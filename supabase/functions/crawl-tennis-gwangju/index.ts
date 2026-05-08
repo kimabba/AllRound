@@ -1,6 +1,8 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import {
   CrawlerTournament,
+  extractApplicationDeadline,
+  extractDate,
   extractTennisGradesFromText,
   finishAudit,
   startAudit,
@@ -56,11 +58,8 @@ async function fetchDetail(detailUrl: string): Promise<CrawlerTournament | null>
   if (!title) return null;
   const bodyText = (dom.querySelector('#bo_v_atc, .view_content, article')?.textContent ?? '').trim();
 
-  // 날짜 추출 (YYYY[.-]MM[.-]DD)
-  const dateMatch = bodyText.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
-  if (!dateMatch) return null;
-  const [, y, m, d] = dateMatch;
-  const startDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  const startDate = extractDate(bodyText);
+  if (!startDate) return null;
 
   const grades = extractTennisGradesFromText(bodyText);
   if (grades.length === 0) return null;
@@ -69,6 +68,7 @@ async function fetchDetail(detailUrl: string): Promise<CrawlerTournament | null>
     title,
     description: bodyText.slice(0, 1500),
     start_date: startDate,
+    application_deadline: extractApplicationDeadline(bodyText) ?? undefined,
     region: REGION,
     eligible_grades: grades,
     source_url: detailUrl,

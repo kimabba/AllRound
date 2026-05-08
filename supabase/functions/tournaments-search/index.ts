@@ -25,11 +25,17 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const sport = url.searchParams.get('sport');
+  if (sport && sport !== 'tennis' && sport !== 'futsal') {
+    return errorResponse('sport must be tennis or futsal');
+  }
   const region = url.searchParams.get('region');
   const dateFrom = url.searchParams.get('date_from');
   const dateTo = url.searchParams.get('date_to');
   const onlyMyGrade = url.searchParams.get('only_my_grade') !== 'false';
   const q = url.searchParams.get('q');
+  if (q && q.length > 200) {
+    return errorResponse('q too long (max 200 chars)');
+  }
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 100);
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10), 0);
 

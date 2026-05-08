@@ -11,7 +11,7 @@
 - **Frontend**: Flutter (Dart) — iOS / Android / 웹
 - **Backend**: Supabase Edge Functions (Deno) — 모든 서버 로직 일원화. FastAPI 미사용.
 - **DB**: Supabase Postgres + pgvector + pg_cron + pg_net
-- **AI**: Gemini API (`gemini-2.0-flash` + Search Grounding) + Gemini text-embedding-004 (RAG)
+- **AI**: Gemini API (`gemini-2.0-flash` + Search Grounding) + `gemini-embedding-001` 768d (RAG)
 - **Auth**: Supabase Auth (이메일·구글, 추후 카카오)
 - **Push**: Firebase Cloud Messaging
 - **Streaming**: SSE (챗봇 응답)

@@ -1,248 +1,193 @@
 <div align="center">
 
-# ⚽ Match·Up 🎾
+# 🎾 Match-up ⚽
 
-**축구·풋살·테니스 동호인을 위한 모바일 우선 웹앱**
+**테니스·풋살 동호인 통합 정보 앱**
 
-> 주말마다 같이 뛸 사람을 찾고 있나요?
-> 축구·풋살부터 테니스까지, 내 근처 모임부터 대회까지 한눈에.
+> 회원가입 시 종목·등급을 등록하면, 출전 가능한 대회만 자동으로 보여드립니다.
 
+[![Flutter](https://img.shields.io/badge/Flutter-3.41+-02569B?logo=flutter)](https://flutter.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-Edge_Functions-3ECF8E?logo=supabase)](https://supabase.com)
+[![Deno](https://img.shields.io/badge/Deno-2.1+-000000?logo=deno)](https://deno.com)
+[![Gemini](https://img.shields.io/badge/Gemini-2.0_Flash-4285F4?logo=google)](https://ai.google.dev)
 
 </div>
 
 ---
 
-## 📌 한 눈에 보기
+## 핵심 가치
 
-5개 탭(홈/대회/룰북/동호회/MY) + 5단계 온보딩으로 구성된 **모바일 위주 SPA**. 종목(축구·풋살 ↔ 테니스)에 따라 액센트 컬러가 동적으로 바뀌는 **sport-aware 테마**가 핵심.
+테니스·풋살 동호인은 (1) 종목별 일반 규칙, (2) 대회별 규칙, (3) 본인 등급으로 출전 가능한 대회, (4) 최신 대회 일정 — 이 4가지를 **한 번에 확인하기 어렵습니다**.
 
-| 탭 | 설명 | v1 상태 |
-|---|---|:---:|
-| 🏠 **홈** | 추천 대회 + 내 근처 코트 + 오늘의 룰 퀴즈 | ✅ |
-| 🏆 **대회** | 모집 글 리스트, 필터(종목/시기/지역), 진행률, 마감임박 자동 | ✅ |
-| 📖 **룰북** | 종목별 룰 카테고리 + 자주 찾는 룰 FAQ | ✅ |
-| 👥 **동호회** | 클럽/커뮤니티 | 🔜 placeholder |
-| 👤 **MY** | 사용자 prefs + 약관 | 🔜 placeholder |
+**Match-up**은 회원가입 단계에서 종목·등급을 등록받아, 본인 등급으로 출전 가능한 대회만 홈에 자동 필터링해서 보여줍니다. 즐겨찾기·푸시 알림(D-3·신청 마감), 종목별 룰북, AI 챗봇(Gemini Search Grounding + RAG), 동호회 디렉토리가 보조합니다.
 
-**온보딩 5단계**: 스플래시 → 닉네임 → 활동 지역(서울 16개 구) → 주 종목 → 실력(입문/중급/상급)
+## 종목 · 등급 모델
 
----
+| 종목 | enum | 표시 |
+|------|------|------|
+| **tennis** | `rookie` `div5` `div4` `div3` `div2` `div1` | 신입 / 5부 / 4부 / 3부 / 2부 / 1부 |
+| **futsal** | `beginner` `intermediate` `advanced` | 초급 / 중급 / 고급 |
 
-## 🎨 디자인 토큰
+- 한 사용자가 두 종목 모두 등록 가능 (`user_sports` N:M)
+- 대회의 `eligible_grades` 배열에 사용자 등급이 포함되면 출전 가능
+- 종목별로 매칭하는 RPC `tournaments_for_user`가 종목 교차 매칭을 방지
 
-```ts
-navy:   #1E3A8A   // Primary
-tennis: #FF6B35   // 🎾 테니스 모드 액센트
-futsal: #22C55E   // ⚽ 축구·풋살 모드 액센트
-kakao:  #FEE500   // 카카오 버튼
-bg:     #F5F7FB   // 모바일 배경
+## 기술 스택
 
-font:   Pretendard 400 / 600 / 700
-radius: 카드 16px / 칩 풀 라운드 / 버튼 12px
 ```
-
-종목(`tennis | futsal`)에 따라 카드·뱃지·그라데이션 색이 **전역적으로 동시에** 바뀝니다 (`SportContext` + Tailwind variant).
-
----
-
-## 🚦 v1 vs v2
-
-| 영역 | v1 (이번 MVP) | v2 (다음) |
-|---|---|---|
-| 데이터 | 정적 JSON (`src/data/*.json`) | 백엔드 API |
-| 챗봇 | placeholder ("준비 중") | 실제 코치봇 (Gemini) |
-| 인증 | localStorage prefs | 카카오 OAuth |
-| 동호회 탭 | placeholder | 풀 기능 |
-| MY 탭 | 기본 표시 | 통계·즐겨찾기·신청 이력 |
-| 호스팅 | Cloudflare Pages 또는 Vercel (Phase 0 결정) | 동일 |
-
----
-
-## 🛠️ 기술 스택
+Flutter App (iOS · Android · Web)
+  ├── Supabase Auth (이메일 + 구글, 추후 카카오)
+  ├── REST + SSE → Supabase Edge Functions (Deno)
+  │     ├── tournaments-search/-submit/-approve   등급 자동 필터링
+  │     ├── chat (SSE)                             Gemini + Search Grounding + RAG
+  │     ├── semantic-search                        pgvector 의미 검색
+  │     ├── embed-pending  (pg_cron 5분)
+  │     ├── notify-cron    (pg_cron 1시간)         D-3 / 신청마감
+  │     ├── crawl-tennis-{gwangju,jeonnam,korea}   pg_cron 일 1회
+  │     ├── clubs-search · chat-history · health
+  ├── Postgres + pgvector (768d HNSW)
+  └── FCM 푸시
+```
 
 | 영역 | 선택 |
-|---|---|
-| 언어 | **TypeScript** (strict, `noUncheckedIndexedAccess`) |
-| 프론트 | Phase 0 [`SSF-226`](https://linear.app/ssfak/issue/SSF-226)에서 Figma Make export 분석 후 확정<br/>(가설: Vite + React + Tailwind + shadcn/ui) |
-| 스타일 | **Tailwind CSS** + **Pretendard** |
-| 상태 | React Context + localStorage |
-| 라우터 | TBD (스택 결정에 따라) |
-| 데이터 | 정적 JSON → `src/lib/data.ts` 추상 레이어 |
-| 패키지 매니저 | **pnpm** 9 |
-| 런타임 | Node.js ≥ 20 LTS |
-| CI | GitHub Actions (lint + typecheck + build) |
-| 호스팅 | Phase 0 [`SSF-229`](https://linear.app/ssfak/issue/SSF-229)에서 결정 |
-| 작업 추적 | [Linear](https://linear.app/ssfak/project/matchup-web-v1-3574989af78c) |
+|------|------|
+| Frontend | Flutter (Riverpod + go_router) |
+| Backend | Supabase Edge Functions (Deno) — FastAPI 미사용 |
+| DB | Postgres + `pgvector` + `pg_cron` + `pg_net` |
+| AI 채팅 | Gemini 2.0 Flash + Google Search Grounding |
+| AI 임베딩 | `gemini-embedding-001` (768차원, Matryoshka) |
+| Auth | Supabase Auth |
+| Push | FCM (Legacy HTTP — v1 마이그레이션 예정, [SSF-270](https://linear.app/ssfak/issue/SSF-270)) |
+| Streaming | SSE (챗봇 응답) |
 
----
+## 빠른 시작 (로컬 개발)
 
-## 📊 진행 상태
+### 0. 사전 준비
 
-```
-✅  Phase 0 — 부트스트랩       (5)  ░░░░░░░░░░  진행 중
-⬜  Phase 1 — 디자인 시스템    (6)
-⬜  Phase 2 — 라우팅 + 데이터  (3)
-⬜  Phase 3 — 온보딩           (3)
-⬜  Phase 4 — 홈 탭            (3)
-⬜  Phase 5 — 대회 탭          (4)
-⬜  Phase 6 — 룰북 탭          (4)
-⬜  Phase 7 — 마무리           (4)
-                       총 32 이슈
-```
+- Docker Desktop
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (`brew install supabase/tap/supabase` 또는 `supabase-beta`)
+- [Deno 2.x](https://deno.com)
+- [Flutter 3.41+](https://docs.flutter.dev/get-started/install)
+- [Gemini API 키](https://aistudio.google.com/apikey)
 
-📅 **MVP 마일스톤**: 2026-06-15 (3탭 출시)
-
----
-
-## 🚀 개발 시작하기
-
-### 사전 요구사항
-
-- **Node.js** 20.x 이상 ([`.nvmrc`](./.nvmrc) 참고)
-- **pnpm** 9.x — `npm install -g pnpm`
-
-### 설치
+### 1. Supabase 로컬 스택 + 마이그레이션 + 시드
 
 ```bash
-git clone https://github.com/kimabba/matchup-web.git
-cd matchup-web
-pnpm install
+git clone https://github.com/kimabba/Match-up.git
+cd Match-up
+
+supabase start                  # 12개 서비스 컨테이너 기동
+supabase db reset               # 마이그레이션 8개 + seed.sql 적용
 ```
 
-### 개발 서버
+기동 후 출력된 정보 메모:
+- API: `http://127.0.0.1:54321`
+- DB: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`
+- Studio: `http://127.0.0.1:54323`
+- anon key 출력값
+
+### 2. Gemini API 키 + Edge Functions 핫리로드
 
 ```bash
-pnpm dev
+mkdir -p supabase/functions
+echo 'GEMINI_API_KEY=AIzaSy...본인키' > supabase/functions/.env
+echo 'GEMINI_MODEL=gemini-2.0-flash' >> supabase/functions/.env
+
+supabase functions serve --env-file ./supabase/functions/.env
 ```
 
-> 🚧 Phase 0의 [`SSF-226`](https://linear.app/ssfak/issue/SSF-226)에서 dev/build 스크립트가 채워집니다.
-
-### 검증
+### 3. Flutter 앱
 
 ```bash
-pnpm lint        # ESLint
-pnpm typecheck   # TypeScript
-pnpm build       # 프로덕션 빌드
+cd app && flutter pub get
+
+flutter run \
+  --dart-define=SUPABASE_URL=http://127.0.0.1:54321 \
+  --dart-define=SUPABASE_ANON_KEY=<위에서 출력된 anon key>
 ```
 
----
+### 4. 관리자 권한 부여
 
-## 📂 프로젝트 구조 (목표)
+가입 후 자기 계정을 admin으로 승격:
 
-```
-matchup-web/
-├─ src/
-│  ├─ App.tsx
-│  ├─ types.ts                    # Sport/Tournament/Venue/Rule 등 도메인 타입
-│  ├─ lib/
-│  │  ├─ sport-context.tsx        # 종목 전역 상태 (SportContext)
-│  │  ├─ user-prefs.ts            # localStorage 사용자 prefs
-│  │  └─ data.ts                  # 데이터 fetch 추상화 (v2에서 API로 교체)
-│  ├─ data/                       # 정적 시드 JSON (대회/코트/룰/FAQ/퀴즈)
-│  ├─ components/                 # 디자인 시스템 (15개)
-│  │  ├─ SportToggle.tsx
-│  │  ├─ TournamentCard.tsx
-│  │  ├─ VenueCard.tsx
-│  │  ├─ FilterChipBar.tsx
-│  │  ├─ BottomNavBar.tsx
-│  │  └─ ...
-│  ├─ screens/
-│  │  ├─ HomeScreen.tsx
-│  │  ├─ TournamentListScreen.tsx
-│  │  ├─ TournamentDetailScreen.tsx
-│  │  ├─ RulebookScreen.tsx
-│  │  ├─ RuleCategoryDetail.tsx
-│  │  ├─ ClubPlaceholderScreen.tsx
-│  │  ├─ MyScreen.tsx
-│  │  ├─ onboarding/              # 5단계 온보딩
-│  │  └─ _dev/Gallery.tsx         # 개발 빌드 한정 컴포넌트 갤러리
-│  └─ styles/
-│     └─ globals.css
-├─ public/
-│  ├─ fonts/                      # Pretendard self-host
-│  └─ og-image.png                # 카카오 공유 미리보기
-├─ docs/
-│  └─ decisions/                  # ADR (Architecture Decision Records)
-├─ .github/workflows/
-│  └─ ci.yml
-├─ tailwind.config.ts
-├─ tsconfig.json
-└─ package.json
+```bash
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "update public.users set role='admin' where email='your@email.com';"
 ```
 
----
+또는 Studio (`http://127.0.0.1:54323`) → SQL Editor에서 같은 쿼리 실행.
 
-## 🔄 작업 워크플로
+### 5. 검증
 
-모든 작업은 [Linear "Match·Up Web v1"](https://linear.app/ssfak/project/matchup-web-v1-3574989af78c)에서 추적됩니다.
+```bash
+# 헬스체크
+curl http://127.0.0.1:54321/functions/v1/health
+# → {"status":"ok","service":"match-up","ts":"..."}
 
-```
-1. Linear 이슈 (SSF-XXX) → status: In Progress
-2. 새 브랜치: feature/SSF-XXX-짧은설명
-3. 코드 작성
-4. 커밋 메시지: "type(SSF-XXX): 설명"
-5. PR 생성 (base=main)
-6. 1+ approval + CI 그린
-7. squash merge → 자동 배포
-8. Linear → status: Done
-```
+# 임베딩 워커 수동 트리거 (시드 13건 처리)
+curl -X POST http://127.0.0.1:54321/functions/v1/embed-pending
+# → {"tournaments_processed":5,"rules_processed":8,"errors":[]}
 
-### 브랜치 보호
+# Flutter 코드 정적 검증
+cd app && flutter analyze
+# → No issues found!
 
-`main` 브랜치는 GitHub 단에서 보호됩니다:
-- ✅ Pull Request 필수
-- ✅ 1+ approving review
-- ✅ CI 통과 (lint + typecheck + build)
-- ❌ Force push 차단
-- ❌ 직접 삭제 차단
-
----
-
-## 🎨 디자인 참고
-
-[Figma Make: Futsal-Tennis-Community-App](https://www.figma.com/make/ZlknKCxB548GDQT9i1tscH/Futsal-Tennis-Community-App)
-
-모바일 위주 디자인 → 데스크톱은 가운데 `max-w-md`(420px) 컨테이너 + 좌우 그라데이션 배경으로 반응형.
-
----
-
-## 🤝 기여
-
-이 레포는 **비공개**입니다. 팀원으로 초대받은 분만 PR을 만들 수 있습니다.
-
-### PR 체크리스트
-
-- [ ] Linear 이슈와 연결 (커밋 메시지에 `SSF-XXX` 포함)
-- [ ] `pnpm lint` 통과
-- [ ] `pnpm typecheck` 통과
-- [ ] `pnpm build` 성공
-- [ ] viewport 375 / 1024 / 1440 모두 확인
-- [ ] 종목 토글 회귀 (해당 화면일 시 양쪽 색 모두 확인)
-
-### 커밋 메시지 컨벤션
-
-```
-type(SSF-XXX): 한 줄 요약
-
-상세 설명 (선택)
-
-Co-Authored-By: ...
+# Edge Functions 정적 검증
+cd supabase/functions && deno lint && find . -name index.ts -exec deno check {} +
 ```
 
-`type`: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`
+## API 엔드포인트
 
----
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| GET | `/tournaments-search` | user | 등급 자동 필터링 + 텍스트 검색 |
+| POST | `/tournaments-submit` | user | 사용자 제보 (status=draft) |
+| POST | `/tournaments-approve` | admin | 제보 승인/거부 |
+| GET | `/clubs-search` | user | 클럽 디렉토리 |
+| POST | `/chat` | user | SSE 챗봇 (RAG + Search Grounding) |
+| GET/DELETE | `/chat-history` | user | 대화 이력 |
+| POST | `/semantic-search` | user | pgvector 의미 검색 |
+| POST | `/embed-pending` | cron | 임베딩 워커 (verify_jwt=false) |
+| POST | `/notify-cron` | cron | 알림 워커 (verify_jwt=false) |
+| POST | `/crawl-tennis-*` | cron | 테니스 크롤러 (verify_jwt=false) |
+| GET | `/health` | none | 헬스체크 |
 
-## 📜 라이센스
+## 디렉토리 구조
 
-[MIT](./LICENSE) © 2026 ssfak
+```
+Match-up/
+├── app/                        Flutter 앱
+│   ├── lib/
+│   │   ├── main.dart · router.dart · config.dart
+│   │   ├── models/ · state/ · services/ · widgets/ · utils/
+│   │   └── screens/{auth, tournaments, ...}/
+│   └── test/
+├── supabase/
+│   ├── migrations/00{1..8}_*.sql
+│   ├── functions/
+│   │   ├── _shared/{auth, supabase, gemini, embedding, crawler, enums, cors}.ts
+│   │   └── <function-name>/index.ts × 12
+│   ├── config.toml
+│   └── seed.sql
+├── docs/{privacy-policy.html, store-listing.md, deploy.md, reviews/}
+└── README.md · CLAUDE.md
+```
 
----
+## 운영 작업 흐름
 
-<div align="center">
+- 사용자 제보 → `tournaments.status='draft'` → 관리자가 `/tournaments-approve` → `published`
+- 크롤러 입력 대회는 검수 없이 즉시 `published`
+- 대회/룰북 내용 변경 시 트리거가 `embedding=null`로 invalidate → `embed-pending`이 5분 내 재계산
+- 알림 중복 방지는 `notifications_log(user, tournament, type)` unique 인덱스
+- 관리자 권한: `users.role='admin'`. RLS는 `is_admin()` SECURITY DEFINER 함수로 평가
 
-**계획 문서**: [`~/.claude/plans/fuzzy-spinning-thimble.md`](https://linear.app/ssfak/project/matchup-web-v1-3574989af78c)
-**Linear 프로젝트**: [Match·Up Web v1](https://linear.app/ssfak/project/matchup-web-v1-3574989af78c)
-**문의**: 이슈 또는 Linear 프로젝트 댓글
+## 프로젝트 관리
 
-</div>
+- Linear: [Match-up App (Flutter + Supabase)](https://linear.app/ssfak/project/match-up-app-flutter-supabase-8c50f8db4e20)
+- 핵심 이슈: SSF-268 ~ SSF-277
+- 자세한 개발 가이드: [`CLAUDE.md`](./CLAUDE.md)
+
+## 라이선스
+
+작성자가 별도 명시 전까지 사적 사용 한정.

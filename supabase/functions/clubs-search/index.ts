@@ -14,8 +14,13 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const sport = url.searchParams.get('sport');
+  if (sport && sport !== 'tennis' && sport !== 'futsal') {
+    return errorResponse('sport must be tennis or futsal');
+  }
   const region = url.searchParams.get('region');
-  const q = url.searchParams.get('q');
+  const rawQ = url.searchParams.get('q');
+  // PostgREST .or() 표현식 메타문자 제거 (SEC-M-01 방어)
+  const q = rawQ?.replace(/[(),:%_]/g, ' ').trim().slice(0, 100);
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 200);
 
   let query = auth.supabase.from('clubs').select('*').eq('active', true).limit(limit);

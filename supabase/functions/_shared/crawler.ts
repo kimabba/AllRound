@@ -56,10 +56,11 @@ export async function finishAudit(
 }
 
 /**
- * source_url 기준 upsert. 신규는 status='published' 로 즉시 게시.
- *  (사용자 제보와 달리 협회/공식 사이트 출처는 검수 없이 표시)
+ * source_url 기준 upsert. 신규는 status='draft' 로 들어가 관리자 승인 대기.
+ *  (사이트 셀렉터가 깨지거나 등급/날짜 추출이 잘못된 false positive 가
+ *   바로 사용자에게 노출되지 않도록 하는 안전 장치)
  *
- * 임베딩은 NULL 로 시작 → embed-pending 워커가 5분 이내에 채움.
+ * 임베딩은 published 가 된 후에만 채워진다.
  */
 export async function upsertTournament(
   audit: AuditHandle,
@@ -114,11 +115,43 @@ export async function upsertTournament(
     format: t.format ?? null,
     source: audit.source,
     source_url: t.source_url,
-    status: 'published',
+    status: 'draft', // 관리자 승인 대기 (어드민 화면 SSF-272 후 일괄 승인)
   });
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
   audit.inserted++;
   return 'inserted';
+}
+
+/**
+ * "YYYY[.-/]MM[.-/]DD" 형태의 첫 매치를 ISO yyyy-mm-dd 로 반환. 없으면 null.
+ */
+export function extractDate(text: string): string | null {
+  const m = text.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if (!m) return null;
+  const [, y, mm, dd] = m;
+  return `${y}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+}
+
+/**
+ * 본문에서 "신청 마감일" 또는 "접수 기간"을 찾아 마감일을 추출.
+ * 패턴 우선순위:
+ *   1. "신청마감|접수마감|신청기간|접수기간 ... YYYY[.-/]MM[.-/]DD" → 그 날짜
+ *   2. "~ YYYY[.-/]MM[.-/]DD 까지" 또는 "YYYY[.-/]MM[.-/]DD 까지" → 그 날짜
+ *   3. 못 찾으면 null (notify-cron 의 deadline 알림 미발송)
+ */
+export function extractApplicationDeadline(text: string): string | null {
+  const cleaned = text.replace(/\s+/g, ' ');
+
+  const labelRegex =
+    /(?:신청\s*마감|접수\s*마감|신청\s*기간|접수\s*기간|마감일)[^0-9]{0,40}(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/;
+  const m1 = cleaned.match(labelRegex);
+  if (m1) return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`;
+
+  const untilRegex = /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\s*(?:까지|마감)/;
+  const m2 = cleaned.match(untilRegex);
+  if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`;
+
+  return null;
 }
 
 /**

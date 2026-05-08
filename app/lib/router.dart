@@ -26,12 +26,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == '/login' ? null : '/login';
       }
 
-      // 종목·등급 미등록 사용자는 온보딩으로
-      final sports = ref.read(userSportsProvider).valueOrNull;
-      if ((sports == null || sports.isEmpty) && loc != '/onboarding') {
-        // sports 가 아직 로딩 중이면 온보딩으로 보내지 않음
-        if (sports != null && sports.isEmpty) return '/onboarding';
-      }
+      // 종목·등급 미등록 사용자는 온보딩으로 강제
+      // userSportsProvider 가 로딩 중이면 redirect 보류 (깜빡임 방지)
+      final sportsAsync = ref.read(userSportsProvider);
+      if (sportsAsync.isLoading) return null;
+      final sports = sportsAsync.valueOrNull ?? const [];
+      if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
       if (loc == '/login') return '/';
       return null;
