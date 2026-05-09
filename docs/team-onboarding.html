@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Match-up · 팀원 온보딩 가이드</title>
+<style>
+  :root {
+    --court-green: #2E7D32;
+    --court-green-dark: #1B5E20;
+    --court-green-light: #C8E6C9;
+    --bg: #FAFAF7;
+    --surface: #FFFFFF;
+    --border: #E0E0E0;
+    --ink: #1A1A1A;
+    --muted: #5F6368;
+    --warning: #F9A825;
+    --danger: #C62828;
+    --info: #1565C0;
+    --code-bg: #F5F5F5;
+    --code-fg: #B83232;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  /* ─── Sidebar ToC ─── */
+  aside.toc {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+  }
+  aside.toc h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--court-green);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  aside.toc ol {
+    list-style: none;
+    counter-reset: section;
+  }
+  aside.toc ol li {
+    counter-increment: section;
+    margin: 4px 0;
+  }
+  aside.toc ol li a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 4px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  aside.toc ol li a::before {
+    content: counter(section) ". ";
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  aside.toc ol li a:hover { background: var(--court-green-light); }
+
+  /* ─── Main ─── */
+  main {
+    padding: 48px 56px;
+    max-width: 880px;
+  }
+  header.hero {
+    border-bottom: 3px solid var(--court-green);
+    padding-bottom: 24px;
+    margin-bottom: 40px;
+  }
+  header.hero .badge {
+    display: inline-block;
+    background: var(--court-green-light);
+    color: var(--court-green-dark);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  header.hero h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--court-green-dark);
+    margin: 4px 0;
+  }
+  header.hero p.subtitle {
+    color: var(--muted);
+    font-size: 15px;
+  }
+  header.hero .meta {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  header.hero .meta a { color: var(--court-green); }
+
+  section {
+    margin-bottom: 48px;
+    scroll-margin-top: 24px;
+  }
+  section h2 {
+    font-size: 24px;
+    color: var(--court-green-dark);
+    margin-bottom: 16px;
+    border-left: 4px solid var(--court-green);
+    padding-left: 12px;
+  }
+  section h3 {
+    font-size: 18px;
+    margin: 24px 0 8px;
+    color: var(--ink);
+  }
+  section p, section li { font-size: 15px; }
+  section p { margin: 8px 0; }
+  section ul, section ol {
+    margin: 8px 0 8px 24px;
+  }
+  section li { margin: 4px 0; }
+
+  /* ─── Code ─── */
+  code {
+    font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--code-fg);
+  }
+  pre {
+    background: #1E1E1E;
+    color: #D4D4D4;
+    padding: 14px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    margin: 12px 0;
+    line-height: 1.5;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+  pre .cmt { color: #6A9955; }
+  pre .key { color: #569CD6; }
+  pre .str { color: #CE9178; }
+
+  /* ─── Boxes ─── */
+  .box {
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .box.info {
+    background: #E3F2FD;
+    border-left: 4px solid var(--info);
+    color: #0D47A1;
+  }
+  .box.warn {
+    background: #FFF8E1;
+    border-left: 4px solid var(--warning);
+    color: #8D6E00;
+  }
+  .box.danger {
+    background: #FFEBEE;
+    border-left: 4px solid var(--danger);
+    color: #B71C1C;
+  }
+  .box.success {
+    background: var(--court-green-light);
+    border-left: 4px solid var(--court-green);
+    color: var(--court-green-dark);
+  }
+  .box .icon {
+    font-weight: 700;
+    margin-right: 6px;
+  }
+
+  /* ─── Tables ─── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg);
+    color: var(--court-green-dark);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  tbody tr:hover { background: #FAFAFA; }
+
+  /* ─── Step number badge ─── */
+  .step-num {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    background: var(--court-green);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    margin-right: 8px;
+    font-size: 14px;
+  }
+
+  /* ─── Details / collapsible ─── */
+  details {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 12px 0;
+    background: var(--surface);
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 0;
+    color: var(--court-green-dark);
+    list-style: none;
+  }
+  details summary::before {
+    content: "▶";
+    display: inline-block;
+    width: 16px;
+    transition: transform 0.15s;
+    font-size: 11px;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  details > *:not(summary) {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── Footer ─── */
+  footer {
+    margin-top: 64px;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* Responsive ─── */
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr; }
+    aside.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<aside class="toc">
+  <h2>온보딩 목차</h2>
+  <ol>
+    <li><a href="#intro">프로젝트 개요</a></li>
+    <li><a href="#prereq">사전 요구사항</a></li>
+    <li><a href="#step-clone">레포 clone</a></li>
+    <li><a href="#step-docker">Docker Desktop</a></li>
+    <li><a href="#step-supabase">Supabase CLI</a></li>
+    <li><a href="#step-deno">Deno</a></li>
+    <li><a href="#step-flutter">Flutter SDK</a></li>
+    <li><a href="#step-xcode">Xcode + CocoaPods</a></li>
+    <li><a href="#step-gemini">Gemini API 키</a></li>
+    <li><a href="#step-stack">로컬 스택 기동</a></li>
+    <li><a href="#step-functions">Edge Functions</a></li>
+    <li><a href="#step-flutter-run">Flutter 앱 실행</a></li>
+    <li><a href="#step-e2e">E2E 시나리오</a></li>
+    <li><a href="#troubleshoot">트러블슈팅</a></li>
+    <li><a href="#linear">Linear / 다음 작업</a></li>
+    <li><a href="#refs">참고 자료</a></li>
+  </ol>
+</aside>
+
+<main>
+  <header class="hero">
+    <span class="badge">🎾 ⚽ Match-up · 팀원 온보딩</span>
+    <h1>제로에서부터 앱 실행까지</h1>
+    <p class="subtitle">테니스·풋살 동호인 통합 정보 앱 · Flutter + Supabase + Gemini RAG</p>
+    <div class="meta">
+      작성: 2026-05-09 ·
+      대상 OS: <strong>macOS (Apple Silicon 권장)</strong> ·
+      예상 소요: <strong>1.5 ~ 2.5시간</strong> (도구 설치 시간 포함) ·
+      Repo: <a href="https://github.com/kimabba/Match-up">github.com/kimabba/Match-up</a>
+    </div>
+  </header>
+
+  <!-- ─── 1. Intro ─── -->
+  <section id="intro">
+    <h2>1. 프로젝트 개요</h2>
+    <p>
+      <strong>Match-up</strong>은 테니스·풋살 동호인이 겪는 4가지 페인 포인트
+      <em>(종목별 일반 규칙 · 대회별 규칙 · 본인 등급 출전 가능 대회 · 최신 대회 일정)</em>을
+      한 앱에서 해결합니다.
+    </p>
+    <p>
+      <strong>핵심 가치</strong> — 회원가입 시 종목·등급을 등록하면 본인 등급으로
+      출전 가능한 대회만 자동 필터링됩니다. <code>tournaments_for_user</code> RPC가 종목별 매칭을 처리.
+    </p>
+
+    <h3>스택 한눈에</h3>
+    <table>
+      <tr><th>영역</th><th>선택</th></tr>
+      <tr><td>Frontend</td><td>Flutter (Riverpod + go_router) — iOS / Android / 웹 / macOS</td></tr>
+      <tr><td>Backend</td><td>Supabase Edge Functions (Deno) — 모든 서버 로직 일원화</td></tr>
+      <tr><td>DB</td><td>Postgres + <code>pgvector</code> + <code>pg_cron</code> + <code>pg_net</code></tr>
+      <tr><td>AI</td><td>Gemini 2.0 Flash + Search Grounding · <code>gemini-embedding-001</code> (768d)</td></tr>
+      <tr><td>Auth</td><td>Supabase Auth (이메일 + 구글, 카카오는 v2)</td></tr>
+      <tr><td>Push</td><td>FCM</td></tr>
+    </table>
+
+    <h3>종목·등급 모델</h3>
+    <table>
+      <tr><th>종목</th><th>enum</th><th>표시</th></tr>
+      <tr><td><code>tennis</code></td><td><code>rookie</code> <code>div5</code> <code>div4</code> <code>div3</code> <code>div2</code> <code>div1</code></td><td>신입 / 5부 / 4부 / 3부 / 2부 / 1부</td></tr>
+      <tr><td><code>futsal</code></td><td><code>beginner</code> <code>intermediate</code> <code>advanced</code></td><td>초급 / 중급 / 고급</td></tr>
+    </table>
+
+    <p>한 사용자가 두 종목 모두 등록 가능 (<code>user_sports</code> N:M).</p>
+  </section>
+
+  <!-- ─── 2. Prereq ─── -->
+  <section id="prereq">
+    <h2>2. 사전 요구사항 (체크리스트)</h2>
+    <p>아래 도구를 모두 설치해야 합니다. 이미 깔린 게 있으면 ✅ 표시하고 다음 단계로.</p>
+    <table>
+      <tr><th>도구</th><th>버전</th><th>용도</th><th>~용량</th></tr>
+      <tr><td>Homebrew</td><td>4.x</td><td>패키지 매니저</td><td>1GB</td></tr>
+      <tr><td>Git</td><td>2.x</td><td>버전 관리</td><td>(brew 포함)</td></tr>
+      <tr><td>Docker Desktop</td><td>최신</td><td>Supabase 로컬 스택 (12개 컨테이너)</td><td>2GB</td></tr>
+      <tr><td>Supabase CLI</td><td>2.x</td><td>로컬 stack 관리, 마이그레이션, functions serve</td><td>50MB</td></tr>
+      <tr><td>Deno</td><td>2.1+</td><td>Edge Functions 런타임 (정적 검증·테스트)</td><td>100MB</td></tr>
+      <tr><td>Flutter SDK</td><td>3.41+</td><td>Flutter 앱 빌드</td><td>2GB</td></tr>
+      <tr><td>Xcode</td><td>16.x</td><td>macOS desktop / iOS 빌드</td><td>13GB + 컴포넌트</td></tr>
+      <tr><td>CocoaPods</td><td>1.16+</td><td>iOS/macOS 의존성</td><td>200MB</td></tr>
+      <tr><td>Apple ID + GitHub 계정</td><td>—</td><td>Xcode 다운로드 + repo 접근</td><td>—</td></tr>
+      <tr><td>Gemini API 키</td><td>무료 발급</td><td>챗봇·임베딩</td><td>—</td></tr>
+    </table>
+    <div class="box info">
+      <span class="icon">💡</span>
+      <strong>총 디스크 사용량 약 19GB.</strong> SSD 여유 25GB 이상 권장.
+    </div>
+  </section>
+
+  <!-- ─── 3. Clone ─── -->
+  <section id="step-clone">
+    <h2><span class="step-num">1</span>레포 clone</h2>
+    <p>GitHub에 사전 초대된 상태로 가정합니다. SSH 또는 HTTPS 둘 다 OK.</p>
+    <pre><code><span class="cmt"># 작업 디렉토리로 이동</span>
+cd ~/Documents
+
+<span class="cmt"># clone (HTTPS)</span>
+git clone https://github.com/kimabba/Match-up.git
+cd Match-up
+
+<span class="cmt"># 또는 SSH (key 등록되어 있다면)</span>
+git clone git@github.com:kimabba/Match-up.git</code></pre>
+    <details>
+      <summary>레포 디렉토리 구조</summary>
+<pre><code>Match-up/
+├── app/                       <span class="cmt"># Flutter 앱 (lib/, macos/, ios/, android/, test/)</span>
+├── supabase/
+│   ├── migrations/00{1..8}_*.sql
+│   ├── functions/
+│   │   ├── _shared/           <span class="cmt"># cors, auth, supabase, gemini, embedding, crawler, enums</span>
+│   │   └── &lt;function-name&gt;/index.ts × 12
+│   ├── config.toml
+│   └── seed.sql
+├── docs/
+│   ├── reviews/               <span class="cmt"># security · simplify · code-review 보고서</span>
+│   ├── privacy-policy.html
+│   └── team-onboarding.html   <span class="cmt"># 본 문서</span>
+├── README.md
+└── CLAUDE.md                  <span class="cmt"># 개발자 가이드 (이 문서보다 자세함)</span></code></pre>
+    </details>
+  </section>
+
+  <!-- ─── 4. Docker ─── -->
+  <section id="step-docker">
+    <h2><span class="step-num">2</span>Docker Desktop</h2>
+    <p>이미 설치되어 있으면 건너뛰세요. 확인:</p>
+    <pre><code>docker --version
+docker info --format '{{.ServerVersion}}'   <span class="cmt"># server 버전 출력되면 daemon 동작 중</span></code></pre>
+
+    <p>설치:</p>
+    <pre><code><span class="cmt"># Apple Silicon</span>
+open https://desktop.docker.com/mac/main/arm64/Docker.dmg
+
+<span class="cmt"># Intel</span>
+open https://desktop.docker.com/mac/main/amd64/Docker.dmg</code></pre>
+    <p>설치 후 <strong>Docker.app을 한 번 실행</strong>해서 daemon을 켜야 합니다 (Launchpad → Docker).</p>
+    <div class="box warn">
+      <span class="icon">⚠️</span>
+      <strong>Apple Silicon 사용자는 Rosetta 활성화 옵션 OFF 권장.</strong> Docker → Settings → General에서 "Use Rosetta for x86_64/amd64 emulation" 체크하면 일부 이미지 호환성이 늘지만 지금은 불필요.
+    </div>
+  </section>
+
+  <!-- ─── 5. Supabase CLI ─── -->
+  <section id="step-supabase">
+    <h2><span class="step-num">3</span>Supabase CLI</h2>
+    <pre><code>brew install supabase/tap/supabase
+<span class="cmt"># 또는 beta 채널</span>
+brew install supabase/tap/supabase-beta
+
+<span class="cmt"># 검증</span>
+supabase --version
+<span class="cmt"># 또는 supabase-beta --version (beta 설치 시)</span></code></pre>
+    <div class="box info">
+      <span class="icon">💡</span>
+      이 프로젝트에서는 <code>supabase-beta</code>를 사용했습니다.
+      필요 시 alias 추가: <code>echo 'alias supabase=supabase-beta' &gt;&gt; ~/.zshrc &amp;&amp; source ~/.zshrc</code>
+    </div>
+  </section>
+
+  <!-- ─── 6. Deno ─── -->
+  <section id="step-deno">
+    <h2><span class="step-num">4</span>Deno</h2>
+    <p>Edge Functions의 런타임. supabase가 자체 deno를 가지지만, 정적 검증(<code>deno lint</code>, <code>deno check</code>)을 위해 설치 권장.</p>
+    <pre><code>brew install deno
+
+<span class="cmt"># 검증</span>
+deno --version   <span class="cmt"># deno 2.x</span></code></pre>
+  </section>
+
+  <!-- ─── 7. Flutter ─── -->
+  <section id="step-flutter">
+    <h2><span class="step-num">5</span>Flutter SDK</h2>
+    <pre><code>brew install --cask flutter
+
+<span class="cmt"># 검증 + 환경 진단</span>
+flutter --version
+flutter doctor</code></pre>
+    <p><code>flutter doctor</code>가 빨간 에러 없이 떠야 합니다. macOS desktop 빌드까지 가려면 다음 단계의 Xcode가 추가로 필요.</p>
+  </section>
+
+  <!-- ─── 8. Xcode + CocoaPods ─── -->
+  <section id="step-xcode">
+    <h2><span class="step-num">6</span>Xcode + CocoaPods (macOS 앱 실행 필수)</h2>
+
+    <h3>Xcode 다운로드 (~10GB)</h3>
+    <p>App Store에서 직접 받아야 합니다 (Apple ID 로그인 필요):</p>
+    <pre><code>open "macappstore://apps.apple.com/app/xcode/id497799835"
+<span class="cmt"># 또는 App Store 앱 → "Xcode" 검색 → 받기</span></code></pre>
+
+    <p>다운로드 + 설치 끝나면 (~30~60분):</p>
+    <pre><code><span class="cmt"># 1) 라이선스 동의</span>
+sudo xcodebuild -license accept
+
+<span class="cmt"># 2) Command Line Tools 경로를 Xcode 본체로 전환</span>
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+<span class="cmt"># 3) 첫 실행 컴포넌트 (시뮬레이터 런타임 등) 자동 설치</span>
+sudo xcodebuild -runFirstLaunch</code></pre>
+
+    <h3>CocoaPods (iOS/macOS 의존성 매니저)</h3>
+    <pre><code>brew install cocoapods
+
+<span class="cmt"># 검증</span>
+pod --version</code></pre>
+
+    <div class="box danger">
+      <span class="icon">⚠️</span>
+      <strong>여기까지 안 하면 macOS desktop 빌드가 실패합니다</strong> — <code>xcodebuild</code> 또는 CocoaPods 누락 에러 발생.
+    </div>
+  </section>
+
+  <!-- ─── 9. Gemini ─── -->
+  <section id="step-gemini">
+    <h2><span class="step-num">7</span>Gemini API 키 발급</h2>
+    <ol>
+      <li><a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> 접속 (Google 계정 필요)</li>
+      <li><strong>"Create API key"</strong> 클릭 → 새 프로젝트 또는 기존 GCP 프로젝트 선택</li>
+      <li>발급된 키 (<code>AIzaSy...</code>로 시작) 복사</li>
+    </ol>
+    <div class="box info">
+      <span class="icon">💡</span>
+      <strong>무료 한도 충분</strong> — Gemini 2.0 Flash + embedding은 일일 무료 한도 안에서 충분히 개발 가능. 실 운영 배포 시에만 결제 활성화.
+    </div>
+    <p>레포의 <code>supabase/functions/</code> 디렉토리에 <code>.env</code> 파일 생성:</p>
+    <pre><code><span class="cmt"># Match-up 디렉토리에서</span>
+mkdir -p supabase/functions
+cat &gt; supabase/functions/.env &lt;&lt;EOF
+GEMINI_API_KEY=AIzaSy...본인키
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+EOF</code></pre>
+    <div class="box warn">
+      <span class="icon">🔒</span>
+      이 파일은 <code>.gitignore</code>로 차단되어 있습니다 — git에 commit되지 않습니다. 반드시 본인 키만 사용.
+    </div>
+  </section>
+
+  <!-- ─── 10. Stack ─── -->
+  <section id="step-stack">
+    <h2><span class="step-num">8</span>Supabase 로컬 스택 기동</h2>
+    <p>Docker Desktop이 실행 중인 상태에서 첫 실행은 ~5분 (이미지 ~2GB 다운로드):</p>
+    <pre><code>cd ~/Documents/Match-up
+
+supabase start              <span class="cmt"># 또는 supabase-beta start</span></code></pre>
+    <p>성공하면 다음과 비슷한 출력:</p>
+    <pre><code>✓ Started supabase local development setup.
+
+API URL    : http://127.0.0.1:54321
+DB URL     : postgresql://postgres:postgres@127.0.0.1:54322/postgres
+Studio URL : http://127.0.0.1:54323
+Publishable: sb_publishable_XXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
+    <p><strong>Publishable 키는 메모해두세요</strong> (Flutter 실행 시 필요).</p>
+
+    <p>마이그레이션 + 시드 적용:</p>
+    <pre><code>supabase db reset</code></pre>
+    <p>이후 시드 13건 (룰북 8 + 클럽 5 + 대회 5) + 마이그레이션 8개 + RPC 8개가 적용됩니다.</p>
+
+    <details>
+      <summary>스택 검증 SQL</summary>
+<pre><code><span class="cmt"># 테이블 10개 확인</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select tablename from pg_tables where schemaname='public' order by tablename;"
+
+<span class="cmt"># 시드 카운트</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select 'tournaments', count(*) from public.tournaments
+       union all select 'rule_articles', count(*) from public.rule_articles
+       union all select 'clubs', count(*) from public.clubs;"</code></pre>
+    </details>
+  </section>
+
+  <!-- ─── 11. Edge Functions ─── -->
+  <section id="step-functions">
+    <h2><span class="step-num">9</span>Edge Functions serve (별도 터미널)</h2>
+    <pre><code>supabase functions serve --env-file ./supabase/functions/.env</code></pre>
+    <p>출력에 12개 함수 URL이 나오면 OK:</p>
+    <pre><code>Serving functions on http://127.0.0.1:54321/functions/v1/&lt;function-name&gt;
+ - chat
+ - chat-history
+ - clubs-search
+ - crawl-tennis-gwangju
+ - crawl-tennis-jeonnam
+ - crawl-tennis-korea
+ - embed-pending
+ - health
+ - notify-cron
+ - semantic-search
+ - tournaments-approve
+ - tournaments-search
+ - tournaments-submit</code></pre>
+
+    <p>헬스체크:</p>
+    <pre><code>curl http://127.0.0.1:54321/functions/v1/health
+<span class="cmt"># {"status":"ok","service":"match-up","ts":"..."}</span></code></pre>
+
+    <p>임베딩 워커 (시드 13건 처리):</p>
+    <pre><code>curl -X POST http://127.0.0.1:54321/functions/v1/embed-pending
+<span class="cmt"># {"tournaments_processed":5,"rules_processed":8,"errors":[]}</span></code></pre>
+
+    <div class="box danger">
+      <span class="icon">⚠️</span>
+      <strong>functions serve는 <code>.env</code> 변경을 자동 reload하지 않습니다.</strong> 키를 바꿨으면 <kbd>Ctrl+C</kbd> 후 같은 명령으로 재시작.
+    </div>
+  </section>
+
+  <!-- ─── 12. Flutter run ─── -->
+  <section id="step-flutter-run">
+    <h2><span class="step-num">10</span>Flutter 앱 실행</h2>
+    <p>또 다른 터미널에서:</p>
+    <pre><code>cd ~/Documents/Match-up/app
+flutter pub get
+
+<span class="cmt"># 사용 가능한 디바이스 확인</span>
+flutter devices
+
+<span class="cmt"># macOS desktop으로 실행 (가장 빠름)</span>
+flutter run -d macos \
+  --dart-define=SUPABASE_URL=http://127.0.0.1:54321 \
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_XXXX...</code></pre>
+
+    <div class="box info">
+      <span class="icon">💡</span>
+      <strong>SUPABASE_ANON_KEY는 <code>supabase start</code> 출력의 Publishable 값</strong>을 그대로 붙이세요. 매 환경마다 다릅니다.
+    </div>
+
+    <p>첫 빌드는 CocoaPods + Xcode build로 3~5분 걸립니다. 끝나면 <code>matchup</code> 앱 창이 뜹니다.</p>
+  </section>
+
+  <!-- ─── 13. E2E ─── -->
+  <section id="step-e2e">
+    <h2><span class="step-num">11</span>E2E 시나리오 (앱에서 클릭)</h2>
+
+    <table>
+      <tr><th>단계</th><th>화면</th><th>동작</th></tr>
+      <tr><td>A</td><td>로그인</td><td>"계정이 없어요. 가입하기" → 이메일 + 비번 (6자+) → <strong>회원가입</strong></td></tr>
+      <tr><td>B</td><td>온보딩</td><td>테니스 카드에서 <strong>"3부"</strong> 칩 + 우상단 "주 종목" 라디오 ON / 풋살 카드에서 <strong>"중급"</strong> 칩 → <strong>시작하기</strong></td></tr>
+      <tr><td>C</td><td>홈</td><td><strong>3건 표시</strong>: 광주광역시장배 + 풋살 챌린지컵 + 풋살 입문</td></tr>
+      <tr><td>D</td><td>종목 토글</td><td>전체(3) / 테니스(1) / 풋살(2) 칩 전환</td></tr>
+      <tr><td>E</td><td>즐겨찾기</td><td>카드 우측 북마크 → ON/OFF</td></tr>
+      <tr><td>F</td><td>대회 상세</td><td>카드 탭 → 등급/날짜/장소/참가비 표시</td></tr>
+      <tr><td>G</td><td>챗봇</td><td>"광주에서 열리는 테니스 대회 알려줘" → SSE 스트리밍 + DB 인용 ("광주광역시장배") + 웹 검색 인용</td></tr>
+      <tr><td>H</td><td>챗봇</td><td>"테니스 발리 시 라인 안에 있어도 되나요?" → 룰북 인용 (rule_articles)</td></tr>
+    </table>
+
+    <h3>각 단계 검증 SQL (별도 터미널)</h3>
+    <pre><code><span class="cmt"># 가입 후</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select email, role, created_at from public.users order by created_at desc limit 3;"
+
+<span class="cmt"># 온보딩 후</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select sport, grade, is_primary from public.user_sports;"
+
+<span class="cmt"># 즐겨찾기 후</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select * from public.tournament_favorites;"
+
+<span class="cmt"># 챗봇 후</span>
+docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "select role, left(content,60), jsonb_array_length(citations) as cites
+        from public.chat_messages order by created_at desc limit 6;"</code></pre>
+
+    <h3>관리자 권한 부여 (선택)</h3>
+    <p>본인 계정을 admin으로 승격하려면:</p>
+    <pre><code>docker exec -e PGPASSWORD=postgres supabase_db_matchup \
+  psql -U postgres -d postgres \
+  -c "update public.users set role='admin' where email='your@email.com';"</code></pre>
+    <p>또는 Studio (<code>http://127.0.0.1:54323</code>) → SQL Editor에서 같은 쿼리.</p>
+  </section>
+
+  <!-- ─── 14. Troubleshoot ─── -->
+  <section id="troubleshoot">
+    <h2>12. 트러블슈팅 (자주 막히는 곳)</h2>
+
+    <details open>
+      <summary>🔴 가입 시 "Connection failed (errno = 1, Operation not permitted)"</summary>
+      <p><strong>원인</strong>: macOS App Sandbox가 외부 네트워크를 막음.</p>
+      <p><strong>해결</strong>: <code>app/macos/Runner/DebugProfile.entitlements</code>와 <code>Release.entitlements</code> 둘 다에 다음 추가:</p>
+<pre><code>&lt;key&gt;com.apple.security.network.client&lt;/key&gt;
+&lt;true/&gt;</code></pre>
+      <p>그 후 앱 종료 후 <code>flutter run -d macos ...</code> 재실행.</p>
+      <p>이 프로젝트는 이미 적용되어 있지만 <code>flutter create</code>로 macos 폴더를 새로 만든 경우 다시 추가해야 함.</p>
+    </details>
+
+    <details>
+      <summary>🔴 "Error: CocoaPods not installed or not in valid state"</summary>
+      <p><code>brew install cocoapods</code> + <code>pod --version</code> 로 검증.</p>
+    </details>
+
+    <details>
+      <summary>🔴 "xcrun: error: unable to find utility 'xcodebuild'"</summary>
+      <p>Xcode CLT만 깔린 상태. Xcode 본체 설치 + <code>sudo xcode-select -s /Applications/Xcode.app/Contents/Developer</code>.</p>
+    </details>
+
+    <details>
+      <summary>🔴 supabase start 실패: "port 54321 already allocated"</summary>
+      <p>이전 세션의 컨테이너가 살아있음. 정리:</p>
+<pre><code>docker ps -a --filter name=supabase_ -q | xargs -r docker rm -f
+supabase start</code></pre>
+    </details>
+
+    <details>
+      <summary>🔴 챗봇 "[연결 실패]" 또는 401</summary>
+      <p>가능 원인:</p>
+      <ol>
+        <li><code>functions serve</code>가 안 떠 있거나 <code>.env</code> 로드 안 됨 → 재시작</li>
+        <li>GEMINI_API_KEY가 invalid → AI Studio에서 새 키 발급 후 .env 교체 + functions serve 재시작</li>
+        <li>로그인 토큰 만료 → 앱 종료 후 재로그인</li>
+      </ol>
+    </details>
+
+    <details>
+      <summary>🟡 가입 버튼 눌렀는데 반응 없음</summary>
+      <p>대부분 가입은 됐지만 자동 로그인이 안 된 상태. <code>flutter run</code> 터미널에서 <kbd>R</kbd> (대문자, hot restart) → 저장된 세션 복구로 자동 로그인 → 온보딩 화면.</p>
+      <p>그래도 안 되면 "이미 계정이 있어요" 클릭하고 로그인 모드로 시도.</p>
+    </details>
+
+    <details>
+      <summary>🟡 홈 화면이 비어 있음 (대회 0건)</summary>
+      <p>가능 원인:</p>
+      <ol>
+        <li>온보딩에서 등급 등록이 안 됨 → 프로필 화면 → "수정"으로 다시 등록</li>
+        <li>시드가 적용 안 됨 → <code>supabase db reset</code> 다시</li>
+        <li>"내 등급만" 토글이 ON인데 매칭 대회 0건 → 토글 OFF 또는 다른 등급으로 변경</li>
+      </ol>
+    </details>
+
+    <details>
+      <summary>🟡 Flutter web (Chrome)에서 빌드 실패</summary>
+      <p>알려진 이슈 (<a href="https://linear.app/ssfak/issue/SSF-283">SSF-283</a>): <code>app/lib/services/api.dart</code>가 <code>dart:io</code>를 사용 → web에서 빌드 깨짐.</p>
+      <p>해결 전까지 <strong>macOS desktop 또는 iOS Simulator</strong> 사용.</p>
+    </details>
+
+    <details>
+      <summary>🟡 Docker daemon 안 떠 있음</summary>
+      <p><code>open -a Docker</code> 실행 후 ~30초 대기. 메뉴바 고래 아이콘이 멈추면 ready.</p>
+    </details>
+  </section>
+
+  <!-- ─── 15. Linear ─── -->
+  <section id="linear">
+    <h2>13. Linear / 다음 작업</h2>
+    <p>현재 18개 이슈 (<a href="https://linear.app/ssfak/project/match-up-app-flutter-supabase-8c50f8db4e20">Linear 프로젝트</a>):</p>
+
+    <h3>🔴 High priority — 출시 전 처리 권장</h3>
+    <table>
+      <tr><th>이슈</th><th>내용</th></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-272">SSF-272</a></td><td>관리자 어드민 화면 (사용자 제보·크롤 승인)</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-274">SSF-274</a></td><td>cron 호출자 secret 검증</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-275">SSF-275</a></td><td>chat 함수 E2E 검증</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-278">SSF-278</a></td><td>Prompt injection 방어</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-279">SSF-279</a></td><td>chat / semantic-search rate-limit</td></tr>
+    </table>
+
+    <h3>🟡 Medium</h3>
+    <table>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-270">SSF-270</a></td><td>FCM Server Key + 푸시 E2E</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-271">SSF-271</a></td><td>카카오 OAuth</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-280">SSF-280</a></td><td>코드 단순화 (-170줄)</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-281">SSF-281</a></td><td>chat 빈 응답 + 토큰 만료 + dedup</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-282">SSF-282</a></td><td>tournaments_for_user RPC payload 축소</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-283">SSF-283</a></td><td>Flutter Web 빌드 호환 (dart:io 제거)</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-277">SSF-277</a></td><td>운영 배포 가이드</td></tr>
+    </table>
+
+    <h3>🔵 Low / Backlog</h3>
+    <table>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-269">SSF-269</a></td><td>gemini-embedding-2 검토</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-273">SSF-273</a></td><td>풋살 크롤러</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-276">SSF-276</a></td><td>자동 테스트 보강</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-284">SSF-284</a></td><td>보안 Medium·Low 6건</td></tr>
+      <tr><td><a href="https://linear.app/ssfak/issue/SSF-285">SSF-285</a></td><td>Polish (KST·enum·search_path)</td></tr>
+    </table>
+
+    <p>이슈를 골라 작업 시작 시:</p>
+    <pre><code>git checkout -b feat/ssf-272-admin-screen
+<span class="cmt"># ... 작업 + 커밋</span>
+git push -u origin feat/ssf-272-admin-screen
+gh pr create --title "feat(SSF-272): admin screen for tournament approval"</code></pre>
+  </section>
+
+  <!-- ─── 16. Refs ─── -->
+  <section id="refs">
+    <h2>14. 참고 자료</h2>
+    <ul>
+      <li><strong>레포 내</strong>:
+        <ul>
+          <li><a href="../README.md"><code>README.md</code></a> — 프로젝트 한눈에</li>
+          <li><a href="../CLAUDE.md"><code>CLAUDE.md</code></a> — 자세한 개발 가이드 (API 명세, 디렉토리, 환경변수)</li>
+          <li><a href="reviews/security-review.md"><code>docs/reviews/security-review.md</code></a> — 보안 검토 보고서 (Critical 1 / High 4 / Medium 6 / Low 4)</li>
+          <li><a href="reviews/simplify-review.md"><code>docs/reviews/simplify-review.md</code></a> — 단순화 리뷰 (14 finding)</li>
+          <li><a href="reviews/code-review.md"><code>docs/reviews/code-review.md</code></a> — 종합 코드 리뷰 (Blocking 4 / Should-fix 7 / Nice 5)</li>
+        </ul>
+      </li>
+      <li><strong>외부</strong>:
+        <ul>
+          <li><a href="https://supabase.com/docs/guides/cli">Supabase CLI 문서</a></li>
+          <li><a href="https://docs.flutter.dev/get-started/install/macos">Flutter macOS 설치</a></li>
+          <li><a href="https://ai.google.dev/gemini-api/docs">Gemini API 문서</a></li>
+          <li><a href="https://riverpod.dev/">Riverpod 공식</a></li>
+          <li><a href="https://pub.dev/packages/go_router">go_router</a></li>
+        </ul>
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>이 문서가 도움 됐으면 좋겠습니다. 막히는 부분은 #match-up Slack/Discord 또는 PR로 알려주세요. 🎾⚽</p>
+    <p style="margin-top:8px">— 작성: 2026-05-09 / 마지막 commit: 본 문서가 추가된 commit</p>
+  </footer>
+</main>
+
+</div>
+</body>
+</html>
