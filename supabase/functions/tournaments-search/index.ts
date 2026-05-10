@@ -1,5 +1,6 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
+import { isValidRegionCode, isValidTennisOrg } from '../_shared/enums.ts';
 
 /**
  * GET /tournaments-search
@@ -28,7 +29,15 @@ Deno.serve(async (req) => {
   if (sport && sport !== 'tennis' && sport !== 'futsal') {
     return errorResponse('sport must be tennis or futsal');
   }
-  const region = url.searchParams.get('region');
+  const region = url.searchParams.get('region');           // 자유 텍스트 (구 컬럼)
+  const regionCode = url.searchParams.get('region_code');  // 권역 (gwangju, seoul_metro 등)
+  if (regionCode && !isValidRegionCode(regionCode)) {
+    return errorResponse('invalid region_code');
+  }
+  const org = url.searchParams.get('org');                 // 협회 (kta, kato 등)
+  if (org && !isValidTennisOrg(org)) {
+    return errorResponse('invalid org');
+  }
   const dateFrom = url.searchParams.get('date_from');
   const dateTo = url.searchParams.get('date_to');
   const onlyMyGrade = url.searchParams.get('only_my_grade') !== 'false';
@@ -53,5 +62,20 @@ Deno.serve(async (req) => {
   });
 
   if (error) return errorResponse(error.message, 500);
-  return jsonResponse({ tournaments: data ?? [], limit, offset });
+
+  // region_code · org 는 RPC 시그니처가 아직 받지 않아 client-side 필터.
+  // 향후 RPC v2로 시그니처 확장 시 여기 제거.
+  const rawRows: unknown[] = Array.isArray(data) ? data : [];
+  const filtered = rawRows.filter((row): boolean => {
+    if (typeof row !== 'object' || row === null) return false;
+    const o = row as Record<string, unknown>;
+    if (regionCode && o.region_code !== regionCode) return false;
+    if (org) {
+      const hostOrgs = Array.isArray(o.host_orgs) ? o.host_orgs : [];
+      if (!hostOrgs.includes(org)) return false;
+    }
+    return true;
+  });
+
+  return jsonResponse({ tournaments: filtered, limit, offset });
 });

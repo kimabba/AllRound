@@ -1,6 +1,15 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
-import { isValidGrade, Sport } from '../_shared/enums.ts';
+import {
+  EntryFeeUnit,
+  isValidEntryFeeUnit,
+  isValidGrade,
+  isValidRegionCode,
+  isValidTennisOrg,
+  RegionCode,
+  Sport,
+  TennisOrg,
+} from '../_shared/enums.ts';
 
 /**
  * POST /tournaments-submit
@@ -37,9 +46,17 @@ interface SubmitBody {
   location?: string;
   eligible_grades: string[];
   entry_fee?: number;
+  entry_fee_unit?: EntryFeeUnit;
   prize?: string;
   format?: string;
   source_url?: string;
+  // Phase 2 신규
+  region_code?: RegionCode;
+  host_associations?: string[];
+  host_orgs?: TennisOrg[];
+  division_label_local?: string;
+  division_kta_standard?: string;
+  is_joint_event?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -72,6 +89,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Phase 2 신규 필드 검증
+  if (body.region_code && !isValidRegionCode(body.region_code)) {
+    return errorResponse(`Invalid region_code: ${body.region_code}`);
+  }
+  if (body.host_orgs) {
+    if (!Array.isArray(body.host_orgs)) {
+      return errorResponse('host_orgs must be array');
+    }
+    for (const o of body.host_orgs) {
+      if (!isValidTennisOrg(o)) {
+        return errorResponse(`Invalid tennis_org: ${o}`);
+      }
+    }
+  }
+  if (body.entry_fee_unit && !isValidEntryFeeUnit(body.entry_fee_unit)) {
+    return errorResponse(`Invalid entry_fee_unit: ${body.entry_fee_unit}`);
+  }
+
   const { data, error } = await supabase
     .from('tournaments')
     .insert({
@@ -86,9 +121,16 @@ Deno.serve(async (req) => {
       location: body.location ?? null,
       eligible_grades: body.eligible_grades,
       entry_fee: body.entry_fee ?? null,
+      entry_fee_unit: body.entry_fee_unit ?? 'per_team',
       prize: body.prize ?? null,
       format: body.format ?? null,
       source_url: body.source_url ?? null,
+      region_code: body.region_code ?? null,
+      host_associations: body.host_associations ?? [],
+      host_orgs: body.host_orgs ?? [],
+      division_label_local: body.division_label_local ?? null,
+      division_kta_standard: body.division_kta_standard ?? null,
+      is_joint_event: body.is_joint_event ?? false,
       source: 'user_submission',
       status: 'draft',
       submitted_by: user.id,

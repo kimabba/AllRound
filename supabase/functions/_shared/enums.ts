@@ -7,6 +7,82 @@ export type TennisGrade = typeof TENNIS_GRADES[number];
 export type FutsalGrade = typeof FUTSAL_GRADES[number];
 export type Grade = TennisGrade | FutsalGrade;
 
+// =========================
+// Tennis Org (협회·조직)
+// =========================
+export const TENNIS_ORGS = [
+  'kta',
+  'kato',
+  'kata',
+  'ktfs',
+  'kstf',
+  'kssta',
+  'kasta',
+  'gj',
+  'jn',
+  'local',
+] as const;
+
+export type TennisOrg = typeof TENNIS_ORGS[number];
+
+export const TENNIS_ORG_LABELS: Record<TennisOrg, string> = {
+  kta: '대한테니스협회 (KTA)',
+  kato: '한국테니스발전협의회 (KATO)',
+  kata: '한국동호인테니스협회 (KATA)',
+  ktfs: '국민생활체육 전국테니스연합회 (KTFS)',
+  kstf: '한국시니어테니스연맹 (KSTF, 60+)',
+  kssta: '한국슈퍼시니어테니스협회 (KSSTA)',
+  kasta: '단식 테니스 (KASTA / 단테매)',
+  gj: '광주광역시테니스협회 (GJTA)',
+  jn: '전라남도테니스협회 (JNTA)',
+  local: '시·군 또는 클럽 자체',
+};
+
+export function isValidTennisOrg(value: string): value is TennisOrg {
+  return (TENNIS_ORGS as readonly string[]).includes(value);
+}
+
+// =========================
+// Region (권역)
+// =========================
+export const REGION_CODES = [
+  'gwangju',
+  'jeonnam',
+  'seoul_metro',
+  'busan_ulsan_gn',
+  'daegu_gb',
+  'chungcheong',
+  'gangwon',
+  'jeju',
+] as const;
+
+export type RegionCode = typeof REGION_CODES[number];
+
+export const REGION_LABELS: Record<RegionCode, string> = {
+  gwangju: '광주',
+  jeonnam: '전남',
+  seoul_metro: '수도권',
+  busan_ulsan_gn: '부산·울산·경남',
+  daegu_gb: '대구·경북',
+  chungcheong: '충청',
+  gangwon: '강원',
+  jeju: '제주',
+};
+
+export function isValidRegionCode(value: string): value is RegionCode {
+  return (REGION_CODES as readonly string[]).includes(value);
+}
+
+// =========================
+// EntryFeeUnit
+// =========================
+export const ENTRY_FEE_UNITS = ['per_team', 'per_person'] as const;
+export type EntryFeeUnit = typeof ENTRY_FEE_UNITS[number];
+
+export function isValidEntryFeeUnit(value: string): value is EntryFeeUnit {
+  return (ENTRY_FEE_UNITS as readonly string[]).includes(value);
+}
+
 const TENNIS_RANK: Record<TennisGrade, number> = {
   rookie: 0,
   div5: 1,

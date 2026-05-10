@@ -2,7 +2,12 @@ import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
 import { ChatTurn, streamChat } from '../_shared/gemini.ts';
-import { GRADE_LABELS, SPORT_LABELS } from '../_shared/enums.ts';
+import {
+  GRADE_LABELS,
+  REGION_LABELS,
+  SPORT_LABELS,
+  TENNIS_ORG_LABELS,
+} from '../_shared/enums.ts';
 
 /**
  * POST /chat
@@ -28,6 +33,14 @@ interface UserSport {
   grade: string;
 }
 
+interface UserTennisOrgRow {
+  org: string;
+  division_local: string | null;
+  score: number | null;
+  is_primary: boolean;
+  region_code: string | null;
+}
+
 interface SemanticTournament {
   id: string;
   sport: string;
@@ -51,7 +64,7 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function buildSystemPrompt(sports: UserSport[]): string {
+function buildSystemPrompt(sports: UserSport[], orgs: UserTennisOrgRow[]): string {
   const profile = sports.length === 0
     ? '아직 종목·등급을 등록하지 않았습니다.'
     : sports
@@ -62,14 +75,29 @@ function buildSystemPrompt(sports: UserSport[]): string {
       )
       .join('\n');
 
-  return `당신은 한국 동호인 테니스/풋살 정보 도우미입니다. 사용자의 등록 종목·등급을 고려해 답변하세요.
+  const orgProfile = orgs.length === 0
+    ? ''
+    : '\n\n[등록 협회 (테니스, 다중 등록 가능)]\n' + orgs.map((o) => {
+      const orgName = TENNIS_ORG_LABELS[o.org as keyof typeof TENNIS_ORG_LABELS] ?? o.org;
+      const division = o.division_local ?? '미입력';
+      const score = o.score !== null ? ` (점수 ${o.score})` : '';
+      const primary = o.is_primary ? ' ★주' : '';
+      const region = o.region_code
+        ? ` [${REGION_LABELS[o.region_code as keyof typeof REGION_LABELS] ?? o.region_code}]`
+        : '';
+      return `- ${orgName}: ${division}${score}${primary}${region}`;
+    }).join('\n');
+
+  return `당신은 한국 동호인 테니스/풋살 정보 도우미입니다. 사용자의 등록 종목·등급·협회를 고려해 답변하세요.
 
 [사용자 프로필]
-${profile}
+${profile}${orgProfile}
 
 [규칙]
 - 한국어로 답변합니다.
-- 대회 추천 시 사용자가 출전 가능한 등급의 대회만 우선 추천합니다.
+- 대회 추천 시 사용자가 출전 가능한 등급·협회의 대회를 우선 추천합니다.
+- 한국에는 KTA·KATO·KATA·KTFS 등 여러 협회가 있고 등급 체계가 다릅니다. 사용자의 등록 협회를 우선 고려.
+- 광주·전남은 2026.05.01자로 분리 운영 중입니다 (이중 등록 허용).
 - DB에서 제공된 [관련 대회], [관련 룰] 컨텍스트가 있으면 이를 우선 인용합니다.
 - DB에 정보가 없거나 최신성이 필요하면 웹 검색 결과를 활용합니다.
 - 출처는 DB id 또는 웹 URL 로 명시합니다.
@@ -132,6 +160,12 @@ Deno.serve(async (req) => {
     .select('sport, grade')
     .eq('user_id', user.id);
 
+  // 사용자 등록 협회 (multi-org)
+  const { data: userOrgs } = await supabase
+    .from('user_tennis_orgs')
+    .select('org, division_local, score, is_primary, region_code')
+    .eq('user_id', user.id);
+
   // 이전 대화 (최근 10턴)
   const { data: prior } = await supabase
     .from('chat_messages')
@@ -189,7 +223,10 @@ Deno.serve(async (req) => {
         }
 
         // ---- Gemini 호출 ----
-        const systemPrompt = buildSystemPrompt(userSports ?? []);
+        const systemPrompt = buildSystemPrompt(
+          userSports ?? [],
+          (userOrgs ?? []) as UserTennisOrgRow[],
+        );
         const contextPrompt = buildContextPrompt(tournaments, rules);
 
         const history: ChatTurn[] = [];
