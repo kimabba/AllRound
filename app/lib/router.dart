@@ -9,6 +9,7 @@ import 'screens/clubs_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
+import 'screens/speed_gun/speed_gun_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
@@ -45,6 +46,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
           GoRoute(path: '/tournaments', builder: (_, __) => const TournamentsScreen()),
           GoRoute(path: '/clubs', builder: (_, __) => const ClubsScreen()),
+          GoRoute(path: '/speed-gun', builder: (_, __) => const SpeedGunScreen()),
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
@@ -78,6 +80,7 @@ class _MainShell extends StatelessWidget {
     ('/', Icons.home_outlined, '홈'),
     ('/tournaments', Icons.emoji_events_outlined, '대회'),
     ('/clubs', Icons.groups_outlined, '클럽'),
+    ('/speed-gun', Icons.speed_rounded, '스피드건'),
     ('/rules', Icons.menu_book_outlined, '룰북'),
     ('/chat', Icons.chat_bubble_outline, '챗봇'),
     ('/profile', Icons.person_outline, '내정보'),

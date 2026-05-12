@@ -36,6 +36,13 @@ dependencies:
   shared_preferences: ^2.3.0
   skeletonizer: ^1.4.0
 
+  # Speed Gun
+  image_picker: ^1.1.0
+  ffmpeg_kit_flutter: ^6.0.3
+  tflite_flutter: ^0.11.0
+  path_provider: ^2.1.0
+  image: ^4.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -43,6 +50,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/models/
   fonts:
     - family: Pretendard
       fonts:
