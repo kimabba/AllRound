@@ -1,13 +1,22 @@
 SUPABASE := supabase-beta
 SIM_ID   := 35686810-DADA-43C3-B3BF-E420C50AFF8B
 
-.PHONY: setup backend app check deps
+.PHONY: setup backend app check deps reset
 
 # ────────────────────────────────────────────────────
 # macOS 시스템 의존성 (ffmpeg_kit_flutter_new 요구)
 # ────────────────────────────────────────────────────
 deps:
 	brew install fontconfig zlib fribidi harfbuzz glib pcre2 graphite2 libiconv libsamplerate srt
+
+# ────────────────────────────────────────────────────
+# DB reset 후 시뮬레이터 앱 캐시 초기화
+# (make setup 이후 세션 불일치 방지)
+# ────────────────────────────────────────────────────
+reset:
+	xcrun simctl boot $(SIM_ID) 2>/dev/null || true
+	xcrun simctl uninstall $(SIM_ID) kr.matchpoint.app 2>/dev/null || true
+	@echo "앱 캐시 초기화 완료. make app 으로 재설치하세요."
 
 # ────────────────────────────────────────────────────
 # 최초 1회 — Docker Desktop 실행 후
