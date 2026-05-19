@@ -16,6 +16,7 @@ jobs:
   # ---------------------------------------------------------------
   backend:
     name: Backend (Python)
+    if: ${{ hashFiles('backend/requirements.txt') != '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,7 +57,6 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.x"
           channel: stable
           cache: true
 
@@ -83,10 +83,10 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Run tests
+      - name: Run Deno checks
         run: >
-          deno test
-          --config=supabase/functions/deno.json
-          supabase/functions/_shared/*.test.ts
-          --allow-env
-          --no-check
+          cd supabase/functions &&
+          deno fmt --check */index.ts _shared/*.ts tests/*.ts &&
+          deno lint --config deno.json */index.ts _shared/*.ts tests/*.ts &&
+          deno check --config deno.json */index.ts _shared/*.ts tests/*.ts &&
+          deno test --config deno.json --allow-env --allow-read tests
