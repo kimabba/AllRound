@@ -27,8 +27,8 @@ setup:
 	@echo "2) 마이그레이션 + 시드 적용..."
 	$(SUPABASE) db reset
 	@echo ""
-	@echo "anon key 를 복사해서 app/.env.local 에 붙여넣으세요:"
-	@$(SUPABASE) status | grep anon
+	@echo "SUPABASE_ANON_KEY 를 복사해서 app/.env.local 에 붙여넣으세요:"
+	@$(SUPABASE) status | grep -i "publishable\|anon"
 
 # ────────────────────────────────────────────────────
 # 매일 개발 — 터미널 두 개 열기
