@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 로컬 환경변수 (크리덴셜 포함 — 커밋 금지)
+.env.local

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +10,9 @@ import 'screens/clubs_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
-import 'screens/speed_gun/speed_gun_screen.dart';
+// 웹은 dart:io 미지원 → stub 사용
+import 'screens/speed_gun/speed_gun_screen.dart'
+    if (dart.library.html) 'screens/speed_gun/speed_gun_screen_web.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
@@ -76,11 +79,11 @@ class _MainShell extends StatelessWidget {
   const _MainShell({required this.child});
   final Widget child;
 
-  static const _tabs = [
+  static List<(String, IconData, String)> get _tabs => [
     ('/', Icons.home_outlined, '홈'),
     ('/tournaments', Icons.emoji_events_outlined, '대회'),
     ('/clubs', Icons.groups_outlined, '클럽'),
-    ('/speed-gun', Icons.speed_rounded, '스피드건'),
+    if (!kIsWeb) ('/speed-gun', Icons.speed_rounded, '스피드건'),
     ('/rules', Icons.menu_book_outlined, '룰북'),
     ('/chat', Icons.chat_bubble_outline, '챗봇'),
     ('/profile', Icons.person_outline, '내정보'),
