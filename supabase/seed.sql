@@ -2,6 +2,45 @@
 -- supabase db reset 시 자동 적용. (config.toml [db.seed] 의 sql_paths 기본값)
 
 -- =========================
+-- 개발용 테스트 계정
+-- =========================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+begin
+  -- 이미 존재하면 건너뜀
+  if exists (select 1 from auth.users where email = 'ssfak@naver.com') then
+    return;
+  end if;
+
+  -- auth.users 에 삽입 (트리거가 public.users 자동 생성)
+  insert into auth.users (
+    instance_id, id, aud, role,
+    email, encrypted_password,
+    email_confirmed_at,
+    created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data,
+    is_super_admin, confirmation_token, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    v_uid,
+    'authenticated', 'authenticated',
+    'ssfak@naver.com',
+    crypt('pass1234', gen_salt('bf')),
+    now(), now(), now(),
+    '{"provider":"email","providers":["email"]}',
+    '{"display_name":"ssfak"}',
+    false, '', ''
+  );
+
+  -- 관리자 권한 부여 (seed 컨텍스트는 auth session 없으므로 트리거 임시 비활성화)
+  alter table public.users disable trigger users_prevent_role_self_update;
+  update public.users set role = 'admin' where email = 'ssfak@naver.com';
+  alter table public.users enable trigger users_prevent_role_self_update;
+end;
+$$;
+
+-- =========================
 -- rule_articles (룰북 시드)
 -- =========================
 insert into public.rule_articles (sport, category, title, body, order_idx) values
