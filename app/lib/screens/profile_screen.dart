@@ -275,7 +275,7 @@ class _SportCard extends StatelessWidget {
                 borderRadius: AppRadius.pill,
               ),
               child: Text(
-                '주 종목',
+                '활성 종목 (필터 기준)',
                 style: tt.labelSmall?.copyWith(
                   color: accentColor,
                   fontWeight: FontWeight.w600,

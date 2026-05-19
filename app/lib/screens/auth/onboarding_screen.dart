@@ -308,7 +308,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           setState(() => _primarySport = v ?? sport),
                     ),
                     Text(
-                      '주 종목',
+                      '앱 기본 종목 (대회·클럽·룰북 필터에 사용됩니다)',
                       style: tt.labelMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
