@@ -7,7 +7,6 @@ import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
-import '../widgets/app_chip.dart';
 import '../widgets/app_empty_state.dart';
 
 class ClubsScreen extends ConsumerStatefulWidget {
@@ -18,14 +17,13 @@ class ClubsScreen extends ConsumerStatefulWidget {
 }
 
 class _ClubsScreenState extends ConsumerState<ClubsScreen> {
-  String? _sport;
   String _q = '';
   List<Club>? _clubs;
   bool _loading = false;
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final list = await ref.read(apiProvider).searchClubs(sport: _sport, q: _q);
+    final list = await ref.read(apiProvider).searchClubs(sport: ref.read(activeSportProvider), q: _q);
     if (mounted) {
       setState(() {
         _clubs = list;
@@ -42,6 +40,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(activeSportProvider, (_, __) => _load());
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -73,39 +72,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ),
                   onChanged: (v) => _q = v,
                   onSubmitted: (_) => _load(),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    AppChip(
-                      label: '전체',
-                      selected: _sport == null,
-                      onTap: () {
-                        setState(() => _sport = null);
-                        _load();
-                      },
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    AppChip(
-                      label: '테니스',
-                      leadingIcon: Icons.sports_tennis_rounded,
-                      selected: _sport == 'tennis',
-                      onTap: () {
-                        setState(() => _sport = 'tennis');
-                        _load();
-                      },
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    AppChip(
-                      label: '풋살',
-                      leadingIcon: Icons.sports_soccer_rounded,
-                      selected: _sport == 'futsal',
-                      onTap: () {
-                        setState(() => _sport = 'futsal');
-                        _load();
-                      },
-                    ),
-                  ],
                 ),
               ],
             ),
