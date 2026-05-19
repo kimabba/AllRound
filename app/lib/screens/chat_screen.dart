@@ -177,49 +177,51 @@ class _EmptyHint extends StatelessWidget {
       ('내 등급 클럽 추천', '내 등급에 맞는 클럽 추천해줘'),
       ('대회 신청 방법', '동호인 테니스 대회 신청하는 방법 알려줘'),
     ];
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.auto_awesome_rounded,
-                  size: 32, color: cs.primary),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'AI가 답해드려요',
-              style: tt.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '내 등급 대회 검색, 종목 규칙, 협회 정보를 물어보세요',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              childAspectRatio: 3.0,
-              mainAxisSpacing: AppSpacing.sm,
-              crossAxisSpacing: AppSpacing.sm,
-              children: [
-                for (final (label, msg) in suggestions)
-                  _SuggestionChip(label, onTap: () => onSend(msg)),
-              ],
-            ),
-          ],
-        ),
+            child: Icon(Icons.auto_awesome_rounded,
+                size: 32, color: cs.primary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'AI가 답해드려요',
+            style: tt.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '내 등급 대회 검색, 종목 규칙, 협회 정보를 물어보세요',
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 3.5,
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            children: [
+              for (final (label, msg) in suggestions.take(4))
+                _SuggestionChip(label, onTap: () => onSend(msg)),
+            ],
+          ),
+        ],
       ),
     );
   }
