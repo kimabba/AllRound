@@ -20,7 +20,9 @@ begin
     email_confirmed_at,
     created_at, updated_at,
     raw_app_meta_data, raw_user_meta_data,
-    is_super_admin, confirmation_token, recovery_token
+    is_super_admin,
+    confirmation_token, recovery_token,
+    email_change, email_change_token_new, email_change_token_current
   ) values (
     '00000000-0000-0000-0000-000000000000',
     v_uid,
@@ -30,7 +32,9 @@ begin
     now(), now(), now(),
     '{"provider":"email","providers":["email"]}',
     '{"display_name":"ssfak"}',
-    false, '', ''
+    false,
+    '', '',
+    '', '', ''
   );
 
   -- 관리자 권한 부여 (seed 컨텍스트는 auth session 없으므로 트리거 임시 비활성화)
