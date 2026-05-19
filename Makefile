@@ -1,4 +1,5 @@
 SUPABASE := supabase-beta
+SIM_ID   := 35686810-DADA-43C3-B3BF-E420C50AFF8B
 
 .PHONY: setup backend app check deps
 
@@ -29,10 +30,12 @@ backend:
 	@test -f supabase/functions/.env || (echo "supabase/functions/.env 파일이 없습니다. .env.example 을 복사해서 GEMINI_API_KEY 를 채우세요." && exit 1)
 	$(SUPABASE) functions serve --env-file ./supabase/functions/.env
 
-# 터미널 2: Flutter 앱
+# 터미널 2: Flutter 앱 (iOS 시뮬레이터)
 app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
-	cd app && flutter run --dart-define-from-file=.env.local
+	xcrun simctl boot $(SIM_ID) 2>/dev/null || true
+	open -a Simulator
+	cd app && flutter run -d $(SIM_ID) --dart-define-from-file=.env.local
 
 # ────────────────────────────────────────────────────
 # 정적 검증

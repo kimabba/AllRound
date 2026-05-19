@@ -1,18 +1,16 @@
 enum Sport { tennis, futsal }
 
-const tennisGrades = ['rookie', 'div5', 'div4', 'div3', 'div2', 'div1'];
+const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
 const futsalGrades = ['beginner', 'intermediate', 'advanced'];
 
 const gradeLabels = <String, String>{
-  'rookie': '신입',
-  'div5': '5부',
-  'div4': '4부',
-  'div3': '3부',
-  'div2': '2부',
-  'div1': '1부',
-  'beginner': '초급',
+  'under1y':      '1년 미만',
+  'y1to3':        '1~3년',
+  'y3to5':        '3~5년',
+  'over5y':       '5년 이상',
+  'beginner':     '초급',
   'intermediate': '중급',
-  'advanced': '고급',
+  'advanced':     '고급',
 };
 
 const sportLabels = <Sport, String>{

@@ -3,8 +3,8 @@ import 'package:matchup/utils/grade_labels.dart';
 
 void main() {
   group('grade_labels', () {
-    test('tennis grade order: rookie → div1', () {
-      expect(tennisGrades, ['rookie', 'div5', 'div4', 'div3', 'div2', 'div1']);
+    test('tennis grade order: under1y → over5y', () {
+      expect(tennisGrades, ['under1y', 'y1to3', 'y3to5', 'over5y']);
     });
 
     test('futsal grade order', () {
@@ -12,8 +12,8 @@ void main() {
     });
 
     test('Korean labels', () {
-      expect(gradeLabel('div3'), '3부');
-      expect(gradeLabel('rookie'), '신입');
+      expect(gradeLabel('y3to5'), '3~5년');
+      expect(gradeLabel('under1y'), '1년 미만');
       expect(gradeLabel('intermediate'), '중급');
       expect(sportLabel(Sport.tennis), '테니스');
       expect(sportLabel(Sport.futsal), '풋살');

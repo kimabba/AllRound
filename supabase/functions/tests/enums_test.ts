@@ -8,7 +8,7 @@ import {
 } from '../_shared/enums.ts';
 
 Deno.test('shared enums expose stable sport grade order', () => {
-  assertEquals(TENNIS_GRADES, ['rookie', 'div5', 'div4', 'div3', 'div2', 'div1']);
+  assertEquals(TENNIS_GRADES, ['under1y', 'y1to3', 'y3to5', 'over5y']);
   assertEquals(FUTSAL_GRADES, ['beginner', 'intermediate', 'advanced']);
 });
 

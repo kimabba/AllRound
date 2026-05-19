@@ -1,6 +1,6 @@
 export type Sport = 'tennis' | 'futsal';
 
-export const TENNIS_GRADES = ['rookie', 'div5', 'div4', 'div3', 'div2', 'div1'] as const;
+export const TENNIS_GRADES = ['under1y', 'y1to3', 'y3to5', 'over5y'] as const;
 export const FUTSAL_GRADES = ['beginner', 'intermediate', 'advanced'] as const;
 
 export type TennisGrade = typeof TENNIS_GRADES[number];
@@ -84,12 +84,10 @@ export function isValidEntryFeeUnit(value: string): value is EntryFeeUnit {
 }
 
 const TENNIS_RANK: Record<TennisGrade, number> = {
-  rookie: 0,
-  div5: 1,
-  div4: 2,
-  div3: 3,
-  div2: 4,
-  div1: 5,
+  under1y: 0,
+  y1to3:   1,
+  y3to5:   2,
+  over5y:  3,
 };
 
 const FUTSAL_RANK: Record<FutsalGrade, number> = {
@@ -128,15 +126,13 @@ export function canEnter(userGrade: string, eligibleGrades: string[]): boolean {
  * UI 표시명 매핑
  */
 export const GRADE_LABELS: Record<string, string> = {
-  rookie: '신입',
-  div5: '5부',
-  div4: '4부',
-  div3: '3부',
-  div2: '2부',
-  div1: '1부',
-  beginner: '초급',
+  under1y:      '1년 미만',
+  y1to3:        '1~3년',
+  y3to5:        '3~5년',
+  over5y:       '5년 이상',
+  beginner:     '초급',
   intermediate: '중급',
-  advanced: '고급',
+  advanced:     '고급',
 };
 
 export const SPORT_LABELS: Record<Sport, string> = {
