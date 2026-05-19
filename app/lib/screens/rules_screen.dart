@@ -18,6 +18,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
   late final TabController _tab;
   Map<String, List<RuleArticle>>? _tennisByCat;
   Map<String, List<RuleArticle>>? _futsalByCat;
+  Map<String, List<RuleArticle>>? _activeByCat; // 단일 종목용
+  String? _activeSport; // 로드 시점의 activeSport 저장
   bool _loading = true;
 
   @override
@@ -35,14 +37,28 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
   Future<void> _load() async {
     final api = ref.read(apiProvider);
-    final tennis = await api.listRules('tennis');
-    final futsal = await api.listRules('futsal');
-    if (!mounted) return;
-    setState(() {
-      _tennisByCat = _groupByCategory(tennis);
-      _futsalByCat = _groupByCategory(futsal);
-      _loading = false;
-    });
+    final sport = ref.read(activeSportProvider);
+    _activeSport = sport;
+
+    if (sport != null) {
+      // 활성 종목만 fetch
+      final rules = await api.listRules(sport);
+      if (!mounted) return;
+      setState(() {
+        _activeByCat = _groupByCategory(rules);
+        _loading = false;
+      });
+    } else {
+      // 미등록: 두 종목 모두 fetch
+      final tennis = await api.listRules('tennis');
+      final futsal = await api.listRules('futsal');
+      if (!mounted) return;
+      setState(() {
+        _tennisByCat = _groupByCategory(tennis);
+        _futsalByCat = _groupByCategory(futsal);
+        _loading = false;
+      });
+    }
   }
 
   Map<String, List<RuleArticle>> _groupByCategory(List<RuleArticle> list) {
@@ -55,7 +71,27 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(activeSportProvider, (_, __) {
+      setState(() => _loading = true);
+      _load();
+    });
+
     final cs = Theme.of(context).colorScheme;
+
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // 활성 종목 있음: 단일 ListView
+    if (_activeSport != null && _activeByCat != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('룰북')),
+        body: _CategoryList(grouped: _activeByCat),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('룰북'),
@@ -76,15 +112,13 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           unselectedLabelColor: cs.onSurfaceVariant,
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tab,
-              children: [
-                _CategoryList(grouped: _tennisByCat),
-                _CategoryList(grouped: _futsalByCat),
-              ],
-            ),
+      body: TabBarView(
+        controller: _tab,
+        children: [
+          _CategoryList(grouped: _tennisByCat),
+          _CategoryList(grouped: _futsalByCat),
+        ],
+      ),
     );
   }
 }
