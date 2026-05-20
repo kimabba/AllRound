@@ -1,11 +1,16 @@
 /**
- * Gemini Generative Language API + Search Grounding 클라이언트.
+ * Gemini Generative Language API 클라이언트.
  *
  * REST 직접 호출. SSE 스트리밍은 streamGenerateContent 엔드포인트를 사용한다.
  * https://ai.google.dev/api/rest/v1beta/models/streamGenerateContent
+ *
+ * 비용 절감 정책 (Day 1, 2026-05-20):
+ *  - Google Search grounding 사용 안 함 (백엔드 강제 OFF).
+ *  - thinkingBudget 항상 0 — Flash-Lite 는 RAG/템플릿 답변에 thinking 불필요.
+ *  - 외부 검색 citation 미수신. DB 기반 citation 은 호출 측(chat/index.ts)에서 처리.
  */
 
-const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash-lite';
 
 function apiKey(): string {
   const k = Deno.env.get('GEMINI_API_KEY');
@@ -24,26 +29,19 @@ export interface ChatTurn {
 
 export interface GenerateOptions {
   systemInstruction?: string;
-  enableSearch?: boolean;
   temperature?: number;
   maxOutputTokens?: number;
 }
 
-interface Citation {
-  uri?: string;
-  title?: string;
-}
-
 export interface StreamEvent {
-  type: 'text' | 'citation' | 'done' | 'error';
+  type: 'text' | 'done' | 'error';
   text?: string;
-  citations?: Citation[];
   error?: string;
 }
 
 /**
  * 스트리밍 generate.
- * AsyncGenerator 로 텍스트 청크와 인용을 순차 yield 한다.
+ * AsyncGenerator 로 텍스트 청크를 순차 yield 한다.
  */
 export async function* streamChat(
   history: ChatTurn[],
@@ -57,17 +55,13 @@ export async function* streamChat(
     generationConfig: {
       temperature: opts.temperature ?? 0.4,
       maxOutputTokens: opts.maxOutputTokens ?? 2048,
-      // thinking: search grounding 활성 시에는 thinking 일정량이 필요하므로 0으로 강제하지 않음
-      //  (강제 0 + search ON + 복잡한 prompt 조합에서 빈 응답 나오는 케이스 발생).
-      //  thought=true 파트는 아래 reader 루프에서 필터링해 채팅엔 노출 안 됨.
-      thinkingConfig: opts.enableSearch ? undefined : { thinkingBudget: 0 },
+      // thinking 항상 비활성 — grounding 제거 이후 빈 응답 케이스도 사라짐.
+      // thought=true 파트는 아래 reader 루프에서 필터링해 채팅엔 노출 안 됨.
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
   if (opts.systemInstruction) {
     body.systemInstruction = { parts: [{ text: opts.systemInstruction }] };
-  }
-  if (opts.enableSearch) {
-    body.tools = [{ googleSearch: {} }];
   }
 
   const res = await fetch(url, {
@@ -100,14 +94,6 @@ export async function* streamChat(
         .map((p: ChatPart) => p.text)
         .join('') ?? '';
       if (text) yield { type: 'text', text };
-
-      const grounding = candidate?.groundingMetadata?.groundingChunks;
-      if (grounding) {
-        const citations: Citation[] = grounding
-          .map((c: { web?: Citation }) => c.web)
-          .filter(Boolean);
-        if (citations.length) yield { type: 'citation', citations };
-      }
     } catch (_) {
       // 일부 청크가 깨질 수 있으므로 무시
     }
