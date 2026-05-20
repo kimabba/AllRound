@@ -4,6 +4,16 @@ import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
 import { ChatTurn, streamChat } from '../_shared/gemini.ts';
 import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import {
+  buildEmbeddingResult,
+  buildFallbackResult,
+  buildRuleResult,
+  classifyByRule,
+  extractSlots,
+  type Intent,
+  INTENT_VALUES,
+  type IntentResult,
+} from '../_shared/intent.ts';
 
 /**
  * POST /chat
@@ -11,6 +21,7 @@ import { serviceClient } from '../_shared/supabase.ts';
  *
  * SSE 스트리밍 응답.
  *  event: meta       → { conversation_id }
+ *  event: intent     → { intent, confidence, method, slots, rule_matched? }  (Day 3-4 shadow mode)
  *  event: cache      → { status: 'hit' | 'miss', similarity?: number }  (디버깅용, 클라이언트 무시 가능)
  *  event: context    → { tournaments: [...], rules: [...] }   (RAG 결과, cache miss 일 때만)
  *  event: delta      → { text: '...' }
@@ -81,8 +92,39 @@ interface QaCacheHit {
 const QA_CACHE_THRESHOLD = 0.92;
 const QA_CACHE_TTL_HOURS = 24;
 
+// Intent classifier 설정 (Day 3-4 shadow mode). PLAN_llm-cost-reduction.md 참조.
+//   - 룰 매칭 실패 시 임베딩 KNN 으로 폴백.
+//   - 임베딩 cosine similarity 가 임계값 미달이면 free_chat 폴백.
+//   - shadow mode: 분류 결과는 메트릭/SSE 로만 발송, 실제 routing 은 안 함.
+//     Day 5-6 에서 의도별 SQL+템플릿 routing 활성화 예정.
+const INTENT_KNN_THRESHOLD = 0.75;
+
+interface IntentClassifyRow {
+  intent: string;
+  similarity: number;
+}
+
+function isIntentValue(value: string): value is Intent {
+  return (INTENT_VALUES as readonly string[]).includes(value);
+}
+
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * user_id 의 SHA-256 prefix (8 hex chars = 32bits) 해시.
+ * 운영 로그 PII 회피용 — 평문 user_id 노출 차단하면서 같은 사용자 추적은 가능.
+ *
+ * 32 bits 충돌 확률: 사용자 수가 ~수만 단위까지는 디버깅에 충분.
+ * 분석용 키 이름은 `user_id_hash` 로 사용 (혼동 방지).
+ */
+async function hashUserId(userId: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(userId));
+  return Array.from(new Uint8Array(buf))
+    .slice(0, 4) // 8 hex chars
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -230,6 +272,9 @@ Deno.serve(async (req) => {
   const conversationId = body.conversation_id ?? crypto.randomUUID();
   const userMessage = body.message.trim();
 
+  // 운영 로그용 user_id 해시 (PII 평문 노출 방지). 매 요청 1회 계산 후 모든 구조화 로그에서 재사용.
+  const hashedUserId = await hashUserId(user.id);
+
   // 사용자 종목·등급
   const { data: userSports } = await supabase
     .from('user_sports')
@@ -284,6 +329,100 @@ Deno.serve(async (req) => {
           console.error('Embedding failed:', (e as Error).message);
         }
 
+        const hasPriorHistory = (prior?.length ?? 0) > 0;
+        const adminSupabase = serviceClient();
+
+        // ---- Intent classifier (Day 3-4, shadow mode) ----
+        // 1) 룰 기반 1차 분류
+        // 2) 룰 미매치 + 임베딩 있으면 RPC intent_classify (KNN, threshold 0.75) 폴백
+        // 3) 그래도 미매치면 free_chat
+        // 슬롯 추출은 의도와 독립적으로 항상 수행.
+        //
+        // shadow mode: 분류 결과는 SSE `intent` 이벤트 + 구조화 로그 `chat_intent` 로만 발송.
+        // 실제 routing (RAG/캐시/LLM 분기) 은 변경하지 않음. Day 5-6 에서 활성화 예정.
+        const slots = extractSlots(userMessage);
+        const ruleHit = classifyByRule(userMessage);
+        let intentResult: IntentResult;
+        if (ruleHit) {
+          intentResult = buildRuleResult(ruleHit, slots);
+        } else if (vectorLiteral) {
+          let embeddingHit: IntentClassifyRow | null = null;
+          try {
+            const { data: knnRows, error: knnErr } = await adminSupabase.rpc(
+              'intent_classify',
+              {
+                p_query_embedding: vectorLiteral,
+                p_threshold: INTENT_KNN_THRESHOLD,
+              },
+            );
+            if (knnErr) {
+              // RPC 자체 실패 (마이그레이션 미적용 등) — shadow mode 이므로 폴백만 하고 본 흐름 영향 없음.
+              console.warn(
+                'chat_intent',
+                JSON.stringify({
+                  event: 'knn_rpc_error',
+                  reason: knnErr.message,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+            } else if (Array.isArray(knnRows) && knnRows.length > 0) {
+              const row = knnRows[0] as IntentClassifyRow;
+              if (isIntentValue(row.intent)) {
+                embeddingHit = row;
+              }
+            }
+          } catch (e) {
+            console.warn(
+              'chat_intent',
+              JSON.stringify({
+                event: 'knn_exception',
+                reason: (e as Error).message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+          }
+
+          if (embeddingHit && isIntentValue(embeddingHit.intent)) {
+            intentResult = buildEmbeddingResult(
+              embeddingHit.intent,
+              embeddingHit.similarity,
+              slots,
+            );
+          } else {
+            intentResult = buildFallbackResult(slots);
+          }
+        } else {
+          // 임베딩 자체가 없으면 룰 미매치는 곧장 free_chat 폴백.
+          intentResult = buildFallbackResult(slots);
+        }
+
+        // SSE: 클라이언트 디버깅/관측용 (현재 매치업 클라이언트는 무시 가능)
+        send('intent', {
+          intent: intentResult.intent,
+          confidence: intentResult.confidence,
+          method: intentResult.method,
+          slots: intentResult.slots,
+          ...(intentResult.rule_matched ? { rule_matched: intentResult.rule_matched } : {}),
+        });
+
+        // 구조화 로그: docker logs grep 으로 분포/정확도 집계 가능
+        console.log(
+          'chat_intent',
+          JSON.stringify({
+            event: 'classify',
+            intent: intentResult.intent,
+            confidence: intentResult.confidence,
+            method: intentResult.method,
+            slots: intentResult.slots,
+            rule_matched: intentResult.rule_matched ?? null,
+            has_embedding: !!vectorLiteral,
+            user_id_hash: hashedUserId,
+            conversation_id: conversationId,
+          }),
+        );
+
         // ---- Semantic Cache lookup (Day 2) ----
         // HIT 시 LLM 호출 없이 즉시 반환. RAG 도 우회.
         //
@@ -294,8 +433,6 @@ Deno.serve(async (req) => {
         //
         // 캐시 RPC/테이블은 service_role 만 접근 가능 (RLS 우회 필요). user JWT 클라이언트 사용 시 silent fail.
         // 다른 호출 (rate_limit, user_sports, RAG RPC, chat_messages 등) 은 RLS 적용 위해 user client 유지.
-        const hasPriorHistory = (prior?.length ?? 0) > 0;
-        const adminSupabase = serviceClient();
 
         let cacheHit: QaCacheHit | null = null;
         if (hasPriorHistory) {
@@ -303,7 +440,7 @@ Deno.serve(async (req) => {
             'chat_cache',
             JSON.stringify({
               event: 'skip_history',
-              user_id: user.id,
+              user_id_hash: hashedUserId,
               conversation_id: conversationId,
               prior_count: prior?.length ?? 0,
             }),
@@ -325,7 +462,7 @@ Deno.serve(async (req) => {
             'chat_cache',
             JSON.stringify({
               event: 'skip_no_embedding',
-              user_id: user.id,
+              user_id_hash: hashedUserId,
               conversation_id: conversationId,
               has_vector: !!vectorLiteral,
               has_context_hash: !!userContextHash,
@@ -339,7 +476,7 @@ Deno.serve(async (req) => {
             JSON.stringify({
               event: 'hit',
               similarity: cacheHit.similarity,
-              user_id: user.id,
+              user_id_hash: hashedUserId,
               conversation_id: conversationId,
               cache_id: cacheHit.id,
             }),
@@ -390,7 +527,7 @@ Deno.serve(async (req) => {
             'chat_cache',
             JSON.stringify({
               event: 'miss',
-              user_id: user.id,
+              user_id_hash: hashedUserId,
               conversation_id: conversationId,
             }),
           );
@@ -559,7 +696,7 @@ Deno.serve(async (req) => {
               JSON.stringify({
                 event: 'insert_failed',
                 reason: insertErr.message,
-                user_id: user.id,
+                user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
             );
@@ -569,7 +706,7 @@ Deno.serve(async (req) => {
               'chat_cache',
               JSON.stringify({
                 event: 'insert_skipped_duplicate',
-                user_id: user.id,
+                user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
             );
@@ -579,7 +716,7 @@ Deno.serve(async (req) => {
               JSON.stringify({
                 event: 'insert',
                 cache_id: insertedId,
-                user_id: user.id,
+                user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
             );
