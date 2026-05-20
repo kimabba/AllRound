@@ -19,6 +19,10 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
 });
 
 final currentUserProvider = Provider<User?>((ref) {
+  // authStateProvider 를 watch 해야 onAuthStateChange 시 재평가됨.
+  // (이 줄 없으면 supabaseProvider 인스턴스가 안 바뀌어 currentUser 가 stale 상태로 고정 →
+  //  영속 세션 복원 실패한 첫 실행에서 로그인해도 화면이 안 바뀌는 버그)
+  ref.watch(authStateProvider);
   return ref.watch(supabaseProvider).auth.currentUser;
 });
 

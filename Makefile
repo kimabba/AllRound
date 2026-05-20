@@ -1,4 +1,4 @@
-SUPABASE  := supabase-beta
+SUPABASE ?= supabase
 # iOS Simulator: ffmpeg_kit arm64 미지원으로 현재 macOS 로 실행
 # 추후 iOS 빌드 준비되면: DEVICE_ID = 35686810-DADA-43C3-B3BF-E420C50AFF8B
 DEVICE_ID := macos

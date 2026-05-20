@@ -2,9 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Debug 빌드 한정: ffmpeg_kit_flutter_new가 /opt/homebrew의 zlib/fontconfig 등 외부 dylib을 로드해야 하므로 sandbox 비활성화 + dylib 검증 해제. Release.entitlements는 sandbox 유지. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>

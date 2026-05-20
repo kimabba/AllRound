@@ -57,7 +57,10 @@ export async function* streamChat(
     generationConfig: {
       temperature: opts.temperature ?? 0.4,
       maxOutputTokens: opts.maxOutputTokens ?? 2048,
-      thinkingConfig: { thinkingBudget: 0 }, // thinking 비활성화 (gemini-2.5+)
+      // thinking: search grounding 활성 시에는 thinking 일정량이 필요하므로 0으로 강제하지 않음
+      //  (강제 0 + search ON + 복잡한 prompt 조합에서 빈 응답 나오는 케이스 발생).
+      //  thought=true 파트는 아래 reader 루프에서 필터링해 채팅엔 노출 안 됨.
+      thinkingConfig: opts.enableSearch ? undefined : { thinkingBudget: 0 },
     },
   };
   if (opts.systemInstruction) {
@@ -83,41 +86,50 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  // SSE 청크 처리를 한 곳에 (마지막 buffer 잔여 처리에도 재사용)
+  function* parseLine(line: string): Generator<StreamEvent> {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return;
+    const json = trimmed.slice(5).trim();
+    if (!json) return;
+    try {
+      const parsed = JSON.parse(json);
+      const candidate = parsed.candidates?.[0];
+      const text = candidate?.content?.parts
+        ?.filter((p: Record<string, unknown>) => !p.thought)
+        .map((p: ChatPart) => p.text)
+        .join('') ?? '';
+      if (text) yield { type: 'text', text };
+
+      const grounding = candidate?.groundingMetadata?.groundingChunks;
+      if (grounding) {
+        const citations: Citation[] = grounding
+          .map((c: { web?: Citation }) => c.web)
+          .filter(Boolean);
+        if (citations.length) yield { type: 'citation', citations };
+      }
+    } catch (_) {
+      // 일부 청크가 깨질 수 있으므로 무시
+    }
+  }
+
   while (true) {
     const { value, done } = await reader.read();
-    if (done) break;
+    if (done) {
+      // Gemini SSE가 마지막 청크를 종결자(\n\n) 없이 보낼 수 있으므로 잔여 buffer 도 처리
+      if (buffer.trim()) {
+        for (const ev of parseLine(buffer)) yield ev;
+      }
+      break;
+    }
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE: "data: {json}\n\n"
-    const events = buffer.split('\n\n');
+    // SSE 이벤트 경계는 CRLF 또는 LF 둘 다 허용
+    const events = buffer.split(/\r?\n\r?\n/);
     buffer = events.pop() ?? '';
 
     for (const evt of events) {
-      const line = evt.trim();
-      if (!line.startsWith('data:')) continue;
-      const json = line.slice(5).trim();
-      if (!json) continue;
-
-      try {
-        const parsed = JSON.parse(json);
-        const candidate = parsed.candidates?.[0];
-        // thought: true 파트 필터링 (gemini-2.5 thinking 출력 제외)
-        const text = candidate?.content?.parts
-          ?.filter((p: Record<string, unknown>) => !p.thought)
-          .map((p: ChatPart) => p.text)
-          .join('') ?? '';
-        if (text) yield { type: 'text', text };
-
-        const grounding = candidate?.groundingMetadata?.groundingChunks;
-        if (grounding) {
-          const citations: Citation[] = grounding
-            .map((c: { web?: Citation }) => c.web)
-            .filter(Boolean);
-          if (citations.length) yield { type: 'citation', citations };
-        }
-      } catch (_) {
-        // 무시 (일부 청크가 깨질 수 있음)
-      }
+      for (const ev of parseLine(evt)) yield ev;
     }
   }
   yield { type: 'done' };

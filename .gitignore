@@ -33,6 +33,7 @@ app/ios/.symlinks/
 app/android/.gradle/
 app/android/local.properties
 app/.metadata
+app/.dev.json
 
 # macOS
 .DS_Store

@@ -389,7 +389,9 @@ verify_jwt = false
 verify_jwt = false
 
 [analytics]
-enabled = true
+# Colima 환경에서 vector 컨테이너가 깨진 /var/run/docker.sock symlink 를 마운트하다 실패하므로 비활성화.
+# 운영 클라우드 환경에서는 enabled = true 권장.
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
