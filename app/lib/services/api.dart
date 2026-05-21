@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
 import '../models/admin.dart';
+import '../models/crawl_source.dart';
 import '../models/tournament.dart';
 
 /// Edge Functions REST + SSE 클라이언트.
@@ -308,6 +309,112 @@ class ApiService {
     );
     _check(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ===== admin: crawl_sources (RLS 가 admin role 만 허용 → REST 직접 사용) =====
+
+  Future<List<CrawlSource>> crawlSources() async {
+    final rows = await _supabase
+        .from('crawl_sources')
+        .select()
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows)
+        .map(CrawlSource.fromJson)
+        .toList();
+  }
+
+  Future<CrawlSource> createCrawlSource({
+    required String name,
+    required String slug,
+    required String url,
+    String? sport,
+    String? region,
+    String sourceType = 'board',
+    required String parserModule,
+    String scheduleCron = '0 21 * * *',
+    bool enabled = true,
+    String? notes,
+  }) async {
+    final row = await _supabase
+        .from('crawl_sources')
+        .insert({
+          'name': name,
+          'slug': slug,
+          'url': url,
+          if (sport != null && sport.isNotEmpty) 'sport': sport,
+          if (region != null && region.isNotEmpty) 'region': region,
+          'source_type': sourceType,
+          'parser_module': parserModule,
+          'schedule_cron': scheduleCron,
+          'enabled': enabled,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        })
+        .select()
+        .single();
+    return CrawlSource.fromJson(row);
+  }
+
+  Future<CrawlSource> updateCrawlSource(
+    String id, {
+    String? name,
+    String? url,
+    String? sport,
+    String? region,
+    String? sourceType,
+    String? parserModule,
+    String? scheduleCron,
+    bool? enabled,
+    String? notes,
+    bool clearSport = false,
+    bool clearRegion = false,
+    bool clearNotes = false,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (name != null) patch['name'] = name;
+    if (url != null) patch['url'] = url;
+    if (clearSport) {
+      patch['sport'] = null;
+    } else if (sport != null) {
+      patch['sport'] = sport;
+    }
+    if (clearRegion) {
+      patch['region'] = null;
+    } else if (region != null) {
+      patch['region'] = region;
+    }
+    if (sourceType != null) patch['source_type'] = sourceType;
+    if (parserModule != null) patch['parser_module'] = parserModule;
+    if (scheduleCron != null) patch['schedule_cron'] = scheduleCron;
+    if (enabled != null) patch['enabled'] = enabled;
+    if (clearNotes) {
+      patch['notes'] = null;
+    } else if (notes != null) {
+      patch['notes'] = notes;
+    }
+    if (patch.isEmpty) {
+      // nothing to update — re-fetch row so caller can refresh
+      final row = await _supabase
+          .from('crawl_sources')
+          .select()
+          .eq('id', id)
+          .single();
+      return CrawlSource.fromJson(row);
+    }
+    final row = await _supabase
+        .from('crawl_sources')
+        .update(patch)
+        .eq('id', id)
+        .select()
+        .single();
+    return CrawlSource.fromJson(row);
+  }
+
+  Future<void> deleteCrawlSource(String id) async {
+    await _supabase.from('crawl_sources').delete().eq('id', id);
+  }
+
+  Future<CrawlSource> toggleCrawlSourceEnabled(String id, bool enabled) async {
+    return updateCrawlSource(id, enabled: enabled);
   }
 
   // ===== helpers =====
