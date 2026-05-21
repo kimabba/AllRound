@@ -127,17 +127,34 @@ DB citation 처리(내부 데이터 출처 표시)는 **유지** — Search grou
 
 **Goal**: 정형 의도를 LLM 호출 0회로 처리
 
-- [ ] **SQL 화이트리스트** 함수 정의 — read-only DB role 로만 실행
-  - `tournaments_by_region_date(region, date_range)`
-  - `clubs_by_region_sport(region, sport)`
-  - `matches_upcoming(user_id)`
-- [ ] 의도별 응답 템플릿 (한국어, **톤 가이드 포함**)
-- [ ] **LLM 임의 SQL 생성 비활성화** — 미리 정의된 query 만 사용
-- [ ] 보안 체크리스트
-  - [ ] 파라미터화 prepared statement
-  - [ ] read-only DB role 분리
-  - [ ] RLS 적용 확인
-  - [ ] SQL injection 방어 (슬롯 값 sanitize)
+- [x] **SQL 화이트리스트** 함수 정의 — read-only DB role 로만 실행
+  - [x] `tournament_search_by_slots(p_user_id, p_sport, p_region, p_date_from, p_date_to, p_only_my_grade, p_match_count)` — 018 마이그레이션
+  - [ ] `clubs_by_region_sport(region, sport)` — 후속
+  - [ ] `matches_upcoming(user_id)` — 후속
+- [x] 의도별 응답 템플릿 (한국어, **톤 가이드 포함**) — `renderTournamentSearchTemplate`
+- [x] **LLM 임의 SQL 생성 비활성화** — 미리 정의된 RPC 만 사용
+- [x] 보안 체크리스트 (tournament_search 한정)
+  - [x] 파라미터화 prepared statement (Supabase RPC)
+  - [x] `security invoker` + `authenticated` grant (RLS 적용)
+  - [x] 슬롯 값은 intent.ts 정규식 + REGION_LABELS 매핑으로 enum/타입 검증
+  - [ ] 별도 read-only DB role 분리 — 후속 (현재 authenticated 의 RLS 가 published 만 노출)
+
+#### 현재 활성화 범위 (점진적)
+
+| 의도 | 상태 | confidence 임계값 | 활성화 PR |
+|---|---|---|---|
+| `tournament_search` | **active** | ≥ 0.95 | #8 (Day 5-6) |
+| `tournament_detail` | shadow | — | 데이터 확보 후 |
+| `club_search` | shadow | — | 후속 |
+| `rule_lookup` | shadow | — | 후속 |
+| `match_schedule` | shadow | — | 후속 |
+| `my_profile` | shadow | — | 후속 |
+| `free_chat` | shadow | — | 라우팅 불가 (자유 채팅) |
+
+- **`ROUTABLE_INTENTS`**: `chat/index.ts` 상수. 의도 추가 시 여기 + 의도별 핸들러 + 템플릿 동시 작성.
+- **`ROUTING_CONFIDENCE_THRESHOLD = 0.95`**: 룰 분류 (confidence 1.0) 는 통과, embedding 폴백 (보통 0.7-0.85) 은 자동 미달 → fallback (안전).
+- **결과 0 또는 RPC 에러**: return 안 함 → 기존 RAG+LLM 흐름으로 자연 전환 → false negative 회피.
+- 다음 의도 활성화 기준: shadow 로그 분포 + 정확도 검증 + slot 추출 신뢰도 ≥ 95% + 응답 템플릿 한국어 검증 통과.
 
 **Quality Gate**: 정형 질문 10개 케이스 LLM 호출 0회로 응답 + 보안 체크리스트 통과
 

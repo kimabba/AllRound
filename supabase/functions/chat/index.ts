@@ -9,11 +9,13 @@ import {
   buildFallbackResult,
   buildRuleResult,
   classifyByRule,
+  type DateRange,
   extractSlots,
   type Intent,
   INTENT_VALUES,
   type IntentResult,
 } from '../_shared/intent.ts';
+import type { RegionCode } from '../_shared/enums.ts';
 
 /**
  * POST /chat
@@ -21,18 +23,22 @@ import {
  *
  * SSE 스트리밍 응답.
  *  event: meta       → { conversation_id }
- *  event: intent     → { intent, confidence, method, slots, rule_matched? }  (Day 3-4 shadow mode)
- *  event: cache      → { status: 'hit' | 'miss', similarity?: number }  (디버깅용, 클라이언트 무시 가능)
- *  event: context    → { tournaments: [...], rules: [...] }   (RAG 결과, cache miss 일 때만)
+ *  event: intent     → { intent, confidence, method, slots, rule_matched?, routable }  (Day 3-4 shadow → Day 5-6 일부 라우팅)
+ *  event: route      → { intent, result_count }                (Day 5-6, 라우팅 활성화 시에만 발송. 발송 후 cache/RAG/LLM 모두 우회하고 종료)
+ *  event: cache      → { status: 'hit' | 'miss' | 'skip', similarity?: number }  (라우팅 비활성 분기에서만)
+ *  event: context    → { tournaments: [...], rules: [...] }   (RAG 결과 또는 라우팅 시 빈 배열)
  *  event: delta      → { text: '...' }
  *  event: citation   → { items: [...] }                       (DB citation, 응답 종료 직전 1회)
  *  event: done       → {}
  *
  * 흐름:
- *  1. 사용자 메시지 임베딩
- *  2. qa_cache lookup (user_context_hash 일치, TTL 살아있음, cosine ≥ 0.92) → HIT 시 즉시 반환
- *  3. MISS → RAG (tournaments_semantic_search + rules_semantic_search) → Gemini Flash-Lite
- *  4. 정상 응답이면 qa_cache 에 저장 (TTL 24h)
+ *  1. 사용자 메시지 임베딩 + intent 분류 (룰 → embedding KNN 폴백)
+ *  2. 미등록 종목 명시 → refuse_unregistered_sport (LLM 우회)
+ *  3. Day 5-6 routing: 의도가 ROUTABLE_INTENTS 에 있고 confidence ≥ 0.95 면
+ *     slot 기반 SQL + 템플릿 응답 → LLM 호출 0. 결과 0 또는 RPC 에러는 fallback.
+ *  4. fallback: qa_cache lookup (user_context_hash 일치, TTL 살아있음, cosine ≥ 0.92) → HIT 시 즉시 반환
+ *  5. MISS → RAG (tournaments_semantic_search + rules_semantic_search) → Gemini Flash-Lite
+ *  6. 정상 응답이면 qa_cache 에 저장 (TTL 24h)
  *
  * Google Search grounding 비활성 (Day 1). DB citation 만 사용.
  */
@@ -99,9 +105,102 @@ const QA_CACHE_TTL_HOURS = 24;
 //     Day 5-6 에서 의도별 SQL+템플릿 routing 활성화 예정.
 const INTENT_KNN_THRESHOLD = 0.75;
 
+// Day 5-6 routing 설정.
+// - tournament_search 만 활성화 (다른 의도는 기존 RAG+LLM 흐름 유지).
+// - confidence ≥ 0.95 일 때만 routing. 미달은 fallback.
+// - SQL 결과 0건이면 fallback (return 안 함, 자연스럽게 RAG+LLM 흐름으로 흘러감).
+const ROUTING_CONFIDENCE_THRESHOLD = 0.95;
+const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search']);
+
 interface IntentClassifyRow {
   intent: string;
   similarity: number;
+}
+
+interface TournamentSearchRow {
+  id: string;
+  sport: 'tennis' | 'futsal';
+  title: string;
+  start_date: string;
+  end_date: string | null;
+  region: string | null;
+  location: string | null;
+  eligible_grades: string[];
+  entry_fee: number | null;
+  format: string | null;
+}
+
+/**
+ * tournament_search routing 결과를 마크다운 템플릿으로 렌더.
+ *
+ * 출력 구조:
+ *   - 헤더 1줄 (종목 + 결과 수 + 필터 요약).
+ *   - 종목이 혼합되면 하위 섹션으로 분리 (테니스 → 풋살 순).
+ *   - 각 대회는 1줄 bullet: 제목 / 일정 / 장소 / 참가비 / 포맷 / 출전등급.
+ *   - 마지막에 disclaimer.
+ *
+ * LLM 호출 없이 결정적으로 생성 — 같은 입력에 같은 출력.
+ */
+function renderTournamentSearchTemplate(
+  rows: TournamentSearchRow[],
+  ctx: {
+    sport?: 'tennis' | 'futsal';
+    region: string | null;
+    dateRange?: DateRange;
+  },
+): string {
+  const lines: string[] = [];
+  const sportLabel = ctx.sport === 'futsal'
+    ? '⚽ 풋살'
+    : ctx.sport === 'tennis'
+    ? '🎾 테니스'
+    : '대회';
+
+  // 헤더 — 필터 요약
+  const filters: string[] = [];
+  if (ctx.region) filters.push(ctx.region);
+  if (ctx.dateRange) filters.push(`${ctx.dateRange.from} ~ ${ctx.dateRange.to}`);
+  const filterText = filters.length > 0 ? ` (${filters.join(', ')})` : '';
+  const headerLabel = ctx.sport ? sportLabel : '대회';
+  lines.push(`## ${headerLabel} ${rows.length}건${filterText}`);
+  lines.push('');
+
+  // 종목별 그룹핑 — sport 명시 없을 때 섹션 분리.
+  const groups = new Map<string, TournamentSearchRow[]>();
+  for (const r of rows) {
+    const k = r.sport;
+    const arr = groups.get(k);
+    if (arr) arr.push(r);
+    else groups.set(k, [r]);
+  }
+
+  const order = ['tennis', 'futsal'];
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  for (const key of sortedKeys) {
+    if (groups.size > 1) {
+      const subLabel = key === 'tennis' ? '### 🎾 테니스' : '### ⚽ 풋살';
+      lines.push(subLabel);
+    }
+    for (const t of groups.get(key)!) {
+      const endPart = t.end_date && t.end_date !== t.start_date ? ` ~ ${t.end_date}` : '';
+      const loc = t.location ? ` @ ${t.location}` : '';
+      const fee = t.entry_fee != null ? ` · 참가비 ${t.entry_fee.toLocaleString()}원` : '';
+      const fmt = t.format ? ` · ${t.format}` : '';
+      const grades = t.eligible_grades.length > 0
+        ? ` · 출전등급 ${t.eligible_grades.join('/')}`
+        : '';
+      lines.push(`- **${t.title}** (${t.start_date}${endPart})${loc}${fee}${fmt}${grades}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('_DB 등록 정보 기준. 상세는 협회나 공식 홈페이지에서 확인하세요._');
+  return lines.join('\n');
 }
 
 function isIntentValue(value: string): value is Intent {
@@ -475,6 +574,10 @@ Deno.serve(async (req) => {
           ((userSports ?? []) as UserSport[]).map((s) => s.sport),
         );
 
+        // Day 5-6: routing 후보 여부 (다른 의도 분포 추적).
+        const isRoutable = ROUTABLE_INTENTS.has(intentResult.intent) &&
+          intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD;
+
         // 구조화 로그: docker logs grep 으로 분포/정확도 집계 가능
         console.log(
           'chat_intent',
@@ -488,6 +591,7 @@ Deno.serve(async (req) => {
             has_embedding: !!vectorLiteral,
             requested_sport: requestedSport ?? null,
             registered_sports: Array.from(registeredSports),
+            routable: isRoutable,
             user_id_hash: hashedUserId,
             conversation_id: conversationId,
           }),
@@ -526,6 +630,102 @@ Deno.serve(async (req) => {
           send('done', {});
           controller.close();
           return;
+        }
+
+        // ---- Day 5-6 routing: tournament_search 만, confidence ≥ 0.95 ----
+        // 정책:
+        //  - ROUTABLE_INTENTS 에 포함되고 신뢰도 임계값 충족 시에만 활성.
+        //  - region 코드 (gwangju 등) → 한글 라벨 (광주) 매핑 후 RPC 호출
+        //    (tournaments.region 컬럼이 한글이라서 — RPC 내부에도 ilike 안전망 있음).
+        //  - SQL 결과 ≥ 1 건이면 템플릿 응답 후 즉시 return (LLM/RAG 우회).
+        //  - SQL 결과 0 건 또는 RPC 에러는 fallback (기존 RAG+LLM 흐름).
+        //  - cache 와 마찬가지로 routing 응답은 history-dependent 가 아니어도
+        //    프로필 변동에 따라 결과가 바뀌므로 qa_cache 에는 저장 안 함 (cacheable 미설정).
+        if (isRoutable && intentResult.intent === 'tournament_search') {
+          const regionCode = intentResult.slots.region;
+          const regionLabel = regionCode
+            ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
+            : null;
+          const dateRange = intentResult.slots.date_range;
+
+          const { data: rows, error: routeErr } = await supabase.rpc(
+            'tournament_search_by_slots',
+            {
+              p_user_id: user.id,
+              p_sport: intentResult.slots.sport ?? null,
+              p_region: regionLabel,
+              p_date_from: dateRange?.from ?? null,
+              p_date_to: dateRange?.to ?? null,
+              p_only_my_grade: true,
+              p_match_count: 10,
+            },
+          );
+
+          if (routeErr) {
+            // RPC 실패 (마이그레이션 미적용 등) → fallback 으로 자연스럽게 진행.
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'tournament_search_rpc_error',
+                reason: routeErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+          } else if (Array.isArray(rows) && rows.length > 0) {
+            const typedRows = rows as TournamentSearchRow[];
+            const answerText = renderTournamentSearchTemplate(typedRows, {
+              sport: intentResult.slots.sport,
+              region: regionLabel,
+              dateRange,
+            });
+            const citations: DbCitation[] = typedRows.slice(0, 5).map((t) => ({
+              type: 'db',
+              source: 'tournaments',
+              id: t.id,
+              title: t.title,
+            }));
+
+            console.log(
+              'chat_route',
+              JSON.stringify({
+                event: 'tournament_search_routed',
+                result_count: typedRows.length,
+                slots: intentResult.slots,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+
+            send('route', { intent: 'tournament_search', result_count: typedRows.length });
+            send('context', { tournaments: [], rules: [] });
+            send('delta', { text: answerText });
+            send('citation', { items: citations });
+
+            // assistant 메시지 영구 저장 (대화 이력 일관성)
+            await supabase.from('chat_messages').insert({
+              user_id: user.id,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: answerText,
+              citations,
+            });
+
+            send('done', {});
+            controller.close();
+            return;
+          } else {
+            // routing 시도했지만 결과 0 → fallback. 메트릭만 기록.
+            console.log(
+              'chat_route',
+              JSON.stringify({
+                event: 'tournament_search_empty',
+                slots: intentResult.slots,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+          }
         }
 
         // ---- Semantic Cache lookup (Day 2) ----
