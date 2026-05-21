@@ -1,69 +1,31 @@
+// supabase/functions/crawl-tennis-korea/index.ts
+// ⚠️ DEPRECATED (Phase 2): 이 함수는 thin wrapper 로 변경되었다.
+//
+// 실제 크롤 로직은 _shared/crawler/parsers/tennis_korea_board.ts 로 이동했고,
+// 단일 진입점은 'crawl-dispatch' Edge Function 이다.
+//
+// 외부 호출 호환성 유지를 위해 본 endpoint 는 보존하되,
+// 내부적으로 crawl-dispatch (POST { slug, force: true }) 를 forward 한다.
+// dispatcher 의 응답 body 와 status 를 그대로 relay (B5 — Codex 검토):
+//   - 404 (source not found / disabled) → 404 그대로
+//   - 500 (parser 실패) → 500 그대로
+//   - 200 (정상) → 200 + executed/skipped/errors 본문 보존
+// 200 으로 하드코딩하면 dispatcher 의 실패가 호출자에게 가려진다.
+//
+// Phase 4 에서 호출처가 모두 dispatcher 로 이관되면 디렉토리를 삭제할 예정.
+
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import {
-  CrawlerTournament,
-  extractApplicationDeadline,
-  extractDate,
-  extractTennisGradesFromText,
-  finishAudit,
-  startAudit,
-  upsertTournament,
-} from '../_shared/crawler.ts';
-import { DOMParser } from 'deno-dom';
+import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
 
-const SOURCE = 'tennis-korea';
-const LIST_URL = Deno.env.get('CRAWL_TENNIS_KOREA_URL') ??
-  'https://www.koreatennis.or.kr/board/tournament/list.do';
+const SLUG = 'tennis-korea';
 
-async function fetchListing(): Promise<{ url: string; title: string }[]> {
-  const res = await fetch(LIST_URL, { headers: { 'User-Agent': 'MatchUpBot/1.0' } });
-  if (!res.ok) throw new Error(`Listing fetch failed ${res.status}`);
-  const html = await res.text();
-  const dom = new DOMParser().parseFromString(html, 'text/html');
-  if (!dom) throw new Error('parse listing');
-
-  const items: { url: string; title: string }[] = [];
-  for (const link of dom.querySelectorAll('a[href*="view"], a[href*="board"]')) {
-    const el = link as unknown as { getAttribute(n: string): string | null; textContent: string };
-    const href = el.getAttribute('href');
-    const title = (el.textContent ?? '').trim();
-    if (!href || title.length < 4) continue;
-    items.push({ url: new URL(href, LIST_URL).toString(), title });
+function dispatchUrl(req: Request): string {
+  const baseEnv = Deno.env.get('SUPABASE_URL');
+  if (baseEnv) {
+    return `${baseEnv.replace(/\/$/, '')}/functions/v1/crawl-dispatch`;
   }
-  return items;
-}
-
-async function fetchDetail(url: string, fallbackTitle: string): Promise<CrawlerTournament | null> {
-  const res = await fetch(url, { headers: { 'User-Agent': 'MatchUpBot/1.0' } });
-  if (!res.ok) return null;
-  const html = await res.text();
-  const dom = new DOMParser().parseFromString(html, 'text/html');
-  if (!dom) return null;
-
-  const title = (dom.querySelector('h1, h2, .title, .view_title')?.textContent ?? fallbackTitle)
-    .trim();
-  const body = (dom.querySelector('.view_content, .board_view, article, main')?.textContent ?? '')
-    .trim();
-  if (!title || !body) return null;
-
-  const startDate = extractDate(body);
-  if (!startDate) return null;
-  const grades = extractTennisGradesFromText(body);
-  if (grades.length === 0) return null;
-
-  // 지역 추출 시도
-  const regionMatch = body.match(
-    /(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/,
-  );
-  return {
-    title,
-    description: body.slice(0, 1500),
-    start_date: startDate,
-    application_deadline: extractApplicationDeadline(body) ?? undefined,
-    region: regionMatch?.[1],
-    eligible_grades: grades,
-    source_url: url,
-  };
+  const u = new URL(req.url);
+  return `${u.origin}/functions/v1/crawl-dispatch`;
 }
 
 Deno.serve(async (req) => {
@@ -73,28 +35,26 @@ Deno.serve(async (req) => {
   const auth = await requireServiceRoleOrAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const audit = await startAudit(SOURCE);
+  const authHeader = req.headers.get('Authorization') ?? '';
   try {
-    const items = await fetchListing();
-    const errors: string[] = [];
-    for (const item of items.slice(0, 30)) {
-      try {
-        const t = await fetchDetail(item.url, item.title);
-        if (t) await upsertTournament(audit, 'tennis', t);
-      } catch (e) {
-        errors.push(`${item.url}: ${(e as Error).message}`);
-      }
-    }
-    await finishAudit(audit, errors.length === 0 ? 'success' : 'partial', errors.join('\n'));
-    return jsonResponse({
-      source: SOURCE,
-      fetched: audit.fetched,
-      inserted: audit.inserted,
-      updated: audit.updated,
-      errors,
+    const res = await fetch(dispatchUrl(req), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({ slug: SLUG, force: true }),
+    });
+    // B5: dispatcher 응답을 그대로 relay (status + body 보존)
+    const bodyText = await res.text();
+    return new Response(bodyText, {
+      status: res.status,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders,
+      },
     });
   } catch (e) {
-    await finishAudit(audit, 'failed', (e as Error).message);
-    return errorResponse((e as Error).message, 500);
+    return errorResponse(`dispatch forward error: ${(e as Error).message}`, 500);
   }
 });

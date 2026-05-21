@@ -417,6 +417,25 @@ class ApiService {
     return updateCrawlSource(id, enabled: enabled);
   }
 
+  /// Phase 2: 어드민 "수동 실행" → crawl-dispatch 단일 진입점 호출.
+  /// force=true 면 schedule_cron 무시하고 즉시 실행 (수동 트리거 의도).
+  ///
+  /// 응답 예시:
+  ///   { executed: [{ slug, status, fetched_count, inserted_count, ... }],
+  ///     skipped: [...], errors: [...] }
+  Future<Map<String, dynamic>> runCrawlSource(
+    String slug, {
+    bool force = true,
+  }) async {
+    final res = await http.post(
+      _uri('crawl-dispatch'),
+      headers: await _authHeaders(),
+      body: jsonEncode({'slug': slug, 'force': force}),
+    );
+    _check(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   // ===== helpers =====
   static String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

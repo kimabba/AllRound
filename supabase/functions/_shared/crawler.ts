@@ -17,7 +17,7 @@ export interface CrawlerTournament {
   source_url: string;
 }
 
-interface AuditHandle {
+export interface AuditHandle {
   id: string;
   source: string;
   supabase: SupabaseClient;

@@ -27,6 +27,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   List<CrawlSource> _sources = [];
   bool _loadingSources = false;
   final Set<String> _togglingIds = {};
+  // Phase 2: 수동 실행 중인 source id 집합 (버튼 spinner + 중복 호출 방지)
+  final Set<String> _runningIds = {};
 
   @override
   void initState() {
@@ -237,6 +239,82 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     }
   }
 
+  /// Phase 2: 수동 실행 — crawl-dispatch?slug=...&force=true 호출.
+  /// 실행 후 sources 재로드해서 last_crawled_at / last_status 즉시 반영.
+  ///
+  /// A4 (Codex 권고): SnackBar 색상으로 성공/실패 시각 구분.
+  ///   - executed[0].status == 'ok'      → 기본 (성공)
+  ///   - status == 'no_change'           → 회색 (변화 없음, 비-에러)
+  ///   - status == 'error'               → 빨강 (parser 실패)
+  ///   - executed 비고 skipped 'already_running_or_stale' → 주황 (중복 호출)
+  ///   - 그 외 / 예외                    → 빨강
+  Future<void> _runManual(CrawlSource s) async {
+    if (_runningIds.contains(s.id)) return;
+    if (mounted) setState(() => _runningIds.add(s.id));
+    try {
+      final api = ref.read(apiProvider);
+      final res = await api.runCrawlSource(s.slug, force: true);
+      final executed = (res['executed'] as List?) ?? const [];
+      final skipped = (res['skipped'] as List?) ?? const [];
+
+      String summary;
+      Color? bg;
+      if (executed.isEmpty) {
+        // 실행되지 않음 — 보통 skip 사유 표시.
+        if (skipped.isNotEmpty) {
+          final first = skipped.first as Map<String, dynamic>;
+          final reason = first['reason']?.toString() ?? 'unknown';
+          summary = '${s.slug}: skipped · $reason';
+          // already_running_or_stale = 동시 호출 방지 (B6) — 주황
+          bg = reason == 'already_running_or_stale'
+              ? Colors.orange.shade700
+              : Colors.grey.shade700;
+        } else {
+          summary = '${s.slug}: 실행 결과 없음';
+          bg = Colors.grey.shade700;
+        }
+      } else {
+        final first = executed.first as Map<String, dynamic>;
+        final status = first['status']?.toString() ?? 'unknown';
+        summary = '${s.slug}: $status · '
+            'fetched ${first['fetched_count'] ?? 0} · '
+            'inserted ${first['inserted_count'] ?? 0} · '
+            'updated ${first['updated_count'] ?? 0}';
+        switch (status) {
+          case 'ok':
+            bg = null; // 기본 (성공)
+            break;
+          case 'no_change':
+            bg = Colors.blueGrey.shade700;
+            break;
+          case 'error':
+            bg = Colors.red.shade700;
+            break;
+          default:
+            bg = Colors.grey.shade700;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(summary), backgroundColor: bg),
+        );
+      }
+      await _loadSources();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('수동 실행 실패: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _runningIds.remove(s.id));
+    }
+  }
+
   Future<void> _openSourceEditor({CrawlSource? source}) async {
     final result = await showDialog<_SourceFormResult>(
       context: context,
@@ -406,38 +484,36 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     if (_loadingSources && _sources.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_sources.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadSources,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+          children: const [
+            Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: Text('등록된 크롤 소스가 없습니다.')),
+            ),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _loadSources,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-        itemCount: _sources.isEmpty ? 1 : _sources.length + 1,
+        itemCount: _sources.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
-          if (i == 0) {
-            return Card(
-              color: Colors.amber.withValues(alpha: 0.12),
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  '안내: Phase 1 — 수동 실행은 Phase 2 dispatcher 도입 이후 활성화됩니다.\n현재는 enabled 토글 + CRUD 만 동작하며, 실제 크롤은 기존 pg_cron 스케줄로 진행됩니다.',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-            );
-          }
-          if (_sources.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('등록된 크롤 소스가 없습니다.')),
-            );
-          }
-          final s = _sources[i - 1];
+          final s = _sources[i];
           return _SourceCard(
             source: s,
             toggling: _togglingIds.contains(s.id),
+            running: _runningIds.contains(s.id),
             onToggle: (v) => _toggleSource(s, v),
             onEdit: () => _openSourceEditor(source: s),
             onDelete: () => _deleteSource(s),
+            onRun: () => _runManual(s),
           );
         },
       ),
@@ -451,16 +527,20 @@ class _SourceCard extends StatelessWidget {
   const _SourceCard({
     required this.source,
     required this.toggling,
+    required this.running,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
+    required this.onRun,
   });
 
   final CrawlSource source;
   final bool toggling;
+  final bool running;
   final ValueChanged<bool> onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onRun;
 
   String _fmtTs(DateTime? dt) {
     if (dt == null) return '실행 이력 없음';
@@ -567,13 +647,18 @@ class _SourceCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                Tooltip(
-                  message: 'Phase 2 dispatcher 도입 이후 활성화됩니다',
-                  child: FilledButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('수동 실행'),
-                  ),
+                FilledButton.icon(
+                  onPressed: (running || !source.enabled) ? null : onRun,
+                  icon: running
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.play_arrow),
+                  label: Text(running ? '실행 중...' : '수동 실행'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onEdit,
