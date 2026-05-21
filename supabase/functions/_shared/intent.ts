@@ -299,25 +299,24 @@ const SEARCH_KW = /(검색|찾|알려|뭐\s*있|있어|있나|추천|보여)/;
 const MY_PROFILE_KW = /(내\s*(등급|점수|협회|프로필|랭킹|부수)|제\s*(등급|점수|협회|프로필|부수))/;
 
 export function classifyByRule(text: string): RuleClassification | null {
-  // 1. my_profile — 가장 구체적
-  if (MY_PROFILE_KW.test(text)) {
-    return { intent: 'my_profile', rule: 'my_profile_keyword' };
-  }
-
-  // 2. rule_lookup — 룰/규칙 키워드 단독으로도 명확
-  if (RULE_KW.test(text)) {
-    return { intent: 'rule_lookup', rule: 'rule_keyword' };
-  }
-
-  // 3. tournament_detail — 대회 + 상세 키워드
+  // 1. tournament_detail — 대회 + 상세 키워드 (my_profile보다 먼저: "내 등급 대회 신청방법")
   if (TOURNAMENT_KW.test(text) && DETAIL_KW.test(text)) {
     return { intent: 'tournament_detail', rule: 'tournament_with_detail' };
   }
 
-  // 4. tournament_search — 대회 키워드 (검색 동사 없어도 의도 명확)
-  //    예: "이번 주말 대회" 같은 묵시적 검색
+  // 2. tournament_search — 대회 키워드 (my_profile보다 먼저: "내 등급에 맞는 대회 알려줘")
   if (TOURNAMENT_KW.test(text)) {
     return { intent: 'tournament_search', rule: 'tournament_keyword' };
+  }
+
+  // 3. my_profile — 대회 키워드 없을 때만 ("내 등급이 뭐야", "내 협회 알려줘")
+  if (MY_PROFILE_KW.test(text)) {
+    return { intent: 'my_profile', rule: 'my_profile_keyword' };
+  }
+
+  // 4. rule_lookup — 룰/규칙 키워드 단독으로도 명확
+  if (RULE_KW.test(text)) {
+    return { intent: 'rule_lookup', rule: 'rule_keyword' };
   }
 
   // 5. club_search — 클럽 키워드
