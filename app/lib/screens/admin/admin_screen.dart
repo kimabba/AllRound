@@ -582,7 +582,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Wrap(
             spacing: 8,
