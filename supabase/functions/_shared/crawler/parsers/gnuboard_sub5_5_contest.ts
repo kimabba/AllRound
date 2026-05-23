@@ -89,17 +89,23 @@ function parseListing(html: string, baseUrl: string): BoardItem[] {
   const items: BoardItem[] = [];
   const seen = new Set<string>();
 
-  // q_mode=view 패턴의 a 태그가 게시글 상세 링크.
-  // gjtennis/jntennis 모두 동일.
-  const links = dom.querySelectorAll('a[href*="q_mode=view"]');
-  for (const link of links) {
+  // sid= 파라미터가 있는 a 태그가 게시글 상세 링크.
+  // q_mode=view 대신 sid= 로 매칭 — raw '&' 미인코딩 URL 을 deno-dom 이
+  // 엔티티로 오해할 때 q_mode 부분이 잘려 셀렉터가 매칭 안 되는 버그 회피.
+  // gjtennis/jntennis 모두 동일 패턴.
+  const allLinks = dom.querySelectorAll('a[href]');
+  for (const link of allLinks) {
     const el = link as unknown as {
       getAttribute(name: string): string | null;
       textContent: string;
     };
-    const href = el.getAttribute('href');
+    const href = el.getAttribute('href') ?? '';
+    // sid= 파라미터 + q_mode 또는 view 키워드가 있는 링크만 처리
+    if (!href.includes('sid=')) continue;
+    if (!href.includes('q_mode') && !href.includes('view')) continue;
+
     const title = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (!href || !title) continue;
+    if (!title) continue;
 
     let absolute: string;
     try {
