@@ -189,6 +189,125 @@ class ApiService {
         .toList();
   }
 
+  Future<List<Club>> myClubs() async {
+    final res = await http.get(
+      _uri('clubs-search', {'mine': 'true'}),
+      headers: await _authHeaders(),
+    );
+    _check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return (body['clubs'] as List)
+        .map((e) => Club.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Club> createClub({
+    required String sport,
+    required String name,
+    String? region,
+    String? address,
+    String? contact,
+    String? website,
+    String? description,
+  }) async {
+    final res = await http.post(
+      _uri('clubs-create'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'sport': sport,
+        'name': name,
+        if (region != null && region.isNotEmpty) 'region': region,
+        if (address != null && address.isNotEmpty) 'address': address,
+        if (contact != null && contact.isNotEmpty) 'contact': contact,
+        if (website != null && website.isNotEmpty) 'website': website,
+        if (description != null && description.isNotEmpty) 'description': description,
+      }),
+    );
+    _check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return Club.fromJson(body['club'] as Map<String, dynamic>);
+  }
+
+  Future<void> joinClub(String clubId, {String? message}) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'request',
+        if (message != null && message.isNotEmpty) 'message': message,
+      }),
+    );
+    _check(res);
+  }
+
+  Future<void> cancelJoinClub(String clubId) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({'club_id': clubId, 'action': 'cancel'}),
+    );
+    _check(res);
+  }
+
+  Future<void> leaveClub(String clubId) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({'club_id': clubId, 'action': 'leave'}),
+    );
+    _check(res);
+  }
+
+  /// 클럽 가입 신청 목록 조회 (owner/manager 전용).
+  Future<List<Map<String, dynamic>>> pendingJoinRequests(String clubId) async {
+    final rows = await _supabase
+        .from('club_join_requests')
+        .select('id, user_id, message, created_at, users(display_name, email)')
+        .eq('club_id', clubId)
+        .eq('status', 'pending')
+        .order('created_at');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> reviewJoinRequest(String requestId, {required bool approve, String? reason}) async {
+    final res = await http.post(
+      _uri('clubs-review-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'request_id': requestId,
+        'action': approve ? 'approve' : 'reject',
+        if (reason != null) 'reason': reason,
+      }),
+    );
+    _check(res);
+  }
+
+  // ===== admin: clubs =====
+  Future<List<Club>> pendingClubs() async {
+    final rows = await _supabase
+        .from('clubs')
+        .select('*, club_members(role, status)')
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows)
+        .map(Club.fromJson)
+        .toList();
+  }
+
+  Future<void> approveClub(String clubId, {required bool approve, String? reason}) async {
+    final res = await http.post(
+      _uri('clubs-approve'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': approve ? 'approve' : 'reject',
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      }),
+    );
+    _check(res);
+  }
+
   // ===== rules =====
   Future<List<RuleArticle>> listRules(String sport) async {
     final rows = await _supabase

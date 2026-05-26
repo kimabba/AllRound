@@ -168,6 +168,12 @@ class Club {
   final String? contact;
   final String? website;
   final String? description;
+  final String status; // 'pending' | 'approved' | 'rejected'
+  final String? statusReason;
+  final int memberCount;
+  final String? createdBy;
+  // 현재 사용자의 멤버십 정보 (조회 시 join)
+  final String? myRole; // 'owner'|'manager'|'member'|null
 
   Club({
     required this.id,
@@ -178,18 +184,44 @@ class Club {
     this.contact,
     this.website,
     this.description,
+    this.status = 'approved',
+    this.statusReason,
+    this.memberCount = 0,
+    this.createdBy,
+    this.myRole,
   });
 
-  factory Club.fromJson(Map<String, dynamic> j) => Club(
-        id: j['id'] as String,
-        sport: j['sport'] as String,
-        name: j['name'] as String,
-        region: j['region'] as String?,
-        address: j['address'] as String?,
-        contact: j['contact'] as String?,
-        website: j['website'] as String?,
-        description: j['description'] as String?,
-      );
+  bool get isPending  => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isRejected => status == 'rejected';
+  bool get isMember   => myRole != null;
+  bool get isOwner    => myRole == 'owner';
+  bool get isManager  => myRole == 'manager' || myRole == 'owner';
+
+  factory Club.fromJson(Map<String, dynamic> j) {
+    // club_members join 결과에서 현재 사용자 role 추출
+    final members = j['club_members'] as List?;
+    final myMember = members?.isNotEmpty == true ? members!.first : null;
+    final myRole = myMember != null && myMember['status'] == 'active'
+        ? myMember['role'] as String?
+        : null;
+
+    return Club(
+      id: j['id'] as String,
+      sport: j['sport'] as String,
+      name: j['name'] as String,
+      region: j['region'] as String?,
+      address: j['address'] as String?,
+      contact: j['contact'] as String?,
+      website: j['website'] as String?,
+      description: j['description'] as String?,
+      status: (j['status'] as String?) ?? 'approved',
+      statusReason: j['status_reason'] as String?,
+      memberCount: (j['member_count'] as int?) ?? 0,
+      createdBy: j['created_by'] as String?,
+      myRole: myRole,
+    );
+  }
 }
 
 class RuleArticle {

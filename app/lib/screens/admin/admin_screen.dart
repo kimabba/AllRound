@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/admin.dart';
 import '../../models/crawl_source.dart';
+import '../../models/tournament.dart';
 import '../../state/providers.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -35,10 +36,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   // Phase 2: 수동 실행 중인 source id 집합 (버튼 spinner + 중복 호출 방지)
   final Set<String> _runningIds = {};
 
+  // Tab 3: pending clubs
+  List<Club> _pendingClubs = [];
+  bool _loadingPendingClubs = false;
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     _tab.addListener(_onTabChanged);
     _startRefreshTimer();
     _loadLogs();
@@ -64,6 +69,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         _loadDrafts();
       } else if (_tab.index == 2) {
         _loadSources();
+      } else if (_tab.index == 3) {
+        _loadPendingClubs();
       }
     }
   }
@@ -312,6 +319,68 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     }
   }
 
+  // ── Tab 3: pending clubs ───────────────────────────────────────────────────
+
+  Future<void> _loadPendingClubs() async {
+    if (_loadingPendingClubs) return;
+    if (mounted) setState(() => _loadingPendingClubs = true);
+    try {
+      final list = await ref.read(apiProvider).pendingClubs();
+      if (mounted) setState(() => _pendingClubs = list);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('클럽 목록 로드 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPendingClubs = false);
+    }
+  }
+
+  Future<void> _approveClub(String clubId, {required bool approve}) async {
+    String? reason;
+    if (!approve) {
+      final ctrl = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('거절 사유'),
+          content: TextField(
+            controller: ctrl,
+            decoration: const InputDecoration(hintText: '사유를 입력하세요'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('취소')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('거절'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      reason = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
+    }
+    try {
+      await ref.read(apiProvider).approveClub(clubId, approve: approve, reason: reason);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(approve ? '클럽 승인 완료' : '클럽 거절 완료')),
+        );
+      }
+      await _loadPendingClubs();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('처리 실패: $e')));
+      }
+    }
+  }
+
   // ── Tab 2: crawl_sources CRUD ─────────────────────────────────────────────
 
   Future<void> _loadSources() async {
@@ -516,10 +585,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         title: const Text('관리자'),
         bottom: TabBar(
           controller: _tab,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: '크롤 현황'),
             Tab(text: 'Draft 승인'),
             Tab(text: '크롤 소스'),
+            Tab(text: '클럽 승인'),
           ],
         ),
       ),
@@ -529,6 +601,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           _buildLogsTab(),
           _buildDraftsTab(),
           _buildSourcesTab(),
+          _buildPendingClubsTab(),
         ],
       ),
       floatingActionButton: _tab.index == 2
@@ -793,7 +866,91 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     );
   }
 
-  // ── Tab 3: Crawl Sources (DB-driven CRUD) ─────────────────────────────────
+  // ── Tab 3 (admin): Pending Clubs ─────────────────────────────────────────
+
+  Widget _buildPendingClubsTab() {
+    if (_loadingPendingClubs && _pendingClubs.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_pendingClubs.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadPendingClubs,
+        child: ListView(
+          children: const [
+            Padding(
+              padding: EdgeInsets.all(48),
+              child: Center(child: Text('승인 대기 클럽이 없습니다')),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadPendingClubs,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: _pendingClubs.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final c = _pendingClubs[i];
+          final meta = [
+            c.sport == 'tennis' ? '테니스' : '풋살',
+            if (c.region != null) c.region!,
+            if (c.address != null) c.address!,
+          ].join(' · ');
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.name, style: Theme.of(context).textTheme.titleMedium),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(meta, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                  if (c.contact != null) ...[
+                    const SizedBox(height: 2),
+                    Text('연락처: ${c.contact!}',
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                  if (c.description != null) ...[
+                    const SizedBox(height: 6),
+                    Text(c.description!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 36)),
+                        onPressed: () =>
+                            _approveClub(c.id, approve: true),
+                        child: const Text('승인'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 36)),
+                        onPressed: () =>
+                            _approveClub(c.id, approve: false),
+                        child: const Text('거절'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Tab 2: Crawl Sources (DB-driven CRUD) ─────────────────────────────────
 
   Widget _buildSourcesTab() {
     if (_loadingSources && _sources.isEmpty) {
