@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/grade_labels.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
   const ClubCreateScreen({super.key});
@@ -68,6 +69,20 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    // 사용자가 등록한 종목만 선택지로 노출 (미등록 시에만 양쪽 fallback)
+    final registered = (ref.watch(userSportsProvider).valueOrNull ?? [])
+        .map((s) => s.sport)
+        .toSet()
+        .toList()
+      ..sort();
+    final sportsToShow =
+        registered.isEmpty ? const ['tennis', 'futsal'] : registered;
+    // 현재 _sport 가 선택지에 없으면 primary(activeSport) 또는 첫 종목으로 보정
+    if (!sportsToShow.contains(_sport)) {
+      _sport = ref.read(activeSportProvider) ?? sportsToShow.first;
+      if (!sportsToShow.contains(_sport)) _sport = sportsToShow.first;
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('클럽 만들기')),
       body: Form(
@@ -75,17 +90,37 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            // 종목 선택
+            // 종목 — 사용자가 등록한 종목만 노출
             Text('종목', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: AppSpacing.sm),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'tennis', label: Text('테니스')),
-                ButtonSegment(value: 'futsal', label: Text('풋살')),
-              ],
-              selected: {_sport},
-              onSelectionChanged: (s) => setState(() => _sport = s.first),
-            ),
+            if (sportsToShow.length == 1)
+              // 등록 종목이 하나면 선택 없이 고정 표시
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: AppRadius.card,
+                ),
+                child: Text(
+                  sportLabelFromString(sportsToShow.first),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              )
+            else
+              SegmentedButton<String>(
+                segments: sportsToShow
+                    .map((s) => ButtonSegment(
+                          value: s,
+                          label: Text(sportLabelFromString(s)),
+                        ))
+                    .toList(),
+                selected: {_sport},
+                onSelectionChanged: (s) => setState(() => _sport = s.first),
+              ),
             const SizedBox(height: AppSpacing.lg),
 
             // 클럽명 (필수)
