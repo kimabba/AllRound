@@ -319,6 +319,57 @@ class ApiService {
     return rows.map((r) => RuleArticle.fromJson(r)).toList();
   }
 
+  /// 관리자용: published 무관 전체 룰. embedding vector 는 제외(무거움).
+  Future<List<RuleArticle>> adminListRules({String? sport}) async {
+    var q = _supabase.from('rule_articles').select(
+      'id, sport, category, title, body, order_idx, published, embedding_updated_at, updated_at',
+    );
+    if (sport != null) q = q.eq('sport', sport);
+    final rows = await q.order('sport').order('category').order('order_idx');
+    return (rows as List)
+        .map((r) => RuleArticle.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> createRule(Map<String, dynamic> data) async {
+    await _supabase.from('rule_articles').insert(data);
+  }
+
+  Future<void> updateRule(String id, Map<String, dynamic> data) async {
+    await _supabase.from('rule_articles').update(data).eq('id', id);
+  }
+
+  Future<void> deleteRule(String id) async {
+    await _supabase.from('rule_articles').delete().eq('id', id);
+  }
+
+  /// (sport, category) 내 다음 order_idx (max+1).
+  Future<int> nextRuleOrderIdx(String sport, String category) async {
+    final rows = await _supabase
+        .from('rule_articles')
+        .select('order_idx')
+        .eq('sport', sport)
+        .eq('category', category)
+        .order('order_idx', ascending: false)
+        .limit(1);
+    final list = rows as List;
+    if (list.isEmpty) return 0;
+    return ((list.first['order_idx'] as int?) ?? 0) + 1;
+  }
+
+  /// 즉시 재임베딩: embedding 무효화 후 embed-pending 호출.
+  Future<void> recomputeRuleEmbedding(String id) async {
+    await _supabase
+        .from('rule_articles')
+        .update({'embedding': null, 'embedding_updated_at': null})
+        .eq('id', id);
+    final res = await http.post(
+      _uri('embed-pending'),
+      headers: await _authHeaders(),
+    );
+    _check(res);
+  }
+
   // ===== chat (SSE) =====
 
   /// SSE 스트리밍. 이벤트 라인을 yield 한다.
