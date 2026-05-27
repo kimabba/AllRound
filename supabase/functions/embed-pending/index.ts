@@ -1,4 +1,4 @@
-import { requireServiceRole } from '../_shared/auth.ts';
+import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { embedBatch, toVectorLiteral } from '../_shared/embedding.ts';
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
-  const auth = requireServiceRole(req);
+  const auth = await requireServiceRoleOrAdmin(req);
   if ('error' in auth) return auth.error;
 
   const supabase = serviceClient();
