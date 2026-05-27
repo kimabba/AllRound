@@ -234,6 +234,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.huge),
+
+                  // ── Dev 퀵로그인 (개발용) ───────────────────
+                  if (const bool.fromEnvironment('dart.vm.product') == false) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                      child: Row(
+                        children: [
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                            child: Text('DEV', style: tt.labelSmall?.copyWith(color: cs.outline)),
+                          ),
+                          Expanded(child: Divider(color: cs.outlineVariant)),
+                        ],
+                      ),
+                    ),
+                    FilledButton.tonal(
+                      onPressed: _busy ? null : () => _devLogin(),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+                      ),
+                      child: const Text('Dev 어드민 로그인'),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
                 ],
               ),
             ),
@@ -241,5 +267,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _devLogin() async {
+    // DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD 환경변수 또는 기본값
+    const email = String.fromEnvironment('DEV_ADMIN_EMAIL', defaultValue: '');
+    const password = String.fromEnvironment('DEV_ADMIN_PASSWORD', defaultValue: '');
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD를 .env.local에 추가하세요');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      final supa = ref.read(supabaseProvider);
+      await supa.auth.signInWithPassword(email: email, password: password);
+    } on AuthException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }

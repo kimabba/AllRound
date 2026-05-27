@@ -55,9 +55,14 @@ final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   return api.myFavoriteIds();
 });
 
-/// 사용자의 primary 종목 — 앱 전체 필터 기준
-/// userSportsProvider에서 파생, 별도 상태 없음
+/// 수동 종목 오버라이드 (null이면 userSports primary 사용)
+final sportOverrideProvider = StateProvider<String?>((_) => null);
+
+/// 사용자의 active 종목 — 앱 전체 필터 기준.
+/// sportOverrideProvider가 설정되면 그 값을 사용, 아니면 userSports primary.
 final activeSportProvider = Provider<String?>((ref) {
+  final override = ref.watch(sportOverrideProvider);
+  if (override != null) return override;
   final sports = ref.watch(userSportsProvider).valueOrNull ?? [];
   return sports.where((s) => s.isPrimary).firstOrNull?.sport;
 });
