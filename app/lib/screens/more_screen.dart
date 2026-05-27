@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../state/providers.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_card.dart';
+import '../widgets/matchup_logo.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -29,7 +32,7 @@ class MoreScreen extends ConsumerWidget {
         ),
       _MenuItem(
         icon: Icons.person_outline,
-        label: '내정보',
+        label: 'MY',
         subtitle: '프로필 및 설정',
         onTap: () => context.go('/profile'),
       ),
@@ -43,22 +46,53 @@ class MoreScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('더보기')),
+      appBar: AppBar(title: const BrandedAppBarTitle(title: '더보기')),
       body: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         itemCount: items.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
         itemBuilder: (context, i) {
           final item = items[i];
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: colorScheme.primaryContainer,
-              child: Icon(item.icon, color: colorScheme.onPrimaryContainer),
-            ),
-            title: Text(item.label),
-            subtitle: Text(item.subtitle),
-            trailing: const Icon(Icons.chevron_right),
+          return AppCard(
+            variant: AppCardVariant.elevated,
+            borderRadius: BorderRadius.circular(16),
             onTap: item.onTap,
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(item.icon, color: colorScheme.onPrimaryContainer),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        item.subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           );
         },
       ),

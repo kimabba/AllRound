@@ -17,6 +17,7 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
+import 'theme/tokens.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -48,15 +49,24 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, __) => const OnboardingScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (_, __) => const ChatScreen()),
-          GoRoute(path: '/tournaments', builder: (_, __) => const TournamentsScreen()),
+          GoRoute(
+            path: '/tournaments',
+            builder: (_, __) => const TournamentsScreen(),
+          ),
           GoRoute(path: '/clubs', builder: (_, __) => const ClubsScreen()),
           GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
-          GoRoute(path: '/speed-gun', builder: (_, __) => const SpeedGunScreen()),
+          GoRoute(
+            path: '/speed-gun',
+            builder: (_, __) => const SpeedGunScreen(),
+          ),
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
           GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
@@ -88,19 +98,27 @@ class _MainShell extends ConsumerWidget {
   final Widget child;
 
   static const _tabs = [
-    ('/', Icons.chat_bubble_outline, '채팅'),
+    ('/', Icons.auto_awesome_outlined, '코치봇'),
     ('/tournaments', Icons.emoji_events_outlined, '대회'),
     ('/clubs', Icons.groups_outlined, '클럽'),
     ('/more', Icons.grid_view_outlined, '더보기'),
   ];
 
   // 더보기 하위 경로는 더보기 탭이 선택된 것으로 표시
-  static const _moreSubPaths = ['/more', '/speed-gun', '/rules', '/profile', '/admin'];
+  static const _moreSubPaths = [
+    '/more',
+    '/speed-gun',
+    '/rules',
+    '/profile',
+    '/admin',
+  ];
 
   int _indexOf(String location) {
     for (var i = 0; i < _tabs.length; i++) {
       if (_tabs[i].$1 == '/more') {
-        if (_moreSubPaths.any((p) => location == p || (location.startsWith(p) && p != '/'))) {
+        if (_moreSubPaths.any(
+          (p) => location == p || (location.startsWith(p) && p != '/'),
+        )) {
           return i;
         }
       } else if (location == _tabs[i].$1 ||
@@ -115,16 +133,39 @@ class _MainShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
     final idx = _indexOf(loc);
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: idx,
-        onDestinationSelected: (i) => context.go(_tabs[i].$1),
-        destinations: [
-          for (final t in _tabs)
-            NavigationDestination(icon: Icon(t.$2), label: t.$3),
-        ],
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+        ),
+        child: NavigationBar(
+          selectedIndex: idx,
+          onDestinationSelected: (i) => context.go(_tabs[i].$1),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            for (final t in _tabs)
+              NavigationDestination(
+                icon: Icon(t.$2),
+                selectedIcon: Icon(_selectedIcon(t.$2)),
+                label: t.$3,
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  IconData _selectedIcon(IconData icon) {
+    return switch (icon) {
+      Icons.auto_awesome_outlined => Icons.auto_awesome_rounded,
+      Icons.emoji_events_outlined => Icons.emoji_events_rounded,
+      Icons.groups_outlined => Icons.groups_rounded,
+      Icons.grid_view_outlined => Icons.grid_view_rounded,
+      _ => icon,
+    };
   }
 }

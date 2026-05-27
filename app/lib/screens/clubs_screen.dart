@@ -8,6 +8,7 @@ import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/matchup_logo.dart';
 import 'clubs/club_create_screen.dart';
 
 class ClubsScreen extends ConsumerStatefulWidget {
@@ -67,10 +68,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final list = await ref.read(apiProvider).searchClubs(
-            sport: ref.read(activeSportProvider),
-            q: _q,
-          );
+      final list = await ref
+          .read(apiProvider)
+          .searchClubs(sport: ref.read(activeSportProvider), q: _q);
       if (mounted) setState(() => _clubs = list);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -91,10 +91,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
   @override
   Widget build(BuildContext context) {
     ref.listen(activeSportProvider, (_, __) => _load());
+    final sport = ref.watch(activeSportProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('동호회·클럽'),
+        title: const BrandedAppBarTitle(title: '클럽'),
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -118,6 +119,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
           ),
           _SearchTab(
             q: _q,
+            sport: sport,
             clubs: _clubs,
             loading: _loading,
             onQueryChanged: (v) => _q = v,
@@ -192,6 +194,7 @@ class _MyClubsTab extends ConsumerWidget {
 
 class _SearchTab extends StatelessWidget {
   final String q;
+  final String? sport;
   final List<Club>? clubs;
   final bool loading;
   final ValueChanged<String> onQueryChanged;
@@ -200,6 +203,7 @@ class _SearchTab extends StatelessWidget {
 
   const _SearchTab({
     required this.q,
+    required this.sport,
     required this.clubs,
     required this.loading,
     required this.onQueryChanged,
@@ -210,31 +214,94 @@ class _SearchTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final isTennis = sport == 'tennis';
+    final accent = isTennis ? cs.tertiary : cs.secondary;
+
     return Column(
       children: [
         Container(
-          color: cs.surfaceContainerLowest,
+          color: cs.surfaceContainerLow,
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg,
             AppSpacing.sm,
             AppSpacing.lg,
             AppSpacing.md,
           ),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: '클럽명·설명 검색',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: cs.surfaceContainerLow,
-              border: OutlineInputBorder(
-                borderRadius: AppRadius.card,
-                borderSide: BorderSide.none,
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      accent,
+                      isTennis ? cs.tertiaryContainer : cs.secondaryContainer,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -8,
+                      bottom: -18,
+                      child: Icon(
+                        isTennis
+                            ? Icons.sports_tennis_rounded
+                            : Icons.sports_soccer_rounded,
+                        size: 96,
+                        color: Colors.white.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isTennis ? '테니스 클럽 찾기' : '풋살 클럽 찾기',
+                          style: tt.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '내 지역과 종목에 맞는 클럽을 찾아보세요.',
+                          style: tt.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.88),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            ),
-            onChanged: onQueryChanged,
-            onSubmitted: (_) => onSearch(),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                decoration: InputDecoration(
+                  hintText: '클럽명·설명 검색',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: cs.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.sm,
+                  ),
+                ),
+                onChanged: onQueryChanged,
+                onSubmitted: (_) => onSearch(),
+              ),
+            ],
           ),
         ),
         if (loading) LinearProgressIndicator(color: cs.primary),
@@ -242,26 +309,26 @@ class _SearchTab extends StatelessWidget {
           child: clubs == null
               ? const SizedBox.shrink()
               : clubs!.isEmpty
-                  ? const AppEmptyState(
-                      icon: Icons.groups_rounded,
-                      title: '등록된 클럽이 없습니다',
-                      description: '다른 검색어나 필터로 시도해 보세요.',
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.lg,
-                      ),
-                      itemCount: clubs!.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _ClubCard(
-                          club: clubs![i],
-                          showRole: false,
-                          onChanged: onJoined,
-                        ),
-                      ),
+              ? const AppEmptyState(
+                  icon: Icons.groups_rounded,
+                  title: '등록된 클럽이 없습니다',
+                  description: '다른 검색어나 필터로 시도해 보세요.',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.lg,
+                  ),
+                  itemCount: clubs!.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _ClubCard(
+                      club: clubs![i],
+                      showRole: false,
+                      onChanged: onJoined,
                     ),
+                  ),
+                ),
         ),
       ],
     );
@@ -286,7 +353,7 @@ class _ClubCard extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isTennis = club.sport == 'tennis';
-    final accentColor = isTennis ? cs.primary : cs.tertiary;
+    final accentColor = isTennis ? cs.tertiary : cs.secondary;
 
     final meta = [
       sportLabelFromString(club.sport),
@@ -300,18 +367,18 @@ class _ClubCard extends ConsumerWidget {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              color: isTennis ? cs.tertiaryContainer : cs.secondaryContainer,
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               isTennis
                   ? Icons.sports_tennis_rounded
                   : Icons.sports_soccer_rounded,
               color: accentColor,
-              size: 24,
+              size: 28,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -321,7 +388,14 @@ class _ClubCard extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(club.name, style: tt.titleMedium)),
+                    Expanded(
+                      child: Text(
+                        club.name,
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
                     if (showRole && club.myRole != null)
                       _RoleChip(role: club.myRole!),
                     if (showRole && club.isPending)
@@ -358,11 +432,8 @@ class _ClubCard extends ConsumerWidget {
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       isScrollControlled: true,
-      builder: (_) => _ClubDetailSheet(
-        club: club,
-        ref: ref,
-        onChanged: onChanged,
-      ),
+      builder: (_) =>
+          _ClubDetailSheet(club: club, ref: ref, onChanged: onChanged),
     );
   }
 }
@@ -381,7 +452,9 @@ class _RoleChip extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(left: AppSpacing.xs),
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm, vertical: 2),
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(99),
@@ -389,8 +462,8 @@ class _RoleChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
+        ),
       ),
     );
   }
@@ -405,8 +478,10 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(left: AppSpacing.xs),
-      padding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(99),
@@ -444,15 +519,17 @@ class _ClubDetailSheetState extends ConsumerState<_ClubDetailSheet> {
     try {
       await ref.read(apiProvider).joinClub(widget.club.id);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('가입 신청이 완료되었습니다')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('가입 신청이 완료되었습니다')));
         Navigator.pop(context);
         widget.onChanged();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('가입 신청 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('가입 신청 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -467,8 +544,9 @@ class _ClubDetailSheetState extends ConsumerState<_ClubDetailSheet> {
         content: Text('${widget.club.name}에서 탈퇴할까요?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('취소')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -487,8 +565,9 @@ class _ClubDetailSheetState extends ConsumerState<_ClubDetailSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('탈퇴 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('탈퇴 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -521,13 +600,17 @@ class _ClubDetailSheetState extends ConsumerState<_ClubDetailSheet> {
           ),
           if (club.contact != null) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text('연락처: ${club.contact!}',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+            Text(
+              '연락처: ${club.contact!}',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
           ],
           if (club.address != null) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text('주소: ${club.address!}',
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+            Text(
+              '주소: ${club.address!}',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
           ],
           if (club.description != null) ...[
             const SizedBox(height: AppSpacing.md),
