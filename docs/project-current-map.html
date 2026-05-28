@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Match-up 현재 구현 맵</title>
+  <style>
+    :root {
+      --ink: #14201a;
+      --muted: #607064;
+      --paper: #fbfcf6;
+      --panel: #ffffff;
+      --line: #dce4d8;
+      --green: #2e7d32;
+      --lime: #d9f24f;
+      --blue: #1e3a8a;
+      --orange: #e86b2f;
+      --red: #b3261e;
+      --shadow: 0 18px 54px rgba(20, 32, 26, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 16% 12%, rgba(217, 242, 79, 0.32), transparent 30%),
+        linear-gradient(135deg, #f6f8ee 0%, #eef5ef 46%, #f8fbf4 100%);
+      color: var(--ink);
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.55;
+    }
+
+    header {
+      padding: 56px 24px 28px;
+      border-bottom: 1px solid rgba(46, 125, 50, 0.18);
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto 72px;
+    }
+
+    .hero {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      gap: 28px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 7px 12px;
+      border: 1px solid rgba(46, 125, 50, 0.22);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 860px;
+      font-size: clamp(42px, 7vw, 86px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 780px;
+      margin: 24px 0 0;
+      color: #334239;
+      font-size: 19px;
+      font-weight: 600;
+    }
+
+    .hero-panel {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-panel strong {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+
+    .hero-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      margin-top: 34px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 25px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 4;
+      min-height: 100%;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 10px 28px rgba(20, 32, 26, 0.06);
+    }
+
+    .card.wide {
+      grid-column: span 6;
+    }
+
+    .card.full {
+      grid-column: 1 / -1;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 18px;
+      border: 1px solid rgba(46, 125, 50, 0.18);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tag {
+      display: inline-flex;
+      margin: 0 6px 8px 0;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #edf5ec;
+      color: #285f2d;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tag.blue {
+      background: #e7ecfb;
+      color: var(--blue);
+    }
+
+    .tag.orange {
+      background: #fff0e8;
+      color: #9b3d10;
+    }
+
+    .tag.red {
+      background: #fdebea;
+      color: var(--red);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .step {
+      position: relative;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      min-height: 116px;
+    }
+
+    .step .num {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      margin-bottom: 10px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: white;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 7px 0;
+      color: #334239;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      background: #eef5ec;
+      color: #23362a;
+      font-size: 13px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: #edf2ee;
+      color: #24372c;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .priority {
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr) 190px;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .priority:last-child {
+      border-bottom: 0;
+    }
+
+    .rank {
+      display: inline-grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--lime);
+      color: #1f2a16;
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .owner {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .note {
+      padding: 16px 18px;
+      border-left: 4px solid var(--orange);
+      border-radius: 8px;
+      background: #fff8f2;
+      color: #4d382a;
+    }
+
+    footer {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto 42px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .hero,
+      .metric-row,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .card,
+      .card.wide {
+        grid-column: 1 / -1;
+      }
+
+      .priority {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <div>
+        <div class="eyebrow">Match-up 현재 구현 맵 · 2026-05-28</div>
+        <h1>테니스·풋살 동호인 정보 앱의 현재 상태</h1>
+        <p class="lead">
+          이 문서는 현재 리포지토리 기준으로 구현된 기능, 작동 방식, 제품 스펙,
+          그리고 앞으로 해야 할 작업을 팀 공유용으로 정리한 자료다.
+        </p>
+      </div>
+      <aside class="hero-panel">
+        <strong>핵심 방향</strong>
+        <p>
+          지금 단계는 새 기능을 계속 늘리는 것보다, 대회 데이터 품질·관리자 운영·보안 키 전환·
+          핵심 사용자 동선 QA를 마무리해 MVP를 실제로 운영 가능한 상태로 만드는 것이 중요하다.
+        </p>
+      </aside>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="metric-row">
+        <div class="metric"><b>4</b><span>앱 메인 탭: 채팅, 대회, 클럽, 더보기</span></div>
+        <div class="metric"><b>15+</b><span>Supabase Edge Function 엔드포인트</span></div>
+        <div class="metric"><b>35</b><span>DB 마이그레이션 번호 기준 최신 작업</span></div>
+        <div class="metric"><b>5</b><span>어드민 탭: 현황, 검수, 소스, 클럽, 지식베이스</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>제품 스펙</h2>
+      <div class="grid">
+        <article class="card wide">
+          <h3>제품 정의</h3>
+          <p>
+            Match-up은 사용자가 종목과 등급을 등록하면 출전 가능한 대회를 자동으로 보여주고,
+            대회 정보·클럽·룰북·AI 챗봇·푸시 알림·스피드건을 연결하는 동호인 정보 앱이다.
+          </p>
+          <span class="tag">tennis</span>
+          <span class="tag">futsal</span>
+          <span class="tag">grade-aware search</span>
+          <span class="tag">RAG chatbot</span>
+        </article>
+        <article class="card wide">
+          <h3>기술 스택</h3>
+          <ul>
+            <li>Frontend: Flutter/Dart, Riverpod, go_router, Material 기반 커스텀 디자인 시스템</li>
+            <li>Backend: Supabase Edge Functions on Deno</li>
+            <li>DB: Supabase Postgres, RLS, RPC, pgvector, pg_cron, pg_net, Vault</li>
+            <li>AI: Gemini, Search Grounding, 768차원 임베딩 기반 RAG</li>
+            <li>Push: Firebase Cloud Messaging</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>현재 구현된 주요 기능</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>영역</th>
+            <th>구현 상태</th>
+            <th>작동 방식</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>인증·온보딩</td>
+            <td>이메일/비밀번호, Google OAuth, 개발용 Dev 퀵로그인, 종목·등급 등록</td>
+            <td>로그인 후 <code>user_sports</code>가 없으면 <code>/onboarding</code>으로 이동한다. 개발 모드에서는 <code>dev-auth</code>가 magic link 토큰을 만들어 빠르게 로그인한다.</td>
+          </tr>
+          <tr>
+            <td>종목·등급</td>
+            <td>테니스와 풋살 모두 지원. 테니스는 협회별 다중 등록 구조까지 있음</td>
+            <td><code>user_sports</code>와 <code>user_tennis_orgs</code>를 기준으로 active sport와 등급을 정하고, 대회 검색 RPC가 종목 교차 매칭을 막는다.</td>
+          </tr>
+          <tr>
+            <td>대회 검색</td>
+            <td>등급 기반 검색, 지역/기간/검색어 필터, 즐겨찾기</td>
+            <td>Flutter가 <code>tournaments-search</code>를 호출하고, 서버/DB가 사용자의 등급과 <code>eligible_grades</code>를 비교해 노출 대회를 결정한다.</td>
+          </tr>
+          <tr>
+            <td>대회 제보·검수</td>
+            <td>사용자 제보는 <code>draft</code>, 어드민 승인 후 <code>published</code>, 거부는 <code>rejected</code></td>
+            <td>어드민 화면의 검수 큐에서 사용자 제보와 크롤러 draft를 필터링하고, 일괄 승인/거부 RPC로 상태를 바꾼다.</td>
+          </tr>
+          <tr>
+            <td>크롤러</td>
+            <td>DB-driven <code>crawl-dispatch</code>, 크롤 소스 CRUD, 수동 실행, 중복 실행 방지</td>
+            <td><code>pg_cron</code>이 <code>crawl-dispatch</code>를 호출하고, dispatcher가 <code>crawl_sources</code>의 enabled source를 parser_module에 매핑해 실행한다.</td>
+          </tr>
+          <tr>
+            <td>클럽</td>
+            <td>클럽 생성 요청, 어드민 승인, 내 클럽, 가입 신청, 가입 승인/거절, 탈퇴</td>
+            <td>클럽은 <code>pending → approved/rejected</code> 흐름을 타고, 멤버십은 <code>club_members</code>, 가입 요청은 <code>club_join_requests</code>로 관리한다.</td>
+          </tr>
+          <tr>
+            <td>클럽 활동</td>
+            <td>부분 구현. DB 마이그레이션, 모델, API 메서드, 상세 화면 초안 존재</td>
+            <td><code>035_club_events.sql</code>, <code>club_event.dart</code>, <code>ApiService.clubEvents/createClubEvent/respondEvent</code>, <code>ClubDetailScreen</code>, <code>/clubs/:id</code> 라우트가 있다. 다만 기존 클럽 목록은 아직 바텀시트 상세를 열고 있어 진입 연결 마무리가 필요하다.</td>
+          </tr>
+          <tr>
+            <td>AI 챗봇</td>
+            <td>SSE 스트리밍, RAG, Search Grounding, 대화 이력, 시맨틱 검색</td>
+            <td>사용자 질문을 임베딩하고 DB 문서·대회 컨텍스트를 검색한 뒤 Gemini로 답한다. 응답은 SSE로 조각 단위 수신된다.</td>
+          </tr>
+          <tr>
+            <td>지식베이스</td>
+            <td>어드민 룰북 CRUD, 게시 여부, 임베딩 상태, 즉시 재계산</td>
+            <td>어드민이 <code>rule_articles</code>를 직접 관리하고, 저장 시 임베딩을 무효화한 뒤 <code>embed-pending</code>으로 재계산할 수 있다.</td>
+          </tr>
+          <tr>
+            <td>푸시 알림</td>
+            <td>디바이스 토큰 등록, D-3/마감 알림 워커 구조</td>
+            <td>로그인 후 FCM 토큰을 <code>device_tokens</code>에 저장하고, <code>notify-cron</code>이 중복 방지 로그를 기준으로 발송한다.</td>
+          </tr>
+          <tr>
+            <td>스피드건</td>
+            <td>비디오 선택, 코트 캘리브레이션, 속도 계산 서비스, 결과 화면 구조</td>
+            <td>240fps 영상에서 프레임을 추출하고, 공 위치·코트 보정·속도 계산을 연결한다. 모델 파일이 없으면 개발용 mock detector가 동작한다.</td>
+          </tr>
+          <tr>
+            <td>디자인 시스템</td>
+            <td>Pretendard, 라이트/다크 테마, 공통 위젯, Figma Make 반영</td>
+            <td><code>app/lib/theme</code>와 <code>app/lib/widgets</code>의 토큰/컴포넌트로 화면 스타일을 통일하고 있다.</td>
+          </tr>
+          <tr>
+            <td>보안·운영</td>
+            <td>RLS, admin role, cron JWT Vault 전환, secret scan, CI/harness</td>
+            <td>cron 호출은 Vault의 <code>internal_cron_jwt</code>를 사용하도록 개선됐다. 다만 legacy API key 완전 전환과 노출 JWT revoke는 남은 작업이다.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>핵심 작동 흐름</h2>
+      <div class="flow">
+        <div class="step">
+          <div class="num">1</div>
+          <h3>가입</h3>
+          <p>이메일/Google로 로그인하고 종목·등급을 등록한다.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h3>필터</h3>
+          <p>active sport와 사용자 등급이 대회 검색 기준이 된다.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h3>대회</h3>
+          <p>서버/DB가 출전 가능 대회만 반환하고 앱은 목록·상세를 보여준다.</p>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <h3>운영</h3>
+          <p>크롤러·사용자 제보·클럽·지식베이스는 어드민 화면에서 관리한다.</p>
+        </div>
+        <div class="step">
+          <div class="num">5</div>
+          <h3>AI</h3>
+          <p>챗봇은 DB/RAG 컨텍스트와 검색을 결합해 스트리밍으로 답한다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>현재 리포 기준 주의할 점</h2>
+      <div class="grid">
+        <article class="card wide">
+          <h3>미커밋 변경</h3>
+          <p>
+            <code>supabase/migrations/035_club_events.sql</code>,
+            <code>app/lib/models/club_event.dart</code>,
+            <code>app/lib/screens/clubs/club_detail_screen.dart</code>,
+            그리고 <code>app/lib/services/api.dart</code>의 클럽 활동 메서드가 아직 커밋되지 않은 변경이다.
+            클럽 활동 MVP의 일부 구현으로 보이며, 팀 작업 전에는 리뷰와 테스트가 필요하다.
+          </p>
+        </article>
+        <article class="card wide">
+          <h3>문서와 실제 코드 차이</h3>
+          <p>
+            일부 계획 문서에는 crawl dispatcher가 대기 상태로 남아 있지만, 실제 코드에는
+            <code>crawl-dispatch</code>와 cron 전환 마이그레이션이 존재한다. 팀 공유 시에는 이 HTML처럼
+            실제 코드 기준으로 설명하는 편이 안전하다.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>앞으로 해야 할 작업</h2>
+      <div class="card full">
+        <div class="priority">
+          <div><span class="rank">1</span></div>
+          <div>
+            <h3>보안 키 전환 마무리</h3>
+            <p>legacy anon/service_role API key에서 새 publishable/secret key 체계로 전환하고, 노출된 legacy JWT를 완전히 revoke한다.</p>
+            <span class="tag red">보안 최우선</span>
+            <span class="tag">docs/security/cron-jwt-rotation.md</span>
+          </div>
+          <div class="owner">담당 후보: 백엔드/운영</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">2</span></div>
+          <div>
+            <h3>핵심 사용자 동선 QA</h3>
+            <p>회원가입, 온보딩, 대회 검색, 즐겨찾기, 제보, 클럽 생성/가입, 챗봇 질문까지 실제 디바이스에서 한 번에 검증한다.</p>
+            <span class="tag blue">MVP 품질</span>
+          </div>
+          <div class="owner">담당 후보: 프론트/QA</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">3</span></div>
+          <div>
+            <h3>대회 데이터 품질 검수</h3>
+            <p>크롤링된 대회의 종목, 지역, 날짜, 신청 마감, 등급 코드, 상세 링크를 샘플링해 잘못된 노출을 줄인다.</p>
+            <span class="tag orange">데이터 품질</span>
+          </div>
+          <div class="owner">담당 후보: 도메인/운영</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">4</span></div>
+          <div>
+            <h3>클럽 활동 MVP 연결</h3>
+            <p><code>035_club_events.sql</code>과 Flutter 초안을 리뷰한 뒤 기존 바텀시트 진입을 <code>/clubs/:id</code> 전체화면으로 대체하고, 멤버 목록, 일정 생성, 참석/불참 토글 QA를 마무리한다.</p>
+            <span class="tag">DB + Flutter</span>
+          </div>
+          <div class="owner">담당 후보: 풀스택</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">5</span></div>
+          <div>
+            <h3>AI 비용·품질 관리</h3>
+            <p>의도 분류, QA cache, 정형 질문 템플릿 응답 범위를 확대하고, Search Grounding 사용 기준과 비용 로그를 정리한다.</p>
+            <span class="tag blue">AI/RAG</span>
+          </div>
+          <div class="owner">담당 후보: 백엔드/AI</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">6</span></div>
+          <div>
+            <h3>스피드건 production 기준 정리</h3>
+            <p>실제 모델 파일, 정확도 테스트, 낮은 품질 입력 경고, production mock detector 차단 하네스를 추가한다.</p>
+            <span class="tag orange">실험 기능</span>
+          </div>
+          <div class="owner">담당 후보: 모바일/ML</div>
+        </div>
+        <div class="priority">
+          <div><span class="rank">7</span></div>
+          <div>
+            <h3>카카오 로그인과 배포 준비</h3>
+            <p>카카오 로그인 Edge Function, redirect URL, 앱 스킴, 개인정보 동의 흐름을 분리된 작업으로 진행한다.</p>
+            <span class="tag">Auth</span>
+          </div>
+          <div class="owner">담당 후보: 인증/모바일</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>팀 작업 방식</h2>
+      <div class="grid">
+        <article class="card wide">
+          <h3>작업 단위</h3>
+          <ul>
+            <li>Issue 하나에 목표·범위·완료 기준을 먼저 적는다.</li>
+            <li>DB/API/UI/리팩터링을 한 PR에 크게 섞지 않는다.</li>
+            <li>새 테이블은 타입, RLS, 정책, 인덱스, 테스트 기준을 같이 본다.</li>
+          </ul>
+        </article>
+        <article class="card wide">
+          <h3>검증</h3>
+          <ul>
+            <li>전체: <code>scripts/harness/run_all.sh</code></li>
+            <li>Flutter: <code>cd app && flutter analyze && flutter test</code></li>
+            <li>Edge: <code>cd supabase/functions && deno fmt --check ... && deno lint ... && deno check ... && deno test ...</code></li>
+            <li>DB 변경: 로컬 reset 또는 최소한 SQL/RLS 시나리오 검증</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="note">
+        <strong>오늘 팀 공유 추천:</strong>
+        “현재 기능은 많이 들어왔고, 이제는 보안 키 전환·데이터 품질·핵심 동선 QA·클럽 활동 MVP 연결을 작은 이슈로 쪼개서 마무리하는 단계”라고 설명하면 된다.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    기준 파일: README.md, docs/kb/*, docs/security/cron-jwt-rotation.md, docs/superpowers/specs/2026-05-28-club-activity-mvp-design.md,
+    app/lib/*, supabase/functions/*, supabase/migrations/*.sql. 생성일: 2026-05-28.
+  </footer>
+</body>
+</html>
