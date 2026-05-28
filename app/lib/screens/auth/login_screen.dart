@@ -8,13 +8,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/matchup_logo.dart';
 
 const Color _primaryBlue = Color(0xFF1E3A8A);
 const Color _primaryBlueSoft = Color(0xFF1E40AF);
 const Color _futsalGreen = Color(0xFF84CC16);
 const Color _kakaoYellow = Color(0xFFFEE500);
-const Color _ink = Color(0xFF0F172A);
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -29,6 +27,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordConfirm = TextEditingController();
   bool _signUp = false;
   bool _busy = false;
+  bool _marketingConsent = false;
   String? _error;
 
   @override
@@ -112,54 +111,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [_primaryBlue, _primaryBlueSoft, _futsalGreen],
-            stops: [0, 0.55, 1],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xxl),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+  Future<void> _showEmailAuthSheet() async {
+    setState(() => _error = null);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final cs = Theme.of(context).colorScheme;
+            final tt = Theme.of(context).textTheme;
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: AppSpacing.xxxl),
-                    const _BrandMark(),
-                    const SizedBox(height: AppSpacing.huge),
-                    Text(
-                      _signUp ? '환영해요!\n계정을 만들어볼까요?' : '주말마다\n같이 뛸 사람을 찾고 있나요?',
-                      textAlign: TextAlign.left,
-                      style: tt.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        height: 1.12,
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.outlineVariant,
+                          borderRadius: AppRadius.pill,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.lg),
                     Text(
-                      _signUp
-                          ? '이메일과 비밀번호를 입력하면 내 근처 대회와 모임을 바로 확인할 수 있어요.'
-                          : '풋살부터 테니스까지, 내 근처 모임과 대회를 한눈에 확인하세요.',
-                      style: tt.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.86),
-                        height: 1.45,
+                      _signUp ? '회원가입' : '이메일로 로그인',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.huge),
-                    _AuthField(
+                    const SizedBox(height: AppSpacing.lg),
+                    _SheetAuthField(
                       controller: _email,
                       icon: Icons.email_outlined,
                       label: '이메일',
@@ -168,20 +161,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    _AuthField(
+                    _SheetAuthField(
                       controller: _password,
                       icon: Icons.lock_outline_rounded,
                       label: '비밀번호',
                       hintText: _signUp ? '6자 이상 입력' : null,
                       obscureText: true,
-                      textInputAction: _signUp
-                          ? TextInputAction.next
-                          : TextInputAction.done,
+                      textInputAction:
+                          _signUp ? TextInputAction.next : TextInputAction.done,
                       onSubmitted: (_) => _busy ? null : _emailAuth(),
                     ),
                     if (_signUp) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _AuthField(
+                      _SheetAuthField(
                         controller: _passwordConfirm,
                         icon: Icons.verified_user_outlined,
                         label: '비밀번호 확인',
@@ -191,187 +183,237 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onSubmitted: (_) => _busy ? null : _emailAuth(),
                       ),
                     ],
-                    if (_signUp) ...[
-                      const SizedBox(height: AppSpacing.sm),
+                    if (_error != null) ...[
+                      const SizedBox(height: AppSpacing.md),
                       Text(
-                        '테스트용 이메일 형식과 6자 이상 비밀번호를 입력해 주세요.',
+                        _error!,
                         style: tt.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.82),
+                          color: cs.error,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE84118),
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.error_outline_rounded,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text(
-                                _error!,
-                                style: tt.bodySmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.lg),
                     FilledButton(
                       onPressed: _busy ? null : _emailAuth,
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(54),
-                        backgroundColor: _kakaoYellow,
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: Colors.white.withValues(
-                          alpha: 0.35,
-                        ),
-                        disabledForegroundColor: Colors.black.withValues(
-                          alpha: 0.38,
-                        ),
+                        minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        elevation: 8,
-                        shadowColor: Colors.black.withValues(alpha: 0.24),
                       ),
                       child: _busy
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Text(_signUp ? '회원가입 시작하기' : '이메일로 로그인'),
+                          : Text(_signUp ? '회원가입 시작하기' : '로그인'),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    _ModeSwitchButton(
-                      label: _signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기',
-                      onPressed: () => _setMode(signUp: !_signUp),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.md,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              color: Colors.white.withValues(alpha: 0.42),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                            ),
-                            child: Text(
-                              '또는',
-                              style: tt.labelSmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.86),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              color: Colors.white.withValues(alpha: 0.42),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: AppSpacing.sm),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              _setMode(signUp: !_signUp);
+                              setSheetState(() {});
+                            },
+                      child: Text(
+                        _signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기',
                       ),
                     ),
-                    if (AppConfig.googleWebClientId.isNotEmpty ||
-                        AppConfig.googleIosClientId.isNotEmpty) ...[
-                      _SocialButton(
-                        onPressed: _busy ? null : _googleSignIn,
-                        icon: Icons.account_circle_outlined,
-                        label: '구글로 계속하기',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
-                    _SocialButton(
-                      onPressed: null,
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: '카카오로 계속하기 (준비 중)',
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      '시작하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
-                      textAlign: TextAlign.center,
-                      style: tt.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.huge),
-
-                    // ── Dev 퀵로그인 (개발용) ───────────────────
-                    if (const bool.fromEnvironment('dart.vm.product') ==
-                        false) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.md,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Divider(
-                                color: Colors.white.withValues(alpha: 0.42),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                              ),
-                              child: Text(
-                                'DEV',
-                                style: tt.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.72),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Divider(
-                                color: Colors.white.withValues(alpha: 0.42),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      FilledButton.tonal(
-                        onPressed:
-                            _busy ? null : () => _devLogin('ssfak@naver.com'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: AppRadius.pill,
-                          ),
-                        ),
-                        child: const Text('Dev 어드민 로그인'),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
                   ],
                 ),
               ),
-            ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomRight,
+            colors: [_primaryBlue, _primaryBlueSoft, _futsalGreen],
+            stops: [0, 0.52, 1],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                    maxWidth: 520,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: constraints.maxHeight * 0.20),
+                      const _IntroSportBalls(),
+                      SizedBox(height: constraints.maxHeight * 0.23),
+                      const _IntroDots(),
+                      const SizedBox(height: AppSpacing.xxl),
+                      Text(
+                        '주말마다\n같이 뛸 사람을 찾고 있나요?',
+                        textAlign: TextAlign.left,
+                        style: tt.headlineMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          height: 1.18,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        '축구/풋살부터 테니스까지, 내 근처\n모임부터 대회까지 한눈에 확인하세요.',
+                        style: tt.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.86),
+                          height: 1.7,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE84118),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: tt.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                      _KakaoStartButton(
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        '카카오 로그인은 준비 중입니다. 이메일 로그인을 이용해 주세요.'),
+                                  ),
+                                );
+                              },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      if (AppConfig.googleWebClientId.isNotEmpty ||
+                          AppConfig.googleIosClientId.isNotEmpty) ...[
+                        _SocialButton(
+                          onPressed: _busy ? null : _googleSignIn,
+                          icon: Icons.account_circle_outlined,
+                          label: '구글로 계속하기',
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
+                      TextButton(
+                        onPressed: _busy ? null : _showEmailAuthSheet,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(44),
+                        ),
+                        child: const Text(
+                          '이메일로 계속하기',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        '시작하면 이용약관과 개인정보 처리방침에\n동의한 것으로 간주됩니다.',
+                        textAlign: TextAlign.center,
+                        style: tt.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.64),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _MarketingConsentRow(
+                        value: _marketingConsent,
+                        onChanged: (value) =>
+                            setState(() => _marketingConsent = value ?? false),
+                      ),
+
+                      // ── Dev 퀵로그인 (개발용) ───────────────────
+                      if (const bool.fromEnvironment('dart.vm.product') ==
+                          false) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.md,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color: Colors.white.withValues(alpha: 0.42),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  'DEV',
+                                  style: tt.labelSmall?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.72),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color: Colors.white.withValues(alpha: 0.42),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        FilledButton.tonal(
+                          onPressed:
+                              _busy ? null : () => _devLogin('ssfak@naver.com'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.pill,
+                            ),
+                          ),
+                          child: const Text('Dev 어드민 로그인'),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -379,7 +421,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _devLogin(String email) async {
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       // 1) dev-auth Edge Function 호출 → magic link 토큰 획득
       final baseUrl = AppConfig.apiBaseUrl;
@@ -409,75 +454,202 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
+class _IntroSportBalls extends StatelessWidget {
+  const _IntroSportBalls();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _SportBadge(
-              icon: Icons.sports_soccer_rounded,
-              background: Colors.white,
-              foreground: _ink,
-            ),
-            SizedBox(width: AppSpacing.sm),
-            _SportBadge(
-              icon: Icons.sports_tennis_rounded,
-              background: _kakaoYellow,
-              foreground: Color(0xFF466300),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        const MatchUpLogo(
-          fontSize: 24,
-          textColor: Colors.white,
-          dotColor: _futsalGreen,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: const [
+        Text('⚽', style: TextStyle(fontSize: 108, height: 1)),
+        SizedBox(width: AppSpacing.sm),
+        SizedBox(
+          width: 108,
+          height: 108,
+          child: CustomPaint(painter: _TennisBallPainter()),
         ),
       ],
     );
   }
 }
 
-class _SportBadge extends StatelessWidget {
-  const _SportBadge({
-    required this.icon,
-    required this.background,
-    required this.foreground,
-  });
+class _TennisBallPainter extends CustomPainter {
+  const _TennisBallPainter();
 
-  final IconData icon;
-  final Color background;
-  final Color foreground;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.shortestSide / 2;
+    final ballPaint = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(-0.35, -0.42),
+        radius: 1,
+        colors: [
+          Color(0xFFECFF2E),
+          Color(0xFFBFEA13),
+          Color(0xFF8BC700),
+        ],
+      ).createShader(rect);
+    canvas.drawCircle(center, radius * 0.88, ballPaint);
+
+    final seamPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.88)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.14
+      ..strokeCap = StrokeCap.round;
+    final leftSeam = Path()
+      ..moveTo(size.width * 0.24, size.height * 0.10)
+      ..cubicTo(
+        size.width * 0.54,
+        size.height * 0.28,
+        size.width * 0.54,
+        size.height * 0.72,
+        size.width * 0.24,
+        size.height * 0.90,
+      );
+    final rightSeam = Path()
+      ..moveTo(size.width * 0.76, size.height * 0.10)
+      ..cubicTo(
+        size.width * 0.46,
+        size.height * 0.28,
+        size.width * 0.46,
+        size.height * 0.72,
+        size.width * 0.76,
+        size.height * 0.90,
+      );
+    canvas.drawPath(leftSeam, seamPaint);
+    canvas.drawPath(rightSeam, seamPaint);
+
+    final glossPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.16)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(size.width * 0.34, size.height * 0.28),
+        radius * 0.18, glossPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _IntroDots extends StatelessWidget {
+  const _IntroDots();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 60,
-      height: 60,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        shape: BoxShape.circle,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 18,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Icon(icon, size: 34, color: foreground),
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _IntroDot(active: true),
+        SizedBox(width: AppSpacing.sm),
+        _IntroDot(active: false),
+        SizedBox(width: AppSpacing.sm),
+        _IntroDot(active: false),
+        SizedBox(width: AppSpacing.sm),
+        _IntroDot(active: false),
+        SizedBox(width: AppSpacing.sm),
+        _IntroDot(active: false),
+      ],
     );
   }
 }
 
-class _AuthField extends StatelessWidget {
-  const _AuthField({
+class _IntroDot extends StatelessWidget {
+  const _IntroDot({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: active ? 28 : 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: active ? Colors.white : Colors.white.withValues(alpha: 0.30),
+        borderRadius: AppRadius.pill,
+      ),
+    );
+  }
+}
+
+class _KakaoStartButton extends StatelessWidget {
+  const _KakaoStartButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(64),
+        backgroundColor: _kakaoYellow,
+        foregroundColor: Colors.black,
+        disabledBackgroundColor: Colors.white.withValues(alpha: 0.35),
+        disabledForegroundColor: Colors.black.withValues(alpha: 0.38),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 10,
+        shadowColor: Colors.black.withValues(alpha: 0.22),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_rounded, size: 22),
+          SizedBox(width: AppSpacing.md),
+          Text(
+            '카카오로 시작하기',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarketingConsentRow extends StatelessWidget {
+  const _MarketingConsentRow({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Checkbox(
+              value: value,
+              onChanged: onChanged,
+              side: const BorderSide(color: Colors.white, width: 1.6),
+              checkColor: Colors.black,
+              activeColor: _kakaoYellow,
+            ),
+            Text(
+              '마케팅 정보 수신 동의 (선택)',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.78),
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetAuthField extends StatelessWidget {
+  const _SheetAuthField({
     required this.controller,
     required this.icon,
     required this.label,
@@ -505,59 +677,11 @@ class _AuthField extends StatelessWidget {
       textInputAction: textInputAction,
       obscureText: obscureText,
       onSubmitted: onSubmitted,
-      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-      cursorColor: _kakaoYellow,
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
-        hintStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.42),
-          fontWeight: FontWeight.w600,
-        ),
-        labelStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.76),
-          fontWeight: FontWeight.w700,
-        ),
-        prefixIcon: Icon(icon, color: Colors.white.withValues(alpha: 0.88)),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.14),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.lg,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kakaoYellow, width: 2),
-        ),
+        prefixIcon: Icon(icon),
       ),
-    );
-  }
-}
-
-class _ModeSwitchButton extends StatelessWidget {
-  const _ModeSwitchButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.white,
-        disabledForegroundColor: Colors.white.withValues(alpha: 0.5),
-        minimumSize: const Size.fromHeight(48),
-      ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     );
   }
 }
