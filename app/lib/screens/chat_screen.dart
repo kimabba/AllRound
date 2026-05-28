@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/matchup_logo.dart';
 
 class _Msg {
   final String role;
@@ -76,17 +77,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           case 'error':
             setState(() {
               _messages[assistantIdx].content +=
-                  '\n\n[오류] ${evt.data['message'] ?? '알 수 없는 오류'}';
+                  '\n\n[오류] ${_formatChatError(evt.data['message'])}';
             });
         }
       }
     } catch (e) {
       setState(() {
-        _messages[assistantIdx].content += '\n\n[연결 실패] $e';
+        _messages[assistantIdx].content += '\n\n[연결 실패] ${_formatChatError(e)}';
       });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _formatChatError(Object? error) {
+    final text = error?.toString() ?? '';
+    if (text.contains('API_KEY_INVALID') ||
+        text.contains('API key not valid') ||
+        text.contains('GEMINI_API_KEY')) {
+      return 'AI 챗봇 API 키가 설정되지 않았거나 올바르지 않습니다. supabase/functions/.env의 GEMINI_API_KEY를 실제 Gemini 키로 바꾼 뒤 백엔드를 다시 실행해 주세요.';
+    }
+    if (text.contains('401') || text.contains('JWT')) {
+      return '로그인 세션을 확인할 수 없습니다. 다시 로그인한 뒤 시도해 주세요.';
+    }
+    if (text.contains('rate limit') || text.contains('429')) {
+      return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+    }
+    return '챗봇 응답을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   Future<void> sendText(String text) async {
@@ -111,24 +128,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.auto_awesome_rounded,
-                  size: 16, color: cs.primary),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            const Text('AI 챗봇'),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: const BrandedAppBarTitle(title: '코치봇')),
       body: Column(
         children: [
           Expanded(
@@ -141,8 +141,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       vertical: AppSpacing.md,
                     ),
                     itemCount: _messages.length,
-                    itemBuilder: (_, i) =>
-                        _MessageBubble(msg: _messages[i]),
+                    itemBuilder: (_, i) => _MessageBubble(msg: _messages[i]),
                   ),
           ),
           if (_busy)
@@ -150,11 +149,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               color: cs.primary,
               backgroundColor: cs.surfaceContainerLow,
             ),
-          _InputBar(
-            controller: _ctrl,
-            busy: _busy,
-            onSend: _send,
-          ),
+          _InputBar(controller: _ctrl, busy: _busy, onSend: _send),
         ],
       ),
     );
@@ -186,20 +181,11 @@ class _EmptyHint extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: AppSpacing.lg),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.auto_awesome_rounded,
-                size: 32, color: cs.primary),
-          ),
+          const _CoachBotVisual(size: 108),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'AI가 답해드려요',
-            style: tt.titleLarge,
+            '코치봇에게 물어보세요',
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -207,6 +193,42 @@ class _EmptyHint extends StatelessWidget {
             '내 등급 대회 검색, 종목 규칙, 협회 정보를 물어보세요',
             style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: cs.secondaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.lightbulb_rounded,
+                    color: cs.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    '규칙이 헷갈리는 상황이나 이번 주 참가 가능한 대회를 물어보세요.',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           GridView.count(
@@ -222,6 +244,32 @@ class _EmptyHint extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CoachBotVisual extends StatelessWidget {
+  const _CoachBotVisual({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          boxShadow: AppShadows.elevatedFor(Theme.of(context).brightness),
+        ),
+        child: Image.asset(
+          'assets/images/coachbot/coachbot-avatar.jpg',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
@@ -247,6 +295,7 @@ class _SuggestionChip extends StatelessWidget {
           color: cs.surfaceContainerLow,
           borderRadius: AppRadius.pill,
           border: Border.all(color: cs.outlineVariant),
+          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
         child: Text(
           text,
@@ -275,8 +324,9 @@ class _InputBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: cs.surface,
+          color: cs.surfaceContainerLow,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
+          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
         child: Row(
           children: [
@@ -286,10 +336,14 @@ class _InputBar extends StatelessWidget {
                 decoration: InputDecoration(
                   hintText: '메시지를 입력하세요',
                   filled: true,
-                  fillColor: cs.surfaceContainerLow,
+                  fillColor: cs.surface,
                   border: OutlineInputBorder(
                     borderRadius: AppRadius.pill,
-                    borderSide: BorderSide.none,
+                    borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppRadius.pill,
+                    borderSide: BorderSide(color: cs.outlineVariant),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
@@ -342,13 +396,16 @@ class _MessageBubble extends StatelessWidget {
               vertical: AppSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: isUser ? cs.primaryContainer : cs.surfaceContainerLow,
+              color: isUser ? cs.primary : cs.surfaceContainerLow,
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(AppRadius.lg),
-                topRight: const Radius.circular(AppRadius.lg),
-                bottomLeft: Radius.circular(isUser ? AppRadius.lg : AppRadius.xs),
-                bottomRight: Radius.circular(isUser ? AppRadius.xs : AppRadius.lg),
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: Radius.circular(isUser ? 18 : AppRadius.xs),
+                bottomRight: Radius.circular(isUser ? AppRadius.xs : 18),
               ),
+              boxShadow: isUser
+                  ? null
+                  : AppShadows.cardFor(Theme.of(context).brightness),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,13 +413,16 @@ class _MessageBubble extends StatelessWidget {
                 SelectableText(
                   msg.content.isEmpty ? '…' : msg.content,
                   style: tt.bodyMedium?.copyWith(
-                    color: isUser ? cs.onPrimaryContainer : cs.onSurface,
+                    color: isUser ? cs.onPrimary : cs.onSurface,
                     height: 1.5,
                   ),
                 ),
                 if (msg.citations.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  Divider(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),
+                  Divider(
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
+                    height: 1,
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   for (final c in msg.citations.take(8))
                     _CitationRow(citation: c),
@@ -395,8 +455,10 @@ class _CitationRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: GestureDetector(
         onTap: url != null
-            ? () => launchUrl(Uri.parse(url),
-                mode: LaunchMode.externalApplication)
+            ? () => launchUrl(
+                  Uri.parse(url),
+                  mode: LaunchMode.externalApplication,
+                )
             : null,
         child: Row(
           children: [

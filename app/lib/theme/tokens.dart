@@ -13,8 +13,9 @@ class AppRadius {
 
   static const BorderRadius card = BorderRadius.all(Radius.circular(lg));
   static const BorderRadius hero = BorderRadius.all(Radius.circular(xl));
-  static const BorderRadius sheet =
-      BorderRadius.vertical(top: Radius.circular(xxl));
+  static const BorderRadius sheet = BorderRadius.vertical(
+    top: Radius.circular(xxl),
+  );
   static const BorderRadius pill = BorderRadius.all(Radius.circular(full));
 }
 
@@ -30,8 +31,10 @@ class AppSpacing {
   static const double xxxl = 32;
   static const double huge = 40;
 
-  static const EdgeInsets screen =
-      EdgeInsets.symmetric(horizontal: lg, vertical: md);
+  static const EdgeInsets screen = EdgeInsets.symmetric(
+    horizontal: lg,
+    vertical: md,
+  );
   static const EdgeInsets cardInner = EdgeInsets.all(lg);
   static const EdgeInsets listGap = EdgeInsets.symmetric(vertical: sm);
 }
@@ -42,13 +45,13 @@ class AppShadows {
   AppShadows._();
 
   static const List<BoxShadow> card = [
-    BoxShadow(color: Color(0x0A000000), blurRadius: 1, offset: Offset(0, 1)),
-    BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 2)),
+    BoxShadow(color: Color(0x0A0F172A), blurRadius: 1, offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x0F0F172A), blurRadius: 24, offset: Offset(0, 4)),
   ];
 
   static const List<BoxShadow> elevated = [
-    BoxShadow(color: Color(0x0F000000), blurRadius: 2, offset: Offset(0, 2)),
-    BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x0A0F172A), blurRadius: 2, offset: Offset(0, 2)),
+    BoxShadow(color: Color(0x140F172A), blurRadius: 24, offset: Offset(0, 8)),
   ];
 
   static const List<BoxShadow> overlay = [
@@ -66,9 +69,8 @@ class AppShadows {
 /// 종목 액센트 컬러 (테니스/풋살)
 class AppSportColors {
   AppSportColors._();
-  static const Color tennis = Color(0xFFE8C547); // 테니스 옐로우
-  static const Color futsal = Color(0xFFF4511E); // 풋살 코랄
+  static const Color tennis = Color(0xFFF97316);
+  static const Color futsal = Color(0xFF84CC16);
 
-  static Color forSport(String sport) =>
-      sport == 'futsal' ? futsal : tennis;
+  static Color forSport(String sport) => sport == 'futsal' ? futsal : tennis;
 }

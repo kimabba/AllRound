@@ -79,7 +79,8 @@ class ApiService {
     return Tournament.fromJson(body['tournament'] as Map<String, dynamic>);
   }
 
-  Future<void> approveTournament(String id, {bool approve = true, String? reason}) async {
+  Future<void> approveTournament(String id,
+      {bool approve = true, String? reason}) async {
     final res = await http.post(
       _uri('tournaments-approve'),
       headers: await _authHeaders(),
@@ -112,8 +113,9 @@ class ApiService {
       final m = Map<String, dynamic>.from(r as Map);
       final src = m['source'] as String? ?? '';
       final submittedBy = m['submitted_by'];
-      m['submission_kind'] =
-          (src == 'user_submission' || submittedBy != null) ? 'user' : 'crawler';
+      m['submission_kind'] = (src == 'user_submission' || submittedBy != null)
+          ? 'user'
+          : 'crawler';
       m['submitted_by_email'] = null;
       return m;
     }).toList();
@@ -173,7 +175,8 @@ class ApiService {
   }
 
   // ===== clubs =====
-  Future<List<Club>> searchClubs({String? sport, String? region, String? q}) async {
+  Future<List<Club>> searchClubs(
+      {String? sport, String? region, String? q}) async {
     final res = await http.get(
       _uri('clubs-search', {
         if (sport != null) 'sport': sport,
@@ -220,7 +223,8 @@ class ApiService {
         if (address != null && address.isNotEmpty) 'address': address,
         if (contact != null && contact.isNotEmpty) 'contact': contact,
         if (website != null && website.isNotEmpty) 'website': website,
-        if (description != null && description.isNotEmpty) 'description': description,
+        if (description != null && description.isNotEmpty)
+          'description': description,
       }),
     );
     _check(res);
@@ -270,7 +274,8 @@ class ApiService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  Future<void> reviewJoinRequest(String requestId, {required bool approve, String? reason}) async {
+  Future<void> reviewJoinRequest(String requestId,
+      {required bool approve, String? reason}) async {
     final res = await http.post(
       _uri('clubs-review-join'),
       headers: await _authHeaders(),
@@ -290,12 +295,11 @@ class ApiService {
         .select('*, club_members(role, status)')
         .eq('status', 'pending')
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows)
-        .map(Club.fromJson)
-        .toList();
+    return List<Map<String, dynamic>>.from(rows).map(Club.fromJson).toList();
   }
 
-  Future<void> approveClub(String clubId, {required bool approve, String? reason}) async {
+  Future<void> approveClub(String clubId,
+      {required bool approve, String? reason}) async {
     final res = await http.post(
       _uri('clubs-approve'),
       headers: await _authHeaders(),
@@ -438,6 +442,16 @@ class ApiService {
   }
 
   // ===== user_sports =====
+  Future<void> saveDisplayName(String displayName) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+
+    await _supabase.rpc('ensure_profile');
+    await _supabase
+        .from('users')
+        .update({'display_name': displayName}).eq('id', userId);
+  }
+
   Future<List<UserSport>> myUserSports() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return [];
@@ -609,11 +623,8 @@ class ApiService {
     }
     if (patch.isEmpty) {
       // nothing to update — re-fetch row so caller can refresh
-      final row = await _supabase
-          .from('crawl_sources')
-          .select()
-          .eq('id', id)
-          .single();
+      final row =
+          await _supabase.from('crawl_sources').select().eq('id', id).single();
       return CrawlSource.fromJson(row);
     }
     final row = await _supabase

@@ -36,14 +36,18 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           textStyle: tt.labelLarge,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           textStyle: tt.labelLarge,
           side: BorderSide(color: cs.outlineVariant),
         ),
@@ -89,23 +93,39 @@ class AppTheme {
 
       // AppBar
       appBarTheme: AppBarTheme(
-        backgroundColor: cs.surface,
+        backgroundColor: cs.surfaceContainerLow,
         foregroundColor: cs.onSurface,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
-        surfaceTintColor: cs.surfaceTint,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: tt.titleLarge?.copyWith(color: cs.onSurface),
+        titleTextStyle: tt.titleLarge?.copyWith(
+          color: cs.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
       ),
 
       // NavigationBar
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: cs.surface,
+        backgroundColor: cs.surfaceContainerLow,
         indicatorColor: cs.primaryContainer,
-        height: 68,
-        labelTextStyle: WidgetStateProperty.all(tt.labelSmall),
+        height: 72,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return tt.labelSmall?.copyWith(
+            color: selected ? cs.primary : cs.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? cs.primary : cs.onSurfaceVariant,
+            size: 24,
+          );
+        }),
         elevation: 0,
-        surfaceTintColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
       ),
 
       // SnackBar

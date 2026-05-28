@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/tournament.dart';
 import '../state/providers.dart';
@@ -9,11 +14,206 @@ import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 
-class ProfileScreen extends ConsumerWidget {
+const _profileAvatarPrefsKey = 'profile.avatar.base64';
+const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
+const _notifyClubPrefsKey = 'notify.club_updates';
+const _notifyCoachPrefsKey = 'notify.coachbot_replies';
+
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  Uint8List? _avatarBytes;
+  bool _notifyTournament = true;
+  bool _notifyClub = true;
+  bool _notifyCoach = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileSettings();
+  }
+
+  Future<void> _loadProfileSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final avatarBase64 = prefs.getString(_profileAvatarPrefsKey);
+    if (!mounted) return;
+    setState(() {
+      if (avatarBase64 != null && avatarBase64.isNotEmpty) {
+        _avatarBytes = base64Decode(avatarBase64);
+      }
+      _notifyTournament = prefs.getBool(_notifyTournamentPrefsKey) ?? true;
+      _notifyClub = prefs.getBool(_notifyClubPrefsKey) ?? true;
+      _notifyCoach = prefs.getBool(_notifyCoachPrefsKey) ?? false;
+    });
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 88,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileAvatarPrefsKey, base64Encode(bytes));
+    if (!mounted) return;
+    setState(() => _avatarBytes = bytes);
+  }
+
+  Future<void> _removeProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_profileAvatarPrefsKey);
+    if (!mounted) return;
+    setState(() => _avatarBytes = null);
+  }
+
+  Future<void> _showProfilePhotoSheet() async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _SheetActionRow(
+                  icon: Icons.photo_library_rounded,
+                  label: '앨범에서 선택',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickProfilePhoto();
+                  },
+                ),
+                if (_avatarBytes != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _SheetActionRow(
+                    icon: Icons.delete_outline_rounded,
+                    label: '프로필 사진 삭제',
+                    accentColor: cs.error,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _removeProfilePhoto();
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showNotificationSettings() async {
+    var tournament = _notifyTournament;
+    var club = _notifyClub;
+    var coach = _notifyCoach;
+
+    final result = await showDialog<({bool tournament, bool club, bool coach})>(
+      context: context,
+      builder: (dialogContext) {
+        final cs = Theme.of(dialogContext).colorScheme;
+        final tt = Theme.of(dialogContext).textTheme;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                '알림 설정',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _NotificationSwitchTile(
+                    icon: Icons.emoji_events_outlined,
+                    title: '대회 알림',
+                    subtitle: 'D-3·신청 마감 알림',
+                    value: tournament,
+                    onChanged: (value) =>
+                        setDialogState(() => tournament = value),
+                  ),
+                  Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  _NotificationSwitchTile(
+                    icon: Icons.groups_2_outlined,
+                    title: '클럽 알림',
+                    subtitle: '내 클럽 공지·업데이트',
+                    value: club,
+                    onChanged: (value) => setDialogState(() => club = value),
+                  ),
+                  Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  _NotificationSwitchTile(
+                    icon: Icons.smart_toy_outlined,
+                    title: '코치봇 알림',
+                    subtitle: '답변·추천 업데이트',
+                    value: coach,
+                    onChanged: (value) => setDialogState(() => coach = value),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(
+                    dialogContext,
+                  ).pop((tournament: tournament, club: club, coach: coach)),
+                  child: const Text('저장'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
+    await prefs.setBool(_notifyClubPrefsKey, result.club);
+    await prefs.setBool(_notifyCoachPrefsKey, result.coach);
+    if (!mounted) return;
+    setState(() {
+      _notifyTournament = result.tournament;
+      _notifyClub = result.club;
+      _notifyCoach = result.coach;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
@@ -24,26 +224,44 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          _ProfileHeroSliver(initial: initial, email: email, sports: sports),
+          _ProfileHeroSliver(
+            initial: initial,
+            email: email,
+            sports: sports,
+            tennisOrgs: tennisOrgs,
+            avatarBytes: _avatarBytes,
+            onAvatarTap: _showProfilePhotoSheet,
+          ),
           SliverPadding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.lg,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                const _MyClubsSection(),
+                const SizedBox(height: AppSpacing.xl),
                 _SportsSection(sports: sports),
                 const SizedBox(height: AppSpacing.xl),
                 tennisOrgs.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (orgs) =>
-                      orgs.isEmpty ? const SizedBox.shrink() : _TennisOrgsSection(orgs: orgs),
+                  data: (orgs) => orgs.isEmpty
+                      ? const SizedBox.shrink()
+                      : _TennisOrgsSection(orgs: orgs),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 _AppearanceSection(),
                 const SizedBox(height: AppSpacing.xl),
-                _AccountSection(ref: ref),
+                _AccountSection(
+                  ref: ref,
+                  tournamentNotificationsEnabled: _notifyTournament,
+                  clubNotificationsEnabled: _notifyClub,
+                  coachNotificationsEnabled: _notifyCoach,
+                  onNotificationTap: _showNotificationSettings,
+                ),
                 const SizedBox(height: AppSpacing.xxxl),
               ]),
             ),
@@ -62,11 +280,17 @@ class _ProfileHeroSliver extends StatelessWidget {
   final String initial;
   final String email;
   final AsyncValue<List<UserSport>> sports;
+  final AsyncValue<List<UserTennisOrg>> tennisOrgs;
+  final Uint8List? avatarBytes;
+  final VoidCallback onAvatarTap;
 
   const _ProfileHeroSliver({
     required this.initial,
     required this.email,
     required this.sports,
+    required this.tennisOrgs,
+    required this.avatarBytes,
+    required this.onAvatarTap,
   });
 
   @override
@@ -74,87 +298,431 @@ class _ProfileHeroSliver extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final sportCount = sports.maybeWhen(data: (l) => l.length, orElse: () => 0);
-
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 306,
       pinned: true,
       backgroundColor: cs.primary,
       foregroundColor: cs.onPrimary,
-      title: const Text('내 정보'),
+      title: Text(
+        'MY',
+        style: tt.titleLarge?.copyWith(
+          color: cs.onPrimary,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [cs.primary, cs.primaryContainer],
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            kToolbarHeight + AppSpacing.xxl,
-            AppSpacing.lg,
-            AppSpacing.xl,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // 아바타
-              CircleAvatar(
-                radius: 36,
-                backgroundColor: cs.onPrimary.withValues(alpha: 0.2),
-                child: Text(
-                  initial,
-                  style: tt.headlineMedium?.copyWith(
-                    color: cs.onPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
+        background: Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [cs.primary, const Color(0xFF3B5BDB), cs.secondary],
                 ),
               ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      email,
-                      style: tt.bodyMedium?.copyWith(
-                        color: cs.onPrimary.withValues(alpha: 0.85),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '$sportCount',
-                          style: tt.displayMedium?.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
-                          ),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                kToolbarHeight + AppSpacing.md,
+                AppSpacing.lg,
+                112,
+              ),
+              child: _ProfileHeaderContent(
+                initial: initial,
+                email: email,
+                sports: sports,
+                avatarBytes: avatarBytes,
+                onAvatarTap: onAvatarTap,
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              bottom: AppSpacing.lg,
+              child: _StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeaderContent extends StatelessWidget {
+  const _ProfileHeaderContent({
+    required this.initial,
+    required this.email,
+    required this.sports,
+    required this.avatarBytes,
+    required this.onAvatarTap,
+  });
+
+  final String initial;
+  final String email;
+  final AsyncValue<List<UserSport>> sports;
+  final Uint8List? avatarBytes;
+  final VoidCallback onAvatarTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final primary = sports.maybeWhen(
+      data: (items) => items.where((s) => s.isPrimary).firstOrNull,
+      orElse: () => null,
+    );
+    final sportCount = sports.maybeWhen(data: (l) => l.length, orElse: () => 0);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: onAvatarTap,
+          child: Stack(
+            children: [
+              CircleAvatar(
+                radius: 42,
+                backgroundColor: cs.onPrimary.withValues(alpha: 0.2),
+                backgroundImage:
+                    avatarBytes == null ? null : MemoryImage(avatarBytes!),
+                child: avatarBytes == null
+                    ? Text(
+                        initial,
+                        style: tt.headlineMedium?.copyWith(
+                          color: cs.onPrimary,
+                          fontWeight: FontWeight.w900,
                         ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          '개 종목 등록됨',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onPrimary.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      )
+                    : null,
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: cs.onPrimary,
+                    shape: BoxShape.circle,
+                    boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+                  ),
+                  child: Icon(
+                    Icons.camera_alt_rounded,
+                    color: cs.primary,
+                    size: 15,
+                  ),
                 ),
               ),
             ],
           ),
         ),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                email.isEmpty ? '사용자' : email,
+                style: tt.titleLarge?.copyWith(
+                  color: cs.onPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  _HeroChip(
+                    label: primary == null
+                        ? '종목 미등록'
+                        : sportLabelFromString(primary.sport),
+                  ),
+                  if (primary != null)
+                    _HeroChip(label: gradeLabel(primary.grade)),
+                  _HeroChip(label: '$sportCount개 종목'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroChip extends StatelessWidget {
+  const _HeroChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
+      decoration: BoxDecoration(
+        color: cs.onPrimary.withValues(alpha: 0.18),
+        borderRadius: AppRadius.pill,
+        border: Border.all(color: cs.onPrimary.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        label,
+        style: tt.labelSmall?.copyWith(
+          color: cs.onPrimary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid({required this.sports, required this.tennisOrgs});
+
+  final AsyncValue<List<UserSport>> sports;
+  final AsyncValue<List<UserTennisOrg>> tennisOrgs;
+
+  @override
+  Widget build(BuildContext context) {
+    final sportCount = sports.maybeWhen(
+      data: (items) => items.length,
+      orElse: () => 0,
+    );
+    final orgCount = tennisOrgs.maybeWhen(
+      data: (items) => items.length,
+      orElse: () => 0,
+    );
+    final primary = sports.maybeWhen(
+      data: (items) => items.where((s) => s.isPrimary).firstOrNull?.sport,
+      orElse: () => null,
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.sports_score_rounded,
+            value: '$sportCount',
+            label: '등록 종목',
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.emoji_events_rounded,
+            value: '$orgCount',
+            label: '소속 협회',
+            color: Theme.of(context).colorScheme.tertiary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.tune_rounded,
+            value: primary == null ? '-' : sportLabelFromString(primary),
+            label: '기본 필터',
+            color: Theme.of(context).colorScheme.primary,
+            compact: true,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      variant: AppCardVariant.elevated,
+      borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.md,
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value,
+            style: (compact ? tt.labelLarge : tt.titleLarge)?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w900,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: tt.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MyClubsSection extends ConsumerWidget {
+  const _MyClubsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final clubs = ref.watch(myClubsProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: '내가 등록한 클럽',
+          action: _SectionActionButton(
+            label: '둘러보기',
+            onTap: () => context.go('/clubs'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        clubs.when(
+          loading: () =>
+              const AppCard(child: Center(child: CircularProgressIndicator())),
+          error: (_, __) => AppCard(
+            child: Text(
+              '등록 클럽을 불러오지 못했습니다.',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          data: (items) => items.isEmpty
+              ? AppCard(
+                  variant: AppCardVariant.elevated,
+                  borderRadius: BorderRadius.circular(16),
+                  child: _MyClubEmptyContent(cs: cs, tt: tt),
+                )
+              : Column(
+                  children: [
+                    for (final club in items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: AppCard(
+                          variant: AppCardVariant.elevated,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Row(
+                            children: [
+                              _ProfileSportThumbnail(sport: club.sport),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      club.name,
+                                      style: tt.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    Text(
+                                      [
+                                        sportLabelFromString(club.sport),
+                                        if (club.region != null) club.region!,
+                                      ].join(' · '),
+                                      style: tt.bodySmall?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MyClubEmptyContent extends StatelessWidget {
+  const _MyClubEmptyContent({required this.cs, required this.tt});
+
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: cs.secondaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            Icons.groups_rounded,
+            color: cs.onSecondaryContainer,
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '아직 등록한 클럽이 없습니다',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '마음에 드는 클럽을 찾아 등록하면 이곳에 표시됩니다.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+      ],
     );
   }
 }
@@ -202,16 +770,20 @@ class _SportsSection extends StatelessWidget {
                     padding: AppSpacing.screen,
                     child: Text(
                       '아직 등록된 종목이 없습니다.',
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                      style: tt.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 )
               : Column(
                   children: list
-                      .map((s) => Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _SportCard(sport: s),
-                          ))
+                      .map(
+                        (s) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: _SportCard(sport: s),
+                        ),
+                      )
                       .toList(),
                 ),
         ),
@@ -229,24 +801,14 @@ class _SportCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isTennis = sport.sport == 'tennis';
-    final accentColor = isTennis ? cs.primary : cs.tertiary;
+    final accentColor = isTennis ? cs.tertiary : cs.secondary;
 
     return AppCard(
+      variant: AppCardVariant.elevated,
+      borderRadius: BorderRadius.circular(16),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Icon(
-              isTennis ? Icons.sports_tennis_rounded : Icons.sports_soccer_rounded,
-              color: accentColor,
-              size: 24,
-            ),
-          ),
+          _ProfileSportThumbnail(sport: sport.sport),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -254,7 +816,7 @@ class _SportCard extends StatelessWidget {
               children: [
                 Text(
                   sportLabelFromString(sport.sport),
-                  style: tt.titleMedium,
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -283,6 +845,44 @@ class _SportCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileSportThumbnail extends StatelessWidget {
+  const _ProfileSportThumbnail({required this.sport});
+
+  final String sport;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTennis = sport == 'tennis';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 54,
+        height: 54,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              isTennis
+                  ? 'assets/images/tournaments/tennis-cover.jpg'
+                  : 'assets/images/tournaments/futsal-cover.jpg',
+              fit: BoxFit.cover,
+            ),
+            ColoredBox(color: Colors.black.withValues(alpha: 0.18)),
+            Icon(
+              isTennis
+                  ? Icons.sports_tennis_rounded
+                  : Icons.sports_soccer_rounded,
+              color: Colors.white,
+              size: 23,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -342,7 +942,9 @@ class _OrgRow extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    shortLabel.length <= 4 ? shortLabel : shortLabel.substring(0, 4),
+                    shortLabel.length <= 4
+                        ? shortLabel
+                        : shortLabel.substring(0, 4),
                     style: tt.labelSmall?.copyWith(
                       color: cs.onSecondaryContainer,
                       fontWeight: FontWeight.w700,
@@ -462,11 +1064,27 @@ class _AppearanceSection extends ConsumerWidget {
 
 class _AccountSection extends StatelessWidget {
   final WidgetRef ref;
-  const _AccountSection({required this.ref});
+  final bool tournamentNotificationsEnabled;
+  final bool clubNotificationsEnabled;
+  final bool coachNotificationsEnabled;
+  final VoidCallback onNotificationTap;
+
+  const _AccountSection({
+    required this.ref,
+    required this.tournamentNotificationsEnabled,
+    required this.clubNotificationsEnabled,
+    required this.coachNotificationsEnabled,
+    required this.onNotificationTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final activeCount = [
+      tournamentNotificationsEnabled,
+      clubNotificationsEnabled,
+      coachNotificationsEnabled,
+    ].where((enabled) => enabled).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,10 +1097,13 @@ class _AccountSection extends StatelessWidget {
               _ActionRow(
                 icon: Icons.notifications_outlined,
                 label: '알림 설정',
-                subtitle: '대회 D-3·신청 마감 알림',
-                onTap: () {},
+                subtitle: activeCount == 0 ? '모든 알림 꺼짐' : '$activeCount개 알림 켜짐',
+                onTap: onNotificationTap,
               ),
-              Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+              ),
               _ActionRow(
                 icon: Icons.logout_rounded,
                 label: '로그아웃',
@@ -535,10 +1156,7 @@ class _ActionRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      label,
-                      style: tt.bodyLarge?.copyWith(color: color),
-                    ),
+                    Text(label, style: tt.bodyLarge?.copyWith(color: color)),
                     if (subtitle != null)
                       Text(
                         subtitle!,
@@ -551,6 +1169,117 @@ class _ActionRow extends StatelessWidget {
               ),
               if (accentColor == null)
                 Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationSwitchTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _NotificationSwitchTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: value
+                  ? cs.primaryContainer
+                  : cs.surfaceContainerHighest.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: value ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetActionRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? accentColor;
+  final VoidCallback onTap;
+
+  const _SheetActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final color = accentColor ?? cs.onSurface;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                label,
+                style: tt.bodyLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
         ),
@@ -575,14 +1304,8 @@ class _SectionHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Text(
-          title,
-          style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-        if (action != null) ...[
-          const Spacer(),
-          action!,
-        ],
+        Text(title, style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
+        if (action != null) ...[const Spacer(), action!],
       ],
     );
   }
@@ -599,10 +1322,7 @@ class _SectionActionButton extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return GestureDetector(
       onTap: onTap,
-      child: Text(
-        label,
-        style: tt.labelMedium?.copyWith(color: cs.primary),
-      ),
+      child: Text(label, style: tt.labelMedium?.copyWith(color: cs.primary)),
     );
   }
 }

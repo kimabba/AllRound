@@ -41,6 +41,13 @@ final userTennisOrgsProvider = FutureProvider<List<UserTennisOrg>>((ref) async {
   return api.myTennisOrgs();
 });
 
+/// 사용자가 가입했거나 생성한 클럽 목록
+final myClubsProvider = FutureProvider<List<Club>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myClubs();
+});
+
 /// 권역 목록 (regions 테이블 — 8개 시드)
 final regionsProvider = FutureProvider<List<Region>>((ref) async {
   ref.watch(authStateProvider);

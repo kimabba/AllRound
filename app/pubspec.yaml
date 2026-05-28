@@ -52,6 +52,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/models/
+    - assets/images/tournaments/
+    - assets/images/coachbot/
+    - assets/images/rules/
   fonts:
     - family: Pretendard
       fonts:
