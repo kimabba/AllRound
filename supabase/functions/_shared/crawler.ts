@@ -245,19 +245,23 @@ export function extractGJDivisions(
   org: 'gj' | 'jn',
 ): { codes: string[]; label: string } {
   const KEYWORD_MAP: Array<{ keywords: string[]; suffix: string; label: string }> = [
-    { keywords: ['오픈부', '남자오픈', '오픈'],              suffix: 'm_open',       label: '오픈부' },
-    { keywords: ['골드부', '골드'],                          suffix: 'm_gold',       label: '골드부' },
-    { keywords: ['남자일반부', '일반부', '남자일반'],        suffix: 'm_general',    label: '일반부' },
-    { keywords: ['지도자부', '지도자'],                      suffix: 'm_instructor', label: '지도자부' },
-    { keywords: ['마스터즈부', '마스터즈'],                  suffix: 'm_masters',    label: '마스터즈부' },
-    { keywords: ['남자신인부', '신인부', '신인'],            suffix: 'm_rookie',     label: '신인부' },
-    { keywords: ['베테랑부', '베테랑'],                      suffix: 'm_veteran',    label: '베테랑부' },
-    { keywords: ['초급자부', '비입상자부', '초급자'],        suffix: 'm_beginner',   label: '초급자부' },
-    { keywords: ['여자오픈부', '여자오픈'],                  suffix: 'w_open',       label: '여자오픈부' },
-    { keywords: ['우승자부', '여자우승자', '국화', '금배'],  suffix: 'w_winner',     label: '여자우승자부' },
-    { keywords: ['여자신인부', '여자신인'],                  suffix: 'w_rookie',     label: '여자신인부' },
-    { keywords: ['부부부', '부부'],                          suffix: 'couple',       label: '부부부' },
-    { keywords: ['크로스'],                                  suffix: 'cross',        label: '크로스대회' },
+    { keywords: ['오픈부', '남자오픈', '오픈'], suffix: 'm_open', label: '오픈부' },
+    { keywords: ['골드부', '골드'], suffix: 'm_gold', label: '골드부' },
+    { keywords: ['남자일반부', '일반부', '남자일반'], suffix: 'm_general', label: '일반부' },
+    { keywords: ['지도자부', '지도자'], suffix: 'm_instructor', label: '지도자부' },
+    { keywords: ['마스터즈부', '마스터즈'], suffix: 'm_masters', label: '마스터즈부' },
+    { keywords: ['남자신인부', '신인부', '신인'], suffix: 'm_rookie', label: '신인부' },
+    { keywords: ['베테랑부', '베테랑'], suffix: 'm_veteran', label: '베테랑부' },
+    { keywords: ['초급자부', '비입상자부', '초급자'], suffix: 'm_beginner', label: '초급자부' },
+    { keywords: ['여자오픈부', '여자오픈'], suffix: 'w_open', label: '여자오픈부' },
+    {
+      keywords: ['우승자부', '여자우승자', '국화', '금배'],
+      suffix: 'w_winner',
+      label: '여자우승자부',
+    },
+    { keywords: ['여자신인부', '여자신인'], suffix: 'w_rookie', label: '여자신인부' },
+    { keywords: ['부부부', '부부'], suffix: 'couple', label: '부부부' },
+    { keywords: ['크로스'], suffix: 'cross', label: '크로스대회' },
   ];
 
   const foundCodes: string[] = [];

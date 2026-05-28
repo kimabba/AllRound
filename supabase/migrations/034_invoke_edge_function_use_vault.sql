@@ -1,9 +1,9 @@
--- invoke_edge_function: INTERNAL_CRON_JWT (= service_role JWT) 사용
--- SUPABASE_SERVICE_ROLE_KEY 가 platform reserved secret 으로 교체 불가하므로
--- 별도 INTERNAL_CRON_JWT secret + auth.ts requireCronSecret 체계로 분리.
+-- 보안 수정: invoke_edge_function 이 INTERNAL_CRON_JWT 를 SQL 하드코딩 대신
+-- Vault(`vault.decrypted_secrets`)에서 읽도록 교체한다.
 --
--- 보안: JWT 는 SQL 에 하드코딩하지 않고 Vault(`vault.decrypted_secrets`)에서 읽는다.
--- 사전 준비: select vault.create_secret('<jwt>', 'internal_cron_jwt');
+-- 030 마이그레이션이 service_role JWT 를 평문으로 포함해 공개 레포에 노출되었음.
+-- 적용 전 필수: 새로 발급한 JWT 를 Vault 에 저장
+--   select vault.create_secret('<new_internal_cron_jwt>', 'internal_cron_jwt');
 
 create or replace function public.invoke_edge_function(
   fn_name text,
@@ -18,7 +18,6 @@ declare
   cron_jwt     text;
   request_id   bigint;
 begin
-  -- INTERNAL_CRON_JWT 를 Vault 에서 조회 (auth.ts requireCronSecret 이 동일 값과 비교)
   select decrypted_secret into cron_jwt
   from vault.decrypted_secrets
   where name = 'internal_cron_jwt';

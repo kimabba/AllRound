@@ -221,6 +221,9 @@ class _TournamentSubmitScreenState
               _Label('주최 협회 *'),
               const SizedBox(height: AppSpacing.sm),
               DropdownButtonFormField<String>(
+                // controlled dropdown: 협회 변경 시 setState 로 즉시 반영돼야 하므로
+                // value 유지 (initialValue 는 최초값만 적용돼 회귀 발생).
+                // ignore: deprecated_member_use
                 value: _tennisOrg,
                 decoration: _inputDeco('협회 선택'),
                 items: _tennisOrgOptions

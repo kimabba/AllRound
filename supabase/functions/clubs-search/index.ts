@@ -36,9 +36,9 @@ Deno.serve(async (req) => {
       .eq('user_id', auth.user.id)
       .eq('status', 'active');
     const memberMap = new Map(
-      (memberRows ?? []).map((r: { club_id: string; role: string; status: string }) =>
-        [r.club_id, { role: r.role, status: r.status }]
-      )
+      (memberRows ?? []).map((
+        r: { club_id: string; role: string; status: string },
+      ) => [r.club_id, { role: r.role, status: r.status }]),
     );
     const memberClubIds = [...memberMap.keys()];
 
