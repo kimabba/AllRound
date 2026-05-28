@@ -232,13 +232,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '맞춤 설정')),
+      backgroundColor: cs.surfaceContainerLow,
       body: SafeArea(
         child: Column(
           children: [
+            _OnboardingTopBar(
+              step: _step,
+              onBack: _step == 0 ? null : () => setState(() => _step--),
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.huge,
+                ),
                 children: [
                   _StepProgress(current: _step),
                   const SizedBox(height: AppSpacing.xl),
@@ -277,20 +286,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ],
               ),
             ),
-            Padding(
+            Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              child: AppPrimaryButton(
-                label: _step == 2 ? '시작하기' : '다음',
-                onPressed: _canAdvance && !_busy
-                    ? () {
-                        if (_step < 2) {
-                          setState(() => _step++);
-                        } else {
-                          _submit();
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
+                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+              ),
+              child: SafeArea(
+                top: false,
+                child: AppPrimaryButton(
+                  label: _step == 2 ? '시작하기' : '다음',
+                  icon: _step == 2
+                      ? Icons.check_rounded
+                      : Icons.arrow_forward_rounded,
+                  onPressed: _canAdvance && !_busy
+                      ? () {
+                          if (_step < 2) {
+                            setState(() => _step++);
+                          } else {
+                            _submit();
+                          }
                         }
-                      }
-                    : null,
-                loading: _busy,
+                      : null,
+                  loading: _busy,
+                ),
               ),
             ),
           ],
@@ -306,11 +326,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _OnboardingHeroPanel(
+          title: '주말마다\n같이 뛸 사람을 찾고 있나요?',
+          subtitle: '풋살부터 테니스까지, 내 근처 모임과 대회를 맞춤으로 보여드릴게요.',
+          icon: Icons.sports_soccer_rounded,
+        ),
+        const SizedBox(height: AppSpacing.xl),
         Text(
           '환영해요!',
-          style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
         ),
-        const SizedBox(height: AppSpacing.xxl),
+        const SizedBox(height: AppSpacing.lg),
         Center(
           child: Container(
             width: 96,
@@ -326,7 +352,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             child: Icon(Icons.person_rounded, size: 48, color: cs.secondary),
           ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
+        const SizedBox(height: AppSpacing.xl),
         Text(
           '닉네임',
           style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
@@ -367,6 +393,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.xxl),
+        _SportHintCard(
+          icon: Icons.location_on_rounded,
+          title: '지역 기반 추천',
+          description: '선택한 권역은 대회·클럽 추천과 기본 필터에 사용됩니다.',
+        ),
+        const SizedBox(height: AppSpacing.lg),
         GridView.count(
           crossAxisCount: 3,
           mainAxisSpacing: AppSpacing.sm,
@@ -402,6 +434,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         Text(
           '${_regionCode == null ? '' : '${regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _SportHintCard(
+          icon: Icons.auto_awesome_rounded,
+          title: '맞춤 추천 준비',
+          description: '선택한 종목과 등급으로 대회, 클럽, 룰북 추천을 정리합니다.',
         ),
       ],
     );
@@ -633,6 +671,188 @@ class _StepProgress extends StatelessWidget {
           if (index < 2) const SizedBox(width: AppSpacing.xs),
         ],
       ],
+    );
+  }
+}
+
+class _OnboardingTopBar extends StatelessWidget {
+  const _OnboardingTopBar({
+    required this.step,
+    required this.onBack,
+  });
+
+  final int step;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final titles = ['프로필 설정', '활동 지역', '종목·경력'];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      color: cs.surface,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: Icon(onBack == null
+                ? Icons.close_rounded
+                : Icons.arrow_back_rounded),
+            tooltip: onBack == null ? '닫기' : '이전',
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const MatchUpLogo(fontSize: 18),
+          const SizedBox(width: AppSpacing.sm),
+          Container(width: 1, height: 18, color: cs.outlineVariant),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              titles[step],
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingHeroPanel extends StatelessWidget {
+  const _OnboardingHeroPanel({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cs.primary, const Color(0xFF1E40AF), AppSportColors.futsal],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: AppShadows.elevatedFor(Theme.of(context).brightness),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -18,
+            top: -18,
+            child: Icon(
+              Icons.sports_tennis_rounded,
+              size: 112,
+              color: Colors.white.withValues(alpha: 0.16),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(18),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                child: Icon(icon, color: Colors.white, size: 30),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                title,
+                style: tt.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  height: 1.22,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                subtitle,
+                style: tt.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SportHintCard extends StatelessWidget {
+  const _SportHintCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      variant: AppCardVariant.elevated,
+      borderRadius: BorderRadius.circular(16),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: cs.onPrimaryContainer),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -36,6 +36,12 @@ class MoreScreen extends ConsumerWidget {
         subtitle: '프로필 및 설정',
         onTap: () => context.go('/profile'),
       ),
+      _MenuItem(
+        icon: Icons.tune_rounded,
+        label: '맞춤 설정',
+        subtitle: '닉네임, 활동 지역, 종목·등급 수정',
+        onTap: () => context.go('/onboarding'),
+      ),
       if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_outlined,
@@ -75,14 +81,16 @@ class MoreScreen extends ConsumerWidget {
                     children: [
                       Text(
                         item.label,
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       Text(
                         item.subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                       ),
                     ],
                   ),
