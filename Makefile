@@ -5,7 +5,7 @@ PROJECT_REF ?= bsjdgwmveokanclqwtvx
 # 추후 iOS 빌드 준비되면: DEVICE_ID = 35686810-DADA-43C3-B3BF-E420C50AFF8B
 DEVICE_ID := macos
 
-.PHONY: setup backend app check deps reset
+.PHONY: setup backend app admin check deps reset
 
 # ────────────────────────────────────────────────────
 # macOS 시스템 의존성 (ffmpeg_kit_flutter_new 요구)
@@ -47,10 +47,15 @@ backend:
 	@test -f supabase/functions/.env || (echo "supabase/functions/.env 파일이 없습니다. .env.example 을 복사해서 GEMINI_API_KEY 를 채우세요." && exit 1)
 	$(SUPABASE) functions serve --env-file ./supabase/functions/.env --project-ref $(PROJECT_REF)
 
-# 터미널 2: Flutter 앱 (My Mac - Designed for iPad 모바일 레이아웃)
+# 터미널 2: Flutter 앱 — 일반 사용자 (모바일 레이아웃)
 app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	cd app && flutter run -d $(DEVICE_ID) --dart-define-from-file=.env.local
+
+# 터미널 3: 웹 어드민 대시보드 (Chrome)
+admin:
+	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
+	cd app && flutter run -d chrome --dart-define-from-file=.env.local
 
 # ────────────────────────────────────────────────────
 # 정적 검증
