@@ -71,7 +71,9 @@ export async function upsertTournament(
   audit.fetched++;
   const { data: existing } = await audit.supabase
     .from('tournaments')
-    .select('id, title, start_date, application_deadline, eligible_grades, region')
+    .select(
+      'id, title, start_date, application_deadline, eligible_grades, region, manual_description',
+    )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
     .maybeSingle();
@@ -82,7 +84,9 @@ export async function upsertTournament(
       title: t.title,
       organizer: t.organizer ?? null,
     };
-    if (t.description !== undefined) updatePayload.description = t.description ?? null;
+    if (t.description !== undefined && !existing.manual_description) {
+      updatePayload.description = t.description ?? null;
+    }
     const { error } = await audit.supabase
       .from('tournaments')
       .update({
