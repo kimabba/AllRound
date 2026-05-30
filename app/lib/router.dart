@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/admin/admin_screen.dart';
+import 'screens/admin/admin_shell.dart';
+import 'screens/admin/no_access_screen.dart';
+import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'screens/chat_screen.dart';
@@ -33,15 +37,30 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == '/login' ? null : '/login';
       }
 
-      // 종목·등급 미등록 사용자는 온보딩으로 강제
-      // userSportsProvider 가 로딩 중이면 redirect 보류 (깜빡임 방지)
+      // 웹: onboarding skip, 어드민 전용
+      if (kIsWeb) {
+        if (loc == '/login') return '/admin';
+        if (loc.startsWith('/admin')) {
+          final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+          if (!isAdmin) return '/no-access';
+          return null;
+        }
+        if (loc == '/no-access') {
+          final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+          return isAdmin ? '/admin' : null;
+        }
+        // 웹에서 앱 경로 접근 시
+        final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+        return isAdmin ? '/admin' : '/no-access';
+      }
+
+      // 앱: 기존 로직
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.valueOrNull ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
-      // /admin 비어드민 접근 차단
-      if (loc == '/admin') {
+      if (loc.startsWith('/admin')) {
         final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
         if (!isAdmin) return '/';
       }
@@ -71,9 +90,45 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-          GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
         ],
       ),
+      // 웹 전용
+      GoRoute(path: '/no-access', builder: (_, __) => const NoAccessScreen()),
+
+      // Admin routes (AdminShell wrapping)
+      ShellRoute(
+        builder: (context, state, child) => AdminShell(child: child),
+        routes: [
+          GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
+          GoRoute(
+            path: '/admin/drafts',
+            builder: (_, __) => const AdminScreen(initialTab: 1),
+          ),
+          GoRoute(
+            path: '/admin/sources',
+            builder: (_, __) => const AdminScreen(initialTab: 2),
+          ),
+          GoRoute(
+            path: '/admin/clubs',
+            builder: (_, __) => const AdminScreen(initialTab: 3),
+          ),
+          GoRoute(
+            path: '/admin/kb',
+            builder: (_, __) => const AdminScreen(initialTab: 4),
+          ),
+          GoRoute(
+            path: '/admin/tournaments',
+            builder: (_, __) => const _AdminTournamentListScreen(),
+          ),
+          GoRoute(
+            path: '/admin/edit/:id',
+            builder: (_, state) => TournamentEditScreen(
+              tournamentId: state.pathParameters['id']!,
+            ),
+          ),
+        ],
+      ),
+
       GoRoute(
         path: '/tournaments/submit',
         builder: (_, __) => const TournamentSubmitScreen(),
@@ -117,7 +172,6 @@ class _MainShell extends ConsumerWidget {
     '/speed-gun',
     '/rules',
     '/profile',
-    '/admin',
   ];
 
   int _indexOf(String location) {
@@ -215,5 +269,62 @@ class _MainShell extends ConsumerWidget {
       Icons.grid_view_outlined => Icons.grid_view_rounded,
       _ => icon,
     };
+  }
+}
+
+class _AdminTournamentListScreen extends ConsumerWidget {
+  const _AdminTournamentListScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final supabase = ref.read(supabaseProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('대회 편집')),
+      body: FutureBuilder(
+        future: supabase
+            .from('tournaments')
+            .select('id, title, sport, region, start_date, status')
+            .order('start_date', ascending: false)
+            .limit(100),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final rows = snapshot.data as List;
+          if (rows.isEmpty) {
+            return const Center(child: Text('대회 없음'));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 4),
+            itemBuilder: (_, i) {
+              final r = rows[i];
+              final statusColor = r['status'] == 'published'
+                  ? Colors.green
+                  : (r['status'] == 'draft' ? Colors.orange : Colors.grey);
+              return ListTile(
+                title: Text(r['title'] ?? ''),
+                subtitle: Text(
+                  '${r['sport']} · ${r['region'] ?? ''} · ${r['start_date']}',
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    r['status'] ?? '',
+                    style: TextStyle(color: statusColor, fontSize: 12),
+                  ),
+                ),
+                onTap: () => context.go('/admin/edit/${r['id']}'),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }
