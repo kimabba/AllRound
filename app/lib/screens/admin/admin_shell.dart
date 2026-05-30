@@ -25,7 +25,7 @@ class AdminShell extends ConsumerWidget {
         return Scaffold(
           body: Row(
             children: [
-              _AdminSidebar(child: child),
+              const _AdminSidebar(),
               Expanded(child: child),
             ],
           ),
@@ -36,10 +36,7 @@ class AdminShell extends ConsumerWidget {
 }
 
 class _AdminSidebar extends ConsumerWidget {
-  // ignore: unused_field
-  final Widget child;
-
-  const _AdminSidebar({required this.child});
+  const _AdminSidebar();
 
   static const _items = [
     (path: '/admin', label: '대시보드', icon: Icons.dashboard_outlined),
