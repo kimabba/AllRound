@@ -46,6 +46,18 @@ import 'services/notifications.dart'
 
 `notifications_web.dart`는 동일 함수 시그니처로 no-op 반환 (웹에서 FCM 불필요).
 
+stub이 export해야 하는 함수 시그니처:
+
+```dart
+Future<void> initNotifications(ApiService api) async {}
+```
+
+`main.dart`의 `onAuthStateChange` 리스너가 `initNotifications(api)`를 호출하므로,
+stub은 이 시그니처를 정확히 맞춰야 한다.
+
+Note: `firebase_messaging`은 웹도 지원하지만 (`firebase-messaging-sw.js` 필요),
+MVP에서는 의도적으로 no-op으로 처리한다. 웹 푸시는 Post-MVP 검토.
+
 ## Step 2: Router Branching
 
 ### Web Redirect Flow
@@ -59,6 +71,45 @@ import 'services/notifications.dart'
 ### App Redirect Flow
 
 기존 그대로 유지 (변경 없음).
+
+### Redirect Guard: /admin/* 전체 경로 보호
+
+현재 redirect 로직은 `loc == '/admin'`만 체크한다. 변경 후에는
+`/admin/*` 서브라우트 전체를 보호해야 한다:
+
+```dart
+if (loc.startsWith('/admin')) {
+  final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+  if (!isAdmin) return kIsWeb ? '/no-access' : '/';
+}
+```
+
+이 가드가 없으면 비어드민이 `/admin/drafts` 직접 접근 시 AdminShell이 렌더된다.
+RLS가 데이터를 보호하지만, UI 노출 자체가 정보 유출이므로 반드시 차단.
+
+### Web Onboarding Bypass
+
+웹에서는 onboarding redirect를 skip한다. 어드민은 이미 종목 등록을
+완료한 상태이며, 웹에서 온보딩 UI를 제공할 필요가 없다:
+
+```dart
+// 기존: sports.isEmpty → /onboarding
+// 변경: kIsWeb이면 onboarding skip
+if (!kIsWeb && sports.isEmpty) return '/onboarding';
+```
+
+### AdminShell Loading State
+
+`isAdminProvider`가 async이므로 AdminShell이 redirect 전에 잠시 렌더될 수 있다.
+AdminShell 위젯 내부에서 `isAdminProvider`를 watch하고:
+- loading → 중앙 `CircularProgressIndicator`
+- false → 자동으로 redirect 발생 (router의 refresh stream이 처리)
+- true → 정상 렌더
+
+### _moreSubPaths 정리
+
+`router.dart`의 `_moreSubPaths` 배열에서 `/admin`을 제거한다.
+AdminShell이 ShellRoute 밖으로 이동하므로 Bottom Nav 인덱스 로직에서 제외.
 
 ### Route Tree Changes
 
@@ -111,16 +162,31 @@ AdminShellRoute:
 
 ### Behavior
 
-- Supabase client로 직접 update (service_role 불필요, RLS admin 정책 활용)
-- 저장 시 `embedding = null` 설정하여 embed-pending이 재임베딩
-- 크롤러 재크롤 시 덮어쓰기 방지: description이 수동 편집되었으면 크롤러가 skip
+- Supabase client로 직접 update (service_role 불필요, RLS `tournaments_admin_all` 정책 활용)
+- 임베딩 재생성: `003_tournaments.sql`의 `tournaments_invalidate_embedding` 트리거가
+  title/description/region/format/organizer 변경 시 자동으로 `embedding = null` 설정.
+  클라이언트에서 별도로 `embedding = null`을 세팅할 필요 없음.
+- 401 응답 처리: Supabase가 401 반환 시 (JWT 만료) 로그아웃 + `/login` redirect
 
 ### Crawl Overwrite Protection
 
-`upsertTournament`의 기존 로직 활용:
-- 파서가 `description = undefined` 반환 시 기존 값 유지 (이미 구현됨)
-- 구조화된 description(파서 생성)과 수동 편집 description 구분 필요 시,
-  `manual_edit` boolean 컬럼 추가 검토 (MVP에서는 파서가 항상 description을 반환하므로 불필요할 수 있음)
+MVP Known Limitation: 크롤러는 매 크롤 시 description을 반환하므로,
+수동 편집한 description이 다음 크롤에서 덮어써질 수 있다.
+
+MVP 대응: 수동 편집 시 `manual_description` boolean 컬럼을 true로 설정.
+`upsertTournament`에서 `manual_description == true`이면 description update skip.
+
+```sql
+-- 마이그레이션
+ALTER TABLE tournaments ADD COLUMN manual_description boolean NOT NULL DEFAULT false;
+```
+
+```typescript
+// upsertTournament 수정
+if (t.description !== undefined && !existing.manual_description) {
+  updatePayload.description = t.description ?? null;
+}
+```
 
 ## File Changes
 
@@ -141,16 +207,33 @@ AdminShellRoute:
 | `app/lib/router.dart` | Web/app route branching, /admin/* subroutes, /no-access |
 | `app/lib/screens/admin/admin_screen.dart` | Extract tab widgets for reuse in AdminShell |
 
+### DB Migration (1)
+
+| File | Change |
+|------|--------|
+| `supabase/migrations/042_manual_description.sql` | `manual_description` boolean 컬럼 추가 |
+
+### Backend (1)
+
+| File | Change |
+|------|--------|
+| `supabase/functions/_shared/crawler.ts` | `upsertTournament`에서 `manual_description` 체크 |
+
 ### Unchanged
 
 - App user flows (Bottom Nav, all existing screens)
-- Edge Functions / DB schema
 - Existing providers
 
 ## Error Handling
 
-- Web admin session expiry -> redirect `/login`
-- Tournament edit save failure -> SnackBar error, retry possible
+- Web admin session expiry (401) -> 로그아웃 + redirect `/login`
+- Tournament edit save failure (non-401) -> SnackBar error, retry possible
+- CORS: Supabase Edge Functions는 기본 CORS 허용. 별도 설정 불필요.
+
+## Dashboard Tab Content
+
+`/admin` (대시보드)는 기존 AdminScreen의 크롤 현황 탭 위젯을 재사용한다.
+신규 요약 위젯은 필요 시 추후 추가.
 
 ## Success Criteria
 
