@@ -2,7 +2,7 @@ import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
 import { ChatTurn, streamChat } from '../_shared/gemini.ts';
-import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
+import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS, type Sport } from '../_shared/enums.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import {
   buildEmbeddingResult,
@@ -45,6 +45,7 @@ import type { RegionCode } from '../_shared/enums.ts';
 interface ChatBody {
   message: string;
   conversation_id?: string;
+  active_sport?: string;
 }
 
 interface UserSport {
@@ -612,7 +613,7 @@ Deno.serve(async (req) => {
         // 캐시에도 저장하지 않음 (사용자별 등록 상태에 의존, 컨텍스트 해시에 sport 가 포함돼
         // 다른 사용자 답변에 노출될 위험은 없지만 노이즈 차단).
         if (requestedSport && !registeredSports.has(requestedSport)) {
-          const sportLabel = SPORT_LABELS[requestedSport] ?? requestedSport;
+          const sportLabel = SPORT_LABELS[requestedSport as Sport] ?? requestedSport;
           const refusalText = `'${sportLabel}' 은(는) 현재 등록되지 않은 종목입니다. ` +
             '프로필에서 종목을 추가하시면 관련 정보를 안내드릴 수 있습니다.';
           console.log(
