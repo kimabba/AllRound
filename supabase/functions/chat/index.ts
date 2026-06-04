@@ -581,7 +581,11 @@ Deno.serve(async (req) => {
         //    응답 분리/거부 분기를 위해 여기서도 명시적으로 처리).
         //  - 사용자가 메시지에 sport 키워드를 명시했고 그 종목이 미등록이면 LLM 호출 우회하고 거부 응답.
         //  - 명시 종목이 등록돼 있으면 RAG 결과를 그 종목으로 post-filter (다른 종목 컨텍스트 차단).
-        const requestedSport = intentResult.slots.sport ?? clientActiveSport;
+        // requestedSport: 메시지에서 감지된 종목 또는 UI 활성 종목.
+        // explicitSport: 메시지에서 명시적으로 언급한 종목 (미등록 거부 판단용).
+        //   clientActiveSport는 UI 토글일 뿐이므로 미등록 거부 대상이 아님.
+        const explicitSport = intentResult.slots.sport ?? null;
+        const requestedSport = explicitSport ?? clientActiveSport;
         const registeredSports = new Set(
           ((userSports ?? []) as UserSport[]).map((s) => s.sport),
         );
@@ -612,7 +616,7 @@ Deno.serve(async (req) => {
         // 미등록 종목 명시 요청 → 즉시 거부 (RAG/LLM 모두 우회).
         // 캐시에도 저장하지 않음 (사용자별 등록 상태에 의존, 컨텍스트 해시에 sport 가 포함돼
         // 다른 사용자 답변에 노출될 위험은 없지만 노이즈 차단).
-        if (requestedSport && !registeredSports.has(requestedSport)) {
+        if (explicitSport && !registeredSports.has(explicitSport)) {
           const sportLabel = SPORT_LABELS[requestedSport as Sport] ?? requestedSport;
           const refusalText = `'${sportLabel}' 은(는) 현재 등록되지 않은 종목입니다. ` +
             '프로필에서 종목을 추가하시면 관련 정보를 안내드릴 수 있습니다.';
