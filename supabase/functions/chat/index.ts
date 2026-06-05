@@ -81,9 +81,21 @@ interface SemanticRule {
   similarity: number;
 }
 
+interface VenueRow {
+  id: string;
+  sport: string;
+  name: string;
+  region: string;
+  address: string | null;
+  venue_type: string;
+  court_count: number | null;
+  phone: string | null;
+  website: string | null;
+}
+
 interface DbCitation {
   type: 'db';
-  source: 'tournaments' | 'rules';
+  source: 'tournaments' | 'rules' | 'venues';
   id: string;
   title: string;
 }
@@ -284,10 +296,11 @@ function buildSystemPrompt(sports: UserSport[], orgs: UserTennisOrgRow[]): strin
 ${profile}${orgProfile}
 
 [엄격한 답변 규칙 — 최우선]
-- 당신은 **오직 [사용자 프로필], [관련 대회], [관련 룰북] 블록의 데이터만** 사용해 답변합니다.
+- 당신은 **오직 [사용자 프로필], [관련 대회], [관련 룰북], [구장 정보] 블록의 데이터만** 사용해 답변합니다.
 - 당신의 사전학습 지식 (예: 일반적인 테니스 등급 분류, 협회 일반 정보, 협회장 이름, 대회 일정 등) 은 **절대 사용하지 마세요.** "광주 테니스 협회는 초심/중급/상급으로 나뉩니다" 같은 일반론을 만들어내면 안 됩니다.
 - 데이터 블록이 없거나 사용자 질문에 답할 정보가 없으면, **답을 만들지 말고** 다음 형식으로만 답하세요:
   > "현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다. 협회 또는 공식 홈페이지에 직접 문의해 주세요."
+- [구장 정보] 블록이 제공된 경우, 구장 이름·주소·실내/실외·연락처를 포함하여 친절히 안내하세요.
 - 일부만 있고 일부는 없으면, 있는 부분만 답하고 없는 부분은 위 형식으로 명시하세요.
 - 절대 추측·일반화·예시 ("일반적으로", "보통", "대체로") 표현 사용 금지.
 
@@ -326,6 +339,7 @@ function escapeForData(text: string): string {
 function buildContextPrompt(
   tournaments: SemanticTournament[],
   rules: SemanticRule[],
+  venues: VenueRow[] = [],
 ): string {
   const parts: string[] = [];
 
@@ -393,6 +407,17 @@ function buildContextPrompt(
       }
       parts.push('');
     }
+  }
+
+  if (venues.length > 0) {
+    parts.push('[구장 정보]');
+    for (const v of venues) {
+      const type = v.venue_type === 'indoor' ? '실내' : v.venue_type === 'outdoor' ? '실외' : v.venue_type === 'mixed' ? '실내·실외' : '';
+      const courts = v.court_count ? ` ${v.court_count}면` : '';
+      const phone = v.phone ? ` 📞 ${v.phone}` : '';
+      parts.push(`- ${escapeForData(v.name)} | ${v.region} ${escapeForData(v.address ?? '')} | ${type}${courts}${phone}`);
+    }
+    parts.push('');
   }
 
   return parts.join('\n').trimEnd();
@@ -863,11 +888,35 @@ Deno.serve(async (req) => {
 
         let tournaments: SemanticTournament[] = [];
         let rules: SemanticRule[] = [];
+        let venues: VenueRow[] = [];
         // RPC 자체가 실패했는지 (네트워크/DB 장애) — true 면 "DB 없음" 거절 대신 일시 오류 안내
         let ragErrored = false;
         // free_chat(인사, 잡담)에는 RAG 불필요 — 비용 절감 + 불필요한 citation 차단
         const skipRag = intentResult.intent === 'free_chat';
-        if (skipRag) {
+        // venue_search intent → venues RPC 직접 호출 (임베딩 불필요)
+        const isVenueSearch = intentResult.intent === 'venue_search';
+        if (isVenueSearch) {
+          try {
+            const regionSlot = intentResult.slots.region;
+            // region code → display name 매핑 (venues.region은 "광주시" 등 display name)
+            const regionDisplay = regionSlot ? (REGION_LABELS[regionSlot] ? REGION_LABELS[regionSlot] + '시' : null) : null;
+            const { data: vData, error: vErr } = await supabase.rpc('venues_search', {
+              p_sport: requestedSport ?? null,
+              p_region: regionDisplay ?? regionSlot ?? null,
+              p_limit: 15,
+            });
+            if (vErr) {
+              ragErrored = true;
+              console.error('venues_search error:', vErr.message);
+            } else {
+              venues = (vData as VenueRow[]) ?? [];
+            }
+          } catch (e) {
+            ragErrored = true;
+            console.error('venues_search failed:', (e as Error).message);
+          }
+          send('context', { tournaments: [], rules: [], venues });
+        } else if (skipRag) {
           send('context', { tournaments: [], rules: [] });
         } else if (!vectorLiteral) {
           ragErrored = true;
@@ -898,7 +947,7 @@ Deno.serve(async (req) => {
             tournaments = (tRes.data as SemanticTournament[]) ?? [];
             rules = (rRes.data as SemanticRule[]) ?? [];
 
-            send('context', { tournaments, rules });
+            send('context', { tournaments, rules, venues });
           } catch (e) {
             ragErrored = true;
             console.error('RAG failed:', (e as Error).message);
@@ -910,7 +959,7 @@ Deno.serve(async (req) => {
           userSports ?? [],
           (userOrgs ?? []) as UserTennisOrgRow[],
         );
-        const contextPrompt = buildContextPrompt(tournaments, rules);
+        const contextPrompt = buildContextPrompt(tournaments, rules, venues);
 
         const history: ChatTurn[] = [];
         for (const m of prior ?? []) {
@@ -947,10 +996,9 @@ Deno.serve(async (req) => {
             '일시적인 시스템 오류로 답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.';
           send('delta', { text: errorText });
           assistantText = errorText;
-        } else if (tournaments.length === 0 && rules.length === 0) {
+        } else if (tournaments.length === 0 && rules.length === 0 && venues.length === 0) {
           const refusalText = '현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다. ' +
-            '협회 또는 공식 홈페이지에 직접 문의해 주세요. ' +
-            '(매치업은 등록된 대회·룰북 정보만 안내합니다)';
+            '협회 또는 공식 홈페이지에 직접 문의해 주세요.';
           send('delta', { text: refusalText });
           assistantText = refusalText;
         } else {
@@ -989,8 +1037,15 @@ Deno.serve(async (req) => {
           title: r.title,
         }));
 
+        const venueCitations = venues.slice(0, 15).map((v) => ({
+          type: 'db' as const,
+          source: 'venues' as const,
+          id: v.id,
+          title: v.name,
+        }));
+
         // DB citation 을 SSE 로도 한 번 전송 (클라이언트 호환 유지).
-        const dbCitationItems = [...dbCitations, ...ruleCitations];
+        const dbCitationItems = [...dbCitations, ...ruleCitations, ...venueCitations];
         if (dbCitationItems.length > 0) {
           send('citation', { items: dbCitationItems });
         }

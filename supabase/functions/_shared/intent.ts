@@ -27,6 +27,7 @@ export type Intent =
   | 'tournament_detail'
   | 'club_search'
   | 'rule_lookup'
+  | 'venue_search'
   | 'match_schedule'
   | 'my_profile'
   | 'free_chat';
@@ -36,6 +37,7 @@ export const INTENT_VALUES: readonly Intent[] = [
   'tournament_detail',
   'club_search',
   'rule_lookup',
+  'venue_search',
   'match_schedule',
   'my_profile',
   'free_chat',
@@ -292,6 +294,7 @@ export function extractSlots(text: string, now: Date = new Date()): Slots {
 const TOURNAMENT_KW = /(대회|토너먼트|시합|컵|오픈|선수권)/;
 const CLUB_KW = /(클럽|동호회|동호인\s*모임)/;
 const RULE_KW = /(룰|규칙|규정|규약|룰북)/;
+const VENUE_KW = /(구장|풋살장|테니스장|경기장|연습장|코트|체육관|실내.*장|실외.*장)/;
 const MATCH_KW = /(매치|경기|시합\s*일정)/;
 const SCHEDULE_KW = /(일정|스케줄|언제|오늘|내일|이번\s*주|다음\s*주)/;
 const DETAIL_KW = /(자세|상세|어떻게|신청|참가\s*방법|등록\s*방법|접수)/;
@@ -319,7 +322,12 @@ export function classifyByRule(text: string): RuleClassification | null {
     return { intent: 'rule_lookup', rule: 'rule_keyword' };
   }
 
-  // 5. club_search — 클럽 키워드
+  // 5. venue_search — 구장/풋살장/테니스장 키워드
+  if (VENUE_KW.test(text)) {
+    return { intent: 'venue_search', rule: 'venue_keyword' };
+  }
+
+  // 6. club_search — 클럽 키워드
   if (CLUB_KW.test(text)) {
     return { intent: 'club_search', rule: 'club_keyword' };
   }
