@@ -207,8 +207,20 @@ const FUTSAL_RANK: Record<FutsalGrade, number> = {
 };
 
 export function isValidGrade(sport: Sport, grade: string): grade is Grade {
-  if (sport === 'tennis') return (TENNIS_GRADES as readonly string[]).includes(grade);
+  if (sport === 'tennis') {
+    // Legacy grade (y1to3 등) 또는 division code (gj_m_gold 등) 모두 허용
+    if ((TENNIS_GRADES as readonly string[]).includes(grade)) return true;
+    return isValidDivisionCode(grade);
+  }
   return (FUTSAL_GRADES as readonly string[]).includes(grade);
+}
+
+/** Division code 유효성: {org}_{suffix} 패턴 (예: gj_m_gold, kta_m_open) */
+function isValidDivisionCode(code: string): boolean {
+  const idx = code.indexOf('_');
+  if (idx < 1) return false;
+  const org = code.substring(0, idx);
+  return (TENNIS_ORGS as readonly string[]).includes(org);
 }
 
 /**
