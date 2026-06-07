@@ -171,6 +171,17 @@ class TournamentCard extends StatelessWidget {
         );
       }
     }
+    // deadline이 없어도 start_date가 지났으면 마감 처리
+    final today = DateTime.now();
+    final startPassed = tournament.startDate
+        .isBefore(DateTime(today.year, today.month, today.day));
+    if (startPassed && tournament.status == 'published') {
+      return _StatusBadgeData(
+        label: '마감',
+        foreground: cs.onSurfaceVariant,
+        background: cs.surfaceContainerHighest,
+      );
+    }
     return _StatusBadgeData(
       label: _statusLabel(tournament.status),
       foreground: tournament.sport == 'tennis'
