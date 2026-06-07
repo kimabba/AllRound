@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
 import '../theme/tokens.dart';
@@ -41,6 +42,24 @@ class MoreScreen extends ConsumerWidget {
         label: '맞춤 설정',
         subtitle: '닉네임, 활동 지역, 종목·등급 수정',
         onTap: () => context.go('/onboarding'),
+      ),
+      _MenuItem(
+        icon: Icons.description_outlined,
+        label: '이용약관',
+        subtitle: '서비스 이용 조건',
+        onTap: () => launchUrl(
+          Uri.parse('https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/terms-of-service.html'),
+          mode: LaunchMode.externalApplication,
+        ),
+      ),
+      _MenuItem(
+        icon: Icons.privacy_tip_outlined,
+        label: '개인정보 처리방침',
+        subtitle: '개인정보 수집·이용 안내',
+        onTap: () => launchUrl(
+          Uri.parse('https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/privacy-policy.html'),
+          mode: LaunchMode.externalApplication,
+        ),
       ),
       if (kIsWeb && isAdmin)
         _MenuItem(
