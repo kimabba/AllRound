@@ -36,7 +36,6 @@ Deno.serve(async (req) => {
       status_reason: (body.reason as string | undefined) ?? null,
       approved_by: auth.user.id,
       approved_at: new Date().toISOString(),
-      active: action === 'approve',
     })
     .eq('id', clubId)
     .eq('status', 'pending');

@@ -57,8 +57,11 @@ Deno.serve(async (req) => {
   if ('error' in auth) return auth.error;
 
   const supabase = serviceClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const dPlus3 = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // KST(UTC+9) 기준 날짜 — DB의 date 컬럼이 한국 날짜로 저장되므로 맞춰야 함
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const today = kstNow.toISOString().slice(0, 10);
+  const dPlus3 = new Date(kstNow.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // 즐겨찾기 + 대회 정보 조인
   const { data: favorites, error } = await supabase
