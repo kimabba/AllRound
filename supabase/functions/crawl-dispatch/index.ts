@@ -275,10 +275,20 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 크롤 완료 후: start_date가 지난 published 대회를 자동 closed 처리
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const todayKst = kstNow.toISOString().slice(0, 10);
+  const { count: closedCount } = await supabase
+    .from('tournaments')
+    .update({ status: 'closed' }, { count: 'exact' })
+    .eq('status', 'published')
+    .lt('start_date', todayKst);
+
   return jsonResponse({
     executed,
     skipped,
     errors,
+    auto_closed: closedCount ?? 0,
     requested: { slug: body.slug ?? null, force: body.force === true },
   });
 });
