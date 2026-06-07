@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
@@ -224,37 +223,18 @@ class _DetailBody extends StatelessWidget {
             ),
           ),
 
-          // 대회 요강 — 구조화된 메타데이터(파서 생성)는 이미 카드에 표시되므로 숨김
+          // 대회 안내 문구 (수기 입력된 경우만 표시, 크롤 보일러플레이트 제외)
           if (t.description != null &&
               t.description!.trim().isNotEmpty &&
-              !t.description!.startsWith('참가부서:')) ...[
+              !t.description!.startsWith('참가부서:') &&
+              t.description!.length < 500) ...[
             const SizedBox(height: AppSpacing.xl),
-            Text('대회 요강', style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
+            Text('대회 안내', style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
-              child: _ExpandableText(
-                text: t.description!,
+              child: Text(
+                t.description!,
                 style: tt.bodyMedium?.copyWith(height: 1.7),
-              ),
-            ),
-          ],
-
-          // 원본 공고 링크 (접기 형태)
-          if (t.sourceUrl != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => launchUrl(
-                  Uri.parse(t.sourceUrl!),
-                  mode: LaunchMode.externalApplication,
-                ),
-                icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                label: const Text('원문 보기'),
-                style: TextButton.styleFrom(
-                  foregroundColor: cs.onSurfaceVariant,
-                  textStyle: tt.labelSmall,
-                ),
               ),
             ),
           ],
@@ -317,42 +297,3 @@ class _Divider extends StatelessWidget {
   }
 }
 
-/// 일정 줄 이상이면 "더 보기" 토글을 제공하는 텍스트 위젯
-class _ExpandableText extends StatefulWidget {
-  final String text;
-  final TextStyle? style;
-  const _ExpandableText({required this.text, this.style});
-
-  @override
-  State<_ExpandableText> createState() => _ExpandableTextState();
-}
-
-class _ExpandableTextState extends State<_ExpandableText> {
-  bool _expanded = false;
-  static const int _collapsedLines = 6;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.text,
-          style: widget.style,
-          maxLines: _expanded ? null : _collapsedLines,
-          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Text(
-            _expanded ? '접기' : '더 보기',
-            style: tt.labelSmall?.copyWith(color: cs.primary),
-          ),
-        ),
-      ],
-    );
-  }
-}
