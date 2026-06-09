@@ -214,57 +214,93 @@ class _MainShell extends ConsumerWidget {
             bottom: false,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
               color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              child: Row(
-                children: [
-                  Icon(
-                    activeSport == 'futsal'
-                        ? Icons.sports_soccer_rounded
-                        : Icons.sports_tennis_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'tennis', label: Text('테니스')),
-                      ButtonSegment(value: 'futsal', label: Text('풋살')),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          activeSport == 'futsal'
+                              ? Icons.sports_soccer_rounded
+                              : Icons.sports_tennis_rounded,
+                          size: 18,
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                              value: 'tennis',
+                              label: Text('테니스'),
+                              icon: Icon(Icons.sports_tennis_rounded),
+                            ),
+                            ButtonSegment(
+                              value: 'futsal',
+                              label: Text('풋살'),
+                              icon: Icon(Icons.sports_soccer_rounded),
+                            ),
+                          ],
+                          selected: {activeSport ?? 'tennis'},
+                          onSelectionChanged: (s) {
+                            ref.read(sportOverrideProvider.notifier).state =
+                                s.first;
+                          },
+                          style: SegmentedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ),
                     ],
-                    selected: {activeSport ?? 'tennis'},
-                    onSelectionChanged: (s) {
-                      ref.read(sportOverrideProvider.notifier).state = s.first;
-                    },
-                    style: SegmentedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-          Expanded(child: child),
+          Expanded(
+            child: ColoredBox(
+              color: cs.surfaceContainerLowest,
+              child: child,
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
+          color: cs.surface,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
           boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
-        child: NavigationBar(
-          selectedIndex: idx,
-          onDestinationSelected: (i) => context.go(_tabs[i].$1),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            for (final t in _tabs)
-              NavigationDestination(
-                icon: Icon(t.$2),
-                selectedIcon: Icon(_selectedIcon(t.$2)),
-                label: t.$3,
-              ),
-          ],
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+            child: NavigationBar(
+              selectedIndex: idx,
+              onDestinationSelected: (i) => context.go(_tabs[i].$1),
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              height: 66,
+              destinations: [
+                for (final t in _tabs)
+                  NavigationDestination(
+                    icon: Icon(t.$2),
+                    selectedIcon: Icon(_selectedIcon(t.$2)),
+                    label: t.$3,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

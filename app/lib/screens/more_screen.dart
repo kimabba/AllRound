@@ -19,6 +19,30 @@ class MoreScreen extends ConsumerWidget {
 
     final items = [
       _MenuItem(
+        icon: Icons.grid_view_rounded,
+        label: '전체메뉴',
+        subtitle: '대회, 클럽, 룰북, MY 메뉴 모아보기',
+        onTap: () => context.go('/more'),
+      ),
+      _MenuItem(
+        icon: Icons.groups_rounded,
+        label: '팀원모집',
+        subtitle: '함께 뛸 팀원과 클럽 찾기',
+        onTap: () => context.go('/clubs'),
+      ),
+      _MenuItem(
+        icon: Icons.calendar_month_rounded,
+        label: '친구 일정 보러가기',
+        subtitle: '내 일정과 참여 기록 확인',
+        onTap: () => context.go('/profile'),
+      ),
+      _MenuItem(
+        icon: Icons.bookmark_rounded,
+        label: '관심',
+        subtitle: '관심 대회와 클럽 모아보기',
+        onTap: () => context.go('/tournaments'),
+      ),
+      _MenuItem(
         icon: Icons.menu_book_outlined,
         label: '룰북',
         subtitle: '종목별 규칙 안내',
@@ -48,7 +72,8 @@ class MoreScreen extends ConsumerWidget {
         label: '이용약관',
         subtitle: '서비스 이용 조건',
         onTap: () => launchUrl(
-          Uri.parse('https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/terms-of-service.html'),
+          Uri.parse(
+              'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/terms-of-service.html'),
           mode: LaunchMode.externalApplication,
         ),
       ),
@@ -57,7 +82,8 @@ class MoreScreen extends ConsumerWidget {
         label: '개인정보 처리방침',
         subtitle: '개인정보 수집·이용 안내',
         onTap: () => launchUrl(
-          Uri.parse('https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/privacy-policy.html'),
+          Uri.parse(
+              'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/privacy-policy.html'),
           mode: LaunchMode.externalApplication,
         ),
       ),

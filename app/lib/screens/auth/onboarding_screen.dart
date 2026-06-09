@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
@@ -162,6 +163,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // submit
   // ───────────────────────────────────────────────────
   Future<void> _submit() async {
+    if (AppConfig.userDesignPreview) {
+      context.go('/');
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -245,7 +251,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
-                  AppSpacing.sm,
+                  AppSpacing.md,
                   AppSpacing.lg,
                   AppSpacing.huge,
                 ),
@@ -328,14 +334,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _OnboardingHeroPanel(
-          title: '주말마다\n같이 뛸 사람을 찾고 있나요?',
-          subtitle: '풋살부터 테니스까지, 내 근처 모임과 대회를 맞춤으로 보여드릴게요.',
+          title: '내 운동 생활을\n가볍게 시작해요',
+          subtitle: '닉네임과 활동 조건만 정하면 대회, 클럽, 룰북을 맞춤으로 볼 수 있어요.',
           icon: Icons.sports_soccer_rounded,
         ),
         const SizedBox(height: AppSpacing.xl),
         Text(
-          '환영해요!',
+          '프로필 이름',
           style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '앱 안에서 표시될 닉네임이에요.',
+          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.lg),
         Center(
@@ -353,18 +364,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             child: Icon(Icons.person_rounded, size: 48, color: cs.secondary),
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        Text(
-          '닉네임',
-          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.lg),
         TextField(
           controller: _nickname,
           maxLength: 10,
           onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(
             hintText: '닉네임을 입력하세요',
+            prefixIcon: Icon(Icons.badge_outlined),
             counterText: '',
           ),
         ),
@@ -609,9 +616,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           Wrap(
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
-            children: tennisDivisions
-                .where((d) => d.org == draft.org)
-                .map((d) {
+            children: tennisDivisions.where((d) => d.org == draft.org).map((d) {
               final selected = draft.selectedDivisionCodes.contains(d.code);
               return FilterChip(
                 label: Text(d.label),
@@ -675,25 +680,73 @@ class _StepProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    const labels = ['프로필', '지역', '종목'];
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var index = 0; index < 3; index++) ...[
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: current == index ? 28 : 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: index <= current
-                  ? cs.primary
-                  : cs.outlineVariant.withValues(alpha: 0.7),
-              borderRadius: AppRadius.pill,
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          for (var index = 0; index < 3; index++) ...[
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: index == current
+                      ? cs.primaryContainer
+                      : Colors.transparent,
+                  borderRadius: AppRadius.pill,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color:
+                            index <= current ? cs.primary : cs.outlineVariant,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${index + 1}',
+                        style: tt.labelSmall?.copyWith(
+                          color: index <= current ? cs.onPrimary : cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        labels[index],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(
+                          color: index == current
+                              ? cs.onPrimaryContainer
+                              : cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          if (index < 2) const SizedBox(width: AppSpacing.xs),
+            if (index < 2) const SizedBox(width: AppSpacing.xs),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -715,12 +768,12 @@ class _OnboardingTopBar extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.sm,
+        AppSpacing.md,
         AppSpacing.sm,
         AppSpacing.lg,
         AppSpacing.sm,
       ),
-      color: cs.surface,
+      color: cs.surfaceContainerLowest,
       child: Row(
         children: [
           IconButton(
@@ -730,7 +783,7 @@ class _OnboardingTopBar extends StatelessWidget {
                 : Icons.arrow_back_rounded),
             tooltip: onBack == null ? '닫기' : '이전',
           ),
-          const SizedBox(width: AppSpacing.xs),
+          const SizedBox(width: AppSpacing.sm),
           const MatchUpLogo(fontSize: 18),
           const SizedBox(width: AppSpacing.sm),
           Container(width: 1, height: 18, color: cs.outlineVariant),
@@ -772,7 +825,11 @@ class _OnboardingHeroPanel extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [cs.primary, const Color(0xFF1E40AF), AppSportColors.futsal],
+          colors: [
+            cs.primary,
+            const Color(0xFF1E40AF),
+            AppSportColors.futsal,
+          ],
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: AppShadows.elevatedFor(Theme.of(context).brightness),
@@ -786,6 +843,15 @@ class _OnboardingHeroPanel extends StatelessWidget {
               Icons.sports_tennis_rounded,
               size: 112,
               color: Colors.white.withValues(alpha: 0.16),
+            ),
+          ),
+          Positioned(
+            right: 54,
+            top: 40,
+            child: Icon(
+              Icons.sports_soccer_rounded,
+              size: 72,
+              color: Colors.white.withValues(alpha: 0.12),
             ),
           ),
           Column(

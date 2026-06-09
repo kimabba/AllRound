@@ -182,7 +182,6 @@ class _EmptyHint extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          // 아이콘
           Container(
             width: 72,
             height: 72,
@@ -194,7 +193,11 @@ class _EmptyHint extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(22),
             ),
-            child: const Icon(Icons.auto_awesome_rounded, size: 36, color: Colors.white),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 36,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
@@ -211,9 +214,12 @@ class _EmptyHint extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xl),
-          // 추천 질문 카드
           for (final (emoji, label, msg) in _suggestions) ...[
-            _SuggestionCard(emoji: emoji, label: label, onTap: () => onSend(msg)),
+            _SuggestionCard(
+              emoji: emoji,
+              label: label,
+              onTap: () => onSend(msg),
+            ),
             const SizedBox(height: AppSpacing.sm),
           ],
         ],
@@ -239,7 +245,10 @@ class _SuggestionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
           child: Row(
             children: [
               Text(emoji, style: const TextStyle(fontSize: 22)),
@@ -250,7 +259,11 @@ class _SuggestionCard extends StatelessWidget {
                   style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: cs.onSurfaceVariant),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: cs.onSurfaceVariant,
+              ),
             ],
           ),
         ),
@@ -382,7 +395,8 @@ class _MessageBubble extends StatelessWidget {
                             color: cs.onSurface,
                             fontWeight: FontWeight.bold,
                           ),
-                          listBullet: tt.bodyMedium?.copyWith(color: cs.onSurface),
+                          listBullet:
+                              tt.bodyMedium?.copyWith(color: cs.onSurface),
                           strong: tt.bodyMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: cs.onSurface,
@@ -414,7 +428,9 @@ String _cleanAssistantContent(String content) {
   // "(출처: id xxx-xxx, ...)" or "(출처: xxx-xxx)" 패턴 제거
   return content
       .replaceAll(RegExp(r'\(출처:?\s*(?:id\s*)?[a-f0-9\-,\s]+\)'), '')
-      .replaceAll(RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'), '')
+      .replaceAll(
+          RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'),
+          '')
       .trim();
 }
 
