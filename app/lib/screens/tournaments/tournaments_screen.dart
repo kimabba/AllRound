@@ -286,7 +286,7 @@ List<Tournament> _previewTournaments(String? sport) {
       applicationDeadline: now.add(const Duration(days: 5)),
       region: '광주',
       location: '염주실내테니스장',
-      eligibleGrades: const ['novice', 'beginner'],
+      eligibleGrades: const ['under1y', 'y1to3'],
       entryFee: 40000,
       entryFeeUnit: 'per_person',
       prize: '우승 상품권',

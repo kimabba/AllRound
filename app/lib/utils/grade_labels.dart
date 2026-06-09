@@ -105,7 +105,8 @@ final _divisionLabelMap = <String, String>{
 };
 
 /// division 코드 → 표시명 (미등록 코드는 코드 그대로 반환)
-String divisionLabel(String code) => _divisionLabelMap[code] ?? code;
+String divisionLabel(String code) =>
+    _divisionLabelMap[code] ?? gradeLabels[code] ?? code;
 
 /// 특정 org의 division 목록 반환
 List<TennisDivision> divisionsForOrg(String org) =>
