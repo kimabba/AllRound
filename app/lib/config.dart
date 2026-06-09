@@ -34,6 +34,25 @@ class AppConfig {
     defaultValue: '',
   );
 
+  /// Frontend-only preview switch for UI/design work.
+  ///
+  /// This bypasses web admin route guards locally when running with
+  /// `--dart-define=ADMIN_DESIGN_PREVIEW=true`. Server-side RLS and Edge
+  /// Function authorization still remain the source of truth.
+  static const adminDesignPreview = bool.fromEnvironment(
+    'ADMIN_DESIGN_PREVIEW',
+    defaultValue: false,
+  );
+
+  /// Frontend-only preview switch for user-facing app UI work.
+  ///
+  /// This lets designers open mobile app routes on web without a signed-in
+  /// session. It must only be enabled from local `flutter run` commands.
+  static const userDesignPreview = bool.fromEnvironment(
+    'USER_DESIGN_PREVIEW',
+    defaultValue: false,
+  );
+
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(

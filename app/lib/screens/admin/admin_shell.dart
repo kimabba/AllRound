@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../config.dart';
 import '../../state/providers.dart';
 
 class AdminShell extends ConsumerWidget {
@@ -11,6 +12,17 @@ class AdminShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (AppConfig.adminDesignPreview) {
+      return Scaffold(
+        body: Row(
+          children: [
+            const _AdminSidebar(),
+            Expanded(child: child),
+          ],
+        ),
+      );
+    }
+
     final isAdminAsync = ref.watch(isAdminProvider);
 
     return isAdminAsync.when(
@@ -44,7 +56,11 @@ class _AdminSidebar extends ConsumerWidget {
     (path: '/admin/sources', label: '크롤 소스', icon: Icons.rss_feed_outlined),
     (path: '/admin/clubs', label: '클럽 승인', icon: Icons.groups_outlined),
     (path: '/admin/kb', label: '지식베이스', icon: Icons.menu_book_outlined),
-    (path: '/admin/tournaments', label: '대회 편집', icon: Icons.edit_note_outlined),
+    (
+      path: '/admin/tournaments',
+      label: '대회 편집',
+      icon: Icons.edit_note_outlined
+    ),
   ];
 
   @override
@@ -95,7 +111,8 @@ class _AdminSidebar extends ConsumerWidget {
                         color: selected
                             ? colorScheme.onPrimaryContainer
                             : colorScheme.onSurfaceVariant,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                     selected: selected,
