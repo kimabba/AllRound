@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../config.dart';
 import '../../models/admin.dart';
 import '../../models/crawl_source.dart';
 import '../../models/tournament.dart';
@@ -45,7 +46,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
+    _tab =
+        TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
     _tab.addListener(_onTabChanged);
     _startRefreshTimer();
     _loadLogs();
@@ -90,6 +92,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   }
 
   Future<void> _loadLogs() async {
+    if (AppConfig.adminDesignPreview) return;
     if (_loadingLogs) return;
     if (mounted) setState(() => _loadingLogs = true);
     try {
@@ -107,6 +110,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   }
 
   Future<void> _loadDrafts() async {
+    if (AppConfig.adminDesignPreview) return;
     if (_loadingDrafts) return;
     if (mounted) setState(() => _loadingDrafts = true);
     try {
@@ -137,13 +141,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       case _DraftFilter.all:
         return _drafts;
       case _DraftFilter.crawler:
-        return _drafts
-            .where((r) => r['submission_kind'] == 'crawler')
-            .toList();
+        return _drafts.where((r) => r['submission_kind'] == 'crawler').toList();
       case _DraftFilter.user:
-        return _drafts
-            .where((r) => r['submission_kind'] == 'user')
-            .toList();
+        return _drafts.where((r) => r['submission_kind'] == 'user').toList();
     }
   }
 
@@ -260,8 +260,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   void _toggleSelectAll(bool selectAll) {
     setState(() {
       if (selectAll) {
-        _selectedDraftIds
-            .addAll(_filteredDrafts.map((r) => r['id'] as String));
+        _selectedDraftIds.addAll(_filteredDrafts.map((r) => r['id'] as String));
       } else {
         for (final r in _filteredDrafts) {
           _selectedDraftIds.remove(r['id'] as String);
@@ -309,8 +308,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     if (confirmed != true) return;
     try {
       final api = ref.read(apiProvider);
-      final reason =
-          reasonController.text.trim().isEmpty ? null : reasonController.text.trim();
+      final reason = reasonController.text.trim().isEmpty
+          ? null
+          : reasonController.text.trim();
       await api.approveTournament(id, approve: false, reason: reason);
       await _loadDrafts();
     } catch (e) {
@@ -324,6 +324,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   // ── Tab 3: pending clubs ───────────────────────────────────────────────────
 
   Future<void> _loadPendingClubs() async {
+    if (AppConfig.adminDesignPreview) return;
     if (_loadingPendingClubs) return;
     if (mounted) setState(() => _loadingPendingClubs = true);
     try {
@@ -368,7 +369,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       reason = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
     }
     try {
-      await ref.read(apiProvider).approveClub(clubId, approve: approve, reason: reason);
+      await ref
+          .read(apiProvider)
+          .approveClub(clubId, approve: approve, reason: reason);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(approve ? '클럽 승인 완료' : '클럽 거절 완료')),
@@ -386,6 +389,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   // ── Tab 2: crawl_sources CRUD ─────────────────────────────────────────────
 
   Future<void> _loadSources() async {
+    if (AppConfig.adminDesignPreview) return;
     if (_loadingSources) return;
     if (mounted) setState(() => _loadingSources = true);
     try {
@@ -707,10 +711,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 44),
                 ),
-                onPressed:
-                    (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                        ? null
-                        : _bulkApprove,
+                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                    ? null
+                    : _bulkApprove,
                 icon: _bulkActionInFlight
                     ? const SizedBox(
                         width: 14,
@@ -725,10 +728,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 44),
                 ),
-                onPressed:
-                    (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                        ? null
-                        : _bulkReject,
+                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                    ? null
+                    : _bulkReject,
                 icon: const Icon(Icons.close, color: Colors.red),
                 label: const Text(
                   '일괄 거부',
@@ -768,7 +770,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final title = t['title'] as String? ?? '(제목 없음)';
           final sport = t['sport'] as String? ?? '';
           final startDate = t['start_date']?.toString() ?? '';
-          final date = startDate.length >= 10 ? startDate.substring(0, 10) : startDate;
+          final date =
+              startDate.length >= 10 ? startDate.substring(0, 10) : startDate;
           final region = t['region'] as String? ?? '';
           final sourceUrl = t['source_url'] as String? ?? '';
           final source = t['source'] as String? ?? '';
@@ -778,7 +781,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
               ? (submitterEmail != null
                   ? submitterEmail.split('@').first
                   : 'user')
-              : source.isEmpty ? 'crawler' : source;
+              : source.isEmpty
+                  ? 'crawler'
+                  : source;
           final selected = _selectedDraftIds.contains(id);
 
           return Padding(
@@ -823,12 +828,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(title,
-                              style:
-                                  Theme.of(context).textTheme.titleMedium),
+                              style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 4),
                           Text('$sport · $date · $region',
-                              style:
-                                  Theme.of(context).textTheme.bodySmall),
+                              style: Theme.of(context).textTheme.bodySmall),
                           if (sourceUrl.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
@@ -931,16 +934,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                       FilledButton(
                         style: FilledButton.styleFrom(
                             minimumSize: const Size(0, 36)),
-                        onPressed: () =>
-                            _approveClub(c.id, approve: true),
+                        onPressed: () => _approveClub(c.id, approve: true),
                         child: const Text('승인'),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
                             minimumSize: const Size(0, 36)),
-                        onPressed: () =>
-                            _approveClub(c.id, approve: false),
+                        onPressed: () => _approveClub(c.id, approve: false),
                         child: const Text('거절'),
                       ),
                     ],
@@ -1177,7 +1178,8 @@ class _SubmissionKindBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+        style:
+            TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1280,8 +1282,7 @@ class _SourceFormDialogState extends State<_SourceFormDialog> {
     super.dispose();
   }
 
-  String? _required(String? v) =>
-      (v == null || v.trim().isEmpty) ? '필수' : null;
+  String? _required(String? v) => (v == null || v.trim().isEmpty) ? '필수' : null;
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
@@ -1327,7 +1328,8 @@ class _SourceFormDialogState extends State<_SourceFormDialog> {
                 ),
                 TextFormField(
                   controller: _slug,
-                  enabled: !isEdit, // slug is the unique key — don't allow rename
+                  enabled:
+                      !isEdit, // slug is the unique key — don't allow rename
                   decoration: InputDecoration(
                     labelText: 'slug (코드 식별자, 영문 소문자/하이픈)',
                     helperText: isEdit ? '생성 후에는 변경할 수 없습니다' : null,
@@ -1365,11 +1367,9 @@ class _SourceFormDialogState extends State<_SourceFormDialog> {
                   initialValue: _sourceType,
                   decoration: const InputDecoration(labelText: 'source_type'),
                   items: _sourceTypes
-                      .map((t) =>
-                          DropdownMenuItem(value: t, child: Text(t)))
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                       .toList(),
-                  onChanged: (v) =>
-                      setState(() => _sourceType = v ?? 'board'),
+                  onChanged: (v) => setState(() => _sourceType = v ?? 'board'),
                 ),
                 TextFormField(
                   controller: _parserModule,

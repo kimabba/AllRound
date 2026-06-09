@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'config.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
@@ -32,6 +33,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
       final loc = state.matchedLocation;
+      final adminDesignPreview = kIsWeb && AppConfig.adminDesignPreview;
+      final userDesignPreview = kIsWeb && AppConfig.userDesignPreview;
+
+      if (adminDesignPreview && loc.startsWith('/admin')) {
+        return null;
+      }
+
+      if (userDesignPreview && !loc.startsWith('/admin')) {
+        if (loc == '/login') return '/';
+        return null;
+      }
 
       if (user == null) {
         return loc == '/login' ? null : '/login';
@@ -133,8 +145,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clubs/:id',
-        builder: (_, state) =>
-            ClubDetailScreen(club: state.extra as Club),
+        builder: (_, state) => ClubDetailScreen(club: state.extra as Club),
       ),
       GoRoute(
         path: '/tournaments/:id',
@@ -307,7 +318,8 @@ class _AdminTournamentListScreen extends ConsumerWidget {
                   '${r['sport']} · ${r['region'] ?? ''} · ${r['start_date']}',
                 ),
                 trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
