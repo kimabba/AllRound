@@ -264,6 +264,17 @@ List<_DescSection> _parseDescription(String raw) {
     final idx = text.indexOf(marker);
     if (idx > 0) text = text.substring(0, idx);
   }
+
+  // 0.1단계: 신청 폼 잔해 제거
+  text = text
+      .replaceAll(RegExp(r'이점 참고하여 신중하게 신청 바랍니다'), '')
+      .replaceAll(RegExp(r'입금대기중을 클릭하여 입금계좌로 입금후로 입금일 입금자를 등록해주시기 바랍니다\.?'), '')
+      .replaceAll(RegExp(r'참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역'), '')
+      .replaceAll(RegExp(r'참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?'), '')
+      .replaceAll(RegExp(r'참가비\s+입금\s*×\s*\.?'), '')
+      .replaceAll(RegExp(r'\[신청대기\]|\[신청마감\]|\[신청중\]'), '')
+      .replaceAll(RegExp(r'부서추후공지'), '');
+
   text = text.trim();
   if (text.isEmpty) return [];
 

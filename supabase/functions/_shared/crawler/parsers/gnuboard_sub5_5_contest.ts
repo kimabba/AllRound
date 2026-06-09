@@ -192,18 +192,54 @@ async function fetchDetail(
 
   // 원문에서 보일러플레이트 제거 후 본문 추출
   let rawBody = bodyText;
+
+  // 하단 푸터 제거
   for (const marker of ['개인정보 취급방침', 'COPYRIGHT', '홈페이지바로가기']) {
     const idx = rawBody.indexOf(marker);
     if (idx > 0) rawBody = rawBody.substring(0, idx);
   }
-  // 신청 폼 안내 보일러플레이트 제거
-  const formBoilerIdx = rawBody.indexOf('참가신청 선수 변경시');
-  const contentBody = formBoilerIdx >= 0
-    ? rawBody.substring(formBoilerIdx + '참가신청 선수 변경시 대기 마지막(대기) 순으로 변경됩니다.'.length).trim()
-    : rawBody.trim();
 
-  // 메타 + 본문 결합 (본문이 메타보다 실질적으로 길면 포함)
-  const description = contentBody.length > metaLine.length + 20
+  // 신청 폼 안내 보일러플레이트 제거 — 여러 변형 처리
+  const formBoilerMarkers = [
+    '참가신청 선수 변경시',
+    '이점 참고하여 신중하게 신청 바랍니다',
+  ];
+  for (const marker of formBoilerMarkers) {
+    const idx = rawBody.indexOf(marker);
+    if (idx >= 0) {
+      // 마커 이전 텍스트와 이후 텍스트를 분리
+      const before = rawBody.substring(0, idx).trim();
+      // 마커 이후에서 실제 공고 시작점 찾기 (『SPORTS 또는 제N회 등)
+      const after = rawBody.substring(idx);
+      const contentStart = after.search(/[『「]|제\d+회|풋\s*폴트|일\s*시\s+\d{4}년/);
+      if (contentStart > 0) {
+        rawBody = before + ' ' + after.substring(contentStart);
+      } else {
+        rawBody = before;
+      }
+    }
+  }
+
+  // 폼 테이블 헤더/잔해 제거 (참가부서 신청기간 경기일시 현재신청팀...)
+  rawBody = rawBody
+    .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
+    .replace(/참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?/g, '')
+    .replace(/참가비\s+입금\s*×\s*\.?/g, '')
+    .replace(/입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g, '')
+    .replace(/\[신청대기\]/g, '')
+    .replace(/\[신청마감\]/g, '')
+    .replace(/\[신청중\]/g, '')
+    // 사이트 네비/메뉴 잔해
+    .replace(/선수회원신청\s*×?\s*대회일정.*?광주광역시테니스협회/g, '')
+    .replace(/일상속\s*힐링운동.*?광주광역시테니스협회/g, '')
+    .replace(/전문체육과\s*동호인이\s*함께하는/g, '')
+    .replace(/대회일정\s+대회그룹\s+대회일정\s+대진표관리\s+대회결과\s+대회공지사항/g, '')
+    .replace(/부서추후공지/g, '')
+    .trim();
+
+  // 메타 + 본문 결합 (본문이 실질적 내용을 포함할 때만)
+  const contentBody = rawBody.length > metaLine.length + 50 ? rawBody : '';
+  const description = contentBody
     ? `${metaLine}\n\n${contentBody}`
     : metaLine;
 
