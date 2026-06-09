@@ -172,6 +172,52 @@
       font-weight: 700;
     }
 
+    .simple-summary {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 14px;
+    }
+
+    .summary-lead {
+      padding: 24px;
+      border: 1px solid rgba(46, 125, 50, 0.22);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-lead strong {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 30px;
+      line-height: 1.16;
+      letter-spacing: 0;
+    }
+
+    .summary-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .summary-item {
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .summary-item b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .summary-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .tag {
       display: inline-flex;
       margin: 0 6px 8px 0;
@@ -323,6 +369,7 @@
     @media (max-width: 900px) {
       .hero,
       .metric-row,
+      .simple-summary,
       .flow {
         grid-template-columns: 1fr;
       }
@@ -366,6 +413,37 @@
         <div class="metric"><b>15+</b><span>Supabase Edge Function 엔드포인트</span></div>
         <div class="metric"><b>35</b><span>DB 마이그레이션 번호 기준 최신 작업</span></div>
         <div class="metric"><b>5</b><span>어드민 탭: 현황, 검수, 소스, 클럽, 지식베이스</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>쉬운 요약</h2>
+      <div class="simple-summary">
+        <article class="summary-lead">
+          <strong>내 종목과 등급에 맞는 대회·클럽 정보를 보여주는 동호인 앱</strong>
+          <p>
+            Match-up은 사용자가 테니스/풋살 종목과 등급을 등록하면, 참가 가능한 대회와
+            관련 클럽·룰북·챗봇 정보를 한곳에서 확인하게 해주는 앱이다.
+          </p>
+        </article>
+        <div class="summary-list">
+          <div class="summary-item">
+            <b>현재까지 만든 것</b>
+            <p>로그인, 온보딩, 대회 검색/제보/검수, 크롤러, 관리자 화면, 클럽, 클럽 활동, AI 챗봇, 지식베이스가 구현됐다.</p>
+          </div>
+          <div class="summary-item">
+            <b>앱 기본 흐름</b>
+            <p>로그인 → 종목·등급 등록 → 참가 가능한 대회 확인 → 클럽 가입/활동 → 챗봇 질문 → 관리자가 데이터 운영.</p>
+          </div>
+          <div class="summary-item">
+            <b>지금 가장 중요한 것</b>
+            <p>새 기능 추가보다 보안 키 마무리, 실제 기기 QA, 대회 데이터 정확도, 팀 협업 방식 정리가 먼저다.</p>
+          </div>
+          <div class="summary-item">
+            <b>결론</b>
+            <p>기능은 많이 들어왔다. 이제는 MVP를 운영 가능한 상태로 안정화하는 단계다.</p>
+          </div>
+        </div>
       </div>
     </section>
 
