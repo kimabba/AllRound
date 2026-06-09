@@ -2,7 +2,13 @@ import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
 import { ChatTurn, streamChat } from '../_shared/gemini.ts';
-import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS, type Sport } from '../_shared/enums.ts';
+import {
+  GRADE_LABELS,
+  REGION_LABELS,
+  type Sport,
+  SPORT_LABELS,
+  TENNIS_ORG_LABELS,
+} from '../_shared/enums.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import {
   buildEmbeddingResult,
@@ -412,10 +418,20 @@ function buildContextPrompt(
   if (venues.length > 0) {
     parts.push('[구장 정보]');
     for (const v of venues) {
-      const type = v.venue_type === 'indoor' ? '실내' : v.venue_type === 'outdoor' ? '실외' : v.venue_type === 'mixed' ? '실내·실외' : '';
+      const type = v.venue_type === 'indoor'
+        ? '실내'
+        : v.venue_type === 'outdoor'
+        ? '실외'
+        : v.venue_type === 'mixed'
+        ? '실내·실외'
+        : '';
       const courts = v.court_count ? ` ${v.court_count}면` : '';
       const phone = v.phone ? ` 📞 ${v.phone}` : '';
-      parts.push(`- ${escapeForData(v.name)} | ${v.region} ${escapeForData(v.address ?? '')} | ${type}${courts}${phone}`);
+      parts.push(
+        `- ${escapeForData(v.name)} | ${v.region} ${
+          escapeForData(v.address ?? '')
+        } | ${type}${courts}${phone}`,
+      );
     }
     parts.push('');
   }
@@ -899,7 +915,9 @@ Deno.serve(async (req) => {
           try {
             const regionSlot = intentResult.slots.region;
             // region code → display name 매핑 (venues.region은 "광주시" 등 display name)
-            const regionDisplay = regionSlot ? (REGION_LABELS[regionSlot] ? REGION_LABELS[regionSlot] + '시' : null) : null;
+            const regionDisplay = regionSlot
+              ? (REGION_LABELS[regionSlot] ? REGION_LABELS[regionSlot] + '시' : null)
+              : null;
             const { data: vData, error: vErr } = await supabase.rpc('venues_search', {
               p_sport: requestedSport ?? null,
               p_region: regionDisplay ?? regionSlot ?? null,
