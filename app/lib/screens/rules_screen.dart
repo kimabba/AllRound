@@ -358,20 +358,28 @@ const _previewTennisRules = <String, List<(String, String)>>{
 
 const _previewFutsalRules = <String, List<(String, String)>>{
   '경기 진행': [
-    ('풋살 경기 시간', '일반적으로 전후반으로 나뉘며 대회 규정에 따라 러닝타임 또는 스톱타임을 적용합니다.'),
-    ('선수 교체', '지정된 교체 구역과 절차를 지키면 경기 중 반복 교체가 가능합니다.'),
+    ('풋살 경기 시간', '전·후반 20분이 기본이며, 대회 규정에 따라 러닝타임 또는 스톱타임을 적용합니다.'),
+    ('선수 수와 교체', '골키퍼 포함 5명이 경기하고, 지정된 교체 구역을 지키면 경기 중 반복 교체가 가능합니다.'),
   ],
-  '판정 규칙': [
-    ('킥인 재개', '볼이 터치라인을 넘으면 손으로 던지지 않고 킥인으로 경기를 재개합니다.'),
+  '골키퍼': [
     ('골키퍼 4초 제한', '골키퍼는 자기 진영에서 볼을 4초 넘게 컨트롤할 수 없습니다.'),
+    ('백패스 제한', '골키퍼가 플레이한 볼은 상대 선수 터치 없이 다시 골키퍼에게 돌아갈 수 없습니다.'),
   ],
-  '매너 & 에티켓': [
-    ('슬라이딩과 접촉', '무리한 슬라이딩과 위험한 접촉은 파울 또는 경고가 될 수 있습니다.'),
-    ('경기장 매너', '심판 판정과 상대 팀을 존중하고, 과한 항의는 삼가야 합니다.'),
+  '파울': [
+    ('누적 파울', '한 하프에서 직접 프리킥성 파울이 누적되면 이후 상대팀에게 더 위험한 프리킥 기회가 주어집니다.'),
+    ('위험한 접촉', '무리한 슬라이딩과 위험한 접촉은 파울 또는 경고가 될 수 있습니다.'),
   ],
-  '대회 규정': [
-    ('동률 순위 산정', '승점이 같으면 골득실, 다득점, 승자승 등 대회별 기준을 따릅니다.'),
-    ('선수 등록 확인', '대회 시작 전 참가 명단과 등번호, 자격 기준을 확인합니다.'),
+  '킥인/재개': [
+    ('킥인 재개', '볼이 터치라인을 넘으면 손으로 던지지 않고 킥인으로 경기를 재개합니다.'),
+    ('코너킥과 골 클리어런스', '골라인을 넘은 볼은 마지막 터치한 팀에 따라 코너킥 또는 골 클리어런스로 재개합니다.'),
+  ],
+  '장비/경기장': [
+    ('풋살공과 피치', '풋살은 반발력이 낮은 4호공과 전용 피치를 사용합니다.'),
+    ('기본 장비', '유니폼, 스타킹, 신발, 정강이 보호대를 착용하고 골키퍼는 구분되는 색상을 입습니다.'),
+  ],
+  '연맹 안내': [
+    ('한국풋살연맹', '국내 풋살 대회, FK리그, 심판 양성, 클럽 등록 등을 담당하는 공식 기관입니다.'),
+    ('경기규칙서', '2024-25 경기규칙서는 한국풋살연맹과 FIFA 풋살 경기 규칙을 기준으로 정리됩니다.'),
   ],
 };
 
@@ -1140,6 +1148,24 @@ IconData _iconForCategory(String category) {
   if (lower.contains('시간') || lower.contains('time')) {
     return Icons.timer_outlined;
   }
+  if (lower.contains('골키퍼')) {
+    return Icons.sports_handball_rounded;
+  }
+  if (lower.contains('킥인') || lower.contains('재개') || lower.contains('코너')) {
+    return Icons.redo_rounded;
+  }
+  if (lower.contains('장비') || lower.contains('경기장') || lower.contains('피치')) {
+    return Icons.sports_soccer_rounded;
+  }
+  if (lower.contains('연맹')) {
+    return Icons.account_balance_rounded;
+  }
+  if (lower.contains('포지션') || lower.contains('전술')) {
+    return Icons.route_rounded;
+  }
+  if (lower.contains('부상') || lower.contains('컨디션')) {
+    return Icons.health_and_safety_rounded;
+  }
   if (lower.contains('교체') || lower.contains('substitution')) {
     return Icons.swap_horiz_rounded;
   }
@@ -1177,6 +1203,24 @@ String _descriptionForCategory(String category) {
   }
   if (lower.contains('시간') || lower.contains('time')) {
     return '제한 시간 · 진행 속도';
+  }
+  if (lower.contains('골키퍼')) {
+    return '4초 제한 · 백패스';
+  }
+  if (lower.contains('킥인') || lower.contains('재개') || lower.contains('코너')) {
+    return '킥인 · 코너킥 · 재개';
+  }
+  if (lower.contains('장비') || lower.contains('경기장') || lower.contains('피치')) {
+    return '풋살공 · 피치 · 장비';
+  }
+  if (lower.contains('연맹')) {
+    return '공식 기관 · 규칙서';
+  }
+  if (lower.contains('포지션') || lower.contains('전술')) {
+    return '피보 · 아라 · 픽소';
+  }
+  if (lower.contains('부상') || lower.contains('컨디션')) {
+    return '부상 예방 · 회복';
   }
   if (lower.contains('교체') || lower.contains('substitution')) {
     return '선수 교체 · 절차';
