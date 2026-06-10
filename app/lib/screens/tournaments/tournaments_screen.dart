@@ -239,6 +239,24 @@ List<Tournament> _previewTournaments(String? sport) {
   if (sport == 'futsal') {
     return [
       Tournament(
+        id: 'preview-futsal-sleague-2026',
+        sport: 'futsal',
+        title: '2026 생활체육 서울시민리그 풋살리그',
+        organizer: '서울특별시풋살연맹',
+        description:
+            '서울시민리그 공식 풋살 페이지 기준 2차 접수는 2026년 5월 1일부터 6월 7일까지, 리그는 2026년 6월 20일부터 10월 11일까지 진행됩니다.',
+        startDate: DateTime(2026, 6, 20),
+        endDate: DateTime(2026, 10, 11),
+        applicationDeadline: DateTime(2026, 6, 7),
+        region: '서울',
+        location: '서울시민리그 풋살 공식 경기장소',
+        eligibleGrades: const ['beginner', 'intermediate', 'advanced'],
+        prize: null,
+        format: '서울시민리그 풋살 리그전',
+        sourceUrl: 'https://www.sleague.or.kr/2026/futsal/',
+        status: 'published',
+      ),
+      Tournament(
         id: 'preview-futsal-1',
         sport: 'futsal',
         title: '서울 풋살 위클리 컵',

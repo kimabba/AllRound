@@ -807,7 +807,8 @@ List<_DescSection> _parseDescription(String raw, {required String sportLabel}) {
   text = text
       .replaceAll(RegExp(r'이점 참고하여 신중하게 신청 바랍니다'), '')
       .replaceAll(RegExp(r'입금대기중을 클릭하여 입금계좌로 입금후로 입금일 입금자를 등록해주시기 바랍니다\.?'), '')
-      .replaceAll(RegExp(r'참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역'), '')
+      .replaceAll(
+          RegExp(r'참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역'), '')
       .replaceAll(RegExp(r'참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?'), '')
       .replaceAll(RegExp(r'참가비\s+입금\s*×\s*\.?'), '')
       .replaceAll(RegExp(r'\[신청대기\]|\[신청마감\]|\[신청중\]'), '')
@@ -1079,6 +1080,31 @@ class _InfoRow extends StatelessWidget {
 Tournament? _previewTournamentById(String id) {
   final now = DateTime.now();
   final tournaments = [
+    Tournament(
+      id: 'preview-futsal-sleague-2026',
+      sport: 'futsal',
+      title: '2026 생활체육 서울시민리그 풋살리그',
+      organizer: '서울특별시풋살연맹',
+      description: '''
+참가부서: 초급 · 중급 · 고급
+신청기간: 2026년 5월 1일 ~ 2026년 6월 7일
+대회일: 2026년 6월 20일 ~ 2026년 10월 11일
+지역: 서울
+장소: 서울시민리그 풋살 공식 경기장소
+경기종목: 5인제 풋살 리그전
+안내: A조, B조, C조, D조 경기일정 및 결과와 지역·권역·결선 경기장소는 서울시민리그 공식 페이지에서 확인할 수 있습니다. 대표 연락처는 02-415-8711입니다.
+''',
+      startDate: DateTime(2026, 6, 20),
+      endDate: DateTime(2026, 10, 11),
+      applicationDeadline: DateTime(2026, 6, 7),
+      region: '서울',
+      location: '서울시민리그 풋살 공식 경기장소',
+      eligibleGrades: const ['beginner', 'intermediate', 'advanced'],
+      prize: null,
+      format: '서울시민리그 풋살 리그전',
+      sourceUrl: 'https://www.sleague.or.kr/2026/futsal/',
+      status: 'published',
+    ),
     Tournament(
       id: 'preview-futsal-1',
       sport: 'futsal',
