@@ -43,7 +43,7 @@ class MoreScreen extends ConsumerWidget {
         label: '관심',
         subtitle: '관심 대회와 클럽 모아보기',
         color: const Color(0xFFF59E0B),
-        onTap: () => context.go('/tournaments'),
+        onTap: () => context.go('/favorites'),
       ),
     ];
 

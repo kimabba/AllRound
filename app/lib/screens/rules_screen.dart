@@ -59,7 +59,9 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     final sport = ref.read(activeSportProvider);
     _activeSport = sport;
 
-    if (!kReleaseMode && AppConfig.apiBaseUrl.contains('127.0.0.1')) {
+    if (!kReleaseMode &&
+        (AppConfig.userDesignPreview ||
+            AppConfig.apiBaseUrl.contains('127.0.0.1'))) {
       setState(() {
         if (sport != null) {
           _activeByCat = _previewRulesFor(sport);

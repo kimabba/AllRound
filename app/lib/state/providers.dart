@@ -62,6 +62,13 @@ final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   return api.myFavoriteIds();
 });
 
+/// 관심 클럽 ID 집합
+final clubFavoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myClubFavoriteIds();
+});
+
 /// MY 페이지용 관심/예정 대회 기록
 final myTournamentRecordsProvider =
     FutureProvider<List<Tournament>>((ref) async {
@@ -70,6 +77,21 @@ final myTournamentRecordsProvider =
   return api
       .myFavoriteTournaments(limit: 5)
       .timeout(const Duration(seconds: 2));
+});
+
+/// 관심 화면용 스크랩 대회
+final myFavoriteTournamentsProvider =
+    FutureProvider<List<Tournament>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myFavoriteTournaments(limit: 50);
+});
+
+/// 관심 화면용 스크랩 클럽
+final myFavoriteClubsProvider = FutureProvider<List<Club>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myFavoriteClubs(limit: 50);
 });
 
 /// 수동 종목 오버라이드 (null이면 userSports primary 사용)
