@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/chat_ui.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/matchup_logo.dart';
@@ -11,9 +12,11 @@ class _Msg {
   final String role;
   String content;
   List<Map<String, dynamic>> citations;
+  List<ChatUiBlock> uiBlocks;
 
   _Msg({required this.role, required this.content})
-      : citations = <Map<String, dynamic>>[];
+      : citations = <Map<String, dynamic>>[],
+        uiBlocks = <ChatUiBlock>[];
 }
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -76,6 +79,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ...items.cast<Map<String, dynamic>>(),
               ];
             });
+          case 'ui':
+            final blocks = ChatUiBlock.listFromEvent(evt.data);
+            if (blocks.isNotEmpty) {
+              setState(() {
+                _messages[assistantIdx].uiBlocks = [
+                  ..._messages[assistantIdx].uiBlocks,
+                  ...blocks,
+                ];
+              });
+              _scrollToBottom();
+            }
           case 'error':
             setState(() {
               _messages[assistantIdx].content +=
