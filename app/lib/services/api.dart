@@ -553,6 +553,7 @@ class ApiService {
     String? conversationId,
     bool enableSearch = true,
     String? activeSport,
+    Map<String, String>? selectedEntity,
   }) async* {
     final request = http.Request('POST', _uri('chat'));
     final headers = await _authHeaders();
@@ -565,6 +566,7 @@ class ApiService {
       if (conversationId != null) 'conversation_id': conversationId,
       'enable_search': enableSearch,
       if (activeSport != null) 'active_sport': activeSport,
+      if (selectedEntity != null) 'selected_entity': selectedEntity,
     });
 
     final client = http.Client();
