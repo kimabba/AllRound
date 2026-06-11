@@ -1103,6 +1103,31 @@ Deno.serve(async (req) => {
           send('citation', { items: dbCitationItems });
         }
 
+        // RAG 경로에서도 대회 카드 전송 (tournament_search 의도 또는 대회 결과 있을 때)
+        if (tournaments.length > 0) {
+          const cardRows: TournamentCardRow[] = tournaments.slice(0, 10).map((t) => ({
+            id: t.id,
+            sport: t.sport as 'tennis' | 'futsal',
+            title: t.title,
+            start_date: t.start_date,
+            end_date: null,
+            region: t.region ?? null,
+            location: null,
+            eligible_grades: t.eligible_grades ?? [],
+            entry_fee: null,
+            format: null,
+          }));
+          send('ui', {
+            blocks: [
+              {
+                type: 'cards',
+                entity: 'tournament',
+                items: buildTournamentCards(cardRows),
+              },
+            ],
+          });
+        }
+
         if (assistantText.trim()) {
           await supabase.from('chat_messages').insert({
             user_id: user.id,
