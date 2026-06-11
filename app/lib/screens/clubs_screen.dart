@@ -60,6 +60,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
   Future<void> _loadMyClubs() async {
     setState(() => _loadingMy = true);
     try {
+      if (AppConfig.userDesignPreview) {
+        if (mounted) setState(() => _myClubs = _previewManagedClubs);
+        return;
+      }
       final list = await ref.read(apiProvider).myClubs();
       if (mounted) setState(() => _myClubs = list);
     } catch (_) {
@@ -190,6 +194,8 @@ class _MyClubsTab extends ConsumerWidget {
         if (!a.isPending && b.isPending) return 1;
         return 0;
       });
+    final managedClubs = sorted.where((club) => club.isManager).toList();
+    final itemCount = sorted.length + (managedClubs.isNotEmpty ? 1 : 0);
 
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
@@ -198,17 +204,185 @@ class _MyClubsTab extends ConsumerWidget {
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.lg,
         ),
-        itemCount: sorted.length,
-        itemBuilder: (_, i) => Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _ClubCard(
-            club: sorted[i],
-            showRole: true,
-            isFavorite: favoriteIds.contains(sorted[i].id),
-            onChanged: onRefresh,
+        itemCount: itemCount,
+        itemBuilder: (_, i) {
+          if (managedClubs.isNotEmpty && i == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _TeamRecruitingEntryCard(managedClubs: managedClubs),
+            );
+          }
+          final clubIndex = managedClubs.isNotEmpty ? i - 1 : i;
+          final club = sorted[clubIndex];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: _ClubCard(
+              club: club,
+              showRole: true,
+              isFavorite: favoriteIds.contains(club.id),
+              onChanged: onRefresh,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+final _previewManagedClubs = [
+  Club(
+    id: 'preview-managed-futsal',
+    sport: 'futsal',
+    name: '광주 위너스 풋살클럽',
+    region: '광주',
+    address: '광주 북구 풋살파크',
+    description: '주말 저녁 풋살 멤버를 모집하는 클럽',
+    memberCount: 18,
+    myRole: 'owner',
+  ),
+  Club(
+    id: 'preview-managed-tennis',
+    sport: 'tennis',
+    name: '매치업 테니스 크루',
+    region: '광주',
+    address: '염주실내테니스장',
+    description: '초보부터 함께 치는 테니스 모임',
+    memberCount: 24,
+    myRole: 'manager',
+  ),
+];
+
+class _TeamRecruitingEntryCard extends StatelessWidget {
+  final List<Club> managedClubs;
+
+  const _TeamRecruitingEntryCard({required this.managedClubs});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showRecruitingSheet(context),
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF7F1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFBFE8D2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: Color(0xFF16A34A),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '팀원모집',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showRecruitingSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final tt = Theme.of(context).textTheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '팀원모집 관리',
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '클럽장 또는 운영진 권한이 있는 클럽만 표시됩니다.',
+                  style: tt.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                for (final club in managedClubs)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: _ClubSportThumbnail(
+                      sport: club.sport,
+                      accentColor: club.sport == 'tennis'
+                          ? Theme.of(context).colorScheme.tertiary
+                          : Theme.of(context).colorScheme.secondary,
+                      logoUrl: club.logoUrl,
+                    ),
+                    title: Text(
+                      club.name,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: Text(
+                      '${sportLabelFromString(club.sport)} · ${club.isOwner ? '클럽장' : '운영진'}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${club.name} 팀원모집 작성 화면은 준비 중입니다.'),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

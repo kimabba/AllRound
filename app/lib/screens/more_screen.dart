@@ -55,13 +55,6 @@ class MoreScreen extends ConsumerWidget {
         color: AppSportColors.tennis,
         onTap: () => context.go('/rules'),
       ),
-      _MenuItem(
-        icon: Icons.groups_rounded,
-        label: '팀원모집',
-        subtitle: '함께 뛸 팀원과 클럽 찾기',
-        color: const Color(0xFF06B6D4),
-        onTap: () => context.go('/clubs'),
-      ),
       if (!kIsWeb)
         _MenuItem(
           icon: Icons.speed_rounded,
