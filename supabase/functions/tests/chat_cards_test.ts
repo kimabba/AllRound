@@ -36,6 +36,10 @@ Deno.test('buildTournamentCards caps at 10 items', () => {
   assertEquals(cards.length, 10);
 });
 
+Deno.test('buildTournamentCards returns empty array for empty input', () => {
+  assertEquals(buildTournamentCards([]), []);
+});
+
 Deno.test('parseSelectedEntity accepts a valid tournament entity', () => {
   const result = parseSelectedEntity({
     type: 'tournament',
@@ -46,6 +50,12 @@ Deno.test('parseSelectedEntity accepts a valid tournament entity', () => {
     assertEquals(result.value.type, 'tournament');
     assertEquals(result.value.id, '11111111-1111-1111-1111-111111111111');
   }
+});
+
+Deno.test('parseSelectedEntity accepts a valid club entity', () => {
+  const result = parseSelectedEntity({ type: 'club', id: '22222222-2222-2222-2222-222222222222' });
+  assert(result.ok);
+  if (result.ok) assertEquals(result.value.type, 'club');
 });
 
 Deno.test('parseSelectedEntity rejects invalid entity type', () => {
