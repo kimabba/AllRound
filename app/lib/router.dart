@@ -15,6 +15,7 @@ import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
+import 'screens/friend_schedule_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
@@ -105,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/favorites',
             builder: (_, __) => const FavoritesScreen(),
           ),
+          GoRoute(
+            path: '/friend-schedule',
+            builder: (_, __) => const FriendScheduleScreen(),
+          ),
         ],
       ),
       // 웹 전용
@@ -187,6 +192,7 @@ class _MainShell extends ConsumerWidget {
     '/rules',
     '/profile',
     '/favorites',
+    '/friend-schedule',
   ];
 
   int _indexOf(String location) {
@@ -211,69 +217,71 @@ class _MainShell extends ConsumerWidget {
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
     final activeSport = ref.watch(activeSportProvider);
+    final showSportSwitcher = loc != '/friend-schedule';
 
     return Scaffold(
       body: Column(
         children: [
           // 종목 스왑 바
-          SafeArea(
-            bottom: false,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-              color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          activeSport == 'futsal'
-                              ? Icons.sports_soccer_rounded
-                              : Icons.sports_tennis_rounded,
-                          size: 18,
-                          color: cs.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                              value: 'tennis',
-                              label: Text('테니스'),
-                              icon: Icon(Icons.sports_tennis_rounded),
-                            ),
-                            ButtonSegment(
-                              value: 'futsal',
-                              label: Text('풋살'),
-                              icon: Icon(Icons.sports_soccer_rounded),
-                            ),
-                          ],
-                          selected: {activeSport ?? 'tennis'},
-                          onSelectionChanged: (s) {
-                            ref.read(sportOverrideProvider.notifier).state =
-                                s.first;
-                          },
-                          style: SegmentedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (showSportSwitcher)
+            SafeArea(
+              bottom: false,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            activeSport == 'futsal'
+                                ? Icons.sports_soccer_rounded
+                                : Icons.sports_tennis_rounded,
+                            size: 18,
+                            color: cs.onPrimaryContainer,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'tennis',
+                                label: Text('테니스'),
+                                icon: Icon(Icons.sports_tennis_rounded),
+                              ),
+                              ButtonSegment(
+                                value: 'futsal',
+                                label: Text('풋살'),
+                                icon: Icon(Icons.sports_soccer_rounded),
+                              ),
+                            ],
+                            selected: {activeSport ?? 'tennis'},
+                            onSelectionChanged: (s) {
+                              ref.read(sportOverrideProvider.notifier).state =
+                                  s.first;
+                            },
+                            style: SegmentedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           Expanded(
             child: ColoredBox(
               color: cs.surfaceContainerLowest,

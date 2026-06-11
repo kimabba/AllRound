@@ -33,10 +33,10 @@ class MoreScreen extends ConsumerWidget {
       ),
       _MenuItem(
         icon: Icons.calendar_month_rounded,
-        label: '친구 일정 보러가기',
+        label: '친구 일정',
         subtitle: '내 일정과 참여 기록 확인',
         color: const Color(0xFF7C3AED),
-        onTap: () => context.go('/profile'),
+        onTap: () => context.go('/friend-schedule'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
