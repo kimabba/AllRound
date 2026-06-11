@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matchup/models/chat_ui.dart';
+import 'package:matchup/widgets/chat_tournament_card.dart';
 
 void main() {
   group('ChatUiBlock.listFromEvent', () {
@@ -92,6 +94,41 @@ void main() {
       };
       final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.eligibleGrades, ['ok']);
+    });
+  });
+
+  group('ChatTournamentCard', () {
+    testWidgets('renders title, region and an action; hides id', (tester) async {
+      const item = TournamentChatCardItem(
+        id: '11111111-1111-1111-1111-111111111111',
+        title: '광주 테니스 오픈',
+        sport: 'tennis',
+        region: '광주',
+        location: '진월국제테니스장',
+        startDate: '2026-06-13',
+        endDate: '2026-06-13',
+        eligible: true,
+        eligibleGrades: ['gj_m_gold'],
+        entryFee: 30000,
+        format: '복식',
+      );
+      String? sent;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ChatTournamentCard(
+            item: item,
+            onAction: (message, entityId) => sent = message,
+          ),
+        ),
+      ));
+
+      expect(find.text('광주 테니스 오픈'), findsOneWidget);
+      expect(find.textContaining('광주'), findsWidgets);
+      expect(find.textContaining('11111111'), findsNothing);
+
+      await tester.tap(find.text('상세 알려줘'));
+      await tester.pump();
+      expect(sent, '상세 알려줘');
     });
   });
 }
