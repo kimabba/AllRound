@@ -3,17 +3,22 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/chat_ui.dart';
+import '../services/api.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/chat_tournament_card.dart';
 import '../widgets/matchup_logo.dart';
 
 class _Msg {
   final String role;
   String content;
   List<Map<String, dynamic>> citations;
+  List<ChatUiBlock> uiBlocks;
 
   _Msg({required this.role, required this.content})
-      : citations = <Map<String, dynamic>>[];
+      : citations = <Map<String, dynamic>>[],
+        uiBlocks = <ChatUiBlock>[];
 }
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -52,12 +57,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final assistantIdx = _messages.length - 1;
     final api = ref.read(apiProvider);
 
-    try {
-      await for (final evt in api.chat(
+    await _consumeChatStream(
+      api.chat(
         message: text,
         conversationId: _conversationId,
         activeSport: ref.read(activeSportProvider),
-      )) {
+      ),
+      assistantIdx,
+    );
+  }
+
+  Future<void> _sendWithEntity(String message, String entityId) async {
+    if (_busy) return;
+    setState(() {
+      _messages.add(_Msg(role: 'user', content: message));
+      _messages.add(_Msg(role: 'assistant', content: ''));
+      _busy = true;
+    });
+    _scrollToBottom();
+
+    final assistantIdx = _messages.length - 1;
+    final api = ref.read(apiProvider);
+
+    await _consumeChatStream(
+      api.chat(
+        message: message,
+        conversationId: _conversationId,
+        activeSport: ref.read(activeSportProvider),
+        selectedEntity: {'type': 'tournament', 'id': entityId},
+      ),
+      assistantIdx,
+    );
+  }
+
+  Future<void> _consumeChatStream(
+      Stream<ChatStreamEvent> stream, int assistantIdx) async {
+    try {
+      await for (final evt in stream) {
         if (!mounted) return;
         switch (evt.event) {
           case 'meta':
@@ -76,6 +112,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ...items.cast<Map<String, dynamic>>(),
               ];
             });
+          case 'ui':
+            final blocks = ChatUiBlock.listFromEvent(evt.data);
+            if (blocks.isNotEmpty) {
+              setState(() {
+                _messages[assistantIdx].uiBlocks = [
+                  ..._messages[assistantIdx].uiBlocks,
+                  ...blocks,
+                ];
+              });
+              _scrollToBottom();
+            }
           case 'error':
             setState(() {
               _messages[assistantIdx].content +=
@@ -85,7 +132,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     } catch (e) {
       setState(() {
-        _messages[assistantIdx].content += '\n\n[연결 실패] ${_formatChatError(e)}';
+        _messages[assistantIdx].content +=
+            '\n\n[연결 실패] ${_formatChatError(e)}';
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -143,7 +191,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       vertical: AppSpacing.md,
                     ),
                     itemCount: _messages.length,
-                    itemBuilder: (_, i) => _MessageBubble(msg: _messages[i]),
+                    itemBuilder: (_, i) => _MessageBubble(
+                      msg: _messages[i],
+                      onCardAction: _sendWithEntity,
+                    ),
                   ),
           ),
           if (_busy)
@@ -338,8 +389,9 @@ class _InputBar extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.msg});
+  const _MessageBubble({required this.msg, required this.onCardAction});
   final _Msg msg;
+  final void Function(String message, String entityId) onCardAction;
 
   @override
   Widget build(BuildContext context) {
@@ -413,6 +465,16 @@ class _MessageBubble extends StatelessWidget {
                   for (final c in msg.citations.take(8))
                     _CitationRow(citation: c),
                 ],
+                if (msg.uiBlocks.isNotEmpty)
+                  for (final block in msg.uiBlocks)
+                    for (final item in block.tournamentItems)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: ChatTournamentCard(
+                          item: item,
+                          onAction: onCardAction,
+                        ),
+                      ),
               ],
             ),
           ),

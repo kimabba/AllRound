@@ -177,9 +177,12 @@ class ApiService {
   }
 
   Future<List<Tournament>> myFavoriteTournaments({int limit = 5}) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return [];
     final rows = await _supabase
         .from('tournament_favorites')
         .select('created_at, tournaments(*)')
+        .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(limit);
 
@@ -220,9 +223,12 @@ class ApiService {
   }
 
   Future<List<Club>> myFavoriteClubs({int limit = 50}) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return [];
     final rows = await _supabase
         .from('club_favorites')
         .select('created_at, clubs(*)')
+        .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(limit);
 
@@ -547,6 +553,7 @@ class ApiService {
     String? conversationId,
     bool enableSearch = true,
     String? activeSport,
+    Map<String, String>? selectedEntity,
   }) async* {
     final request = http.Request('POST', _uri('chat'));
     final headers = await _authHeaders();
@@ -559,6 +566,7 @@ class ApiService {
       if (conversationId != null) 'conversation_id': conversationId,
       'enable_search': enableSearch,
       if (activeSport != null) 'active_sport': activeSport,
+      if (selectedEntity != null) 'selected_entity': selectedEntity,
     });
 
     final client = http.Client();

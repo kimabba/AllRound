@@ -55,6 +55,9 @@ coverage.xml
 # Claude Code local settings
 .claude/
 
+# Superpowers brainstorming local artifacts
+.superpowers/
+
 # Supabase generated
 supabase/.branches/
 supabase/.temp/
