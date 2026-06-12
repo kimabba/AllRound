@@ -29,7 +29,7 @@ class MoreScreen extends ConsumerWidget {
         label: '맞춤 설정',
         subtitle: '활동 지역, 종목, 등급 수정',
         color: AppSportColors.futsal,
-        onTap: () => context.go('/onboarding'),
+        onTap: () => context.push('/onboarding'),
       ),
       _MenuItem(
         icon: Icons.calendar_month_rounded,

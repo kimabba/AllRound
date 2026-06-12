@@ -219,6 +219,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  void _handleBack() {
+    if (_step > 0) {
+      setState(() => _step--);
+      return;
+    }
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/more');
+  }
+
   @override
   void dispose() {
     _nickname.dispose();
@@ -245,7 +257,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             _OnboardingTopBar(
               step: _step,
-              onBack: _step == 0 ? null : () => setState(() => _step--),
+              onBack: _handleBack,
             ),
             Expanded(
               child: ListView(
