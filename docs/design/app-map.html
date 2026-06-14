@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match-up App Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; background: #fff; color: #111; padding: 32px; max-width: 880px; margin: 0 auto; font-size: 14px; line-height: 1.5; }
+
+  h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .meta { color: #999; font-size: 12px; margin: 4px 0 24px; }
+
+  .summary { display: flex; gap: 24px; margin-bottom: 28px; font-size: 13px; color: #666; }
+  .summary span { font-weight: 700; color: #111; }
+
+  .section { margin-bottom: 2px; }
+  .section-head {
+    padding: 9px 14px;
+    background: #f5f5f5;
+    border: 1px solid #e5e5e5;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+  }
+  .section-head:hover { background: #efefef; }
+  .section-head .cnt { font-weight: 400; color: #999; }
+  .section-body { border: 1px solid #e5e5e5; border-top: none; }
+  .section-body.hide { display: none; }
+
+  .screen { border-bottom: 1px solid #f0f0f0; }
+  .screen:last-child { border-bottom: none; }
+  .screen-head {
+    padding: 8px 14px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .screen-head:hover { background: #fafafa; }
+  .screen-name { font-weight: 700; font-size: 13px; }
+  .screen-path { font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 11px; color: #7c4dff; }
+  .screen-desc { color: #999; font-size: 12px; flex: 1; }
+  .screen-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .tag-new { background: #e8f5e9; color: #2e7d32; }
+  .tag-plan { background: #fff3e0; color: #e65100; }
+  .tag-ext { background: #f5f5f5; color: #bbb; }
+  .screen-arrow { color: #ccc; font-size: 10px; transition: transform 0.15s; }
+  .screen-arrow.on { transform: rotate(90deg); }
+
+  .detail { display: none; padding: 6px 14px 10px 14px; }
+  .detail.on { display: block; }
+  .detail-row { display: flex; gap: 8px; padding: 3px 0; font-size: 12px; }
+  .detail-label { color: #aaa; width: 64px; flex-shrink: 0; font-weight: 600; }
+  .detail-value { color: #555; }
+
+  .sub { margin-left: 20px; border-left: 2px solid #f0f0f0; }
+  .sub .screen-head { padding-left: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Match-up App Map</h1>
+<p class="meta">2026-06-14</p>
+
+<div class="summary">
+  <div>기존 <span>18</span></div>
+  <div>신규 <span>10</span></div>
+  <div>미설계 <span>4</span></div>
+</div>
+
+<div id="root"></div>
+
+<script>
+const D=[
+{s:"인증 / 온보딩",screens:[
+{n:"로그인",p:"/login",d:"Google / Kakao 소셜 로그인",tag:"ext",details:[
+{l:"인증",v:"Supabase Auth (Google OAuth)"},{l:"다음",v:"온보딩 미완료 시 → 온보딩, 완료 시 → 홈"}
+]},
+{n:"온보딩",p:"/onboarding",d:"종목, 등급, 활동 지역 선택",tag:"ext",details:[
+{l:"입력",v:"종목(테니스/풋살), 등급, 소속 협회, 활동 지역"},{l:"저장",v:"user_sports + user_tennis_orgs"},{l:"다음",v:"홈"}
+]}
+]},
+
+{s:"탭 1 — 대회",screens:[
+{n:"대회 목록",p:"/tournaments",d:"대회 검색, 필터, 즐겨찾기",tag:"ext",details:[
+{l:"필터",v:"종목, 지역, 등급, 기간"},{l:"데이터",v:"tournaments (공통)"},{l:"카드",v:"제목, 일자, 지역, 부서, 상태"}
+]},
+{n:"대회 상세",p:"/tournaments/:id",d:"기본 정보, 출전 등급, 참가 안내, 대회 요강",tag:"ext",details:[
+{l:"데이터",v:"tournaments + tennis/futsal_tournament_details (JOIN)"},{l:"섹션",v:"히어로 → 퀵 인포 → 출전 조건 → 아코디언 4개"},{l:"요강",v:"크롤 본문 파싱, 미게시 시 안내 문구"}
+]},
+{n:"대회 제보",p:"/tournaments/submit",d:"사용자가 대회 정보 제보",tag:"ext",details:[
+{l:"저장",v:"tournaments (status=draft)"},{l:"검수",v:"어드민 승인 후 published"}
+]}
+]},
+
+{s:"탭 2 — 클럽",screens:[
+{n:"내 클럽 / 클럽 찾기",p:"/clubs",d:"탭 2개: 소속 클럽 + 검색",tag:"ext",details:[
+{l:"필터",v:"종목, 지역, 성별, 모임요일, 월회비"},{l:"데이터",v:"clubs + club_members"}
+]},
+{n:"클럽 만들기",p:"/clubs/create",d:"클럽 생성 신청 (어드민 승인 대기)",tag:"ext",details:[
+{l:"입력",v:"종목, 이름, 지역, 로고, 연락처, 모임요일, 월회비"},{l:"저장",v:"clubs (status=pending) + club_members (role=owner)"}
+]},
+{n:"클럽 상세",p:"/clubs/:id",d:"소개 / 멤버 / 일정 / 게시판",tag:"ext",details:[
+{l:"탭",v:"소개, 멤버, 일정, 게시판"},{l:"권한",v:"비멤버는 소개만, 멤버는 전체"}
+],children:[
+{n:"멤버 목록",p:"",d:"역할 표시, 강퇴 (owner)",tag:"ext",details:[
+{l:"데이터",v:"club_members JOIN users"},{l:"강퇴",v:"clubs-join action=kick (owner만)"}
+]},
+{n:"일정",p:"",d:"운영자만 등록, 참석/불참 응답",tag:"ext",details:[
+{l:"등록",v:"owner 또는 can_create_event manager"},{l:"데이터",v:"club_events + club_event_attendees"},{l:"ICS",v:"캘린더 추가 (ICS 다운로드)"}
+]},
+{n:"게시판",p:"",d:"태그 필터, 시간순, 댓글+멘션",tag:"new",details:[
+{l:"태그",v:"notice (운영자만) / free / recruit / photo"},{l:"데이터",v:"club_posts + club_post_comments + club_post_mentions"},{l:"이미지",v:"Storage club-posts, 1280px 압축, max 5장"},{l:"알림",v:"공지 → 전체, 멘션 → 대상, 댓글 → 글 작성자"}
+]}
+]}
+]},
+
+{s:"탭 3 — 코치봇",screens:[
+{n:"AI 채팅",p:"/",d:"4단 라우팅: intent → slot → cache → RAG+LLM",tag:"ext",details:[
+{l:"모델",v:"gemini-2.0-flash (채팅), gemini-embedding-2 (임베딩)"},{l:"카드",v:"대회 검색 결과를 카드 UI로 렌더링"},{l:"데이터",v:"chat_messages, intent_examples, qa_cache, rule_articles"}
+]}
+]},
+
+{s:"탭 4 — 더보기",screens:[
+{n:"MY (프로필)",p:"/profile",d:"프로필, 내 클럽, 대회 기록, 종목/등급",tag:"ext",details:[
+{l:"데이터",v:"users + user_sports + user_tennis_orgs"},{l:"섹션",v:"히어로 → 내 클럽 → 대회 기록 → 종목 → 협회 → 설정"}
+],children:[
+{n:"경기 이력",p:"/profile/matches",d:"대회 타임라인, 성장 그래프, 승률",tag:"new",details:[
+{l:"데이터",v:"match_entries + match_rounds"},{l:"그래프",v:"포인트 누적 변화"},{l:"통계",v:"총 대회 수, 승률, 최고 성적"}
+]},
+{n:"상대 전적",p:"/profile/opponents",d:"상대별 전적 조회",tag:"new",details:[
+{l:"데이터",v:"match_rounds WHERE opponent_id"},{l:"표시",v:"N전 N승 N패, 최근 대결"}
+]},
+{n:"랭킹 / 포인트",p:"/profile/ranking",d:"협회별 포인트, 등급 현황",tag:"new",details:[
+{l:"데이터",v:"user_tennis_orgs (score, ranking_points)"}
+]},
+{n:"시즌 결산",p:"/profile/year-review",d:"Year in Review 스토리",tag:"plan",details:[
+{l:"기능",v:"연도별 대회 참가, 성장, 통계를 챕터 형식으로"},{l:"참고",v:"Strava Year in Sport"}
+]}
+]},
+{n:"맞춤 설정",p:"/onboarding",d:"종목, 등급, 활동 지역 수정",tag:"ext",details:[]},
+{n:"관심",p:"/favorites",d:"관심 대회 + 관심 클럽",tag:"ext",details:[
+{l:"데이터",v:"tournament_favorites + club_favorites"}
+]},
+{n:"캘린더",p:"/calendar",d:"내 일정 + 파트너 공유 + 수동 공유",tag:"new",details:[
+{l:"내 일정",v:"match_entries + club_events (참석)"},{l:"파트너",v:"match_entries.partner_id로 자동"},{l:"수동",v:"schedule_shares (이벤트 단위)"}
+]},
+{n:"룰북",p:"/rules",d:"테니스/풋살 규칙 검색",tag:"ext",details:[
+{l:"데이터",v:"rule_articles"},{l:"기능",v:"태그 필터, 검색, 퀴즈"}
+]},
+{n:"스피드건",p:"/speed-gun",d:"공 속도 측정 (모바일 전용)",tag:"ext",details:[]},
+{n:"이용약관 / 개인정보",p:"외부 링크",d:"법적 문서",tag:"ext",details:[]},
+{n:"알림 센터",p:"/notifications",d:"전체 알림 목록, 읽음 처리",tag:"new",details:[
+{l:"데이터",v:"notifications WHERE user_id"},{l:"뱃지",v:"is_read=false 카운트"},{l:"딥링크",v:"reference_type + reference_id로 해당 화면 이동"}
+]}
+]},
+
+{s:"어드민 (웹 전용)",screens:[
+{n:"검수 큐",p:"/admin/drafts",d:"대회 승인/거절",tag:"ext",details:[]},
+{n:"크롤 소스",p:"/admin/sources",d:"크롤러 소스 CRUD + 수동 실행",tag:"ext",details:[]},
+{n:"클럽 승인",p:"/admin/clubs",d:"클럽 생성 승인/거절",tag:"ext",details:[]},
+{n:"지식베이스",p:"/admin/kb",d:"rule_articles 관리",tag:"ext",details:[]},
+{n:"대회 편집",p:"/admin/tournaments",d:"대회 수기 편집",tag:"ext",details:[]}
+]}
+];
+
+const tagMap={new:['신규','tag-new'],plan:['미설계','tag-plan'],ext:['','tag-ext']};
+let uid=0;
+
+function renderScreen(sc,depth){
+const id=uid++;
+const tg=tagMap[sc.tag];
+const hasDetail=sc.details&&sc.details.length>0;
+const hasSub=sc.children&&sc.children.length>0;
+return `
+<div class="screen">
+<div class="screen-head" ${hasDetail||hasSub?`onclick="var c=document.getElementById('d${id}'),a=document.getElementById('a${id}');c.classList.toggle('on');a.classList.toggle('on')"`:''}>
+<span class="screen-name">${sc.n}</span>
+${sc.p?`<span class="screen-path">${sc.p}</span>`:''}
+${tg[0]?`<span class="screen-tag ${tg[1]}">${tg[0]}</span>`:''}
+<span class="screen-desc">${sc.d}</span>
+${hasDetail||hasSub?`<span class="screen-arrow" id="a${id}">&#9654;</span>`:''}
+</div>
+${hasDetail||hasSub?`<div class="detail" id="d${id}">
+${sc.details.map(d=>`<div class="detail-row"><span class="detail-label">${d.l}</span><span class="detail-value">${d.v}</span></div>`).join('')}
+${hasSub?`<div class="sub">${sc.children.map(c=>renderScreen(c,depth+1)).join('')}</div>`:''}
+</div>`:''}
+</div>`;
+}
+
+function R(){
+document.getElementById('root').innerHTML=D.map((s,i)=>{
+const cnt=s.screens.reduce((a,sc)=>a+1+(sc.children?sc.children.length:0),0);
+return `
+<div class="section">
+<div class="section-head" onclick="document.getElementById('sb${i}').classList.toggle('hide')">
+<span>${s.s}</span><span class="cnt">${cnt}</span>
+</div>
+<div class="section-body" id="sb${i}">
+${s.screens.map(sc=>renderScreen(sc,0)).join('')}
+</div>
+</div>`;
+}).join('');
+}
+R();
+</script>
+</body>
+</html>
