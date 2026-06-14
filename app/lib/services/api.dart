@@ -10,6 +10,7 @@ import '../models/admin.dart';
 import '../models/club_event.dart';
 import '../models/club_post.dart';
 import '../models/crawl_source.dart';
+import '../models/app_notification.dart';
 import '../models/tournament.dart';
 
 /// Edge Functions REST + SSE 클라이언트.
@@ -928,6 +929,39 @@ class ApiService {
       fileOptions: FileOptions(contentType: contentType, upsert: true),
     );
     return _supabase.storage.from('club-posts').getPublicUrl(path);
+  }
+
+  // ── 알림 ──────────────────────────────────────────────────
+
+  Future<List<AppNotification>> myNotifications({int limit = 50}) async {
+    final rows = await _supabase
+        .from('notifications')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows.map((r) => AppNotification.fromJson(r)).toList();
+  }
+
+  Future<int> unreadNotificationCount() async {
+    final res = await _supabase
+        .from('notifications')
+        .select('id')
+        .eq('is_read', false);
+    return (res as List).length;
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('id', id);
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('is_read', false);
   }
 
   // ===== helpers =====

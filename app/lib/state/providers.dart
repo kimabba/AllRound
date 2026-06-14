@@ -133,3 +133,8 @@ final adminRulesProvider =
     FutureProvider.autoDispose.family<List<RuleArticle>, String?>((ref, sport) {
   return ref.watch(apiProvider).adminListRules(sport: sport);
 });
+
+final unreadNotificationCountProvider = FutureProvider<int>((ref) async {
+  final api = ref.watch(apiProvider);
+  return api.unreadNotificationCount();
+});
