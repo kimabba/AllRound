@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
     return errorResponse(`Invalid entry_fee_unit: ${body.entry_fee_unit}`);
   }
 
+  // 1. tournaments 공통 테이블 INSERT
   const { data, error } = await supabase
     .from('tournaments')
     .insert({
@@ -134,10 +135,7 @@ Deno.serve(async (req) => {
       source_url: body.source_url ?? null,
       region_code: body.region_code ?? null,
       host_associations: body.host_associations ?? [],
-      host_orgs: body.host_orgs ?? [],
       division_label_local: body.division_label_local ?? null,
-      division_kta_standard: body.division_kta_standard ?? null,
-      is_joint_event: body.is_joint_event ?? false,
       source: 'user_submission',
       status: 'draft',
       submitted_by: user.id,
@@ -146,5 +144,26 @@ Deno.serve(async (req) => {
     .single();
 
   if (error) return errorResponse(error.message, 500);
+
+  // 2. 종목별 확장 테이블 INSERT
+  const tournamentId = data.id;
+
+  if (body.sport === 'tennis') {
+    const { error: detailErr } = await supabase
+      .from('tennis_tournament_details')
+      .insert({
+        tournament_id: tournamentId,
+        host_orgs: body.host_orgs ?? [],
+        division_kta_standard: body.division_kta_standard ?? null,
+        is_joint_event: body.is_joint_event ?? false,
+      });
+    if (detailErr) return errorResponse(detailErr.message, 500);
+  } else if (body.sport === 'futsal') {
+    const { error: detailErr } = await supabase
+      .from('futsal_tournament_details')
+      .insert({ tournament_id: tournamentId });
+    if (detailErr) return errorResponse(detailErr.message, 500);
+  }
+
   return jsonResponse({ tournament: data }, { status: 201 });
 });
