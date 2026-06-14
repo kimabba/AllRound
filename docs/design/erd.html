@@ -6,506 +6,228 @@
 <title>Match-up DB ERD</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; padding: 24px; max-width: 960px; margin: 0 auto; }
-  h1 { font-size: 1.6rem; margin-bottom: 4px; }
-  .subtitle { color: #64748b; font-size: 0.85rem; margin-bottom: 24px; }
-  .stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-  .stat { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 18px; flex: 1; min-width: 120px; }
-  .stat-value { font-size: 1.4rem; font-weight: 900; color: #3b82f6; }
-  .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 2px; }
-  .legend { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #64748b; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 4px; }
-  .dot-existing { background: #e2e8f0; }
-  .dot-modified { background: #fbbf24; }
-  .dot-new { background: #34d399; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; background: #fff; color: #111; padding: 32px; max-width: 880px; margin: 0 auto; font-size: 14px; line-height: 1.5; }
 
-  .layer { margin-bottom: 16px; }
-  .layer-header { background: #1e293b; color: white; padding: 10px 16px; border-radius: 10px 10px 0 0; font-weight: 800; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
-  .layer-header:hover { background: #334155; }
-  .layer-body { border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; }
-  .layer-body.collapsed { display: none; }
+  h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .meta { color: #999; font-size: 12px; margin: 4px 0 24px; }
 
-  .table-row { border-bottom: 1px solid #f1f5f9; }
-  .table-row:last-child { border-bottom: none; }
-  .table-header { padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; background: white; user-select: none; }
-  .table-header:hover { background: #f8fafc; }
-  .table-icon { font-size: 1.1rem; }
-  .table-name { font-weight: 800; font-size: 0.9rem; flex: 1; }
-  .table-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
-  .badge-existing { background: #f1f5f9; color: #94a3b8; }
-  .badge-modified { background: #fef3c7; color: #92400e; }
-  .badge-new { background: #d1fae5; color: #065f46; }
-  .table-desc { font-size: 0.75rem; color: #94a3b8; }
-  .table-arrow { color: #cbd5e1; font-size: 0.8rem; transition: transform 0.2s; }
-  .table-arrow.open { transform: rotate(90deg); }
+  .summary { display: flex; gap: 24px; margin-bottom: 28px; font-size: 13px; color: #666; }
+  .summary span { font-weight: 700; color: #111; }
 
-  .columns { display: none; background: #fafbfc; padding: 0 16px 12px 16px; }
-  .columns.open { display: block; }
-  .col-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-  .col-table th { text-align: left; padding: 6px 8px; color: #94a3b8; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
-  .col-table td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-  .col-name { font-weight: 700; color: #1e293b; white-space: nowrap; }
-  .col-type { color: #6366f1; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; white-space: nowrap; }
-  .col-desc { color: #64748b; }
-  .col-new { background: #f0fdf4; }
-  .col-pk { color: #dc2626; font-weight: 800; }
-  .col-fk { color: #2563eb; }
+  .layer { margin-bottom: 2px; }
+  .layer-head {
+    padding: 9px 14px;
+    background: #f5f5f5;
+    border: 1px solid #e5e5e5;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+  }
+  .layer-head:hover { background: #efefef; }
+  .layer-head .cnt { font-weight: 400; color: #999; }
 
-  .relations { margin-top: 6px; padding: 8px 12px; background: #eff6ff; border-radius: 8px; font-size: 0.75rem; color: #3b82f6; }
-  .relations strong { color: #1e40af; }
+  .layer-body { border: 1px solid #e5e5e5; border-top: none; }
+  .layer-body.hide { display: none; }
+
+  .tbl { border-bottom: 1px solid #f0f0f0; }
+  .tbl:last-child { border-bottom: none; }
+
+  .tbl-head {
+    padding: 8px 14px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .tbl-head:hover { background: #fafafa; }
+  .tbl-name { font-weight: 700; font-size: 13px; }
+  .tbl-desc { color: #999; font-size: 12px; flex: 1; }
+  .tbl-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .tag-new { background: #e8f5e9; color: #2e7d32; }
+  .tag-mod { background: #fff8e1; color: #f57f17; }
+  .tag-ext { background: #f5f5f5; color: #bbb; }
+  .tbl-arrow { color: #ccc; font-size: 10px; transition: transform 0.15s; }
+  .tbl-arrow.on { transform: rotate(90deg); }
+
+  .cols { display: none; padding: 0 14px 10px 14px; }
+  .cols.on { display: block; }
+
+  table.ct { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.ct th {
+    text-align: left;
+    padding: 4px 6px;
+    font-weight: 600;
+    color: #aaa;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #eee;
+  }
+  table.ct td { padding: 4px 6px; border-bottom: 1px solid #f8f8f8; vertical-align: top; }
+  table.ct tr.new-row td { background: #fafff7; }
+
+  .cn { font-weight: 600; color: #222; }
+  .ct-type { font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 11px; color: #7c4dff; }
+  .ct-desc { color: #888; }
+  .pk { color: #d32f2f; }
+  .fk { color: #1565c0; }
+
+  .rels { margin-top: 4px; padding: 6px 8px; background: #f8f8f8; border-radius: 4px; font-size: 11px; color: #888; }
+  .rels div { padding: 1px 0; }
 </style>
 </head>
 <body>
 
-<h1>Match-up DB ERD</h1>
-<p class="subtitle">최종 업데이트: 2026-06-14 | 클릭하여 테이블 상세 확인</p>
+<h1>Match-up DB Schema</h1>
+<p class="meta">2026-06-14</p>
 
-<div class="stats">
-  <div class="stat"><div class="stat-value">29</div><div class="stat-label">전체 테이블</div></div>
-  <div class="stat"><div class="stat-value">20</div><div class="stat-label">기존 유지</div></div>
-  <div class="stat"><div class="stat-value">5</div><div class="stat-label">수정</div></div>
-  <div class="stat"><div class="stat-value">9</div><div class="stat-label">신규</div></div>
+<div class="summary">
+  <div>전체 <span>29</span></div>
+  <div>기존 <span>20</span></div>
+  <div>수정 <span>5</span></div>
+  <div>신규 <span>9</span></div>
 </div>
 
-<div class="legend">
-  <div class="legend-item"><div class="legend-dot dot-existing"></div>기존 유지</div>
-  <div class="legend-item"><div class="legend-dot dot-modified"></div>수정</div>
-  <div class="legend-item"><div class="legend-dot dot-new"></div>신규</div>
-</div>
-
-<div id="tree"></div>
+<div id="root"></div>
 
 <script>
-const data = [
-  {
-    layer: "Layer 0: 사용자",
-    tables: [
-      {
-        name: "users", icon: "👤", status: "modified",
-        desc: "사용자 프로필. auth.users와 1:1 연결",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "= auth.users.id", pk: true },
-          { name: "email", type: "text NOT NULL", desc: "이메일" },
-          { name: "name", type: "text NOT NULL", desc: "실명 (기존 display_name에서 변경)", isNew: true },
-          { name: "nickname", type: "text", desc: "닉네임 (동호회에서 부르는 이름)", isNew: true },
-          { name: "avatar_url", type: "text", desc: "프로필 사진 URL", isNew: true },
-          { name: "phone", type: "text", desc: "연락처", isNew: true },
-          { name: "birth_year", type: "int", desc: "출생 연도 (시니어부 자동 매칭)", isNew: true },
-          { name: "gender", type: "text", desc: "male / female", isNew: true },
-          { name: "bio", type: "text", desc: "자기소개", isNew: true },
-          { name: "primary_region", type: "text FK", desc: "주 활동 지역 → regions", fk: true, isNew: true },
-          { name: "interest_regions", type: "text[]", desc: "관심 지역 (최대 3개)", isNew: true },
-          { name: "role", type: "user_role", desc: "user / admin" },
-          { name: "created_at", type: "timestamptz", desc: "가입 시각" },
-          { name: "updated_at", type: "timestamptz", desc: "마지막 수정 시각" },
-        ],
-        relations: ["→ user_sports, user_tennis_orgs, club_members, match_entries, notifications, device_tokens"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 1: 종목 / 협회",
-    tables: [
-      {
-        name: "user_sports", icon: "🎾", status: "existing",
-        desc: "사용자 종목 등록 (테니스/풋살). 한 사용자가 N개 종목",
-        columns: [
-          { name: "user_id", type: "uuid FK", desc: "사용자", fk: true },
-          { name: "sport", type: "sport enum", desc: "tennis / futsal" },
-          { name: "grade", type: "text", desc: "경력 등급 (under1y, y1to3 등)" },
-          { name: "is_primary", type: "boolean", desc: "주 종목 여부" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["PK: (user_id, sport)"]
-      },
-      {
-        name: "user_tennis_orgs", icon: "🏛️", status: "modified",
-        desc: "테니스 협회별 부서 등록. PK 변경: (user_id, org) → (user_id, org, division)",
-        columns: [
-          { name: "user_id", type: "uuid FK", desc: "사용자", fk: true },
-          { name: "org", type: "tennis_org", desc: "소속 협회 (kta, gj, kato, kata...)" },
-          { name: "division", type: "text NOT NULL", desc: "출전 부서 (골드부, 오픈부...) — PK에 추가", pk: true, isNew: true },
-          { name: "score", type: "numeric(5,1)", desc: "등급 점수 통합 (협회마다 의미 다름)", isNew: true },
-          { name: "ranking_points", type: "int", desc: "누적 랭킹 포인트 (KATA 등)", isNew: true },
-          { name: "player_origin", type: "text", desc: "선수 출신 단계 (elementary/middle/high/university/professional/instructor)", isNew: true },
-          { name: "is_primary", type: "boolean", desc: "주 부서 여부" },
-          { name: "region_code", type: "text FK", desc: "활동 지역 → regions", fk: true },
-          { name: "created_at", type: "timestamptz", desc: "" },
-          { name: "updated_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["PK: (user_id, org, division)", "한 사용자가 같은 협회에서 여러 부서 출전 가능"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 2: 대회",
-    tables: [
-      {
-        name: "tournaments", icon: "🏆", status: "modified",
-        desc: "대회 공통 정보. 종목별 전용 컬럼은 확장 테이블로 분리",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "sport", type: "text NOT NULL", desc: "tennis / futsal" },
-          { name: "title", type: "text NOT NULL", desc: "대회명" },
-          { name: "organizer", type: "text", desc: "주최 단체" },
-          { name: "description", type: "text", desc: "대회 요강" },
-          { name: "start_date", type: "date NOT NULL", desc: "대회 시작일" },
-          { name: "end_date", type: "date", desc: "종료일" },
-          { name: "application_deadline", type: "date", desc: "신청 마감일" },
-          { name: "region", type: "text", desc: "지역명" },
-          { name: "region_code", type: "text FK", desc: "지역 코드", fk: true },
-          { name: "location", type: "text", desc: "장소" },
-          { name: "eligible_grades", type: "text[]", desc: "출전 가능 부서 코드" },
-          { name: "division_label_local", type: "text", desc: "부서명 한글" },
-          { name: "entry_fee", type: "int", desc: "참가비" },
-          { name: "entry_fee_unit", type: "text", desc: "per_team / per_person" },
-          { name: "prize", type: "text", desc: "시상" },
-          { name: "format", type: "text", desc: "진행 방식" },
-          { name: "status", type: "enum", desc: "draft / published / closed" },
-          { name: "embedding", type: "vector(768)", desc: "AI 검색용 벡터" },
-          { name: "source / source_url", type: "text", desc: "출처 / 원본 URL" },
-        ],
-        relations: ["→ tennis_tournament_details (1:1)", "→ futsal_tournament_details (1:1)", "종목별 전용 컬럼은 확장 테이블에 저장"]
-      },
-      {
-        name: "tennis_tournament_details", icon: "🎾", status: "new",
-        desc: "테니스 대회 전용 정보. tournaments와 1:1",
-        columns: [
-          { name: "tournament_id", type: "uuid PK FK", desc: "→ tournaments.id", pk: true, fk: true },
-          { name: "host_orgs", type: "tennis_org[]", desc: "주최 협회 코드" },
-          { name: "division_kta_standard", type: "text", desc: "KTA 표준 매핑" },
-          { name: "division_gender", type: "text", desc: "성별 구분" },
-          { name: "division_age_group", type: "text", desc: "연령대 구분" },
-          { name: "is_joint_event", type: "boolean", desc: "통합 대회 여부" },
-        ],
-        relations: ["← tournaments.id (1:1)"]
-      },
-      {
-        name: "futsal_tournament_details", icon: "⚽", status: "new",
-        desc: "풋살 대회 전용 정보. tournaments와 1:1",
-        columns: [
-          { name: "tournament_id", type: "uuid PK FK", desc: "→ tournaments.id", pk: true, fk: true },
-          { name: "host_futsal_orgs", type: "futsal_org[]", desc: "주최 풋살 단체" },
-          { name: "venue_type", type: "text", desc: "indoor / outdoor / mixed" },
-          { name: "surface_type", type: "text", desc: "바닥 재질" },
-          { name: "match_format", type: "text", desc: "경기 방식" },
-          { name: "player_count", type: "int", desc: "참가 인원" },
-          { name: "team_count_max", type: "int", desc: "최대 팀수" },
-          { name: "roster_min / roster_max", type: "int", desc: "팀당 인원" },
-        ],
-        relations: ["← tournaments.id (1:1)"]
-      },
-    ]
-  },
-  {
-    layer: "Layer 2: 클럽",
-    tables: [
-      {
-        name: "clubs", icon: "🏠", status: "modified",
-        desc: "동호회/클럽. 어드민 승인 후 활성화",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "sport", type: "text NOT NULL", desc: "tennis / futsal" },
-          { name: "name", type: "text NOT NULL", desc: "클럽명" },
-          { name: "region", type: "text", desc: "지역" },
-          { name: "address", type: "text", desc: "상세 주소" },
-          { name: "logo_url", type: "text", desc: "로고 이미지" },
-          { name: "contact", type: "text", desc: "연락처" },
-          { name: "website", type: "text", desc: "웹사이트" },
-          { name: "description", type: "text", desc: "클럽 소개" },
-          { name: "meeting_days", type: "text[]", desc: "정기 모임 요일 ['월','수','금']", isNew: true },
-          { name: "monthly_fee", type: "int", desc: "월회비 (원)", isNew: true },
-          { name: "gender_preference", type: "text", desc: "male / female / mixed", isNew: true },
-          { name: "status", type: "text", desc: "pending / approved / rejected" },
-          { name: "member_count", type: "int", desc: "멤버 수 (트리거 자동)" },
-          { name: "created_by", type: "uuid FK", desc: "생성자", fk: true },
-        ],
-        relations: ["→ club_members, club_events, club_posts"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 3: 클럽 멤버십",
-    tables: [
-      {
-        name: "club_members", icon: "👥", status: "modified",
-        desc: "클럽 멤버. 역할(owner/manager/member) + 권한 boolean",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "club_id", type: "uuid FK", desc: "클럽", fk: true },
-          { name: "user_id", type: "uuid FK", desc: "사용자", fk: true },
-          { name: "role", type: "text", desc: "owner / manager / member" },
-          { name: "status", type: "text", desc: "active / left / banned" },
-          { name: "can_kick", type: "boolean", desc: "멤버 강퇴 권한", isNew: true },
-          { name: "can_create_event", type: "boolean", desc: "일정 등록 권한", isNew: true },
-          { name: "can_post_notice", type: "boolean", desc: "공지 작성 권한", isNew: true },
-          { name: "joined_at", type: "timestamptz", desc: "가입일" },
-          { name: "left_at", type: "timestamptz", desc: "탈퇴일" },
-        ],
-        relations: ["UNIQUE(club_id, user_id)", "owner는 모든 권한 자동 (컬럼 무시)"]
-      },
-      {
-        name: "club_join_requests", icon: "📩", status: "existing",
-        desc: "클럽 가입 신청. pending → approved/rejected",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "club_id", type: "uuid FK", desc: "", fk: true },
-          { name: "user_id", type: "uuid FK", desc: "", fk: true },
-          { name: "message", type: "text", desc: "신청 메시지" },
-          { name: "status", type: "text", desc: "pending / approved / rejected" },
-          { name: "reviewed_by", type: "uuid FK", desc: "검토자", fk: true },
-        ],
-        relations: ["UNIQUE(club_id, user_id)"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 4: 클럽 일정 / 게시판",
-    tables: [
-      {
-        name: "club_events", icon: "📅", status: "modified",
-        desc: "클럽 일정. 운영자만 등록 가능 (casual 타입 제거)",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "club_id", type: "uuid FK", desc: "", fk: true },
-          { name: "created_by", type: "uuid FK", desc: "작성자 (운영자)", fk: true },
-          { name: "title", type: "text NOT NULL", desc: "일정 제목" },
-          { name: "description", type: "text", desc: "설명" },
-          { name: "location_text", type: "text", desc: "장소" },
-          { name: "starts_at", type: "timestamptz", desc: "시작 시각" },
-        ],
-        relations: ["→ club_event_attendees", "type 컬럼 제거 (모두 공식 일정)"]
-      },
-      {
-        name: "club_event_attendees", icon: "✋", status: "existing",
-        desc: "일정 참석 응답",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "event_id", type: "uuid FK", desc: "", fk: true },
-          { name: "user_id", type: "uuid FK", desc: "", fk: true },
-          { name: "status", type: "text", desc: "going / not_going" },
-        ],
-        relations: ["UNIQUE(event_id, user_id)"]
-      },
-      {
-        name: "club_posts", icon: "📝", status: "new",
-        desc: "클럽 게시판. 태그: notice(운영자만)/free/recruit/photo",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "club_id", type: "uuid FK", desc: "소속 클럽", fk: true },
-          { name: "author_id", type: "uuid FK", desc: "작성자", fk: true },
-          { name: "tag", type: "text NOT NULL", desc: "notice / free / recruit / photo" },
-          { name: "title", type: "text NOT NULL", desc: "글 제목" },
-          { name: "body", type: "text NOT NULL", desc: "글 내용" },
-          { name: "image_urls", type: "text[]", desc: "첨부 이미지 (최대 5장, 1280px 압축)" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-          { name: "updated_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["→ club_post_comments, club_post_mentions", "notice 태그: owner 또는 can_post_notice manager만", "Storage: club-posts 버킷 (10MB, jpeg/png/webp)"]
-      },
-      {
-        name: "club_post_comments", icon: "💬", status: "new",
-        desc: "게시글 댓글. 1단 (대댓글 없음, 멘션으로 대체)",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "post_id", type: "uuid FK", desc: "게시글", fk: true },
-          { name: "author_id", type: "uuid FK", desc: "작성자", fk: true },
-          { name: "body", type: "text NOT NULL", desc: "댓글 내용" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["→ club_post_mentions"]
-      },
-      {
-        name: "club_post_mentions", icon: "@", status: "new",
-        desc: "멘션 (@사용자). 글 또는 댓글에서 특정 사용자 태그",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "post_id", type: "uuid FK", desc: "게시글", fk: true },
-          { name: "comment_id", type: "uuid FK", desc: "댓글 (nullable)", fk: true },
-          { name: "mentioned_user_id", type: "uuid FK", desc: "멘션된 사용자 → 알림", fk: true },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["INSERT 시 → notifications에 club_mention 알림 생성"]
-      },
-    ]
-  },
-  {
-    layer: "Layer 5: 알림",
-    tables: [
-      {
-        name: "notifications", icon: "🔔", status: "new",
-        desc: "통합 알림 (기존 notifications_log 대체). 8종 type",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "user_id", type: "uuid FK", desc: "알림 받는 사람", fk: true },
-          { name: "type", type: "text NOT NULL", desc: "tournament_d3, tournament_deadline, club_notice, club_event, club_mention, club_comment, club_event_reminder, club_attendance_change" },
-          { name: "title", type: "text NOT NULL", desc: "알림 제목" },
-          { name: "body", type: "text", desc: "알림 내용" },
-          { name: "reference_type", type: "text", desc: "tournament / club_event / club_post / club_post_comment" },
-          { name: "reference_id", type: "uuid", desc: "대상 ID (딥링크용)" },
-          { name: "club_id", type: "uuid", desc: "클럽 알림일 때 클럽 ID" },
-          { name: "is_read", type: "boolean", desc: "읽음 여부 (DEFAULT false)" },
-          { name: "status", type: "text", desc: "pending / sent / failed" },
-          { name: "sent_at", type: "timestamptz", desc: "발송 시각" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["UNIQUE(user_id, type, reference_id) — 중복 방지", "RLS: 본인 알림만 읽기, service_role만 생성"]
-      },
-      {
-        name: "device_tokens", icon: "📱", status: "existing",
-        desc: "FCM 디바이스 토큰. 사용자당 최대 10개",
-        columns: [
-          { name: "user_id", type: "uuid FK", desc: "", fk: true },
-          { name: "token", type: "text", desc: "FCM 토큰" },
-          { name: "platform", type: "text", desc: "ios / android / web" },
-          { name: "enabled", type: "boolean", desc: "" },
-        ],
-        relations: ["PK: (user_id, token)", "cap_device_tokens 트리거 (최대 10개)"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 6: 경기 이력 / 랭킹",
-    tables: [
-      {
-        name: "match_entries", icon: "📊", status: "new",
-        desc: "대회 참가 기록. 어떤 대회 어떤 부서에서 어디까지 갔는가",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "user_id", type: "uuid FK", desc: "참가자", fk: true },
-          { name: "tournament_id", type: "uuid FK", desc: "대회", fk: true },
-          { name: "division", type: "text NOT NULL", desc: "참가 부서 (골드부 등)" },
-          { name: "partner_id", type: "uuid FK", desc: "복식 파트너 (테니스)", fk: true },
-          { name: "partner_name", type: "text", desc: "비회원 파트너 이름" },
-          { name: "team_name", type: "text", desc: "풋살 팀명" },
-          { name: "final_round", type: "text", desc: "최종 진출 (우승/준우승/4강/8강/16강/1회전)" },
-          { name: "points_earned", type: "int", desc: "획득 포인트" },
-          { name: "source", type: "text", desc: "manual / crawl / admin" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["→ match_rounds", "성장 그래프: points_earned 누적", "파트너 전적: partner_id로 집계"]
-      },
-      {
-        name: "match_rounds", icon: "⚔️", status: "new",
-        desc: "라운드별 상세. 매 경기 스코어와 상대 기록",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "entry_id", type: "uuid FK", desc: "→ match_entries", fk: true },
-          { name: "round", type: "text NOT NULL", desc: "1회전 / 16강 / 8강 / 4강 / 준결승 / 결승" },
-          { name: "opponent_1_id", type: "uuid FK", desc: "상대 1 (회원이면 연결)", fk: true },
-          { name: "opponent_1_name", type: "text", desc: "상대 1 이름 (비회원용)" },
-          { name: "opponent_2_id", type: "uuid FK", desc: "상대 2 — 복식", fk: true },
-          { name: "opponent_2_name", type: "text", desc: "상대 2 이름" },
-          { name: "score", type: "text", desc: "스코어 (6:3, 6:4)" },
-          { name: "result", type: "text NOT NULL", desc: "win / lose" },
-          { name: "played_at", type: "date", desc: "경기 날짜" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["상대 전적: opponent_id로 GROUP BY result", "승률: result 집계"]
-      }
-    ]
-  },
-  {
-    layer: "Layer 7: 일정 공유",
-    tables: [
-      {
-        name: "schedule_shares", icon: "📨", status: "new",
-        desc: "특정 이벤트를 특정 사람에게 공유. 파트너는 match_entries에서 자동",
-        columns: [
-          { name: "id", type: "uuid PK", desc: "", pk: true },
-          { name: "shared_by", type: "uuid FK", desc: "공유한 사람", fk: true },
-          { name: "shared_with", type: "uuid FK", desc: "공유받는 사람", fk: true },
-          { name: "event_type", type: "text NOT NULL", desc: "tournament / club_event" },
-          { name: "event_id", type: "uuid NOT NULL", desc: "대상 이벤트 ID" },
-          { name: "status", type: "text", desc: "pending / accepted / declined" },
-          { name: "created_at", type: "timestamptz", desc: "" },
-        ],
-        relations: ["대회 파트너 자동 공유: match_entries.partner_id에서 조회", "수동 공유: 이 테이블에 INSERT (이벤트 단위)"]
-      }
-    ]
-  },
-  {
-    layer: "기존 유지 (변경 없음)",
-    tables: [
-      { name: "regions", icon: "🗺️", status: "existing", desc: "지역 코드 매핑 (8개 권역)", columns: [
-        { name: "code", type: "text PK", desc: "gwangju, jeonnam, seoul_metro...", pk: true },
-        { name: "display_name_ko", type: "text", desc: "광주, 전남, 수도권..." },
-      ], relations: [] },
-      { name: "venues", icon: "🏟️", status: "existing", desc: "풋살 구장 정보 (269곳)", columns: [
-        { name: "id", type: "uuid PK", desc: "", pk: true },
-        { name: "name / region / address", type: "text", desc: "구장 정보" },
-        { name: "venue_type", type: "text", desc: "indoor / outdoor / mixed" },
-      ], relations: [] },
-      { name: "chat_messages", icon: "💭", status: "existing", desc: "AI 챗봇 대화 이력", columns: [
-        { name: "user_id / conversation_id / role / content", type: "...", desc: "" },
-      ], relations: [] },
-      { name: "rule_articles", icon: "📖", status: "existing", desc: "룰북 콘텐츠 (테니스+풋살)", columns: [
-        { name: "sport / category / title / body / embedding", type: "...", desc: "" },
-      ], relations: [] },
-      { name: "crawl_sources + crawl_audit", icon: "🕷️", status: "existing", desc: "크롤러 소스 관리 + 감사 로그", columns: [
-        { name: "slug / url / parser_module / enabled", type: "...", desc: "" },
-      ], relations: [] },
-      { name: "tournament_favorites", icon: "⭐", status: "existing", desc: "대회 즐겨찾기", columns: [
-        { name: "user_id + tournament_id", type: "uuid FK", desc: "PK", fk: true },
-      ], relations: [] },
-      { name: "club_favorites", icon: "⭐", status: "existing", desc: "클럽 즐겨찾기", columns: [
-        { name: "user_id + club_id", type: "uuid FK", desc: "PK", fk: true },
-      ], relations: [] },
-    ]
-  }
+const D=[
+{l:"Layer 0 — 사용자",t:[
+{n:"users",s:"mod",d:"사용자 프로필",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"email",t:"text",d:""},{n:"name",t:"text",d:"실명",w:1},{n:"nickname",t:"text",d:"닉네임",w:1},{n:"avatar_url",t:"text",d:"프로필 사진",w:1},{n:"phone",t:"text",d:"연락처",w:1},{n:"birth_year",t:"int",d:"출생 연도",w:1},{n:"gender",t:"text",d:"male / female",w:1},{n:"bio",t:"text",d:"자기소개",w:1},{n:"primary_region",t:"text FK",d:"주 활동 지역",f:1,w:1},{n:"interest_regions",t:"text[]",d:"관심 지역 (max 3)",w:1},{n:"role",t:"user_role",d:"user / admin"},{n:"created_at",t:"timestamptz",d:""},{n:"updated_at",t:"timestamptz",d:""}
+],r:[]}
+]},
+
+{l:"Layer 1 — 종목 / 협회",t:[
+{n:"user_sports",s:"ext",d:"종목 등록 (테니스/풋살)",c:[
+{n:"user_id",t:"uuid FK",d:"",f:1},{n:"sport",t:"enum",d:"tennis / futsal"},{n:"grade",t:"text",d:"경력 등급"},{n:"is_primary",t:"boolean",d:"주 종목"}
+],r:["PK: (user_id, sport)"]},
+{n:"user_tennis_orgs",s:"mod",d:"테니스 협회별 부서 등록",c:[
+{n:"user_id",t:"uuid FK",d:"",f:1},{n:"org",t:"tennis_org",d:"협회 (kta, gj, kato...)"},{n:"division",t:"text",d:"부서 (골드부, 오픈부...)",p:1,w:1},{n:"score",t:"numeric(5,1)",d:"등급 점수",w:1},{n:"ranking_points",t:"int",d:"누적 포인트",w:1},{n:"player_origin",t:"text",d:"선수 출신 단계",w:1},{n:"is_primary",t:"boolean",d:"주 부서"},{n:"region_code",t:"text FK",d:"활동 지역",f:1}
+],r:["PK: (user_id, org, division)","한 협회에서 여러 부서 출전 가능"]}
+]},
+
+{l:"Layer 2 — 대회",t:[
+{n:"tournaments",s:"mod",d:"대회 공통 정보",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"sport",t:"text",d:"tennis / futsal"},{n:"title",t:"text",d:"대회명"},{n:"organizer",t:"text",d:"주최"},{n:"description",t:"text",d:"대회 요강"},{n:"start_date",t:"date",d:"시작일"},{n:"end_date",t:"date",d:"종료일"},{n:"application_deadline",t:"date",d:"신청 마감"},{n:"region_code",t:"text FK",d:"지역",f:1},{n:"eligible_grades",t:"text[]",d:"출전 가능 부서"},{n:"entry_fee",t:"int",d:"참가비"},{n:"status",t:"enum",d:"draft / published / closed"},{n:"embedding",t:"vector(768)",d:"AI 검색"}
+],r:["종목 전용 컬럼은 확장 테이블에 분리"]},
+{n:"tennis_tournament_details",s:"new",d:"테니스 전용 (1:1)",c:[
+{n:"tournament_id",t:"uuid PK FK",d:"",p:1,f:1},{n:"host_orgs",t:"tennis_org[]",d:"주최 협회"},{n:"division_kta_standard",t:"text",d:"KTA 표준"},{n:"division_gender",t:"text",d:"성별"},{n:"division_age_group",t:"text",d:"연령대"},{n:"is_joint_event",t:"boolean",d:"통합 대회"}
+],r:[]},
+{n:"futsal_tournament_details",s:"new",d:"풋살 전용 (1:1)",c:[
+{n:"tournament_id",t:"uuid PK FK",d:"",p:1,f:1},{n:"venue_type",t:"text",d:"indoor / outdoor"},{n:"surface_type",t:"text",d:"바닥 재질"},{n:"match_format",t:"text",d:"경기 방식"},{n:"player_count",t:"int",d:"참가 인원"},{n:"roster_min",t:"int",d:"팀 최소 인원"},{n:"roster_max",t:"int",d:"팀 최대 인원"}
+],r:[]}
+]},
+
+{l:"Layer 2 — 클럽",t:[
+{n:"clubs",s:"mod",d:"동호회",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"sport",t:"text",d:"tennis / futsal"},{n:"name",t:"text",d:"클럽명"},{n:"region",t:"text",d:"지역"},{n:"logo_url",t:"text",d:"로고"},{n:"meeting_days",t:"text[]",d:"모임 요일",w:1},{n:"monthly_fee",t:"int",d:"월회비",w:1},{n:"gender_preference",t:"text",d:"male / female / mixed",w:1},{n:"status",t:"text",d:"pending / approved / rejected"},{n:"member_count",t:"int",d:"멤버 수 (자동)"}
+],r:[]}
+]},
+
+{l:"Layer 3 — 클럽 멤버십",t:[
+{n:"club_members",s:"mod",d:"멤버 + 권한",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"club_id",t:"uuid FK",d:"",f:1},{n:"user_id",t:"uuid FK",d:"",f:1},{n:"role",t:"text",d:"owner / manager / member"},{n:"status",t:"text",d:"active / left / banned"},{n:"can_kick",t:"boolean",d:"강퇴 권한",w:1},{n:"can_create_event",t:"boolean",d:"일정 등록 권한",w:1},{n:"can_post_notice",t:"boolean",d:"공지 작성 권한",w:1}
+],r:["UNIQUE(club_id, user_id)","owner는 모든 권한 자동"]},
+{n:"club_join_requests",s:"ext",d:"가입 신청",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"club_id",t:"uuid FK",d:"",f:1},{n:"user_id",t:"uuid FK",d:"",f:1},{n:"status",t:"text",d:"pending / approved / rejected"}
+],r:[]}
+]},
+
+{l:"Layer 4 — 일정 / 게시판",t:[
+{n:"club_events",s:"mod",d:"클럽 일정 (운영자만 등록)",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"club_id",t:"uuid FK",d:"",f:1},{n:"created_by",t:"uuid FK",d:"작성자",f:1},{n:"title",t:"text",d:"제목"},{n:"description",t:"text",d:"설명"},{n:"location_text",t:"text",d:"장소"},{n:"starts_at",t:"timestamptz",d:"시작 시각"}
+],r:["type 컬럼 제거 (모두 공식)"]},
+{n:"club_event_attendees",s:"ext",d:"참석 응답",c:[
+{n:"event_id",t:"uuid FK",d:"",f:1},{n:"user_id",t:"uuid FK",d:"",f:1},{n:"status",t:"text",d:"going / not_going"}
+],r:["UNIQUE(event_id, user_id)"]},
+{n:"club_posts",s:"new",d:"게시판",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"club_id",t:"uuid FK",d:"",f:1},{n:"author_id",t:"uuid FK",d:"",f:1},{n:"tag",t:"text",d:"notice / free / recruit / photo"},{n:"title",t:"text",d:"제목"},{n:"body",t:"text",d:"내용"},{n:"image_urls",t:"text[]",d:"이미지 (max 5, 1280px)"}
+],r:["notice: owner 또는 can_post_notice만","Storage: club-posts 버킷"]},
+{n:"club_post_comments",s:"new",d:"댓글 (1단)",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"post_id",t:"uuid FK",d:"",f:1},{n:"author_id",t:"uuid FK",d:"",f:1},{n:"body",t:"text",d:"내용"}
+],r:[]},
+{n:"club_post_mentions",s:"new",d:"멘션 (@사용자)",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"post_id",t:"uuid FK",d:"",f:1},{n:"comment_id",t:"uuid FK",d:"댓글에서 멘션 (nullable)",f:1},{n:"mentioned_user_id",t:"uuid FK",d:"알림 대상",f:1}
+],r:["INSERT 시 알림 생성"]}
+]},
+
+{l:"Layer 5 — 알림",t:[
+{n:"notifications",s:"new",d:"통합 알림 (8종)",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"user_id",t:"uuid FK",d:"받는 사람",f:1},{n:"type",t:"text",d:"tournament_d3 / club_notice / club_mention..."},{n:"title",t:"text",d:"알림 제목"},{n:"body",t:"text",d:"알림 내용"},{n:"reference_type",t:"text",d:"tournament / club_event / club_post"},{n:"reference_id",t:"uuid",d:"대상 ID"},{n:"club_id",t:"uuid",d:"클럽 ID"},{n:"is_read",t:"boolean",d:"읽음 여부"},{n:"status",t:"text",d:"pending / sent / failed"}
+],r:["UNIQUE(user_id, type, reference_id)","본인만 읽기, service_role만 생성"]},
+{n:"device_tokens",s:"ext",d:"FCM 토큰",c:[
+{n:"user_id",t:"uuid FK",d:"",f:1},{n:"token",t:"text",d:"FCM 토큰"},{n:"platform",t:"text",d:"ios / android / web"}
+],r:["PK: (user_id, token)","최대 10개"]}
+]},
+
+{l:"Layer 6 — 경기 이력",t:[
+{n:"match_entries",s:"new",d:"대회 참가 기록",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"user_id",t:"uuid FK",d:"참가자",f:1},{n:"tournament_id",t:"uuid FK",d:"대회",f:1},{n:"division",t:"text",d:"참가 부서"},{n:"partner_id",t:"uuid FK",d:"복식 파트너",f:1},{n:"partner_name",t:"text",d:"비회원 파트너"},{n:"team_name",t:"text",d:"풋살 팀명"},{n:"final_round",t:"text",d:"최종 진출 단계"},{n:"points_earned",t:"int",d:"획득 포인트"},{n:"source",t:"text",d:"manual / crawl / admin"}
+],r:["성장 그래프: points_earned 누적","파트너 전적: partner_id 집계"]},
+{n:"match_rounds",s:"new",d:"라운드별 상세 (스코어, 상대)",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"entry_id",t:"uuid FK",d:"match_entries",f:1},{n:"round",t:"text",d:"1회전 / 8강 / 결승..."},{n:"opponent_1_id",t:"uuid FK",d:"상대 1",f:1},{n:"opponent_1_name",t:"text",d:"비회원 상대"},{n:"opponent_2_id",t:"uuid FK",d:"상대 2 (복식)",f:1},{n:"opponent_2_name",t:"text",d:""},{n:"score",t:"text",d:"6:3, 6:4"},{n:"result",t:"text",d:"win / lose"},{n:"played_at",t:"date",d:"경기 날짜"}
+],r:["상대 전적: opponent_id GROUP BY","승률: result 집계"]}
+]},
+
+{l:"Layer 7 — 일정 공유",t:[
+{n:"schedule_shares",s:"new",d:"이벤트 단위 일정 공유",c:[
+{n:"id",t:"uuid PK",d:"",p:1},{n:"shared_by",t:"uuid FK",d:"공유한 사람",f:1},{n:"shared_with",t:"uuid FK",d:"공유받는 사람",f:1},{n:"event_type",t:"text",d:"tournament / club_event"},{n:"event_id",t:"uuid",d:"대상 이벤트"},{n:"status",t:"text",d:"pending / accepted / declined"}
+],r:["파트너 자동: match_entries.partner_id","수동: 이벤트 단위 공유"]}
+]},
+
+{l:"기존 유지",t:[
+{n:"regions",s:"ext",d:"지역 코드 (8개 권역)",c:[{n:"code",t:"text PK",d:"gwangju, seoul_metro...",p:1},{n:"display_name_ko",t:"text",d:""}],r:[]},
+{n:"venues",s:"ext",d:"풋살 구장 (269곳)",c:[{n:"id / name / region / venue_type",t:"...",d:""}],r:[]},
+{n:"chat_messages",s:"ext",d:"AI 챗봇 대화",c:[{n:"user_id / conversation_id / role / content",t:"...",d:""}],r:[]},
+{n:"rule_articles",s:"ext",d:"룰북 콘텐츠",c:[{n:"sport / category / title / body / embedding",t:"...",d:""}],r:[]},
+{n:"crawl_sources + crawl_audit",s:"ext",d:"크롤러",c:[{n:"slug / url / parser_module",t:"...",d:""}],r:[]},
+{n:"tournament_favorites",s:"ext",d:"대회 즐겨찾기",c:[{n:"user_id + tournament_id",t:"uuid FK",d:"",f:1}],r:[]},
+{n:"club_favorites",s:"ext",d:"클럽 즐겨찾기",c:[{n:"user_id + club_id",t:"uuid FK",d:"",f:1}],r:[]}
+]}
 ];
 
-function render() {
-  const tree = document.getElementById('tree');
-  tree.innerHTML = data.map((layer, li) => `
-    <div class="layer">
-      <div class="layer-header" onclick="toggleLayer(${li})">
-        <span>${layer.layer}</span>
-        <span>${layer.tables.length}개 테이블</span>
-      </div>
-      <div class="layer-body" id="layer-${li}">
-        ${layer.tables.map((t, ti) => `
-          <div class="table-row">
-            <div class="table-header" onclick="toggleTable(${li},${ti})">
-              <span class="table-icon">${t.icon}</span>
-              <span class="table-name">${t.name}</span>
-              <span class="table-badge badge-${t.status}">${t.status === 'new' ? '신규' : t.status === 'modified' ? '수정' : '기존'}</span>
-              <span class="table-desc">${t.desc}</span>
-              <span class="table-arrow" id="arrow-${li}-${ti}">▶</span>
-            </div>
-            <div class="columns" id="cols-${li}-${ti}">
-              <table class="col-table">
-                <tr><th>컬럼</th><th>타입</th><th>설명</th></tr>
-                ${t.columns.map(c => `
-                  <tr class="${c.isNew ? 'col-new' : ''}">
-                    <td class="col-name ${c.pk ? 'col-pk' : ''} ${c.fk ? 'col-fk' : ''}">${c.name}${c.pk ? ' 🔑' : ''}${c.fk ? ' →' : ''}</td>
-                    <td class="col-type">${c.type}</td>
-                    <td class="col-desc">${c.desc}</td>
-                  </tr>
-                `).join('')}
-              </table>
-              ${t.relations.length ? `<div class="relations">${t.relations.map(r => `<div>${r}</div>`).join('')}</div>` : ''}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
-}
+const tags={new:['신규','tag-new'],mod:['수정','tag-mod'],ext:['','tag-ext']};
 
-function toggleLayer(li) {
-  document.getElementById('layer-' + li).classList.toggle('collapsed');
+function R(){
+document.getElementById('root').innerHTML=D.map((l,i)=>`
+<div class="layer">
+<div class="layer-head" onclick="document.getElementById('lb${i}').classList.toggle('hide')">
+<span>${l.l}</span><span class="cnt">${l.t.length}</span>
+</div>
+<div class="layer-body" id="lb${i}">
+${l.t.map((t,j)=>{
+const tg=tags[t.s];
+return `<div class="tbl">
+<div class="tbl-head" onclick="var c=document.getElementById('c${i}_${j}'),a=document.getElementById('a${i}_${j}');c.classList.toggle('on');a.classList.toggle('on')">
+<span class="tbl-name">${t.n}</span>
+${tg[0]?`<span class="tbl-tag ${tg[1]}">${tg[0]}</span>`:''}
+<span class="tbl-desc">${t.d}</span>
+<span class="tbl-arrow" id="a${i}_${j}">&#9654;</span>
+</div>
+<div class="cols" id="c${i}_${j}">
+<table class="ct"><tr><th>컬럼</th><th>타입</th><th>설명</th></tr>
+${t.c.map(c=>`<tr${c.w?' class="new-row"':''}>
+<td class="cn ${c.p?'pk':''} ${c.f?'fk':''}">${c.n}</td>
+<td class="ct-type">${c.t}</td>
+<td class="ct-desc">${c.d}</td>
+</tr>`).join('')}
+</table>
+${t.r.length?`<div class="rels">${t.r.map(r=>`<div>${r}</div>`).join('')}</div>`:''}
+</div></div>`;}).join('')}
+</div></div>`).join('');
 }
-
-function toggleTable(li, ti) {
-  const cols = document.getElementById('cols-' + li + '-' + ti);
-  const arrow = document.getElementById('arrow-' + li + '-' + ti);
-  cols.classList.toggle('open');
-  arrow.classList.toggle('open');
-}
-
-render();
+R();
 </script>
 </body>
 </html>
