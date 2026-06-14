@@ -8,7 +8,7 @@ import { serviceClient } from '../_shared/supabase.ts';
  * 즐겨찾기한 대회의:
  *   - D-3 (start_date - 3일 == 오늘)
  *   - 신청 마감일 == 오늘
- * 알림을 발송한다. notifications_log 의 unique idx (user, tournament, type) 로 중복 방지.
+ * 알림을 발송한다. notifications 의 unique idx (user, reference, type) 로 중복 방지.
  *
  * FCM 발송은 FCM_SERVER_KEY 가 설정된 경우에만 수행.
  * (개발 단계에서는 환경변수 없이도 로직 검증 가능 — 실패는 status='failed' 로 기록)
@@ -104,14 +104,15 @@ Deno.serve(async (req) => {
   let sent = 0, dedupSkipped = 0, failed = 0;
 
   for (const task of tasks) {
-    // dedup: 이미 같은 (user, tournament, type) 발송 기록이 있으면 skip
+    // dedup: 이미 같은 (user, reference, type) 발송 기록이 있으면 skip
+    const notifType = task.type === 'd_minus_3' ? 'tournament_d3' : 'tournament_deadline';
     const { data: existing } = await supabase
-      .from('notifications_log')
+      .from('notifications')
       .select('id')
       .eq('user_id', task.user_id)
-      .eq('tournament_id', task.tournament_id)
-      .eq('type', task.type)
-      .eq('status', 'sent')
+      .eq('reference_type', 'tournament')
+      .eq('reference_id', task.tournament_id)
+      .eq('type', notifType)
       .maybeSingle();
 
     if (existing) {
@@ -140,10 +141,14 @@ Deno.serve(async (req) => {
       errText = (e as Error).message;
     }
 
-    await supabase.from('notifications_log').insert({
+    const notifTitle = task.type === 'd_minus_3' ? '대회 3일 전 알림' : '신청 마감 알림';
+    await supabase.from('notifications').insert({
       user_id: task.user_id,
-      tournament_id: task.tournament_id,
-      type: task.type,
+      type: notifType,
+      title: notifTitle,
+      body: message,
+      reference_type: 'tournament',
+      reference_id: task.tournament_id,
       status: ok ? 'sent' : 'failed',
       error: errText,
       sent_at: ok ? new Date().toISOString() : null,
