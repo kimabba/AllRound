@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/club_event.dart';
+import '../../models/club_post.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
@@ -30,7 +31,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     if (club.isMember) _reload();
   }
 
@@ -115,6 +116,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
             Tab(text: '소개'),
             Tab(text: '멤버'),
             Tab(text: '일정'),
+            Tab(text: '게시판'),
           ],
         ),
       ),
@@ -147,6 +149,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                         future: _eventsF!,
                         onChanged: _reload,
                       )
+                    : _memberOnlyNotice(cs, tt),
+                isMember
+                    ? _PostsTab(club: club)
                     : _memberOnlyNotice(cs, tt),
               ],
             ),
@@ -753,6 +758,173 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
         ],
       ),
     );
+  }
+}
+
+// ─── 게시판 탭 ─────────────────────────────────────────────────
+class _PostsTab extends ConsumerStatefulWidget {
+  final Club club;
+  const _PostsTab({required this.club});
+
+  @override
+  ConsumerState<_PostsTab> createState() => _PostsTabState();
+}
+
+class _PostsTabState extends ConsumerState<_PostsTab> {
+  List<ClubPost>? _posts;
+  bool _loading = true;
+  String? _activeTag;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final posts = await ref.read(apiProvider).clubPosts(
+            widget.club.id,
+            tag: _activeTag,
+          );
+      if (mounted) setState(() { _posts = posts; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      children: [
+        // 태그 필터 바
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            children: [
+              _TagChip(
+                  label: '전체',
+                  selected: _activeTag == null,
+                  onTap: () { _activeTag = null; _load(); }),
+              _TagChip(
+                  label: '공지',
+                  selected: _activeTag == 'notice',
+                  onTap: () { _activeTag = 'notice'; _load(); }),
+              _TagChip(
+                  label: '자유',
+                  selected: _activeTag == 'free',
+                  onTap: () { _activeTag = 'free'; _load(); }),
+              _TagChip(
+                  label: '모집',
+                  selected: _activeTag == 'recruit',
+                  onTap: () { _activeTag = 'recruit'; _load(); }),
+              _TagChip(
+                  label: '사진',
+                  selected: _activeTag == 'photo',
+                  onTap: () { _activeTag = 'photo'; _load(); }),
+            ],
+          ),
+        ),
+        if (_loading) const LinearProgressIndicator(),
+        Expanded(
+          child: _posts == null || _posts!.isEmpty
+              ? Center(
+                  child: Text('게시글이 없습니다',
+                      style: tt.bodyMedium
+                          ?.copyWith(color: cs.onSurfaceVariant)))
+              : RefreshIndicator(
+                  onRefresh: () async => _load(),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _posts!.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) => _PostRow(post: _posts![i]),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TagChip(
+      {required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+          label: Text(label), selected: selected, onSelected: (_) => onTap()),
+    );
+  }
+}
+
+class _PostRow extends StatelessWidget {
+  final ClubPost post;
+  const _PostRow({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: post.tag == 'notice'
+                  ? cs.errorContainer
+                  : cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(post.tagLabel,
+                style: tt.labelSmall?.copyWith(
+                  color: post.tag == 'notice'
+                      ? cs.onErrorContainer
+                      : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                )),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(post.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w700))),
+        ],
+      ),
+      subtitle: Text(
+        '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
+        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+      ),
+      trailing: post.imageUrls.isNotEmpty
+          ? Icon(Icons.image_rounded, size: 16, color: cs.onSurfaceVariant)
+          : null,
+    );
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return '방금';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전';
+    if (diff.inDays < 7) return '${diff.inDays}일 전';
+    return '${dt.month}/${dt.day}';
   }
 }
 

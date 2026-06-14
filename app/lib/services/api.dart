@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
 import '../models/admin.dart';
 import '../models/club_event.dart';
+import '../models/club_post.dart';
 import '../models/crawl_source.dart';
 import '../models/tournament.dart';
 
@@ -843,6 +844,90 @@ class ApiService {
     );
     _check(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ── 클럽 게시판 ──────────────────────────────────────────────
+
+  Future<List<ClubPost>> clubPosts(String clubId, {String? tag}) async {
+    var query = _supabase
+        .from('club_posts')
+        .select('*, users!author_id(name), club_post_comments(id)')
+        .eq('club_id', clubId);
+    if (tag != null) query = query.eq('tag', tag);
+    final rows = await query.order('created_at', ascending: false).limit(50);
+    return rows.map((r) => ClubPost.fromJson(r)).toList();
+  }
+
+  Future<ClubPost> createPost({
+    required String clubId,
+    required String tag,
+    required String title,
+    required String body,
+    List<String> imageUrls = const [],
+  }) async {
+    final userId = _supabase.auth.currentUser!.id;
+    final row = await _supabase
+        .from('club_posts')
+        .insert({
+          'club_id': clubId,
+          'author_id': userId,
+          'tag': tag,
+          'title': title,
+          'body': body,
+          'image_urls': imageUrls,
+        })
+        .select('*, users!author_id(name)')
+        .single();
+    return ClubPost.fromJson(row);
+  }
+
+  Future<void> deletePost(String postId) async {
+    await _supabase.from('club_posts').delete().eq('id', postId);
+  }
+
+  Future<List<ClubPostComment>> postComments(String postId) async {
+    final rows = await _supabase
+        .from('club_post_comments')
+        .select('*, users!author_id(name)')
+        .eq('post_id', postId)
+        .order('created_at');
+    return rows.map((r) => ClubPostComment.fromJson(r)).toList();
+  }
+
+  Future<ClubPostComment> addComment({
+    required String postId,
+    required String body,
+  }) async {
+    final userId = _supabase.auth.currentUser!.id;
+    final row = await _supabase
+        .from('club_post_comments')
+        .insert({
+          'post_id': postId,
+          'author_id': userId,
+          'body': body,
+        })
+        .select('*, users!author_id(name)')
+        .single();
+    return ClubPostComment.fromJson(row);
+  }
+
+  Future<void> deleteComment(String commentId) async {
+    await _supabase.from('club_post_comments').delete().eq('id', commentId);
+  }
+
+  Future<String> uploadPostImage({
+    required String clubId,
+    required Uint8List bytes,
+    required String extension,
+    required String contentType,
+  }) async {
+    final userId = _supabase.auth.currentUser!.id;
+    final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+    await _supabase.storage.from('club-posts').uploadBinary(
+      path, bytes,
+      fileOptions: FileOptions(contentType: contentType, upsert: true),
+    );
+    return _supabase.storage.from('club-posts').getPublicUrl(path);
   }
 
   // ===== helpers =====
