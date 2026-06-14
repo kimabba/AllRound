@@ -28,7 +28,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   Uint8List? _logoBytes;
   String _logoExtension = 'jpg';
   String _logoContentType = 'image/jpeg';
-  Set<String> _meetingDays = {};
+  final Set<String> _meetingDays = {};
   String? _genderPreference;
   bool _submitting = false;
 
