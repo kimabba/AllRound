@@ -268,8 +268,8 @@ erDiagram
     regions ||--o{ user_tennis_orgs : "region_code"
 
     tournaments ||--o{ tournament_favorites : "bookmarked by"
-    tournaments ||--|| tennis_tournament_details : "has"
-    tournaments ||--|| futsal_tournament_details : "has"
+    tournaments ||--o| tennis_tournament_details : "has"
+    tournaments ||--o| futsal_tournament_details : "has"
     tournaments ||--o{ match_entries : "records"
 
     clubs ||--o{ club_members : "has"
