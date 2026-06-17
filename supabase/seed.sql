@@ -85,6 +85,8 @@ insert into public.rule_articles (sport, category, title, body, order_idx) value
 
 -- =========================
 -- regions (권역 매핑 — 광주·전남 2026.05.01 분리 반영)
+--   045_seed_regions.sql 이 정식 시드(ON CONFLICT DO UPDATE)이므로
+--   여기서는 충돌 시 무시. enum 일관성 검사(check_enums.py)용으로 유지.
 -- =========================
 insert into public.regions(code, display_name_ko, governing_associations, uses_kato, uses_kata, notes) values
   ('gwangju', '광주', ARRAY['KTA-광주(GJTA)'], false, false,
@@ -102,7 +104,8 @@ insert into public.regions(code, display_name_ko, governing_associations, uses_k
   ('gangwon', '강원', ARRAY['KTA-강원'], false, false,
    '도 단위 메이저 대회 중심(평창백일홍배).'),
   ('jeju', '제주', ARRAY['KTA-제주'], false, false,
-   '자체 점수제(1~9), 가장 독자적. 2026 혼복 등급 미반영.');
+   '자체 점수제(1~9), 가장 독자적. 2026 혼복 등급 미반영.')
+on conflict (code) do nothing;
 
 -- =========================
 -- clubs (디렉토리 시드)
@@ -131,8 +134,8 @@ insert into public.clubs (sport, name, region, address, contact, description) va
 insert into public.tournaments (
   sport, title, organizer, description,
   start_date, application_deadline, region, location,
-  region_code, host_associations, host_orgs,
-  division_label_local, division_kta_standard, entry_fee_unit, is_joint_event,
+  region_code, host_associations,
+  division_label_local, entry_fee_unit,
   eligible_grades, entry_fee, prize, format,
   source, status
 ) values
@@ -141,8 +144,8 @@ insert into public.tournaments (
  (current_date + interval '14 days')::date,
  (current_date + interval '7 days')::date,
  '광주', '광주 시민체육관 테니스장',
- 'gwangju', ARRAY['광주광역시테니스협회'], ARRAY['gj']::tennis_org[],
- '남자 일반부 (1~5급) + 여자 신인부', '청·장년부 + 개나리부', 'per_team', false,
+ 'gwangju', ARRAY['광주광역시테니스협회'],
+ '남자 일반부 (1~5급) + 여자 신인부', 'per_team',
  array['under1y','y1to3','y3to5'],
  30000, '부수별 1·2·3위 시상',
  '단·복식 토너먼트',
@@ -153,8 +156,8 @@ insert into public.tournaments (
  (current_date + interval '21 days')::date,
  (current_date + interval '14 days')::date,
  '전남', '전남 무안종합체육시설',
- 'jeonnam', ARRAY['전라남도테니스협회'], ARRAY['jn']::tennis_org[],
- '남자 오픈부', '청년부 오픈', 'per_person', false,
+ 'jeonnam', ARRAY['전라남도테니스협회'],
+ '남자 오픈부', 'per_person',
  array['over5y','y3to5'],
  50000, '우승 200만원',
  '단식 토너먼트',
@@ -165,8 +168,8 @@ insert into public.tournaments (
  (current_date + interval '10 days')::date,
  (current_date + interval '5 days')::date,
  '서울', '서울 양재 테니스장',
- 'seoul_metro', ARRAY['서울 라켓 클럽 (KATA 등록)'], ARRAY['kata']::tennis_org[],
- '4·5부', '청·장년부 신인부', 'per_team', false,
+ 'seoul_metro', ARRAY['서울 라켓 클럽 (KATA 등록)'],
+ '4·5부', 'per_team',
  array['under1y','y1to3'],
  20000, '간식·선물',
  '복식 풀리그',
@@ -177,8 +180,8 @@ insert into public.tournaments (
  (current_date + interval '12 days')::date,
  (current_date + interval '7 days')::date,
  '광주', '광주 스포츠 풋살파크',
- 'gwangju', ARRAY['광주 풋살 라이언즈'], ARRAY['local']::tennis_org[],
- null, null, 'per_team', false,
+ 'gwangju', ARRAY['광주 풋살 라이언즈'],
+ null, 'per_team',
  array['intermediate','advanced'],
  40000, '1·2위 시상',
  '5인제 토너먼트',
@@ -189,8 +192,8 @@ insert into public.tournaments (
  (current_date + interval '20 days')::date,
  (current_date + interval '14 days')::date,
  '서울', '서울 잠실 실내 풋살장',
- 'seoul_metro', ARRAY['서울 풋볼 클럽 FC'], ARRAY['local']::tennis_org[],
- null, null, 'per_team', false,
+ 'seoul_metro', ARRAY['서울 풋볼 클럽 FC'],
+ null, 'per_team',
  array['beginner','intermediate'],
  25000, null,
  '리그전',
