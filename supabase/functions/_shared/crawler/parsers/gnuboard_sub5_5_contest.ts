@@ -25,6 +25,7 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractGJDivisions,
+  extractVenue,
   saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
@@ -253,12 +254,14 @@ async function fetchDetail(
   const contentBody = trimmedBody.length > metaLine.length + 50 ? trimmedBody : '';
   const description = contentBody ? `${metaLine}\n\n${contentBody}` : metaLine;
 
+  const location = extractVenue(bodyText) ?? undefined;
   const tournament: CrawlerTournament = {
     title,
     description: description || undefined,
     start_date: startDate,
     application_deadline: deadline,
     region,
+    location,
     eligible_grades: gradeCodes,
     division_label_local: divisionLabel,
     source_url: detailUrl,

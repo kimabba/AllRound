@@ -8,7 +8,7 @@
 //   - 본 테스트는 한국어 매칭 우선 + 연도 sanity 검증 동작을 고정한다.
 
 import { assert, assertEquals } from 'std/assert/mod.ts';
-import { extractApplicationDeadline, extractDate } from '../_shared/crawler.ts';
+import { extractApplicationDeadline, extractDate, extractVenue } from '../_shared/crawler.ts';
 
 Deno.test('extractDate parses Korean format first', () => {
   const text = '경기일시 : 2026년 4월 5일(일) 09시~ ...';
@@ -66,4 +66,18 @@ Deno.test('extractApplicationDeadline rejects out-of-range year', () => {
   // 라벨 없음 + sanity 실패 → null
   const r = extractApplicationDeadline(text);
   assert(r === null, `expected null, got ${r}`);
+});
+
+Deno.test('extractVenue extracts facility name from body (no label)', () => {
+  const text = '단체전 예선 배정팀 중 진월국제테니스장은 8시30분 경기시작';
+  assertEquals(extractVenue(text), '진월국제테니스장');
+});
+
+Deno.test('extractVenue prefers labeled location', () => {
+  const text = '일시 2026년 3월 7일 경기장 광주시민테니스장 에서 진행';
+  assertEquals(extractVenue(text), '광주시민테니스장');
+});
+
+Deno.test('extractVenue returns null when no facility name', () => {
+  assertEquals(extractVenue('참가비 입금 안내 function accounting_price_ser()'), null);
 });
