@@ -305,6 +305,34 @@ export function extractApplicationDeadline(text: string): string | null {
 }
 
 /**
+ * 본문에서 대회 장소(상세 경기장)를 추출. 없으면 null.
+ *
+ * 한국 협회 공고는 "장소:" 라벨 없이 본문 중간에 "○○테니스장"처럼 등장하는 경우가 많다.
+ * (참가비는 신청 폼/JS 에만 있어 정적 파싱으로 추출 불가 → 다루지 않음)
+ *
+ * 전략:
+ *   1) "장소|경기장|개최지|대회장" 라벨 뒤의 장소명 우선
+ *   2) 없으면 본문 첫 "[가-힣]{2,}(테니스장|정구장|구장|체육관|코트장)" 매치
+ *   false positive 방지: 2글자 이상 고유명 + 시설 접미사로 제한. status='draft' 검수로 추가 보정.
+ */
+export function extractVenue(text: string): string | null {
+  const cleaned = text.replace(/\s+/g, ' ');
+  const SUFFIX = '(?:테니스장|정구장|구장|체육관|코트장)';
+
+  // 1) 라벨 + 장소명
+  const labeled = cleaned.match(
+    new RegExp(`(?:장소|경기장|개최지|대회장)\\s*[:：]?\\s*([가-힣A-Za-z0-9·]{2,20}?${SUFFIX})`),
+  );
+  if (labeled && labeled[1].trim().length >= 3) return labeled[1].trim();
+
+  // 2) 본문 첫 시설명
+  const bare = cleaned.match(new RegExp(`([가-힣A-Za-z0-9·]{2,}${SUFFIX})`));
+  if (bare) return bare[1].trim();
+
+  return null;
+}
+
+/**
  * 광주/전남 생활체육 협회 공고 텍스트에서 부서 코드 추출.
  * org: 'gj' | 'jn' — prefix로 사용됨 (예: 'gj_m_gold')
  *
