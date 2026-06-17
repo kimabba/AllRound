@@ -374,17 +374,19 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
     errors.push(`상세 ${parseFailures}건 모두 파싱 실패 — 사이트 구조 변경 의심`);
   }
 
-  // 전건 실패 시에는 etag/last_modified 를 반환하지 않는다.
-  // dispatcher 가 last_etag 를 갱신하면 다음 스케줄 실행이 같은 listing 해시에서
-  // no-change 로 일찍 종료해, 일시적 글리치나 파서 수정 후에도 자동 재시도가
-  // 막히기 때문. (성공/부분성공 시에만 변경감지 캐시를 갱신한다.)
+  // 전건 실패 시에는 변경감지 캐시(etag/last_modified)를 null 로 비운다.
+  // dispatcher 는 result.etag !== undefined 일 때만 last_etag 를 갱신하므로
+  // undefined 를 주면 이전 성공 크롤의 stale etag 가 남아, 다음 스케줄 실행이
+  // 같은 listing 해시에서 no-change 로 일찍 종료해 자동 재시도가 막힌다.
+  // null 로 비우면 다음 실행의 previousEtag 가 falsy → no-change 우회 → 재시도.
+  // (성공/부분성공 시에만 변경감지 캐시를 갱신한다.)
   return {
     fetched_count: ctx.audit.fetched,
     inserted_count: ctx.audit.inserted,
     updated_count: ctx.audit.updated,
     status: allFailed ? 'error' : 'ok',
     error: errors.length > 0 ? errors.slice(0, 5).join('\n') : undefined,
-    etag: allFailed ? undefined : effectiveEtag,
-    last_modified: allFailed ? undefined : (listing.lastModified ?? null),
+    etag: allFailed ? null : effectiveEtag,
+    last_modified: allFailed ? null : (listing.lastModified ?? null),
   };
 };
