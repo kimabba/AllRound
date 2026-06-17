@@ -35,7 +35,7 @@ class ClubMember {
 class ClubEvent {
   final String id;
   final String clubId;
-  final String createdBy;
+  final String? createdBy; // 작성자 탈퇴 시 067 FK 에 의해 NULL 가능
   final String title;
   final String? description;
   final String? locationText;
@@ -46,7 +46,7 @@ class ClubEvent {
   ClubEvent({
     required this.id,
     required this.clubId,
-    required this.createdBy,
+    this.createdBy,
     required this.title,
     this.description,
     this.locationText,
@@ -74,7 +74,7 @@ class ClubEvent {
     return ClubEvent(
       id: j['id'] as String,
       clubId: j['club_id'] as String,
-      createdBy: j['created_by'] as String,
+      createdBy: j['created_by'] as String?,
       title: j['title'] as String,
       description: j['description'] as String?,
       locationText: j['location_text'] as String?,
