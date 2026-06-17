@@ -17,6 +17,7 @@ export interface CrawlerTournament {
   prize?: string;
   format?: string;
   source_url: string;
+  raw_html?: string; // raw zone(crawl_documents) 보관용 — 가공 전 원본 HTML
 }
 
 export interface AuditHandle {
@@ -55,6 +56,44 @@ export async function finishAudit(
       finished_at: new Date().toISOString(),
     })
     .eq('id', audit.id);
+}
+
+/**
+ * raw HTML 을 crawl_documents(raw zone)에 보관.
+ * (source, source_url) 기준 upsert — 같은 게시글은 1 row, 재크롤 시 덮어씀.
+ * raw 보관은 부가 기능이므로 실패해도 크롤 파이프라인을 중단하지 않는다.
+ */
+async function sha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function saveRawDocument(
+  audit: AuditHandle,
+  sourceUrl: string,
+  rawHtml: string,
+  tournamentId: string | null,
+): Promise<void> {
+  const contentHash = await sha256Hex(rawHtml);
+  const { error } = await audit.supabase
+    .from('crawl_documents')
+    .upsert(
+      {
+        source: audit.source,
+        source_url: sourceUrl,
+        raw_html: rawHtml,
+        content_hash: contentHash,
+        http_status: 200,
+        fetched_at: new Date().toISOString(),
+        tournament_id: tournamentId,
+        parse_status: 'parsed',
+      },
+      { onConflict: 'source,source_url' },
+    );
+  if (error) console.error(`saveRawDocument: ${error.message}`);
 }
 
 /**
@@ -108,31 +147,37 @@ export async function upsertTournament(
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
+    if (t.raw_html) await saveRawDocument(audit, t.source_url, t.raw_html, existing.id);
     audit.updated++;
     return 'updated';
   }
 
-  const { error } = await audit.supabase.from('tournaments').insert({
-    sport,
-    title: t.title,
-    organizer: t.organizer ?? null,
-    description: t.description ?? null,
-    start_date: t.start_date,
-    end_date: t.end_date ?? null,
-    application_deadline: t.application_deadline ?? null,
-    region: t.region ?? null,
-    region_code: regionCode,
-    location: t.location ?? null,
-    eligible_grades: t.eligible_grades,
-    division_label_local: t.division_label_local ?? null,
-    entry_fee: t.entry_fee ?? null,
-    prize: t.prize ?? null,
-    format: t.format ?? null,
-    source: audit.source,
-    source_url: t.source_url,
-    status: 'draft',
-  });
+  const { data: insertedRow, error } = await audit.supabase
+    .from('tournaments')
+    .insert({
+      sport,
+      title: t.title,
+      organizer: t.organizer ?? null,
+      description: t.description ?? null,
+      start_date: t.start_date,
+      end_date: t.end_date ?? null,
+      application_deadline: t.application_deadline ?? null,
+      region: t.region ?? null,
+      region_code: regionCode,
+      location: t.location ?? null,
+      eligible_grades: t.eligible_grades,
+      division_label_local: t.division_label_local ?? null,
+      entry_fee: t.entry_fee ?? null,
+      prize: t.prize ?? null,
+      format: t.format ?? null,
+      source: audit.source,
+      source_url: t.source_url,
+      status: 'draft',
+    })
+    .select('id')
+    .single();
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
+  if (t.raw_html) await saveRawDocument(audit, t.source_url, t.raw_html, insertedRow?.id ?? null);
   audit.inserted++;
   return 'inserted';
 }

@@ -253,6 +253,7 @@ async function fetchDetail(
     division_label_local: divisionLabel,
     source_url: detailUrl,
     organizer: region ? `${region}테니스협회` : undefined,
+    raw_html: html, // raw zone(crawl_documents) 보관용 — 가공 전 원본
   };
 }
 
