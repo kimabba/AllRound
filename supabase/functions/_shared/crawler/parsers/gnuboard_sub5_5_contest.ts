@@ -25,6 +25,7 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractGJDivisions,
+  saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
@@ -147,17 +148,19 @@ async function fetchDetail(
   region: string,
   titleHint: string,
   org: 'gj' | 'jn',
-): Promise<CrawlerTournament | null> {
+): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
   const html = await res.text();
+  // 이 지점부터는 원본(html)을 확보했으므로, 파싱 가드 실패 시에도
+  // { rawHtml, tournament: null } 로 반환해 dispatch 가 raw 를 failed 로 보관한다.
   const dom = new DOMParser().parseFromString(html, 'text/html');
-  if (!dom) return null;
+  if (!dom) return { rawHtml: html, tournament: null };
 
   // 제목: h3 우선, 없으면 listing 링크 텍스트(titleHint) 사용
   const h3El = dom.querySelector('h3');
   const title = (h3El?.textContent ?? '').replace(/\s+/g, ' ').trim() || titleHint;
-  if (!title) return null;
+  if (!title) return { rawHtml: html, tournament: null };
 
   // 노이즈 태그 제거 후 body 텍스트 추출
   const bodyEl = dom.querySelector('body');
@@ -173,7 +176,7 @@ async function fetchDetail(
 
   // 대회일 추출: 가장 먼저 등장하는 유효 날짜를 start_date 로 사용
   const startDate = extractDate(bodyText) ?? extractDate(title);
-  if (!startDate) return null;
+  if (!startDate) return { rawHtml: html, tournament: null };
 
   const { codes: gradeCodes, label: divisionLabel } = extractGJDivisions(
     `${title} ${bodyText}`,
@@ -225,7 +228,10 @@ async function fetchDetail(
     .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
     .replace(/참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?/g, '')
     .replace(/참가비\s+입금\s*×\s*\.?/g, '')
-    .replace(/입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g, '')
+    .replace(
+      /입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g,
+      '',
+    )
     .replace(/\[신청대기\]/g, '')
     .replace(/\[신청마감\]/g, '')
     .replace(/\[신청중\]/g, '')
@@ -239,11 +245,9 @@ async function fetchDetail(
 
   // 메타 + 본문 결합 (본문이 실질적 내용을 포함할 때만)
   const contentBody = rawBody.length > metaLine.length + 50 ? rawBody : '';
-  const description = contentBody
-    ? `${metaLine}\n\n${contentBody}`
-    : metaLine;
+  const description = contentBody ? `${metaLine}\n\n${contentBody}` : metaLine;
 
-  return {
+  const tournament: CrawlerTournament = {
     title,
     description: description || undefined,
     start_date: startDate,
@@ -253,8 +257,8 @@ async function fetchDetail(
     division_label_local: divisionLabel,
     source_url: detailUrl,
     organizer: region ? `${region}테니스협회` : undefined,
-    raw_html: html, // raw zone(crawl_documents) 보관용 — 가공 전 원본
   };
+  return { rawHtml: html, tournament };
 }
 
 // =============================================================================
@@ -336,9 +340,23 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
   const errors: string[] = [];
   for (const item of items.slice(0, 30)) {
     try {
-      const detail = await fetchDetail(item.url, region, item.title, org);
-      if (detail) {
-        await upsertTournament(ctx.audit, 'tennis', detail);
+      const result = await fetchDetail(item.url, region, item.title, org);
+      if (!result) continue; // fetch 실패 — 보관할 원본 자체가 없음
+      if (result.tournament) {
+        // 파싱 성공: tournaments upsert + 원본을 parsed 로 보관·연결
+        await upsertTournament(ctx.audit, 'tennis', result.tournament, result.rawHtml);
+      } else {
+        // 파싱 가드 미통과: 원본을 failed 로 보관해 파서 수정 후 재처리 가능하게 한다.
+        // (raw zone 이 존재하는 핵심 목적 — 파서가 깨진 케이스를 놓치지 않는다.)
+        await saveRawDocument(
+          ctx.audit,
+          item.url,
+          result.rawHtml,
+          null,
+          'failed',
+          '파싱 실패: 가드 미통과(DOM/제목/날짜)',
+        );
+        ctx.audit.fetched++;
       }
     } catch (e) {
       errors.push(`${item.url}: ${(e as Error).message}`);

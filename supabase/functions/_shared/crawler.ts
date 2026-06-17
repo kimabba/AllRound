@@ -17,7 +17,6 @@ export interface CrawlerTournament {
   prize?: string;
   format?: string;
   source_url: string;
-  raw_html?: string; // raw zone(crawl_documents) 보관용 — 가공 전 원본 HTML
 }
 
 export interface AuditHandle {
@@ -71,11 +70,13 @@ async function sha256Hex(text: string): Promise<string> {
     .join('');
 }
 
-async function saveRawDocument(
+export async function saveRawDocument(
   audit: AuditHandle,
   sourceUrl: string,
   rawHtml: string,
   tournamentId: string | null,
+  parseStatus: 'parsed' | 'failed' | 'pending' = 'parsed',
+  parseError?: string,
 ): Promise<void> {
   const contentHash = await sha256Hex(rawHtml);
   const { error } = await audit.supabase
@@ -89,7 +90,8 @@ async function saveRawDocument(
         http_status: 200,
         fetched_at: new Date().toISOString(),
         tournament_id: tournamentId,
-        parse_status: 'parsed',
+        parse_status: parseStatus,
+        parse_error: parseError ?? null,
       },
       { onConflict: 'source,source_url' },
     );
@@ -107,6 +109,7 @@ export async function upsertTournament(
   audit: AuditHandle,
   sport: 'tennis' | 'futsal',
   t: CrawlerTournament,
+  rawHtml?: string,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
   // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
@@ -147,7 +150,7 @@ export async function upsertTournament(
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
-    if (t.raw_html) await saveRawDocument(audit, t.source_url, t.raw_html, existing.id);
+    if (rawHtml) await saveRawDocument(audit, t.source_url, rawHtml, existing.id, 'parsed');
     audit.updated++;
     return 'updated';
   }
@@ -177,7 +180,9 @@ export async function upsertTournament(
     .select('id')
     .single();
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
-  if (t.raw_html) await saveRawDocument(audit, t.source_url, t.raw_html, insertedRow?.id ?? null);
+  if (rawHtml) {
+    await saveRawDocument(audit, t.source_url, rawHtml, insertedRow?.id ?? null, 'parsed');
+  }
   audit.inserted++;
   return 'inserted';
 }
