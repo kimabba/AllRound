@@ -243,8 +243,14 @@ async function fetchDetail(
     .replace(/부서추후공지/g, '')
     .trim();
 
-  // 메타 + 본문 결합 (본문이 실질적 내용을 포함할 때만)
-  const contentBody = rawBody.length > metaLine.length + 50 ? rawBody : '';
+  // 원문 전체는 crawl_documents(raw zone)에 보존되므로, description 은 임베딩·표시용으로
+  // 보일러플레이트 제거 본문을 MAX_DESC_BODY 자로 제한해 잡음(긴 푸터/안내문)을 줄인다.
+  // (description 비대 → 의미검색 임베딩 품질 저하 + 앱 표시 부담)
+  const MAX_DESC_BODY = 1000;
+  const trimmedBody = rawBody.length > MAX_DESC_BODY
+    ? rawBody.slice(0, MAX_DESC_BODY).replace(/\s+\S*$/, '').trimEnd() + ' …'
+    : rawBody;
+  const contentBody = trimmedBody.length > metaLine.length + 50 ? trimmedBody : '';
   const description = contentBody ? `${metaLine}\n\n${contentBody}` : metaLine;
 
   const tournament: CrawlerTournament = {
