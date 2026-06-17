@@ -338,6 +338,7 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
   // 4) 상세 페이지 처리
   const org: 'gj' | 'jn' = source.slug.includes('gwangju') ? 'gj' : 'jn';
   const errors: string[] = [];
+  let parseFailures = 0;
   for (const item of items.slice(0, 30)) {
     try {
       const result = await fetchDetail(item.url, region, item.title, org);
@@ -357,10 +358,18 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
           '파싱 실패: 가드 미통과(DOM/제목/날짜)',
         );
         ctx.audit.fetched++;
+        parseFailures++;
       }
     } catch (e) {
       errors.push(`${item.url}: ${(e as Error).message}`);
     }
+  }
+
+  // 상세를 가져왔는데 단 한 건도 파싱 성공하지 못하면 사이트 구조 변경을 의심하고
+  // 경고를 남긴다 → dispatcher 가 partial/failed + last_error 로 기록해 알림이 뜨게 한다.
+  // (개별 게시글의 파싱 실패는 정상일 수 있으므로 "전부 실패"일 때만 경고)
+  if (parseFailures > 0 && ctx.audit.inserted + ctx.audit.updated === 0) {
+    errors.push(`상세 ${parseFailures}건 모두 파싱 실패 — 사이트 구조 변경 의심`);
   }
 
   return {
