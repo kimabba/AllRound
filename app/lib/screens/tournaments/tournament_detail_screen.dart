@@ -46,7 +46,8 @@ class _TournamentDetailScreenState
       final supa = ref.read(supabaseProvider);
       final row = await supa
           .from('tournaments')
-          .select('*, tennis_tournament_details(*), futsal_tournament_details(*)')
+          .select(
+              '*, tennis_tournament_details(*), futsal_tournament_details(*)')
           .eq('id', widget.tournamentId)
           .single();
       setState(() {
@@ -128,6 +129,9 @@ class _DetailBody extends StatelessWidget {
     final isTennis = t.sport == 'tennis';
     final accentColor = isTennis ? cs.primary : cs.tertiary;
     final grades = _displayGrades(t);
+    final futsalCategory = t.sport == 'futsal'
+        ? futsalEventCategoryLabel(t.futsalEventCategory)
+        : '';
 
     final hasDescription =
         t.description != null && t.description!.trim().isNotEmpty;
@@ -205,6 +209,12 @@ class _DetailBody extends StatelessWidget {
                           label: sportLabelFromString(t.sport),
                           color: accentColor,
                         ),
+                        if (futsalCategory.isNotEmpty)
+                          _InfoChip(
+                            icon: Icons.flag_rounded,
+                            label: futsalCategory,
+                            color: cs.secondary,
+                          ),
                         _InfoChip(
                           icon: Icons.emoji_events_rounded,
                           label: grades,
@@ -240,6 +250,12 @@ class _DetailBody extends StatelessWidget {
                     label: '종목',
                     value: sportLabelFromString(t.sport),
                   ),
+                  if (futsalCategory.isNotEmpty)
+                    _InfoRow(
+                      icon: Icons.flag_rounded,
+                      label: '분류',
+                      value: futsalCategory,
+                    ),
                   _InfoRow(
                     icon: Icons.calendar_today_rounded,
                     label: '대회일',
@@ -555,7 +571,7 @@ class _QuickInfoGrid extends StatelessWidget {
       itemCount: rows.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 2.25,
+        childAspectRatio: 1.75,
         crossAxisSpacing: AppSpacing.sm,
         mainAxisSpacing: AppSpacing.sm,
       ),
@@ -590,12 +606,20 @@ class _QuickInfoTile extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            info.value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+          const SizedBox(height: AppSpacing.xs),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                info.value,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  height: 1.18,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1086,7 +1110,7 @@ Tournament? _previewTournamentById(String id) {
       title: '2026 생활체육 서울시민리그 풋살리그',
       organizer: '서울특별시풋살연맹',
       description: '''
-참가부서: 초급 · 중급 · 고급
+참가부서: 입문 · 초급 · 중급 · 고급 · 선출
 신청기간: 2026년 5월 1일 ~ 2026년 6월 7일
 대회일: 2026년 6월 20일 ~ 2026년 10월 11일
 지역: 서울
@@ -1099,11 +1123,18 @@ Tournament? _previewTournamentById(String id) {
       applicationDeadline: DateTime(2026, 6, 7),
       region: '서울',
       location: '서울시민리그 풋살 공식 경기장소',
-      eligibleGrades: const ['beginner', 'intermediate', 'advanced'],
+      eligibleGrades: const [
+        'intro',
+        'beginner',
+        'intermediate',
+        'advanced',
+        'elite'
+      ],
       prize: null,
       format: '서울시민리그 풋살 리그전',
       sourceUrl: 'https://www.sleague.or.kr/2026/futsal/',
       status: 'published',
+      futsalEventCategory: 'sports_for_all',
     ),
     Tournament(
       id: 'preview-futsal-1',
@@ -1111,7 +1142,7 @@ Tournament? _previewTournamentById(String id) {
       title: '수도권 풋살 슈퍼컵',
       organizer: '서울 풋살 협회',
       description: '''
-참가부서: 초급·중급
+참가부서: 입문·초급·중급
 신청마감: 대회 7일 전
 대회일: 주말 양일 진행
 장소: 서울 송파 풋살파크
@@ -1124,11 +1155,12 @@ Tournament? _previewTournamentById(String id) {
       applicationDeadline: now.add(const Duration(days: 4)),
       region: '수도권',
       location: '서울 송파 풋살파크',
-      eligibleGrades: const ['beginner', 'intermediate'],
+      eligibleGrades: const ['intro', 'beginner', 'intermediate'],
       entryFee: 80000,
       prize: '우승팀 구장 이용권',
       format: '5대5 조별리그',
       status: 'published',
+      futsalEventCategory: 'private',
     ),
     Tournament(
       id: 'preview-futsal-2',
@@ -1136,7 +1168,7 @@ Tournament? _previewTournamentById(String id) {
       title: '부산 야간 풋살 리그',
       organizer: '부산 풋살 연합',
       description: '''
-참가부서: 고급
+참가부서: 고급·선출
 일시: 평일 야간 리그
 장소: 부산 사직 풋살장
 참가비: 팀당 100,000원
@@ -1148,11 +1180,12 @@ Tournament? _previewTournamentById(String id) {
       applicationDeadline: now.add(const Duration(days: 11)),
       region: '부산·울산·경남',
       location: '부산 사직 풋살장',
-      eligibleGrades: const ['advanced'],
+      eligibleGrades: const ['advanced', 'elite'],
       entryFee: 100000,
       prize: '우승 트로피',
       format: '토너먼트',
       status: 'published',
+      futsalEventCategory: 'regional_federation',
     ),
     Tournament(
       id: 'preview-tennis-1',
@@ -1187,7 +1220,7 @@ Tournament? _previewTournamentById(String id) {
       title: '수도권 동호인 랭킹전',
       organizer: 'KATA 수도권 지부',
       description: '''
-참가부서: 중급·고급
+참가부서: 3~5년 · 5년 이상
 신청마감: 대회 14일 전
 장소: 분당 테니스파크
 참가비: 인당 50,000원
@@ -1200,7 +1233,7 @@ Tournament? _previewTournamentById(String id) {
       applicationDeadline: now.add(const Duration(days: 14)),
       region: '수도권',
       location: '분당 테니스파크',
-      eligibleGrades: const ['intermediate', 'advanced'],
+      eligibleGrades: const ['y3to5', 'over5y'],
       entryFee: 50000,
       entryFeeUnit: 'per_person',
       prize: '랭킹 포인트',

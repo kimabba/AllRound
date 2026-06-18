@@ -1061,7 +1061,7 @@ List<Tournament> _previewTournamentRecords() {
       applicationDeadline: now.add(const Duration(days: 5)),
       region: '광주',
       location: '염주실내테니스장',
-      eligibleGrades: const ['novice', 'beginner'],
+      eligibleGrades: const ['under1y', 'y1to3'],
       entryFee: 40000,
       entryFeeUnit: 'per_person',
       status: 'published',
@@ -1076,9 +1076,10 @@ List<Tournament> _previewTournamentRecords() {
       applicationDeadline: now.add(const Duration(days: 4)),
       region: '수도권',
       location: '서울 송파 풋살파크',
-      eligibleGrades: const ['beginner', 'intermediate'],
+      eligibleGrades: const ['intro', 'beginner', 'intermediate'],
       entryFee: 80000,
       status: 'published',
+      futsalEventCategory: 'private',
     ),
   ];
 }

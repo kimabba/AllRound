@@ -20,41 +20,27 @@ class ClubsScreen extends ConsumerStatefulWidget {
   ConsumerState<ClubsScreen> createState() => _ClubsScreenState();
 }
 
-class _ClubsScreenState extends ConsumerState<ClubsScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
-
+class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   // 내 클럽 탭
   List<Club>? _myClubs;
   bool _loadingMy = false;
 
   // 클럽 찾기 탭
-  String _q = '';
+  final String _q = '';
   List<Club>? _clubs;
   bool _loading = false;
   String? _searchError;
   _ClubSearchFilters _clubFilters = const _ClubSearchFilters();
+  late Set<String> _clubInterests;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _tab.addListener(_onTabChanged);
+    _clubInterests = {ref.read(activeSportProvider) ?? 'futsal'};
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMyClubs();
       _load();
     });
-  }
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
-
-  void _onTabChanged() {
-    if (_tab.indexIsChanging) return;
-    if (mounted) setState(() {});
   }
 
   Future<void> _loadMyClubs() async {
@@ -79,11 +65,29 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
       _searchError = null;
     });
     try {
-      final list = await ref.read(apiProvider).searchClubs(
-            sport: ref.read(activeSportProvider),
+      if (AppConfig.userDesignPreview) {
+        if (mounted) setState(() => _clubs = _previewSearchClubs);
+        return;
+      }
+      final api = ref.read(apiProvider);
+      final sports = _clubInterests.isEmpty
+          ? const <String>['tennis', 'futsal']
+          : _clubInterests.toList();
+      final results = await Future.wait(
+        sports.map(
+          (sport) => api.searchClubs(
+            sport: sport,
             region: _clubFilters.region,
             q: _q,
-          );
+          ),
+        ),
+      );
+      final seen = <String>{};
+      final list = [
+        for (final clubs in results)
+          for (final club in clubs)
+            if (seen.add(club.id)) club,
+      ];
       if (mounted) setState(() => _clubs = list);
     } catch (_) {
       if (mounted) setState(() => _searchError = '클럽 목록을 불러오지 못했습니다.');
@@ -103,129 +107,221 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen>
     }
   }
 
+  Future<void> _openClubFilterSheet() async {
+    final cs = Theme.of(context).colorScheme;
+    final result = await showModalBottomSheet<_ClubFilterResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ClubFilterSheet(
+        initialFilters: _clubFilters,
+        initialInterests: _clubInterests,
+        title: '클럽 찾기 조건',
+        icon: Icons.tune_rounded,
+        accentColor: cs.primaryContainer,
+        onAccentColor: cs.onPrimaryContainer,
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _clubFilters = result.filters;
+        _clubInterests = result.interests;
+      });
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    ref.listen(activeSportProvider, (_, __) => _load());
-    final sport = ref.watch(activeSportProvider);
-    final favoriteIds =
-        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+    final cs = Theme.of(context).colorScheme;
+    final effectiveClubs = _clubs ?? _previewSearchClubs;
+    final visibleClubs = effectiveClubs
+        .where((club) => _clubInterests.contains(club.sport))
+        .where((club) => _matchesClubFilters(club, _clubFilters))
+        .toList();
+    final newClubs = _newPreviewClubs(visibleClubs);
+    final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
+    final joinedClubs = (_myClubs ?? _previewManagedClubs)
+        .where((club) => club.isMember)
+        .toList();
+    final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
         title: const BrandedAppBarTitle(title: '클럽'),
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(text: '내 클럽'),
-            Tab(text: '클럽 찾기'),
-          ],
-        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,
         icon: const Icon(Icons.add_rounded),
         label: const Text('클럽 만들기'),
       ),
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          _MyClubsTab(
-            clubs: _myClubs,
-            loading: _loadingMy,
-            favoriteIds: favoriteIds,
-            onRefresh: _loadMyClubs,
-          ),
-          _SearchTab(
-            q: _q,
-            sport: sport,
-            clubs: _clubs,
-            loading: _loading,
-            error: _searchError,
-            favoriteIds: favoriteIds,
-            filters: _clubFilters,
-            onQueryChanged: (v) => _q = v,
-            onFiltersChanged: (filters) {
-              setState(() => _clubFilters = filters);
-              _load();
-            },
-            onSearch: _load,
-            onJoined: () {
-              _loadMyClubs();
-              _load();
-            },
+      body: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              112,
+            ),
+            sliver: SliverList.list(
+              children: [
+                _SimplePanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SimpleSectionHeader(
+                        title: '내 주변에 새로 생겼어요',
+                        action: '더보기',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      if (_loading || _loadingMy)
+                        const LinearProgressIndicator(),
+                      if (_searchError != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          _searchError!,
+                          style: TextStyle(color: cs.error),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.sm),
+                      _SimpleClubGrid(clubs: newClubs),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _SimpleActionCard(
+                  icon: Icons.location_on_rounded,
+                  title: '맞춤 조건 설정',
+                  subtitle: [
+                    _selectedSportLabel(_clubInterests),
+                    ..._clubFilters.labels,
+                  ].join(' · '),
+                  action: '설정',
+                  color: const Color(0xFFEAF7F1),
+                  onTap: _openClubFilterSheet,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                if (managedClubs.isNotEmpty) ...[
+                  _SimpleActionCard(
+                    icon: Icons.person_add_alt_1_rounded,
+                    title: '팀원모집',
+                    subtitle: '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
+                    color: const Color(0xFFEAF7F1),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '가입한 클럽',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                    Text(
+                      '가입한 클럽 공개',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Switch(value: true, onChanged: (_) {}),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _SimpleClubTile(
+                    club: joinedClubs.isEmpty ? null : joinedClubs.first),
+                const SizedBox(height: AppSpacing.xl),
+                _SimpleSectionHeader(
+                  title: '맞춤추천',
+                  subtitle: _clubFilters.hasActive
+                      ? [
+                          _selectedSportLabel(_clubInterests),
+                          ..._clubFilters.labels,
+                        ].join(' · ')
+                      : '${_selectedSportLabel(_clubInterests)} 기준',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final club in recommendedClubs.take(3))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _SimpleClubTile(club: club),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-}
 
-// ─── 내 클럽 탭 ──────────────────────────────────────────────────────────────
-
-class _MyClubsTab extends ConsumerWidget {
-  final List<Club>? clubs;
-  final bool loading;
-  final Set<String> favoriteIds;
-  final VoidCallback onRefresh;
-
-  const _MyClubsTab({
-    required this.clubs,
-    required this.loading,
-    required this.favoriteIds,
-    required this.onRefresh,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (loading && clubs == null) {
-      return const Center(child: CircularProgressIndicator());
+  bool _matchesClubFilters(Club club, _ClubSearchFilters filters) {
+    if (filters.region != null && club.region != filters.region) return false;
+    if (filters.gender != null &&
+        club.genderPreference != null &&
+        club.genderPreference != filters.gender) {
+      return false;
     }
-    if (clubs == null || clubs!.isEmpty) {
-      return const AppEmptyState(
-        icon: Icons.groups_rounded,
-        title: '소속 클럽이 없습니다',
-        description: '클럽 찾기 탭에서 가입 신청하거나\n클럽 만들기로 새 클럽을 열어보세요.',
-      );
+    if (filters.days.isNotEmpty &&
+        club.meetingDays.isNotEmpty &&
+        club.meetingDays.every((day) => !filters.days.contains(day))) {
+      return false;
     }
+    if (club.monthlyFee != null &&
+        (club.monthlyFee! < filters.feeRange.start ||
+            club.monthlyFee! > filters.feeRange.end)) {
+      return false;
+    }
+    return true;
+  }
 
-    // pending(대기중) 클럽을 맨 위로
-    final sorted = [...clubs!]..sort((a, b) {
-        if (a.isPending && !b.isPending) return -1;
-        if (!a.isPending && b.isPending) return 1;
-        return 0;
+  String _selectedSportLabel(Set<String> interests) {
+    if (interests.length == 1) {
+      return sportLabelFromString(interests.first);
+    }
+    return '테니스 · 풋살';
+  }
+
+  List<Club> _newPreviewClubs(List<Club> source) {
+    final now = DateTime.now();
+    final recent = source.where((club) {
+      final createdAt = club.createdAt;
+      if (createdAt == null) return false;
+      return now.difference(createdAt).inDays <= 7;
+    }).toList()
+      ..sort((a, b) {
+        final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bDate.compareTo(aDate);
       });
-    final managedClubs = sorted.where((club) => club.isManager).toList();
-    final itemCount = sorted.length + (managedClubs.isNotEmpty ? 1 : 0);
+    return (recent.isEmpty ? source : recent).take(4).toList();
+  }
 
-    return RefreshIndicator(
-      onRefresh: () async => onRefresh(),
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.lg,
+  List<Club> _recommendedPreviewClubs(List<Club> source) {
+    final scored = [
+      for (final club in source)
+        (
+          club: club,
+          score: (_clubFilters.region != null &&
+                      club.region == _clubFilters.region
+                  ? 4
+                  : 0) +
+              (_clubFilters.days.isNotEmpty &&
+                      club.meetingDays.any(_clubFilters.days.contains)
+                  ? 2
+                  : 0) +
+              club.memberCount,
         ),
-        itemCount: itemCount,
-        itemBuilder: (_, i) {
-          if (managedClubs.isNotEmpty && i == 0) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _TeamRecruitingEntryCard(managedClubs: managedClubs),
-            );
-          }
-          final clubIndex = managedClubs.isNotEmpty ? i - 1 : i;
-          final club = sorted[clubIndex];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: _ClubCard(
-              club: club,
-              showRole: true,
-              isFavorite: favoriteIds.contains(club.id),
-              onChanged: onRefresh,
-            ),
-          );
-        },
-      ),
-    );
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    return scored.map((item) => item.club).toList();
   }
 }
 
@@ -251,6 +347,519 @@ final _previewManagedClubs = [
     myRole: 'manager',
   ),
 ];
+
+final _previewSearchClubs = [
+  Club(
+    id: 'preview-new-futsal-1',
+    sport: 'futsal',
+    name: '리얼 FS 신규회원 모집중',
+    region: '광주',
+    address: '광주 북구 풋살파크',
+    description: '평일 저녁과 주말에 함께 뛰는 풋살 클럽',
+    memberCount: 78,
+    meetingDays: const ['화', '목', '토'],
+    monthlyFee: 30000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 1)),
+  ),
+  Club(
+    id: 'preview-new-tennis-1',
+    sport: 'tennis',
+    name: '올라운드 테니스 크루',
+    region: '광주',
+    address: '염주실내테니스장',
+    description: '초보부터 랠리까지 함께 치는 테니스 모임',
+    memberCount: 24,
+    meetingDays: const ['수', '토'],
+    monthlyFee: 20000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 2)),
+  ),
+  Club(
+    id: 'preview-new-futsal-2',
+    sport: 'futsal',
+    name: '광주 위너스 풋살클럽',
+    region: '광주',
+    address: '수완 풋살파크',
+    description: '초급자도 참여 가능한 주말 풋살 클럽',
+    memberCount: 32,
+    meetingDays: const ['일'],
+    monthlyFee: 10000,
+    genderPreference: '남성',
+    createdAt: DateTime.now().subtract(const Duration(days: 5)),
+  ),
+  Club(
+    id: 'preview-new-tennis-2',
+    sport: 'tennis',
+    name: '광주 랠리메이트',
+    region: '광주',
+    address: '상무 테니스코트',
+    description: '퇴근 후 가볍게 치는 직장인 테니스 클럽',
+    memberCount: 41,
+    meetingDays: const ['월', '목'],
+    monthlyFee: 40000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 6)),
+  ),
+  Club(
+    id: 'preview-rec-futsal-1',
+    sport: 'futsal',
+    name: '첨단 풋살 러닝메이트',
+    region: '광주',
+    address: '첨단 풋살센터',
+    description: '입문자와 초급자가 편하게 참여하는 모임',
+    memberCount: 18,
+    meetingDays: const ['금'],
+    monthlyFee: 0,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 14)),
+  ),
+  Club(
+    id: 'preview-rec-tennis-1',
+    sport: 'tennis',
+    name: '주말 테니스 친구들',
+    region: '광주',
+    address: '광주 월드컵 테니스장',
+    description: '주말 오전 중심의 테니스 동호회',
+    memberCount: 56,
+    meetingDays: const ['토', '일'],
+    monthlyFee: 50000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 21)),
+  ),
+];
+
+class _SimpleSectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? action;
+
+  const _SimpleSectionHeader({
+    required this.title,
+    this.subtitle,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+            ],
+          ),
+        ),
+        if (action != null)
+          Text(
+            action!,
+            style: tt.titleMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SimplePanel extends StatelessWidget {
+  final Widget child;
+
+  const _SimplePanel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _SimpleClubGrid extends StatelessWidget {
+  final List<Club> clubs;
+
+  const _SimpleClubGrid({required this.clubs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final club in clubs.take(4))
+          SizedBox(
+            width: 180,
+            child: _SimpleClubMiniTile(club: club),
+          ),
+      ],
+    );
+  }
+}
+
+class _SimpleClubMiniTile extends StatelessWidget {
+  final Club club;
+
+  const _SimpleClubMiniTile({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        _SimpleClubAvatar(club: club, size: 52),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                club.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SimpleActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? action;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _SimpleActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    this.action,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cs.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.035),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(icon, color: cs.primary),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (action != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: cs.primary),
+                ),
+                child: Text(
+                  action!,
+                  style: tt.labelLarge?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
+            Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SimpleClubTile extends StatelessWidget {
+  final Club? club;
+
+  const _SimpleClubTile({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final item = club;
+
+    if (item == null) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        child: Text(
+          '관심 있는 클럽을 찾아 가입해보세요.',
+          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _SimpleClubAvatar(club: item, size: 72),
+              if (item.createdAt != null)
+                Positioned(
+                  left: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF3B4F),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      'N',
+                      style: tt.labelMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.description ?? '새로운 클럽 일정을 확인해보세요.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${sportLabelFromString(item.sport)} · ${item.region ?? '지역 미정'} · 멤버 ${item.memberCount}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SimpleClubAvatar extends StatelessWidget {
+  final Club club;
+  final double size;
+
+  const _SimpleClubAvatar({
+    required this.club,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = _clubLogoSpec(club);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: spec.background,
+        borderRadius: BorderRadius.circular(size * 0.22),
+      ),
+      child: Icon(
+        spec.icon,
+        color: spec.foreground,
+        size: size * 0.48,
+      ),
+    );
+  }
+
+  _ClubLogoSpec _clubLogoSpec(Club club) {
+    final name = club.name;
+    if (name.contains('리얼')) {
+      return const _ClubLogoSpec(
+        icon: Icons.shield_rounded,
+        background: Color(0xFFE8F2FF),
+        foreground: Color(0xFF2563EB),
+      );
+    }
+    if (name.contains('올라운드')) {
+      return const _ClubLogoSpec(
+        icon: Icons.all_inclusive_rounded,
+        background: Color(0xFFEAF7F1),
+        foreground: Color(0xFF059669),
+      );
+    }
+    if (name.contains('위너스')) {
+      return const _ClubLogoSpec(
+        icon: Icons.emoji_events_rounded,
+        background: Color(0xFFFFF4D6),
+        foreground: Color(0xFFF59E0B),
+      );
+    }
+    if (name.contains('랠리')) {
+      return const _ClubLogoSpec(
+        icon: Icons.sports_tennis_rounded,
+        background: Color(0xFFFFF0D8),
+        foreground: Color(0xFFFF7A1A),
+      );
+    }
+    if (name.contains('첨단')) {
+      return const _ClubLogoSpec(
+        icon: Icons.bolt_rounded,
+        background: Color(0xFFEDE9FE),
+        foreground: Color(0xFF7C3AED),
+      );
+    }
+    if (name.contains('주말')) {
+      return const _ClubLogoSpec(
+        icon: Icons.wb_sunny_rounded,
+        background: Color(0xFFFFF7ED),
+        foreground: Color(0xFFEA580C),
+      );
+    }
+    if (club.sport == 'tennis') {
+      return const _ClubLogoSpec(
+        icon: Icons.sports_tennis_rounded,
+        background: Color(0xFFFFF0D8),
+        foreground: Color(0xFFFF7A1A),
+      );
+    }
+    return const _ClubLogoSpec(
+      icon: Icons.sports_soccer_rounded,
+      background: Color(0xFFE8F6D6),
+      foreground: Color(0xFF7DCD18),
+    );
+  }
+}
+
+class _ClubLogoSpec {
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+
+  const _ClubLogoSpec({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+}
 
 class _TeamRecruitingEntryCard extends StatelessWidget {
   final List<Club> managedClubs;
@@ -434,6 +1043,16 @@ class _ClubSearchFilters {
   _ClubSearchFilters cleared() => const _ClubSearchFilters();
 }
 
+class _ClubFilterResult {
+  final _ClubSearchFilters filters;
+  final Set<String> interests;
+
+  const _ClubFilterResult({
+    required this.filters,
+    required this.interests,
+  });
+}
+
 String _formatFee(double value) {
   final amount = value.round();
   if (amount == 0) return '0원';
@@ -444,14 +1063,19 @@ String _formatFee(double value) {
 
 // ─── 클럽 찾기 탭 ────────────────────────────────────────────────────────────
 
+// 클럽 찾기 탭 구조를 되돌릴 때 참고할 수 있도록 남겨둔 기존 컴포넌트.
+// ignore: unused_element
 class _SearchTab extends StatelessWidget {
   final String q;
-  final String? sport;
+  final Set<String> interests;
+  final List<Club>? myClubs;
+  final bool loadingMy;
   final List<Club>? clubs;
   final bool loading;
   final String? error;
   final Set<String> favoriteIds;
   final _ClubSearchFilters filters;
+  final ValueChanged<Set<String>> onInterestsChanged;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<_ClubSearchFilters> onFiltersChanged;
   final VoidCallback onSearch;
@@ -459,12 +1083,16 @@ class _SearchTab extends StatelessWidget {
 
   const _SearchTab({
     required this.q,
-    required this.sport,
+    required this.interests,
+    required this.myClubs,
+    required this.loadingMy,
     required this.clubs,
     required this.loading,
+    // ignore: unused_element_parameter
     this.error,
     required this.favoriteIds,
     required this.filters,
+    required this.onInterestsChanged,
     required this.onQueryChanged,
     required this.onFiltersChanged,
     required this.onSearch,
@@ -474,11 +1102,21 @@ class _SearchTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final isTennis = sport == 'tennis';
-    final accent = isTennis ? cs.tertiary : cs.secondary;
-    final visibleClubs =
-        clubs?.where((club) => _matchesClientFilters(club, filters)).toList();
+    final isLocalPreview =
+        Uri.base.host == '127.0.0.1' || Uri.base.host == 'localhost';
+    final effectiveClubs = clubs ??
+        (AppConfig.userDesignPreview || isLocalPreview
+            ? _previewSearchClubs
+            : null);
+    final visibleClubs = effectiveClubs
+        ?.where((club) => interests.contains(club.sport))
+        .where((club) => _matchesClientFilters(club, filters))
+        .toList();
+    final newClubs = _newClubs(visibleClubs ?? const []);
+    final recommendedClubs = _recommendedClubs(visibleClubs ?? const []);
+    final joinedClubs =
+        (myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
+    final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Column(
       children: [
@@ -492,97 +1130,11 @@ class _SearchTab extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => _openFilterSheet(context),
-                  child: Ink(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          accent,
-                          isTennis
-                              ? cs.tertiaryContainer
-                              : cs.secondaryContainer,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          right: -8,
-                          bottom: -18,
-                          child: Icon(
-                            isTennis
-                                ? Icons.sports_tennis_rounded
-                                : Icons.sports_soccer_rounded,
-                            size: 96,
-                            color: Colors.white.withValues(alpha: 0.22),
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.tune_rounded,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '조건 설정',
-                                  style: tt.labelSmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isTennis ? '테니스 클럽 찾기' : '풋살 클럽 찾기',
-                              style: tt.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              filters.hasActive
-                                  ? filters.labels.join(' · ')
-                                  : '지역, 성별, 모임요일, 월회비로 찾아보세요.',
-                              style: tt.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.88),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              _ClubFindControlCard(
+                filters: filters,
+                interests: interests,
+                onFilterTap: () => _openFilterSheet(context),
+                onInterestTap: () => _openInterestSheet(context),
               ),
               if (filters.hasActive) ...[
                 const SizedBox(height: AppSpacing.sm),
@@ -626,7 +1178,7 @@ class _SearchTab extends StatelessWidget {
                   actionLabel: '다시 시도',
                   onAction: onSearch,
                 )
-              : clubs == null
+              : effectiveClubs == null
                   ? const SizedBox.shrink()
                   : visibleClubs!.isEmpty
                       ? const AppEmptyState(
@@ -634,23 +1186,81 @@ class _SearchTab extends StatelessWidget {
                           title: '등록된 클럽이 없습니다',
                           description: '다른 검색어나 필터로 시도해 보세요.',
                         )
-                      : ListView.builder(
+                      : ListView(
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.lg,
                             vertical: AppSpacing.lg,
                           ),
-                          itemCount: visibleClubs.length,
-                          itemBuilder: (_, i) => Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _ClubCard(
-                              club: visibleClubs[i],
-                              showRole: false,
-                              isFavorite:
-                                  favoriteIds.contains(visibleClubs[i].id),
-                              onChanged: onJoined,
+                          children: [
+                            if (newClubs.isNotEmpty) ...[
+                              _ClubSectionHeader(
+                                title: '내 주변에 새로 생겼어요',
+                                actionLabel: '더보기',
+                                onAction: onSearch,
+                              ),
+                              _NewClubGrid(
+                                clubs: newClubs,
+                                favoriteIds: favoriteIds,
+                                onJoined: onJoined,
+                              ),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
+                            if (managedClubs.isNotEmpty) ...[
+                              _TeamRecruitingEntryCard(
+                                managedClubs: managedClubs,
+                              ),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
+                            _JoinedClubSection(
+                              clubs: joinedClubs,
+                              loading: loadingMy,
+                              favoriteIds: favoriteIds,
+                              onJoined: onJoined,
                             ),
-                          ),
+                            const SizedBox(height: AppSpacing.xl),
+                            _InterestSettingsCard(
+                              interests: interests,
+                              onTap: () => _openInterestSheet(context),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            if (recommendedClubs.isNotEmpty) ...[
+                              _ClubSectionHeader(
+                                title: '맞춤추천',
+                                subtitle: filters.hasActive
+                                    ? filters.labels.join(' · ')
+                                    : '내 관심 종목 기준',
+                              ),
+                              for (final club in recommendedClubs.take(3))
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.sm,
+                                  ),
+                                  child: _ClubCard(
+                                    club: club,
+                                    showRole: false,
+                                    isFavorite: favoriteIds.contains(club.id),
+                                    onChanged: onJoined,
+                                  ),
+                                ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                            _ClubSectionHeader(
+                              title: '전체 클럽',
+                              subtitle: '${visibleClubs.length}개',
+                            ),
+                            for (final club in visibleClubs)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: _ClubCard(
+                                  club: club,
+                                  showRole: false,
+                                  isFavorite: favoriteIds.contains(club.id),
+                                  onChanged: onJoined,
+                                ),
+                              ),
+                          ],
                         ),
         ),
       ],
@@ -659,28 +1269,657 @@ class _SearchTab extends StatelessWidget {
 
   bool _matchesClientFilters(Club club, _ClubSearchFilters filters) {
     if (filters.region != null && club.region != filters.region) return false;
+    if (filters.gender != null &&
+        club.genderPreference != null &&
+        club.genderPreference != filters.gender) {
+      return false;
+    }
+    if (filters.days.isNotEmpty &&
+        club.meetingDays.isNotEmpty &&
+        club.meetingDays.every((day) => !filters.days.contains(day))) {
+      return false;
+    }
+    if (club.monthlyFee != null &&
+        (club.monthlyFee! < filters.feeRange.start ||
+            club.monthlyFee! > filters.feeRange.end)) {
+      return false;
+    }
     return true;
+  }
+
+  List<Club> _newClubs(List<Club> source) {
+    final now = DateTime.now();
+    final recent = source.where((club) {
+      final createdAt = club.createdAt;
+      if (createdAt == null) return false;
+      return now.difference(createdAt).inDays <= 7;
+    }).toList()
+      ..sort((a, b) {
+        final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bDate.compareTo(aDate);
+      });
+    if (recent.isNotEmpty) return recent.take(4).toList();
+    return source.take(4).toList();
+  }
+
+  List<Club> _recommendedClubs(List<Club> source) {
+    final scored = [
+      for (final club in source)
+        (
+          club: club,
+          score: (filters.region != null && club.region == filters.region
+                  ? 4
+                  : 0) +
+              (filters.gender != null && club.genderPreference == filters.gender
+                  ? 2
+                  : 0) +
+              (filters.days.isNotEmpty &&
+                      club.meetingDays.any(filters.days.contains)
+                  ? 2
+                  : 0) +
+              (club.monthlyFee != null &&
+                      club.monthlyFee! >= filters.feeRange.start &&
+                      club.monthlyFee! <= filters.feeRange.end
+                  ? 1
+                  : 0) +
+              club.memberCount,
+        ),
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    return scored.map((item) => item.club).toList();
   }
 
   Future<void> _openFilterSheet(BuildContext context) async {
     final cs = Theme.of(context).colorScheme;
-    final isTennis = sport == 'tennis';
-    final result = await showModalBottomSheet<_ClubSearchFilters>(
+    final result = await showModalBottomSheet<_ClubFilterResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _ClubFilterSheet(
         initialFilters: filters,
-        title: isTennis ? '테니스 클럽 찾기' : '풋살 클럽 찾기',
-        icon: isTennis
-            ? Icons.sports_tennis_rounded
-            : Icons.sports_soccer_rounded,
-        accentColor: isTennis ? cs.tertiaryContainer : cs.secondaryContainer,
-        onAccentColor:
-            isTennis ? cs.onTertiaryContainer : cs.onSecondaryContainer,
+        initialInterests: interests,
+        title: '클럽 찾기 조건',
+        icon: Icons.tune_rounded,
+        accentColor: cs.primaryContainer,
+        onAccentColor: cs.onPrimaryContainer,
       ),
     );
-    if (result != null) onFiltersChanged(result);
+    if (result != null) {
+      onFiltersChanged(result.filters);
+      onInterestsChanged(result.interests);
+    }
+  }
+
+  Future<void> _openInterestSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => _InterestSheet(initialInterests: interests),
+    );
+    if (result != null && result.isNotEmpty) onInterestsChanged(result);
+  }
+}
+
+class _ClubFindControlCard extends StatelessWidget {
+  final _ClubSearchFilters filters;
+  final Set<String> interests;
+  final VoidCallback onFilterTap;
+  final VoidCallback onInterestTap;
+
+  const _ClubFindControlCard({
+    required this.filters,
+    required this.interests,
+    required this.onFilterTap,
+    required this.onInterestTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final interestLabel = interests.map(sportLabelFromString).join(' · ');
+
+    return AppCard(
+      variant: AppCardVariant.filled,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: cs.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '관심사 설정하기',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      interestLabel.isEmpty ? '테니스 · 풋살' : interestLabel,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton(
+                onPressed: onInterestTap,
+                child: const Text('설정'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          InkWell(
+            onTap: onFilterTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Ink(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.location_on_rounded,
+                    size: 18,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      filters.hasActive
+                          ? filters.labels.join(' · ')
+                          : '지역 · 성별 · 모임요일 · 월회비',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.labelLarge?.copyWith(
+                        color: filters.hasActive
+                            ? cs.onSurface
+                            : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InterestSettingsCard extends StatelessWidget {
+  final Set<String> interests;
+  final VoidCallback onTap;
+
+  const _InterestSettingsCard({
+    required this.interests,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.manage_search_rounded,
+                  color: Color(0xFF2F73F6),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '관심사 설정하기',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '선택한 종목의 클럽만 볼 수 있어요.',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JoinedClubSection extends StatelessWidget {
+  final List<Club> clubs;
+  final bool loading;
+  final Set<String> favoriteIds;
+  final VoidCallback onJoined;
+
+  const _JoinedClubSection({
+    required this.clubs,
+    required this.loading,
+    required this.favoriteIds,
+    required this.onJoined,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '가입한 클럽',
+                style: tt.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            Text(
+              '가입한 클럽 공개',
+              style: tt.labelLarge?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Switch(value: true, onChanged: (_) {}),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (loading && clubs.isEmpty)
+          const LinearProgressIndicator()
+        else if (clubs.isEmpty)
+          AppCard(
+            variant: AppCardVariant.outlined,
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    Icons.groups_rounded,
+                    color: cs.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    '관심 있는 클럽을 찾아 가입해보세요.',
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          _ClubCard(
+            club: clubs.first,
+            showRole: true,
+            isFavorite: favoriteIds.contains(clubs.first.id),
+            onChanged: onJoined,
+          ),
+      ],
+    );
+  }
+}
+
+class _InterestSheet extends StatefulWidget {
+  final Set<String> initialInterests;
+
+  const _InterestSheet({required this.initialInterests});
+
+  @override
+  State<_InterestSheet> createState() => _InterestSheetState();
+}
+
+class _InterestSheetState extends State<_InterestSheet> {
+  late final Set<String> _selected = {...widget.initialInterests};
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '관심사 선택',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _SportInterestChip(
+                  sport: 'tennis',
+                  selected: _selected.contains('tennis'),
+                  onTap: _toggleSport,
+                ),
+                _SportInterestChip(
+                  sport: 'futsal',
+                  selected: _selected.contains('futsal'),
+                  onTap: _toggleSport,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _selected.isEmpty
+                    ? null
+                    : () => Navigator.pop(context, _selected),
+                child: const Text('적용하기'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleSport(String sport) {
+    setState(() {
+      if (!_selected.add(sport)) _selected.remove(sport);
+    });
+  }
+}
+
+class _SportInterestChip extends StatelessWidget {
+  final String sport;
+  final bool selected;
+  final ValueChanged<String> onTap;
+
+  const _SportInterestChip({
+    required this.sport,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isTennis = sport == 'tennis';
+    final cs = Theme.of(context).colorScheme;
+
+    return FilterChip(
+      avatar: Icon(
+        isTennis ? Icons.sports_tennis_rounded : Icons.sports_soccer_rounded,
+        size: 18,
+      ),
+      showCheckmark: true,
+      checkmarkColor: cs.primary,
+      selectedColor: cs.primaryContainer,
+      side: BorderSide(
+        color: selected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.6),
+      ),
+      label: Text(sportLabelFromString(sport)),
+      labelStyle: TextStyle(
+        color: selected ? cs.primary : cs.onSurface,
+        fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(sport),
+    );
+  }
+}
+
+class _ClubSectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _ClubSectionHeader({
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewClubGrid extends StatelessWidget {
+  final List<Club> clubs;
+  final Set<String> favoriteIds;
+  final VoidCallback onJoined;
+
+  const _NewClubGrid({
+    required this.clubs,
+    required this.favoriteIds,
+    required this.onJoined,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        final width = compact
+            ? constraints.maxWidth
+            : (constraints.maxWidth - AppSpacing.sm) / 2;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final club in clubs.take(4))
+              SizedBox(
+                width: width,
+                child: _CompactClubCard(
+                  club: club,
+                  isFavorite: favoriteIds.contains(club.id),
+                  onChanged: onJoined,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CompactClubCard extends ConsumerWidget {
+  final Club club;
+  final bool isFavorite;
+  final VoidCallback onChanged;
+
+  const _CompactClubCard({
+    required this.club,
+    required this.isFavorite,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final meta = [
+      sportLabelFromString(club.sport),
+      if (club.region != null) club.region,
+    ].whereType<String>().join(' · ');
+
+    return AppCard(
+      onTap: () async {
+        await context.push('/clubs/${club.id}', extra: club);
+        onChanged();
+      },
+      child: Row(
+        children: [
+          _ClubSportThumbnail(
+            sport: club.sport,
+            accentColor: club.sport == 'tennis' ? cs.tertiary : cs.secondary,
+            logoUrl: club.logoUrl,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        club.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    if (club.createdAt != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF3B4F),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: tt.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (meta.isNotEmpty)
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -732,6 +1971,7 @@ class _ActiveFilterChips extends StatelessWidget {
 
 class _ClubFilterSheet extends StatefulWidget {
   final _ClubSearchFilters initialFilters;
+  final Set<String> initialInterests;
   final String title;
   final IconData icon;
   final Color accentColor;
@@ -739,6 +1979,7 @@ class _ClubFilterSheet extends StatefulWidget {
 
   const _ClubFilterSheet({
     required this.initialFilters,
+    required this.initialInterests,
     required this.title,
     required this.icon,
     required this.accentColor,
@@ -755,6 +1996,9 @@ class _ClubFilterSheetState extends State<_ClubFilterSheet> {
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 
   late _ClubSearchFilters _filters = widget.initialFilters;
+  late Set<String> _selectedInterests = widget.initialInterests.isEmpty
+      ? const {'tennis', 'futsal'}
+      : {...widget.initialInterests};
 
   @override
   Widget build(BuildContext context) {
@@ -797,6 +2041,27 @@ class _ClubFilterSheetState extends State<_ClubFilterSheet> {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
+            _FilterSection(
+              title: '종목',
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _SportInterestChip(
+                      sport: 'tennis',
+                      selected: _selectedInterests.contains('tennis'),
+                      onTap: _selectSport,
+                    ),
+                    _SportInterestChip(
+                      sport: 'futsal',
+                      selected: _selectedInterests.contains('futsal'),
+                      onTap: _selectSport,
+                    ),
+                  ],
+                ),
+              ],
+            ),
             _FilterSection(
               title: '지역',
               children: [
@@ -865,6 +2130,9 @@ class _ClubFilterSheetState extends State<_ClubFilterSheet> {
                   child: OutlinedButton(
                     onPressed: () => setState(() {
                       _filters = _filters.cleared();
+                      _selectedInterests = widget.initialInterests.isEmpty
+                          ? const {'tennis'}
+                          : {...widget.initialInterests};
                     }),
                     child: const Text('초기화'),
                   ),
@@ -873,7 +2141,13 @@ class _ClubFilterSheetState extends State<_ClubFilterSheet> {
                 Expanded(
                   flex: 2,
                   child: FilledButton.icon(
-                    onPressed: () => Navigator.pop(context, _filters),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _ClubFilterResult(
+                        filters: _filters,
+                        interests: _selectedInterests,
+                      ),
+                    ),
                     icon: const Icon(Icons.check_rounded),
                     label: const Text('조건 적용'),
                   ),
@@ -884,6 +2158,12 @@ class _ClubFilterSheetState extends State<_ClubFilterSheet> {
         ),
       ),
     );
+  }
+
+  void _selectSport(String sport) {
+    setState(() {
+      _selectedInterests = {sport};
+    });
   }
 }
 

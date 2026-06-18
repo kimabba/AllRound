@@ -16,7 +16,7 @@ import {
 
 Deno.test('shared enums expose stable sport grade order', () => {
   assertEquals(TENNIS_GRADES, ['under1y', 'y1to3', 'y3to5', 'over5y']);
-  assertEquals(FUTSAL_GRADES, ['beginner', 'intermediate', 'advanced']);
+  assertEquals(FUTSAL_GRADES, ['intro', 'beginner', 'intermediate', 'advanced', 'elite']);
 });
 
 Deno.test('regionCodeFromLabel maps 한글 권역명 → RegionCode', () => {
@@ -79,8 +79,10 @@ Deno.test('isValidGrade rejects invalid tennis grades', () => {
 });
 
 Deno.test('isValidGrade accepts futsal grades', () => {
+  assertEquals(isValidGrade('futsal', 'intro'), true);
   assertEquals(isValidGrade('futsal', 'beginner'), true);
   assertEquals(isValidGrade('futsal', 'advanced'), true);
+  assertEquals(isValidGrade('futsal', 'elite'), true);
 });
 
 Deno.test('isValidGrade rejects invalid futsal grades', () => {
@@ -110,8 +112,10 @@ Deno.test('rankOf returns correct tennis rank', () => {
 });
 
 Deno.test('rankOf returns correct futsal rank', () => {
-  assertEquals(rankOf('futsal', 'beginner'), 0);
-  assertEquals(rankOf('futsal', 'advanced'), 2);
+  assertEquals(rankOf('futsal', 'intro'), 0);
+  assertEquals(rankOf('futsal', 'beginner'), 1);
+  assertEquals(rankOf('futsal', 'advanced'), 3);
+  assertEquals(rankOf('futsal', 'elite'), 4);
 });
 
 Deno.test('rankOf returns null for division codes (no rank mapping)', () => {

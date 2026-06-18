@@ -217,7 +217,8 @@ class _MainShell extends ConsumerWidget {
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
     final activeSport = ref.watch(activeSportProvider);
-    final showSportSwitcher = loc != '/friend-schedule';
+    final showSportSwitcher =
+        loc != '/friend-schedule' && !loc.startsWith('/clubs');
 
     return Scaffold(
       body: Column(
