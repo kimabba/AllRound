@@ -25,6 +25,14 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   bool _loading = false;
   bool _usingPreviewData = false;
   String? _error;
+  _TournamentViewMode _viewMode = _TournamentViewMode.list;
+  late DateTime _selectedDate;
+  late DateTime _focusedMonth;
+
+  DateTime get _today {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
 
   Future<void> _search() async {
     setState(() {
@@ -91,6 +99,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedDate = _today;
+    _focusedMonth = DateTime(_selectedDate.year, _selectedDate.month);
     WidgetsBinding.instance.addPostFrameCallback((_) => _search());
   }
 
@@ -124,6 +134,11 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             ),
             child: Column(
               children: [
+                _ViewModeSegment(
+                  selected: _viewMode,
+                  onChanged: (mode) => setState(() => _viewMode = mode),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 TextField(
                   decoration: InputDecoration(
                     hintText: '대회명·주최·설명 검색',
@@ -202,36 +217,747 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                             title: '검색 결과 없음',
                             description: '다른 검색어나 필터로 시도해 보세요.',
                           )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.lg,
-                              vertical: AppSpacing.lg,
-                            ),
-                            itemCount: _results!.length,
-                            itemBuilder: (_, i) {
-                              final tournament = _results![i];
-                              final favs =
-                                  favorites.valueOrNull ?? const <String>{};
-                              return TournamentCard(
-                                tournament: tournament,
-                                isFavorite: favs.contains(tournament.id),
-                                onTap: () => context
+                        : _viewMode == _TournamentViewMode.list
+                            ? _TournamentListView(
+                                tournaments: _results!,
+                                favoriteIds:
+                                    favorites.valueOrNull ?? const <String>{},
+                                onTap: (tournament) => context
                                     .push('/tournaments/${tournament.id}'),
-                                onFavoriteToggle: () async {
+                                onFavoriteToggle:
+                                    (tournament, isFavorite) async {
                                   await ref.read(apiProvider).toggleFavorite(
                                         tournament.id,
-                                        !favs.contains(tournament.id),
+                                        !isFavorite,
                                       );
                                   ref.invalidate(favoriteIdsProvider);
                                 },
-                              );
-                            },
-                          ),
+                              )
+                            : _TournamentCalendarView(
+                                tournaments: _results!,
+                                favoriteIds:
+                                    favorites.valueOrNull ?? const <String>{},
+                                focusedMonth: _focusedMonth,
+                                selectedDate: _selectedDate,
+                                onMonthChanged: (month) {
+                                  setState(() {
+                                    _focusedMonth = month;
+                                    if (_selectedDate.year != month.year ||
+                                        _selectedDate.month != month.month) {
+                                      _selectedDate =
+                                          DateTime(month.year, month.month);
+                                    }
+                                  });
+                                },
+                                onDateSelected: (date) {
+                                  setState(() => _selectedDate = date);
+                                },
+                                onSelectNextTournamentDate: (date) {
+                                  setState(() {
+                                    _selectedDate = date;
+                                    _focusedMonth =
+                                        DateTime(date.year, date.month);
+                                  });
+                                },
+                                onTap: (tournament) => context
+                                    .push('/tournaments/${tournament.id}'),
+                                onFavoriteToggle:
+                                    (tournament, isFavorite) async {
+                                  await ref.read(apiProvider).toggleFavorite(
+                                        tournament.id,
+                                        !isFavorite,
+                                      );
+                                  ref.invalidate(favoriteIdsProvider);
+                                },
+                              ),
           ),
         ],
       ),
     );
   }
+}
+
+enum _TournamentViewMode { list, calendar }
+
+class _ViewModeSegment extends StatelessWidget {
+  final _TournamentViewMode selected;
+  final ValueChanged<_TournamentViewMode> onChanged;
+
+  const _ViewModeSegment({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.75)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _ViewModeButton(
+            label: '목록',
+            icon: Icons.format_list_bulleted_rounded,
+            selected: selected == _TournamentViewMode.list,
+            textTheme: tt,
+            colorScheme: cs,
+            onTap: () => onChanged(_TournamentViewMode.list),
+          ),
+          _ViewModeButton(
+            label: '일정',
+            icon: Icons.calendar_month_rounded,
+            selected: selected == _TournamentViewMode.calendar,
+            textTheme: tt,
+            colorScheme: cs,
+            onTap: () => onChanged(_TournamentViewMode.calendar),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ViewModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final TextTheme textTheme;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  const _ViewModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.textTheme,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? colorScheme.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentListView extends StatelessWidget {
+  final List<Tournament> tournaments;
+  final Set<String> favoriteIds;
+  final ValueChanged<Tournament> onTap;
+  final void Function(Tournament tournament, bool isFavorite) onFavoriteToggle;
+
+  const _TournamentListView({
+    required this.tournaments,
+    required this.favoriteIds,
+    required this.onTap,
+    required this.onFavoriteToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.lg,
+      ),
+      itemCount: tournaments.length,
+      itemBuilder: (_, i) {
+        final tournament = tournaments[i];
+        final isFavorite = favoriteIds.contains(tournament.id);
+        return TournamentCard(
+          tournament: tournament,
+          isFavorite: isFavorite,
+          onTap: () => onTap(tournament),
+          onFavoriteToggle: () => onFavoriteToggle(tournament, isFavorite),
+        );
+      },
+    );
+  }
+}
+
+class _TournamentCalendarView extends StatelessWidget {
+  final List<Tournament> tournaments;
+  final Set<String> favoriteIds;
+  final DateTime focusedMonth;
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onMonthChanged;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<DateTime> onSelectNextTournamentDate;
+  final ValueChanged<Tournament> onTap;
+  final void Function(Tournament tournament, bool isFavorite) onFavoriteToggle;
+
+  const _TournamentCalendarView({
+    required this.tournaments,
+    required this.favoriteIds,
+    required this.focusedMonth,
+    required this.selectedDate,
+    required this.onMonthChanged,
+    required this.onDateSelected,
+    required this.onSelectNextTournamentDate,
+    required this.onTap,
+    required this.onFavoriteToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedTournaments = _tournamentsOnDate(tournaments, selectedDate);
+    final nextDate = _nextTournamentDate(tournaments, selectedDate);
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      children: [
+        _TournamentMonthCalendar(
+          focusedMonth: focusedMonth,
+          selectedDate: selectedDate,
+          tournaments: tournaments,
+          onMonthChanged: onMonthChanged,
+          onDateSelected: onDateSelected,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _SelectedDateTournamentPanel(
+          selectedDate: selectedDate,
+          count: selectedTournaments.length,
+          child: selectedTournaments.isEmpty
+              ? _EmptySelectedDateCard(
+                  nextDate: nextDate,
+                  onSelectNext: nextDate == null
+                      ? null
+                      : () => onSelectNextTournamentDate(nextDate),
+                )
+              : Column(
+                  children: [
+                    for (final tournament in selectedTournaments)
+                      TournamentCard(
+                        tournament: tournament,
+                        isFavorite: favoriteIds.contains(tournament.id),
+                        onTap: () => onTap(tournament),
+                        onFavoriteToggle: () => onFavoriteToggle(
+                          tournament,
+                          favoriteIds.contains(tournament.id),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TournamentMonthCalendar extends StatelessWidget {
+  final DateTime focusedMonth;
+  final DateTime selectedDate;
+  final List<Tournament> tournaments;
+  final ValueChanged<DateTime> onMonthChanged;
+  final ValueChanged<DateTime> onDateSelected;
+
+  const _TournamentMonthCalendar({
+    required this.focusedMonth,
+    required this.selectedDate,
+    required this.tournaments,
+    required this.onMonthChanged,
+    required this.onDateSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final firstDay = DateTime(focusedMonth.year, focusedMonth.month);
+    final daysInMonth =
+        DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
+    final leadingEmptyCells = firstDay.weekday % 7;
+    final totalCells = leadingEmptyCells + daysInMonth;
+    final rowCount = (totalCells / 7).ceil();
+    final today = _dateOnly(DateTime.now());
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _CalendarMonthButton(
+                onPressed: () => onMonthChanged(
+                  DateTime(focusedMonth.year, focusedMonth.month - 1),
+                ),
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '${focusedMonth.year}년 ${focusedMonth.month}월',
+                    style: tt.titleMedium?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              _CalendarMonthButton(
+                onPressed: () => onMonthChanged(
+                  DateTime(focusedMonth.year, focusedMonth.month + 1),
+                ),
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              for (final day in const ['일', '월', '화', '수', '목', '금', '토'])
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      day,
+                      style: tt.labelSmall?.copyWith(
+                        color: day == '일'
+                            ? cs.error
+                            : day == '토'
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (var row = 0; row < rowCount; row++)
+            Row(
+              children: [
+                for (var col = 0; col < 7; col++)
+                  Expanded(
+                    child: _CalendarDayCell(
+                      date: _dateForCell(
+                        focusedMonth,
+                        leadingEmptyCells,
+                        row * 7 + col,
+                      ),
+                      today: today,
+                      selectedDate: selectedDate,
+                      count: _dateForCell(
+                                focusedMonth,
+                                leadingEmptyCells,
+                                row * 7 + col,
+                              ) ==
+                              null
+                          ? 0
+                          : _tournamentsOnDate(
+                              tournaments,
+                              _dateForCell(
+                                focusedMonth,
+                                leadingEmptyCells,
+                                row * 7 + col,
+                              )!,
+                            ).length,
+                      onTap: onDateSelected,
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  DateTime? _dateForCell(DateTime month, int leadingEmptyCells, int index) {
+    final day = index - leadingEmptyCells + 1;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    if (day < 1 || day > daysInMonth) return null;
+    return DateTime(month.year, month.month, day);
+  }
+}
+
+class _CalendarMonthButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final Widget icon;
+
+  const _CalendarMonthButton({
+    required this.onPressed,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox.square(
+      dimension: 36,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: icon,
+        iconSize: 24,
+        color: cs.onSurface,
+        style: IconButton.styleFrom(
+          backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarDayCell extends StatelessWidget {
+  final DateTime? date;
+  final DateTime today;
+  final DateTime selectedDate;
+  final int count;
+  final ValueChanged<DateTime> onTap;
+
+  const _CalendarDayCell({
+    required this.date,
+    required this.today,
+    required this.selectedDate,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final currentDate = date;
+    if (currentDate == null) {
+      return const SizedBox(height: 46);
+    }
+
+    final isSelected = _isSameDay(currentDate, selectedDate);
+    final isToday = _isSameDay(currentDate, today);
+
+    return InkWell(
+      onTap: () => onTap(currentDate),
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 46,
+        child: Center(
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: isSelected ? 36 : 32,
+                  height: isSelected ? 36 : 32,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: cs.primary, width: 1.3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${currentDate.day}',
+                    style: tt.labelLarge?.copyWith(
+                      color: isSelected ? cs.onPrimary : cs.onSurface,
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (count > 0)
+                  Positioned(
+                    right: count > 1 ? 0 : 6,
+                    bottom: count > 1 ? 0 : 4,
+                    child: count == 1
+                        ? Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: isSelected ? cs.onPrimary : cs.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                        : Container(
+                            height: 16,
+                            constraints: const BoxConstraints(minWidth: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isSelected ? cs.onPrimary : cs.primary,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: tt.labelSmall?.copyWith(
+                                color: isSelected ? cs.primary : cs.onPrimary,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedDateTournamentPanel extends StatelessWidget {
+  final DateTime selectedDate;
+  final int count;
+  final Widget child;
+
+  const _SelectedDateTournamentPanel({
+    required this.selectedDate,
+    required this.count,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SelectedDateHeader(
+            selectedDate: selectedDate,
+            count: count,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedDateHeader extends StatelessWidget {
+  final DateTime selectedDate;
+  final int count;
+
+  const _SelectedDateHeader({
+    required this.selectedDate,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '${selectedDate.month}월 ${selectedDate.day}일 (${_weekdayLabel(selectedDate)})',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: count > 0
+                ? cs.primaryContainer
+                : cs.surfaceContainerHighest.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '대회 $count개',
+            style: tt.labelMedium?.copyWith(
+              color: count > 0 ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptySelectedDateCard extends StatelessWidget {
+  final DateTime? nextDate;
+  final VoidCallback? onSelectNext;
+
+  const _EmptySelectedDateCard({
+    required this.nextDate,
+    required this.onSelectNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.event_busy_rounded,
+              size: 22,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '이 날짜에는 대회가 없어요',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '가까운 날짜의 대회를 확인해보세요.',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          if (nextDate != null && onSelectNext != null)
+            TextButton(
+              onPressed: onSelectNext,
+              child: Text('${nextDate!.month}/${nextDate!.day} 보기'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
+
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+bool _isDateInTournament(DateTime date, Tournament tournament) {
+  final target = _dateOnly(date);
+  final start = _dateOnly(tournament.startDate);
+  final end = _dateOnly(tournament.endDate ?? tournament.startDate);
+  return !target.isBefore(start) && !target.isAfter(end);
+}
+
+List<Tournament> _tournamentsOnDate(
+  List<Tournament> tournaments,
+  DateTime date,
+) {
+  return tournaments
+      .where((tournament) => _isDateInTournament(date, tournament))
+      .toList()
+    ..sort((a, b) => a.startDate.compareTo(b.startDate));
+}
+
+DateTime? _nextTournamentDate(
+  List<Tournament> tournaments,
+  DateTime selectedDate,
+) {
+  final selected = _dateOnly(selectedDate);
+  final candidates = <DateTime>[];
+  for (final tournament in tournaments) {
+    final start = _dateOnly(tournament.startDate);
+    final end = _dateOnly(tournament.endDate ?? tournament.startDate);
+    if (end.isBefore(selected)) continue;
+    candidates.add(start.isBefore(selected) ? selected : start);
+  }
+  if (candidates.isEmpty) return null;
+  candidates.sort();
+  return candidates.first;
+}
+
+String _weekdayLabel(DateTime date) {
+  return const ['월', '화', '수', '목', '금', '토', '일'][date.weekday - 1];
 }
 
 List<Tournament> _previewTournaments(String? sport) {
