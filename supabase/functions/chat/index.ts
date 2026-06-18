@@ -15,16 +15,18 @@ import {
   buildFallbackResult,
   buildRuleResult,
   classifyByRule,
-  type DateRange,
   extractSlots,
   type Intent,
   INTENT_VALUES,
   type IntentResult,
+  resolveRequestedSport,
 } from '../_shared/intent.ts';
 import type { RegionCode } from '../_shared/enums.ts';
 import {
   buildTournamentCards,
   parseSelectedEntity,
+  renderTournamentSearchEmptyText,
+  renderTournamentSearchText,
   type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
 
@@ -133,86 +135,13 @@ const INTENT_KNN_THRESHOLD = 0.75;
 // Day 5-6 routing 설정.
 // - tournament_search 만 활성화 (다른 의도는 기존 RAG+LLM 흐름 유지).
 // - confidence ≥ 0.95 일 때만 routing. 미달은 fallback.
-// - SQL 결과 0건이면 fallback (return 안 함, 자연스럽게 RAG+LLM 흐름으로 흘러감).
+// - SQL 결과 0건이면 precise filter 결과로 보고 즉시 종료한다.
 const ROUTING_CONFIDENCE_THRESHOLD = 0.95;
 const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search']);
 
 interface IntentClassifyRow {
   intent: string;
   similarity: number;
-}
-
-/**
- * tournament_search routing 결과를 마크다운 템플릿으로 렌더.
- *
- * 출력 구조:
- *   - 헤더 1줄 (종목 + 결과 수 + 필터 요약).
- *   - 종목이 혼합되면 하위 섹션으로 분리 (테니스 → 풋살 순).
- *   - 각 대회는 1줄 bullet: 제목 / 일정 / 장소 / 참가비 / 포맷 / 출전등급.
- *   - 마지막에 disclaimer.
- *
- * LLM 호출 없이 결정적으로 생성 — 같은 입력에 같은 출력.
- */
-function renderTournamentSearchTemplate(
-  rows: TournamentCardRow[],
-  ctx: {
-    sport?: 'tennis' | 'futsal';
-    region: string | null;
-    dateRange?: DateRange;
-  },
-): string {
-  const lines: string[] = [];
-  const sportLabel = ctx.sport === 'futsal'
-    ? '⚽ 풋살'
-    : ctx.sport === 'tennis'
-    ? '🎾 테니스'
-    : '대회';
-
-  // 헤더 — 필터 요약
-  const filters: string[] = [];
-  if (ctx.region) filters.push(ctx.region);
-  if (ctx.dateRange) filters.push(`${ctx.dateRange.from} ~ ${ctx.dateRange.to}`);
-  const filterText = filters.length > 0 ? ` (${filters.join(', ')})` : '';
-  const headerLabel = ctx.sport ? sportLabel : '대회';
-  lines.push(`## ${headerLabel} ${rows.length}건${filterText}`);
-  lines.push('');
-
-  // 종목별 그룹핑 — sport 명시 없을 때 섹션 분리.
-  const groups = new Map<string, TournamentCardRow[]>();
-  for (const r of rows) {
-    const k = r.sport;
-    const arr = groups.get(k);
-    if (arr) arr.push(r);
-    else groups.set(k, [r]);
-  }
-
-  const order = ['tennis', 'futsal'];
-  const sortedKeys = [...groups.keys()].sort((a, b) => {
-    const ai = order.indexOf(a);
-    const bi = order.indexOf(b);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-
-  for (const key of sortedKeys) {
-    if (groups.size > 1) {
-      const subLabel = key === 'tennis' ? '### 🎾 테니스' : '### ⚽ 풋살';
-      lines.push(subLabel);
-    }
-    for (const t of groups.get(key)!) {
-      const endPart = t.end_date && t.end_date !== t.start_date ? ` ~ ${t.end_date}` : '';
-      const loc = t.location ? ` @ ${t.location}` : '';
-      const fee = t.entry_fee != null ? ` · 참가비 ${t.entry_fee.toLocaleString()}원` : '';
-      const fmt = t.format ? ` · ${t.format}` : '';
-      const grades = t.eligible_grades.length > 0
-        ? ` · 출전등급 ${t.eligible_grades.join('/')}`
-        : '';
-      lines.push(`- **${t.title}** (${t.start_date}${endPart})${loc}${fee}${fmt}${grades}`);
-    }
-    lines.push('');
-  }
-
-  lines.push('_DB 등록 정보 기준. 상세는 협회나 공식 홈페이지에서 확인하세요._');
-  return lines.join('\n');
 }
 
 function isIntentValue(value: string): value is Intent {
@@ -650,8 +579,10 @@ Deno.serve(async (req) => {
         // requestedSport: 메시지에서 감지된 종목 또는 UI 활성 종목.
         // explicitSport: 메시지에서 명시적으로 언급한 종목 (미등록 거부 판단용).
         //   clientActiveSport는 UI 토글일 뿐이므로 미등록 거부 대상이 아님.
-        const explicitSport = intentResult.slots.sport ?? null;
-        const requestedSport = explicitSport ?? clientActiveSport;
+        const { explicitSport, requestedSport } = resolveRequestedSport(
+          intentResult.slots.sport,
+          clientActiveSport,
+        );
         const registeredSports = new Set(
           ((userSports ?? []) as UserSport[]).map((s) => s.sport),
         );
@@ -734,7 +665,7 @@ Deno.serve(async (req) => {
             'tournament_search_by_slots',
             {
               p_user_id: user.id,
-              p_sport: intentResult.slots.sport ?? null,
+              p_sport: requestedSport,
               p_region: regionLabel,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
@@ -756,8 +687,8 @@ Deno.serve(async (req) => {
             );
           } else if (Array.isArray(rows) && rows.length > 0) {
             const typedRows = rows as TournamentCardRow[];
-            const answerText = renderTournamentSearchTemplate(typedRows, {
-              sport: intentResult.slots.sport,
+            const answerText = renderTournamentSearchText(typedRows, {
+              sport: requestedSport ?? undefined,
               region: regionLabel,
               dateRange,
             });
@@ -807,16 +738,39 @@ Deno.serve(async (req) => {
             controller.close();
             return;
           } else {
-            // routing 시도했지만 결과 0 → fallback. 메트릭만 기록.
+            // routing 결과 0건은 날짜/종목/등급 필터를 반영한 확정 결과다.
+            // semantic RAG fallback 으로 내려가면 날짜와 무관한 유사 대회가 카드로 붙어
+            // "없다"와 "있다"가 동시에 보이는 모순이 생긴다.
+            const answerText = renderTournamentSearchEmptyText({
+              sport: requestedSport,
+              region: regionLabel,
+              dateRange,
+            });
             console.log(
               'chat_route',
               JSON.stringify({
                 event: 'tournament_search_empty',
                 slots: intentResult.slots,
+                requested_sport: requestedSport,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
             );
+            send('route', { intent: 'tournament_search', result_count: 0 });
+            send('context', { tournaments: [], rules: [] });
+            send('delta', { text: answerText });
+
+            await supabase.from('chat_messages').insert({
+              user_id: user.id,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: answerText,
+              citations: [],
+            });
+
+            send('done', {});
+            controller.close();
+            return;
           }
         }
 

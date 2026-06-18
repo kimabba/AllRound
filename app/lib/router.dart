@@ -216,80 +216,11 @@ class _MainShell extends ConsumerWidget {
     final loc = GoRouterState.of(context).matchedLocation;
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
-    final activeSport = ref.watch(activeSportProvider);
-    final showSportSwitcher =
-        loc != '/friend-schedule' && !loc.startsWith('/clubs');
 
     return Scaffold(
-      body: Column(
-        children: [
-          // 종목 스왑 바
-          if (showSportSwitcher)
-            SafeArea(
-              bottom: false,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 640),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            activeSport == 'futsal'
-                                ? Icons.sports_soccer_rounded
-                                : Icons.sports_tennis_rounded,
-                            size: 18,
-                            color: cs.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'tennis',
-                                label: Text('테니스'),
-                                icon: Icon(Icons.sports_tennis_rounded),
-                              ),
-                              ButtonSegment(
-                                value: 'futsal',
-                                label: Text('풋살'),
-                                icon: Icon(Icons.sports_soccer_rounded),
-                              ),
-                            ],
-                            selected: {activeSport ?? 'tennis'},
-                            onSelectionChanged: (s) {
-                              ref.read(sportOverrideProvider.notifier).state =
-                                  s.first;
-                            },
-                            style: SegmentedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          Expanded(
-            child: ColoredBox(
-              color: cs.surfaceContainerLowest,
-              child: child,
-            ),
-          ),
-        ],
+      body: ColoredBox(
+        color: cs.surfaceContainerLowest,
+        child: child,
       ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(

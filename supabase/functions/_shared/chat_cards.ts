@@ -28,6 +28,17 @@ export interface TournamentCardItem {
   format: string | null;
 }
 
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export interface TournamentSearchTextContext {
+  sport?: 'tennis' | 'futsal' | null;
+  region: string | null;
+  dateRange?: DateRange;
+}
+
 const MAX_CARDS = 10;
 
 /// `tournament_search_by_slots`(only_my_grade=true) 결과를 카드 아이템으로 변환.
@@ -46,6 +57,47 @@ export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardI
     entry_fee: r.entry_fee,
     format: r.format,
   }));
+}
+
+function tournamentSportLabel(sport: TournamentSearchTextContext['sport']): string {
+  if (sport === 'tennis') return '테니스 대회';
+  if (sport === 'futsal') return '풋살 대회';
+  return '대회';
+}
+
+function tournamentSportHeading(sport: TournamentSearchTextContext['sport']): string {
+  if (sport === 'tennis') return '🎾 테니스';
+  if (sport === 'futsal') return '⚽ 풋살';
+  return '대회';
+}
+
+function filterText(ctx: TournamentSearchTextContext): string {
+  const filters: string[] = [];
+  if (ctx.region) filters.push(ctx.region);
+  if (ctx.dateRange) filters.push(`${ctx.dateRange.from} ~ ${ctx.dateRange.to}`);
+  return filters.length > 0 ? ` (${filters.join(', ')})` : '';
+}
+
+export function renderTournamentSearchText(
+  rows: TournamentCardRow[],
+  ctx: TournamentSearchTextContext,
+): string {
+  const heading = tournamentSportHeading(ctx.sport);
+  return [
+    `## ${heading} ${rows.length}건${filterText(ctx)}`,
+    '',
+    '조건에 맞는 대회를 찾았습니다. 아래 카드에서 일정을 확인하고 필요한 항목을 선택해 주세요.',
+    '',
+    '_DB 등록 정보 기준. 상세는 협회나 공식 홈페이지에서 확인하세요._',
+  ].join('\n');
+}
+
+export function renderTournamentSearchEmptyText(ctx: TournamentSearchTextContext): string {
+  const label = tournamentSportLabel(ctx.sport);
+  return [
+    `조건에 맞는 ${label}가 없습니다${filterText(ctx)}.`,
+    '기간, 종목, 등급 조건을 바꾸거나 협회 공식 홈페이지를 확인해 주세요.',
+  ].join('\n');
 }
 
 export type SelectedEntityType = 'tournament' | 'club';
