@@ -131,6 +131,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     }
   }
 
+  Future<void> _openTeamRecruitingSheet(List<Club> managedClubs) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _TeamRecruitingDraftSheet(managedClubs: managedClubs),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -211,6 +220,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     title: '팀원모집',
                     subtitle: '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
                     color: const Color(0xFFEAF7F1),
+                    onTap: () => _openTeamRecruitingSheet(managedClubs),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -653,6 +663,393 @@ class _SimpleActionCard extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.xs),
             ],
+            Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamRecruitingDraftSheet extends StatefulWidget {
+  final List<Club> managedClubs;
+
+  const _TeamRecruitingDraftSheet({required this.managedClubs});
+
+  @override
+  State<_TeamRecruitingDraftSheet> createState() =>
+      _TeamRecruitingDraftSheetState();
+}
+
+class _TeamRecruitingDraftSheetState extends State<_TeamRecruitingDraftSheet> {
+  static const _genders = ['무관', '여성', '남성', '혼성'];
+  static const _ages = ['무관', '20대', '30대', '40대', '50대 이상'];
+
+  late String _selectedClubId = widget.managedClubs.first.id;
+  String _gender = _genders.first;
+  String _age = _ages.first;
+
+  Club get _selectedClub =>
+      widget.managedClubs.firstWhere((club) => club.id == _selectedClubId);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF7F1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '팀원모집 글쓰기',
+                          style: tt.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          '운영 중인 클럽 기준으로 모집글을 작성해요.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedClubId,
+                decoration: const InputDecoration(
+                  labelText: '모집할 클럽',
+                  prefixIcon: Icon(Icons.groups_rounded),
+                ),
+                items: [
+                  for (final club in widget.managedClubs)
+                    DropdownMenuItem(
+                      value: club.id,
+                      child: Text(club.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _selectedClubId = value);
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _RecruitingPreviewClub(club: _selectedClub),
+              const SizedBox(height: AppSpacing.lg),
+              _RecruitingSection(
+                title: '모집 조건',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '성별',
+                      style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final gender in _genders)
+                          ChoiceChip(
+                            label: Text(gender),
+                            selected: _gender == gender,
+                            onSelected: (_) => setState(() {
+                              _gender = gender;
+                            }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      '연령',
+                      style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final age in _ages)
+                          ChoiceChip(
+                            label: Text(age),
+                            selected: _age == age,
+                            onSelected: (_) => setState(() {
+                              _age = age;
+                            }),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const _RecruitingSection(
+                title: '운동 정보',
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: '운동하는 장소',
+                        hintText: '예: 광주 북구 풋살파크 A구장',
+                        prefixIcon: Icon(Icons.place_rounded),
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: InputDecoration(
+                              labelText: '날짜',
+                              hintText: '6/22 (토)',
+                              prefixIcon: Icon(Icons.calendar_month_rounded),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: TextField(
+                            decoration: InputDecoration(
+                              labelText: '시간',
+                              hintText: '19:00',
+                              prefixIcon: Icon(Icons.schedule_rounded),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: AppSpacing.sm),
+                    TextField(
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: '비용',
+                        hintText: '예: 10,000원 또는 무료',
+                        prefixIcon: Icon(Icons.payments_rounded),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const _RecruitingSection(
+                title: '상세 내용',
+                child: TextField(
+                  minLines: 4,
+                  maxLines: 6,
+                  decoration: InputDecoration(
+                    hintText: '필요 포지션, 준비물, 경기 수준, 연락 방식 등을 적어주세요.',
+                    alignLabelWithHint: true,
+                    labelText: '기타 내용',
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _OptionalPhotoPicker(),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('취소'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('팀원모집 글쓰기 UI 미리보기입니다.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text('모집글 올리기'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecruitingPreviewClub extends StatelessWidget {
+  final Club club;
+
+  const _RecruitingPreviewClub({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+      ),
+      child: Row(
+        children: [
+          _SimpleClubAvatar(club: club, size: 54),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  club.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · 운영진',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecruitingSection extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _RecruitingSection({
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionalPhotoPicker extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('사진 선택 UI 미리보기입니다.')),
+        );
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: cs.outlineVariant,
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(Icons.add_photo_alternate_rounded, color: cs.primary),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '사진 추가',
+                    style: tt.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    '선택 사항 · 경기장 사진이나 팀 이미지를 넣을 수 있어요.',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
             Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
           ],
         ),
