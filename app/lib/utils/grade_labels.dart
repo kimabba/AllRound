@@ -1,16 +1,24 @@
 enum Sport { tennis, futsal }
 
 const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
-const futsalGrades = ['beginner', 'intermediate', 'advanced'];
+const futsalGrades = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'];
 
 const gradeLabels = <String, String>{
-  'under1y':      '1년 미만',
-  'y1to3':        '1~3년',
-  'y3to5':        '3~5년',
-  'over5y':       '5년 이상',
-  'beginner':     '초급',
+  'under1y': '1년 미만',
+  'y1to3': '1~3년',
+  'y3to5': '3~5년',
+  'over5y': '5년 이상',
+  'intro': '입문',
+  'beginner': '초급',
   'intermediate': '중급',
-  'advanced':     '고급',
+  'advanced': '고급',
+  'elite': '선출',
+};
+
+const futsalEventCategoryLabels = <String, String>{
+  'regional_federation': '지역 풋살연맹',
+  'sports_for_all': '생활체육대회',
+  'private': '민간 풋살 대회',
 };
 
 // =========================
@@ -35,44 +43,113 @@ class TennisDivision {
 
 const tennisDivisions = <TennisDivision>[
   // 광주광역시 (gj) — 남자 랭킹 배점
-  TennisDivision(code: 'gj_m_open',       org: 'gj', label: '오픈부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'gj_m_gold',       org: 'gj', label: '골드부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'gj_m_general',    org: 'gj', label: '일반부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'gj_m_instructor', org: 'gj', label: '지도자부',     hasRanking: true,  gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_open',
+      org: 'gj',
+      label: '오픈부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_gold',
+      org: 'gj',
+      label: '골드부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_general',
+      org: 'gj',
+      label: '일반부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_instructor',
+      org: 'gj',
+      label: '지도자부',
+      hasRanking: true,
+      gender: 'male'),
   // 광주 — 선택 부서
-  TennisDivision(code: 'gj_m_masters',    org: 'gj', label: '마스터즈부',   gender: 'male'),
-  TennisDivision(code: 'gj_m_rookie',     org: 'gj', label: '신인부',       gender: 'male'),
-  TennisDivision(code: 'gj_m_veteran',    org: 'gj', label: '베테랑부',     gender: 'male'),
-  TennisDivision(code: 'gj_m_beginner',   org: 'gj', label: '초급자부',     gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_masters', org: 'gj', label: '마스터즈부', gender: 'male'),
+  TennisDivision(code: 'gj_m_rookie', org: 'gj', label: '신인부', gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_veteran', org: 'gj', label: '베테랑부', gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_beginner', org: 'gj', label: '초급자부', gender: 'male'),
   // 광주 — 여자
-  TennisDivision(code: 'gj_w_open',       org: 'gj', label: '여자오픈부',   gender: 'female'),
-  TennisDivision(code: 'gj_w_winner',     org: 'gj', label: '여자우승자부', hasRanking: true, gender: 'female'),
-  TennisDivision(code: 'gj_w_rookie',     org: 'gj', label: '여자신인부',   hasRanking: true, gender: 'female'),
+  TennisDivision(
+      code: 'gj_w_open', org: 'gj', label: '여자오픈부', gender: 'female'),
+  TennisDivision(
+      code: 'gj_w_winner',
+      org: 'gj',
+      label: '여자우승자부',
+      hasRanking: true,
+      gender: 'female'),
+  TennisDivision(
+      code: 'gj_w_rookie',
+      org: 'gj',
+      label: '여자신인부',
+      hasRanking: true,
+      gender: 'female'),
   // 광주 — 혼성
-  TennisDivision(code: 'gj_couple',       org: 'gj', label: '부부부',       gender: 'mixed'),
-  TennisDivision(code: 'gj_cross',        org: 'gj', label: '크로스대회',   gender: 'mixed'),
+  TennisDivision(code: 'gj_couple', org: 'gj', label: '부부부', gender: 'mixed'),
+  TennisDivision(code: 'gj_cross', org: 'gj', label: '크로스대회', gender: 'mixed'),
 
   // 전라남도 (jn)
-  TennisDivision(code: 'jn_m_open',       org: 'jn', label: '오픈부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'jn_m_gold',       org: 'jn', label: '골드부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'jn_m_general',    org: 'jn', label: '일반부',       hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'jn_m_instructor', org: 'jn', label: '지도자부',     hasRanking: true,  gender: 'male'),
-  TennisDivision(code: 'jn_m_masters',    org: 'jn', label: '마스터즈부',   gender: 'male'),
-  TennisDivision(code: 'jn_m_rookie',     org: 'jn', label: '신인부',       gender: 'male'),
-  TennisDivision(code: 'jn_m_veteran',    org: 'jn', label: '베테랑부',     gender: 'male'),
-  TennisDivision(code: 'jn_m_beginner',   org: 'jn', label: '초급자부',     gender: 'male'),
-  TennisDivision(code: 'jn_w_open',       org: 'jn', label: '여자오픈부',   gender: 'female'),
-  TennisDivision(code: 'jn_w_winner',     org: 'jn', label: '여자우승자부', hasRanking: true, gender: 'female'),
-  TennisDivision(code: 'jn_w_rookie',     org: 'jn', label: '여자신인부',   hasRanking: true, gender: 'female'),
-  TennisDivision(code: 'jn_couple',       org: 'jn', label: '부부부',       gender: 'mixed'),
-  TennisDivision(code: 'jn_cross',        org: 'jn', label: '크로스대회',   gender: 'mixed'),
+  TennisDivision(
+      code: 'jn_m_open',
+      org: 'jn',
+      label: '오픈부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_gold',
+      org: 'jn',
+      label: '골드부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_general',
+      org: 'jn',
+      label: '일반부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_instructor',
+      org: 'jn',
+      label: '지도자부',
+      hasRanking: true,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_masters', org: 'jn', label: '마스터즈부', gender: 'male'),
+  TennisDivision(code: 'jn_m_rookie', org: 'jn', label: '신인부', gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_veteran', org: 'jn', label: '베테랑부', gender: 'male'),
+  TennisDivision(
+      code: 'jn_m_beginner', org: 'jn', label: '초급자부', gender: 'male'),
+  TennisDivision(
+      code: 'jn_w_open', org: 'jn', label: '여자오픈부', gender: 'female'),
+  TennisDivision(
+      code: 'jn_w_winner',
+      org: 'jn',
+      label: '여자우승자부',
+      hasRanking: true,
+      gender: 'female'),
+  TennisDivision(
+      code: 'jn_w_rookie',
+      org: 'jn',
+      label: '여자신인부',
+      hasRanking: true,
+      gender: 'female'),
+  TennisDivision(code: 'jn_couple', org: 'jn', label: '부부부', gender: 'mixed'),
+  TennisDivision(code: 'jn_cross', org: 'jn', label: '크로스대회', gender: 'mixed'),
 
   // KTA
-  TennisDivision(code: 'kta_m_open',    org: 'kta',  label: '남자오픈',    gender: 'male'),
-  TennisDivision(code: 'kta_w_open',    org: 'kta',  label: '여자오픈',    gender: 'female'),
-  TennisDivision(code: 'kta_mixed',     org: 'kta',  label: '혼합복식',    gender: 'mixed'),
-  TennisDivision(code: 'kta_senior_60', org: 'kta',  label: '시니어 60+'),
-  TennisDivision(code: 'kta_senior_65', org: 'kta',  label: '시니어 65+'),
+  TennisDivision(code: 'kta_m_open', org: 'kta', label: '남자오픈', gender: 'male'),
+  TennisDivision(
+      code: 'kta_w_open', org: 'kta', label: '여자오픈', gender: 'female'),
+  TennisDivision(code: 'kta_mixed', org: 'kta', label: '혼합복식', gender: 'mixed'),
+  TennisDivision(code: 'kta_senior_60', org: 'kta', label: '시니어 60+'),
+  TennisDivision(code: 'kta_senior_65', org: 'kta', label: '시니어 65+'),
 
   // KATA — 부수제
   TennisDivision(code: 'kata_1', org: 'kata', label: '1부', gender: 'male'),
@@ -83,10 +160,10 @@ const tennisDivisions = <TennisDivision>[
   TennisDivision(code: 'kata_w', org: 'kata', label: '여자부', gender: 'female'),
 
   // KTFS
-  TennisDivision(code: 'ktfs_open',     org: 'ktfs', label: '오픈'),
-  TennisDivision(code: 'ktfs_general',  org: 'ktfs', label: '일반'),
+  TennisDivision(code: 'ktfs_open', org: 'ktfs', label: '오픈'),
+  TennisDivision(code: 'ktfs_general', org: 'ktfs', label: '일반'),
   TennisDivision(code: 'ktfs_beginner', org: 'ktfs', label: '초급'),
-  TennisDivision(code: 'ktfs_w',        org: 'ktfs', label: '여자부', gender: 'female'),
+  TennisDivision(code: 'ktfs_w', org: 'ktfs', label: '여자부', gender: 'female'),
 
   // KSTF (시니어)
   TennisDivision(code: 'kstf_60', org: 'kstf', label: '60+부'),
@@ -94,10 +171,11 @@ const tennisDivisions = <TennisDivision>[
   TennisDivision(code: 'kstf_70', org: 'kstf', label: '70+부'),
 
   // 지역/클럽 자체
-  TennisDivision(code: 'local_open',    org: 'local', label: '자체 오픈'),
+  TennisDivision(code: 'local_open', org: 'local', label: '자체 오픈'),
   TennisDivision(code: 'local_general', org: 'local', label: '자체 일반'),
-  TennisDivision(code: 'local_rookie',  org: 'local', label: '자체 신인'),
-  TennisDivision(code: 'local_w',       org: 'local', label: '자체 여자부', gender: 'female'),
+  TennisDivision(code: 'local_rookie', org: 'local', label: '자체 신인'),
+  TennisDivision(
+      code: 'local_w', org: 'local', label: '자체 여자부', gender: 'female'),
 ];
 
 final _divisionLabelMap = <String, String>{
@@ -123,8 +201,7 @@ const sportLabels = <Sport, String>{
   Sport.futsal: '풋살',
 };
 
-Sport sportFromString(String s) =>
-    s == 'futsal' ? Sport.futsal : Sport.tennis;
+Sport sportFromString(String s) => s == 'futsal' ? Sport.futsal : Sport.tennis;
 
 String sportToString(Sport s) => s == Sport.futsal ? 'futsal' : 'tennis';
 
@@ -134,6 +211,8 @@ List<String> gradesFor(Sport sport) =>
 String gradeLabel(String grade) => gradeLabels[grade] ?? grade;
 String sportLabel(Sport sport) => sportLabels[sport] ?? '';
 String sportLabelFromString(String s) => sportLabel(sportFromString(s));
+String futsalEventCategoryLabel(String? category) =>
+    category == null ? '' : futsalEventCategoryLabels[category] ?? category;
 
 // =========================
 // Tennis Org (협회) — Edge Functions enums.ts 와 1:1 동기화

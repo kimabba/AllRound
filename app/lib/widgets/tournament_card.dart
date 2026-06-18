@@ -35,6 +35,9 @@ class TournamentCard extends StatelessWidget {
         .toSet()
         .take(3)
         .join(' · ');
+    final futsalCategory = tournament.sport == 'futsal'
+        ? futsalEventCategoryLabel(tournament.futsalEventCategory)
+        : '';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -65,7 +68,8 @@ class TournamentCard extends StatelessWidget {
                   ),
                 ],
                 const Spacer(),
-                Icon(Icons.calendar_today_rounded, size: 13, color: cs.onSurfaceVariant),
+                Icon(Icons.calendar_today_rounded,
+                    size: 13, color: cs.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
                   _dateText(),
@@ -89,11 +93,21 @@ class TournamentCard extends StatelessWidget {
             // Row 3: 주최
             if (!compact && tournament.organizer != null) ...[
               const SizedBox(height: 2),
-              Text(
-                tournament.organizer!,
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      tournament.organizer!,
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (futsalCategory.isNotEmpty) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    _CategoryChip(label: futsalCategory),
+                  ],
+                ],
               ),
             ],
             const SizedBox(height: AppSpacing.sm),
@@ -102,7 +116,8 @@ class TournamentCard extends StatelessWidget {
             Row(
               children: [
                 if (tournament.region != null) ...[
-                  Icon(Icons.place_rounded, size: 14, color: cs.onSurfaceVariant),
+                  Icon(Icons.place_rounded,
+                      size: 14, color: cs.onSurfaceVariant),
                   const SizedBox(width: 2),
                   Text(
                     tournament.region!,
@@ -128,7 +143,9 @@ class TournamentCard extends StatelessWidget {
                       onFavoriteToggle!();
                     },
                     child: Icon(
-                      isFavorite ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                      isFavorite
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_outline_rounded,
                       size: 22,
                       color: isFavorite ? cs.primary : cs.onSurfaceVariant,
                     ),
@@ -218,6 +235,31 @@ class TournamentCard extends StatelessWidget {
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSecondaryContainer,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+    );
+  }
 }
 
 class _StatusChip extends StatelessWidget {

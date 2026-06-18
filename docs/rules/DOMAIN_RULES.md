@@ -7,7 +7,7 @@ Load this when touching tournaments, sports, grades, clubs, favorites, notificat
 | Sport | Grade enum | Display |
 |---|---|---|
 | tennis | `rookie`, `div5`, `div4`, `div3`, `div2`, `div1` | 신입, 5부, 4부, 3부, 2부, 1부 |
-| futsal | `beginner`, `intermediate`, `advanced` | 초급, 중급, 고급 |
+| futsal | `intro`, `beginner`, `intermediate`, `advanced`, `elite` | 입문, 초급, 중급, 고급, 선출 |
 
 Rules:
 

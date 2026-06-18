@@ -299,10 +299,17 @@ final _previewFavoriteTournaments = [
     applicationDeadline: DateTime(2026, 6, 7),
     region: '서울',
     location: '서울시민리그 풋살 공식 경기장소',
-    eligibleGrades: const ['beginner', 'intermediate', 'advanced'],
+    eligibleGrades: const [
+      'intro',
+      'beginner',
+      'intermediate',
+      'advanced',
+      'elite'
+    ],
     format: '서울시민리그 풋살 리그전',
     sourceUrl: 'https://www.sleague.or.kr/2026/futsal/',
     status: 'published',
+    futsalEventCategory: 'sports_for_all',
   ),
 ];
 

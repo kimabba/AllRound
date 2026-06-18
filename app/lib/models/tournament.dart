@@ -23,6 +23,7 @@ class Tournament {
   final String? divisionLabelLocal;
   final String? divisionKtaStandard;
   final bool isJointEvent;
+  final String? futsalEventCategory;
 
   Tournament({
     required this.id,
@@ -48,6 +49,7 @@ class Tournament {
     this.divisionLabelLocal,
     this.divisionKtaStandard,
     this.isJointEvent = false,
+    this.futsalEventCategory,
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) {
@@ -57,12 +59,12 @@ class Tournament {
     final ext = tennis ?? futsal;
 
     final grades = (j['eligible_grades'] as List?)?.cast<String>() ?? const [];
-    final hostAssoc =
-        (ext?['host_associations'] as List?)?.cast<String>() ??
-        (j['host_associations'] as List?)?.cast<String>() ?? const [];
-    final hostOrgs =
-        (ext?['host_orgs'] as List?)?.cast<String>() ??
-        (j['host_orgs'] as List?)?.cast<String>() ?? const [];
+    final hostAssoc = (ext?['host_associations'] as List?)?.cast<String>() ??
+        (j['host_associations'] as List?)?.cast<String>() ??
+        const [];
+    final hostOrgs = (ext?['host_orgs'] as List?)?.cast<String>() ??
+        (j['host_orgs'] as List?)?.cast<String>() ??
+        const [];
     return Tournament(
       id: j['id'] as String,
       sport: j['sport'] as String,
@@ -93,7 +95,11 @@ class Tournament {
       divisionKtaStandard: ext?['division_kta_standard'] as String? ??
           j['division_kta_standard'] as String?,
       isJointEvent: ext?['is_joint_event'] as bool? ??
-          j['is_joint_event'] as bool? ?? false,
+          j['is_joint_event'] as bool? ??
+          false,
+      futsalEventCategory: ext?['event_category'] as String? ??
+          j['futsal_event_category'] as String? ??
+          j['event_category'] as String?,
     );
   }
 }
@@ -192,6 +198,7 @@ class Club {
   final List<String> meetingDays;
   final int? monthlyFee;
   final String? genderPreference;
+  final DateTime? createdAt;
   // 현재 사용자의 멤버십 정보 (조회 시 join)
   final String? myRole; // 'owner'|'manager'|'member'|null
 
@@ -212,6 +219,7 @@ class Club {
     this.meetingDays = const [],
     this.monthlyFee,
     this.genderPreference,
+    this.createdAt,
     this.myRole,
   });
 
@@ -247,6 +255,9 @@ class Club {
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
       genderPreference: j['gender_preference'] as String?,
+      createdAt: j['created_at'] != null
+          ? DateTime.parse(j['created_at'] as String)
+          : null,
       myRole: myRole,
     );
   }

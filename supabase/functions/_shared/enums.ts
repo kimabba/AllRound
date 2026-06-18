@@ -1,7 +1,7 @@
 export type Sport = 'tennis' | 'futsal';
 
 export const TENNIS_GRADES = ['under1y', 'y1to3', 'y3to5', 'over5y'] as const;
-export const FUTSAL_GRADES = ['beginner', 'intermediate', 'advanced'] as const;
+export const FUTSAL_GRADES = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'] as const;
 
 export type TennisGrade = typeof TENNIS_GRADES[number];
 export type FutsalGrade = typeof FUTSAL_GRADES[number];
@@ -216,9 +216,11 @@ const TENNIS_RANK: Record<TennisGrade, number> = {
 };
 
 const FUTSAL_RANK: Record<FutsalGrade, number> = {
-  beginner: 0,
-  intermediate: 1,
-  advanced: 2,
+  intro: 0,
+  beginner: 1,
+  intermediate: 2,
+  advanced: 3,
+  elite: 4,
 };
 
 export function isValidGrade(sport: Sport, grade: string): grade is Grade {
@@ -267,9 +269,11 @@ export const GRADE_LABELS: Record<string, string> = {
   y1to3: '1~3년',
   y3to5: '3~5년',
   over5y: '5년 이상',
+  intro: '입문',
   beginner: '초급',
   intermediate: '중급',
   advanced: '고급',
+  elite: '선출',
 };
 
 export const SPORT_LABELS: Record<Sport, string> = {
