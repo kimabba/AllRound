@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DART_ENUMS = ROOT / "app/lib/utils/grade_labels.dart"
 TS_ENUMS = ROOT / "supabase/functions/_shared/enums.ts"
 SQL_USERS = ROOT / "supabase/migrations/002_init_users_sports.sql"
-SQL_TENNIS_REVAMP = ROOT / "supabase/migrations/010_tennis_grade_revamp.sql"
+SQL_MIGRATIONS = ROOT / "supabase/migrations"
 SQL_ORGS = ROOT / "supabase/migrations/009_regions_and_multi_org.sql"
 SQL_SEED = ROOT / "supabase/seed.sql"
 
@@ -84,6 +84,21 @@ def sql_entry_fee_units(text: str) -> list[str]:
     return quoted_values(match.group(1))
 
 
+def user_sports_grade_constraint_history() -> str:
+    sql_parts: list[str] = [read(SQL_USERS)]
+    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
+        if path == SQL_USERS:
+            continue
+        text = read(path)
+        matches = re.finditer(
+            r"alter\s+table[^;]+?add\s+constraint\s+user_sports_grade_check\s+check\s*\((.*?)\)\s*;",
+            text,
+            re.I | re.S,
+        )
+        sql_parts.extend(match.group(0) for match in matches)
+    return "\n".join(sql_parts)
+
+
 def seed_region_codes(text: str) -> list[str]:
     match = re.search(r"insert\s+into\s+public\.regions\s*\([^)]*\)\s*values\s*(.*?);", text, re.I | re.S)
     if not match:
@@ -109,16 +124,9 @@ def assert_same(name: str, *values: tuple[str, list[str]]) -> None:
 def main() -> int:
     dart = read(DART_ENUMS)
     ts = read(TS_ENUMS)
-    # 마이그레이션 history 정합: 010 의 ADD CONSTRAINT 부분만 추출해 002 뒤에 붙임.
-    # UPDATE/INSERT 문이 잡히지 않도록 ALTER ... ADD CONSTRAINT ... CHECK (...) 블록만 사용.
-    revamp_text = read(SQL_TENNIS_REVAMP)
-    add_constraint = re.search(
-        r"alter\s+table[^;]+?add\s+constraint\s+user_sports_grade_check\s+check\s*\((.*?)\)\s*;",
-        revamp_text, re.I | re.S,
-    )
-    sql_users = read(SQL_USERS)
-    if add_constraint:
-        sql_users = sql_users + "\n" + add_constraint.group(0)
+    # 마이그레이션 history 정합: 후속 migration 의 ADD CONSTRAINT 가 기존
+    # user_sports_grade_check 를 덮어쓰므로 최신 정의를 기준으로 비교한다.
+    sql_users = user_sports_grade_constraint_history()
     sql_orgs = read(SQL_ORGS)
     seed = read(SQL_SEED)
 

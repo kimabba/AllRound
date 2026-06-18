@@ -8,13 +8,21 @@ void main() {
     });
 
     test('futsal grade order', () {
-      expect(futsalGrades, ['beginner', 'intermediate', 'advanced']);
+      expect(futsalGrades, [
+        'intro',
+        'beginner',
+        'intermediate',
+        'advanced',
+        'elite',
+      ]);
     });
 
     test('Korean labels', () {
       expect(gradeLabel('y3to5'), '3~5년');
       expect(gradeLabel('under1y'), '1년 미만');
+      expect(gradeLabel('intro'), '입문');
       expect(gradeLabel('intermediate'), '중급');
+      expect(gradeLabel('elite'), '선출');
       expect(sportLabel(Sport.tennis), '테니스');
       expect(sportLabel(Sport.futsal), '풋살');
     });
