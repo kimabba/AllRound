@@ -14,6 +14,17 @@
 - [ ] Speed Gun/video — `docs/rules/SPEED_GUN_RULES.md`
 - [ ] CI/harness/rules — `docs/rules/HARNESS.md`
 
+## 마이그레이션 배포 (DB 변경 시 필수)
+
+> ⚠️ **머지 ≠ 프로덕션 적용.** 마이그레이션은 머지 후 자동 적용되지 않으므로, 누군가 수동으로 적용해야 한다. 절차: `docs/rules/DATABASE_RULES.md` → "마이그레이션 배포".
+
+- [ ] 이 PR은 마이그레이션/데이터 변경을 **포함하지 않음** (포함하면 아래 작성)
+- [ ] 포함하는 마이그레이션 파일: `supabase/migrations/___`
+- [ ] 프로덕션 적용 담당: @___
+- [ ] 적용 시점: 머지 직후 즉시 (지연 시 사유: ___)
+- [ ] 데이터 시드는 `published` 직접 INSERT가 아닌 **어드민 검수 화면** 경유 (검수 큐 우회 금지)
+- [ ] PR 본문의 "변경 범위" 설명이 실제 변경과 일치함 (예: "DB 변경 없음"인데 마이그레이션 포함 ❌)
+
 ## 하네스 체크
 
 - [ ] `scripts/harness/run_all.sh` 통과

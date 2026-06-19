@@ -25,6 +25,8 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractGJDivisions,
+  extractVenue,
+  saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
@@ -147,17 +149,19 @@ async function fetchDetail(
   region: string,
   titleHint: string,
   org: 'gj' | 'jn',
-): Promise<CrawlerTournament | null> {
+): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
   const html = await res.text();
+  // 이 지점부터는 원본(html)을 확보했으므로, 파싱 가드 실패 시에도
+  // { rawHtml, tournament: null } 로 반환해 dispatch 가 raw 를 failed 로 보관한다.
   const dom = new DOMParser().parseFromString(html, 'text/html');
-  if (!dom) return null;
+  if (!dom) return { rawHtml: html, tournament: null };
 
   // 제목: h3 우선, 없으면 listing 링크 텍스트(titleHint) 사용
   const h3El = dom.querySelector('h3');
   const title = (h3El?.textContent ?? '').replace(/\s+/g, ' ').trim() || titleHint;
-  if (!title) return null;
+  if (!title) return { rawHtml: html, tournament: null };
 
   // 노이즈 태그 제거 후 body 텍스트 추출
   const bodyEl = dom.querySelector('body');
@@ -173,7 +177,7 @@ async function fetchDetail(
 
   // 대회일 추출: 가장 먼저 등장하는 유효 날짜를 start_date 로 사용
   const startDate = extractDate(bodyText) ?? extractDate(title);
-  if (!startDate) return null;
+  if (!startDate) return { rawHtml: html, tournament: null };
 
   const { codes: gradeCodes, label: divisionLabel } = extractGJDivisions(
     `${title} ${bodyText}`,
@@ -225,7 +229,10 @@ async function fetchDetail(
     .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
     .replace(/참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?/g, '')
     .replace(/참가비\s+입금\s*×\s*\.?/g, '')
-    .replace(/입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g, '')
+    .replace(
+      /입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g,
+      '',
+    )
     .replace(/\[신청대기\]/g, '')
     .replace(/\[신청마감\]/g, '')
     .replace(/\[신청중\]/g, '')
@@ -237,23 +244,30 @@ async function fetchDetail(
     .replace(/부서추후공지/g, '')
     .trim();
 
-  // 메타 + 본문 결합 (본문이 실질적 내용을 포함할 때만)
-  const contentBody = rawBody.length > metaLine.length + 50 ? rawBody : '';
-  const description = contentBody
-    ? `${metaLine}\n\n${contentBody}`
-    : metaLine;
+  // 원문 전체는 crawl_documents(raw zone)에 보존되므로, description 은 임베딩·표시용으로
+  // 보일러플레이트 제거 본문을 MAX_DESC_BODY 자로 제한해 잡음(긴 푸터/안내문)을 줄인다.
+  // (description 비대 → 의미검색 임베딩 품질 저하 + 앱 표시 부담)
+  const MAX_DESC_BODY = 1000;
+  const trimmedBody = rawBody.length > MAX_DESC_BODY
+    ? rawBody.slice(0, MAX_DESC_BODY).replace(/\s+\S*$/, '').trimEnd() + ' …'
+    : rawBody;
+  const contentBody = trimmedBody.length > metaLine.length + 50 ? trimmedBody : '';
+  const description = contentBody ? `${metaLine}\n\n${contentBody}` : metaLine;
 
-  return {
+  const location = extractVenue(bodyText) ?? undefined;
+  const tournament: CrawlerTournament = {
     title,
     description: description || undefined,
     start_date: startDate,
     application_deadline: deadline,
     region,
+    location,
     eligible_grades: gradeCodes,
     division_label_local: divisionLabel,
     source_url: detailUrl,
     organizer: region ? `${region}테니스협회` : undefined,
   };
+  return { rawHtml: html, tournament };
 }
 
 // =============================================================================
@@ -333,24 +347,55 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
   // 4) 상세 페이지 처리
   const org: 'gj' | 'jn' = source.slug.includes('gwangju') ? 'gj' : 'jn';
   const errors: string[] = [];
+  let parseFailures = 0;
   for (const item of items.slice(0, 30)) {
     try {
-      const detail = await fetchDetail(item.url, region, item.title, org);
-      if (detail) {
-        await upsertTournament(ctx.audit, 'tennis', detail);
+      const result = await fetchDetail(item.url, region, item.title, org);
+      if (!result) continue; // fetch 실패 — 보관할 원본 자체가 없음
+      if (result.tournament) {
+        // 파싱 성공: tournaments upsert + 원본을 parsed 로 보관·연결
+        await upsertTournament(ctx.audit, 'tennis', result.tournament, result.rawHtml);
+      } else {
+        // 파싱 가드 미통과: 원본을 failed 로 보관해 파서 수정 후 재처리 가능하게 한다.
+        // (raw zone 이 존재하는 핵심 목적 — 파서가 깨진 케이스를 놓치지 않는다.)
+        await saveRawDocument(
+          ctx.audit,
+          item.url,
+          result.rawHtml,
+          null,
+          'failed',
+          '파싱 실패: 가드 미통과(DOM/제목/날짜)',
+        );
+        ctx.audit.fetched++;
+        parseFailures++;
       }
     } catch (e) {
       errors.push(`${item.url}: ${(e as Error).message}`);
     }
   }
 
+  // 상세를 가져왔는데 단 한 건도 파싱 성공하지 못하면 사이트 구조 변경을 의심한다.
+  // status='error' 로 반환해 dispatcher 가 last_status=error + last_error 로 기록 →
+  // 수동 실행 UI/운영에서 "성공"으로 오인되지 않게 한다.
+  // (개별 게시글의 파싱 실패는 정상일 수 있으므로 "전부 실패"일 때만 error 처리)
+  const allFailed = parseFailures > 0 && ctx.audit.inserted + ctx.audit.updated === 0;
+  if (allFailed) {
+    errors.push(`상세 ${parseFailures}건 모두 파싱 실패 — 사이트 구조 변경 의심`);
+  }
+
+  // 전건 실패 시에는 변경감지 캐시(etag/last_modified)를 null 로 비운다.
+  // dispatcher 는 result.etag !== undefined 일 때만 last_etag 를 갱신하므로
+  // undefined 를 주면 이전 성공 크롤의 stale etag 가 남아, 다음 스케줄 실행이
+  // 같은 listing 해시에서 no-change 로 일찍 종료해 자동 재시도가 막힌다.
+  // null 로 비우면 다음 실행의 previousEtag 가 falsy → no-change 우회 → 재시도.
+  // (성공/부분성공 시에만 변경감지 캐시를 갱신한다.)
   return {
     fetched_count: ctx.audit.fetched,
     inserted_count: ctx.audit.inserted,
     updated_count: ctx.audit.updated,
-    status: 'ok',
+    status: allFailed ? 'error' : 'ok',
     error: errors.length > 0 ? errors.slice(0, 5).join('\n') : undefined,
-    etag: effectiveEtag,
-    last_modified: listing.lastModified ?? null,
+    etag: allFailed ? null : effectiveEtag,
+    last_modified: allFailed ? null : (listing.lastModified ?? null),
   };
 };

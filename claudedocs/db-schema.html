@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match-up DB 구조 (2026-06-17)</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1a1d23; --sub:#6b7280; --line:#e5e7eb;
+    --user:#3b82f6; --tour:#8b5cf6; --club:#10b981; --match:#f59e0b;
+    --crawl:#ef4444; --notif:#eab308; --chat:#06b6d4; --venue:#64748b; --infra:#94a3b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;padding:32px 20px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  h1{font-size:28px;font-weight:800;letter-spacing:-.5px}
+  .meta{color:var(--sub);font-size:14px;margin-top:6px}
+  .summary{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:24px 0 8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 18px;text-align:center;min-width:120px}
+  .stat b{display:block;font-size:22px;font-weight:800}
+  .stat span{font-size:12px;color:var(--sub)}
+  .note{background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;margin:20px 0;font-size:14px;color:#3730a3}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:20px 0}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;color:#fff;font-weight:600;cursor:pointer;opacity:.92;transition:.15s}
+  .chip:hover{transform:translateY(-1px)}
+  .chip.off{opacity:.28}
+  section.domain{margin-top:30px}
+  .dhead{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .dot{width:14px;height:14px;border-radius:4px}
+  .dhead h2{font-size:18px;font-weight:700}
+  .dhead .desc{color:var(--sub);font-size:13px;font-weight:400}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .table-card{background:var(--card);border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:14px 16px;transition:.15s}
+  .table-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.07);transform:translateY(-2px)}
+  .tc-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .tc-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:700}
+  .tc-rows{font-size:11px;color:var(--sub);background:var(--bg);padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .tc-ko{font-size:12.5px;color:var(--sub);margin:4px 0 8px}
+  .cols{list-style:none;font-size:12px;display:flex;flex-wrap:wrap;gap:4px}
+  .cols li{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-family:ui-monospace,monospace;font-size:11px}
+  .cols li.pk{border-color:var(--tour);color:var(--tour);font-weight:700}
+  .cols li.fk{border-color:var(--user);color:var(--user)}
+  .flow{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin:28px 0}
+  .flow h2{font-size:17px;margin-bottom:14px}
+  .flowrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+  .fbox{background:#fff;border:2px solid var(--crawl);border-radius:10px;padding:10px 14px;font-family:ui-monospace,monospace;font-size:12px;font-weight:600}
+  .fbox.raw{border-color:#f97316;background:#fff7ed}
+  .fbox.out{border-color:var(--tour);background:#f5f3ff}
+  .farr{color:var(--sub);font-size:20px;font-weight:700}
+  .fcap{font-size:11px;color:var(--sub);display:block;font-weight:400;margin-top:2px}
+  footer{text-align:center;color:var(--sub);font-size:12px;margin-top:40px}
+  .rel{font-size:13px;color:var(--sub);margin-top:6px}
+  .rel code{background:var(--bg);padding:1px 6px;border-radius:5px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Match-up 데이터베이스 구조</h1>
+    <div class="meta">PostgreSQL (Supabase) · 마이그레이션 070 기준 · 2026-06-17</div>
+  </header>
+
+  <div class="summary">
+    <div class="stat"><b>31</b><span>테이블</span></div>
+    <div class="stat"><b>8</b><span>도메인</span></div>
+    <div class="stat"><b>269</b><span>장소 데이터</span></div>
+    <div class="stat"><b>35</b><span>대회</span></div>
+    <div class="stat"><b>40</b><span>크롤 원본</span></div>
+  </div>
+
+  <div class="note">
+    <b>읽는 법</b> — 각 칸은 하나의 <b>테이블</b>(엑셀 시트라고 생각하세요)입니다.
+    <span style="color:var(--tour);font-weight:700">보라색</span> = 기본키(각 행의 고유 번호),
+    <span style="color:var(--user);font-weight:700">파란색</span> = 외래키(다른 테이블과 연결되는 칸).
+    아래 색칠된 칩을 누르면 해당 도메인만 볼 수 있어요.
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <!-- 크롤 흐름 -->
+  <div class="flow">
+    <h2>🕷️ 크롤 데이터는 이렇게 흐릅니다 (원본 → 정형)</h2>
+    <div class="flowrow">
+      <div class="fbox">crawl_sources<span class="fcap">어느 사이트 (8)</span></div>
+      <span class="farr">→</span>
+      <div class="fbox raw">crawl_documents<span class="fcap">원문 HTML 보관 (40) ★raw zone</span></div>
+      <span class="farr">→</span>
+      <div class="fbox out">tournaments + details<span class="fcap">정리된 대회 (35) ★앱 노출</span></div>
+    </div>
+    <p class="rel" style="margin-top:12px">옆에서 <code>crawl_audit</code>(2,029)가 "언제 몇 건 긁었나"를 기록합니다.
+    파서가 깨져도 <b>crawl_documents 원문으로 재처리</b>할 수 있는 게 이번에 추가된 핵심입니다.</p>
+  </div>
+
+  <div id="domains"></div>
+
+  <footer>
+    Match-up · 크롤 원본은 raw zone(crawl_documents)에 보존, 앱은 tournaments를 표시 ·
+    남은 개선 항목은 <code>claudedocs/schema-audit-remaining.md</code> 참고
+  </footer>
+</div>
+
+<script>
+const DOMAINS = [
+  { key:'user', name:'사용자 / 프로필', color:'var(--user)', desc:'회원·종목등급·테니스협회·지역',
+    tables:[
+      {n:'users', ko:'회원 (인증 + 프로필)', rows:3, cols:['id*','email','name','nickname','primary_region→','role','gender']},
+      {n:'user_sports', ko:'회원의 종목·등급', rows:3, cols:['user_id*→','sport*','grade','is_primary']},
+      {n:'user_tennis_orgs', ko:'회원의 테니스 협회·점수', rows:2, cols:['user_id*→','org*','division*','score','ranking_points','region_code→']},
+      {n:'regions', ko:'지역 마스터 (광주·전남 등)', rows:8, cols:['code*','display_name_ko','governing_associations']},
+    ]},
+  { key:'tour', name:'대회', color:'var(--tour)', desc:'크롤·제보된 대회 + 종목별 상세 + 즐겨찾기',
+    tables:[
+      {n:'tournaments', ko:'대회 (공통 정보) ★핵심', rows:35, cols:['id*','sport','title','start_date','region_code→','eligible_grades','status','source','embedding']},
+      {n:'tennis_tournament_details', ko:'테니스 대회 상세', rows:34, cols:['tournament_id*→','host_orgs','division_kta_standard','is_joint_event']},
+      {n:'futsal_tournament_details', ko:'풋살 대회 상세', rows:1, cols:['tournament_id*→','host_futsal_orgs','venue_type','team_count_max','roster_min']},
+      {n:'tournament_favorites', ko:'대회 즐겨찾기', rows:2, cols:['user_id*→','tournament_id*→']},
+    ]},
+  { key:'crawl', name:'크롤 (수집)', color:'var(--crawl)', desc:'수집 대상 + 원본 보관(raw zone) + 실행 로그',
+    tables:[
+      {n:'crawl_sources', ko:'수집 대상 사이트', rows:8, cols:['id*','slug','url','sport','parser_module','enabled','last_status']},
+      {n:'crawl_documents', ko:'원본 HTML 보관 ★raw zone', rows:40, cols:['id*','source','source_url','raw_html','content_hash','tournament_id→','parse_status']},
+      {n:'crawl_audit', ko:'크롤 실행 로그', rows:2029, cols:['id*','source','status','fetched_count','started_at']},
+    ]},
+  { key:'club', name:'클럽', color:'var(--club)', desc:'클럽·멤버·가입·이벤트·게시판',
+    tables:[
+      {n:'clubs', ko:'클럽 (디렉토리)', rows:1, cols:['id*','sport','name','region','status','member_count','meeting_days']},
+      {n:'club_members', ko:'클럽 멤버·권한', rows:1, cols:['id*','club_id→','user_id→','role','can_kick','can_post_notice']},
+      {n:'club_join_requests', ko:'가입 신청', rows:0, cols:['id*','club_id→','user_id→','status','reviewed_by→']},
+      {n:'club_events', ko:'클럽 모임 일정', rows:0, cols:['id*','club_id→','created_by→','title','starts_at']},
+      {n:'club_event_attendees', ko:'모임 참석 응답', rows:0, cols:['id*','event_id→','user_id→','status']},
+      {n:'club_favorites', ko:'클럽 즐겨찾기', rows:0, cols:['user_id*→','club_id*→']},
+      {n:'club_posts', ko:'클럽 게시판 글', rows:0, cols:['id*','club_id→','author_id→','tag','title','image_urls']},
+      {n:'club_post_comments', ko:'게시판 댓글', rows:0, cols:['id*','post_id→','author_id→','body']},
+      {n:'club_post_mentions', ko:'게시판 멘션', rows:0, cols:['id*','post_id→','mentioned_user_id→']},
+    ]},
+  { key:'match', name:'경기 전적', color:'var(--match)', desc:'대회 참가 기록 + 라운드별 결과',
+    tables:[
+      {n:'match_entries', ko:'대회 참가 기록', rows:0, cols:['id*','user_id→','tournament_id→','division','partner_id→','points_earned']},
+      {n:'match_rounds', ko:'라운드별 결과', rows:0, cols:['id*','entry_id→','round','opponent_1_id→','score','result']},
+    ]},
+  { key:'notif', name:'알림 / 공유', color:'var(--notif)', desc:'통합 알림 + 푸시 토큰 + 일정 공유',
+    tables:[
+      {n:'notifications', ko:'통합 알림 (8종)', rows:2, cols:['id*','user_id→','type','title','reference_id','is_read','status']},
+      {n:'device_tokens', ko:'푸시 토큰', rows:0, cols:['user_id*→','token*','platform','enabled']},
+      {n:'schedule_shares', ko:'일정 공유 (수락/거절)', rows:0, cols:['id*','shared_by→','shared_with→','event_type','event_id','status']},
+    ]},
+  { key:'chat', name:'챗봇 / AI', color:'var(--chat)', desc:'대화·시맨틱 캐시·의도분류·룰북',
+    tables:[
+      {n:'chat_messages', ko:'챗봇 대화 기록', rows:98, cols:['id*','user_id→','conversation_id','role','content','citations']},
+      {n:'qa_cache', ko:'질문답변 시맨틱 캐시', rows:1, cols:['id*','question_embedding','answer_text','ttl_expires_at']},
+      {n:'intent_examples', ko:'의도분류 예시', rows:0, cols:['id*','intent','example_text','embedding']},
+      {n:'rule_articles', ko:'룰북 (테니스·풋살)', rows:58, cols:['id*','sport','category','title','body','embedding']},
+    ]},
+  { key:'venue', name:'장소 · 인프라', color:'var(--venue)', desc:'경기장 마스터 + 레이트리밋',
+    tables:[
+      {n:'venues', ko:'경기장 마스터', rows:269, cols:['id*','sport','name','region_code→','venue_type','court_count']},
+      {n:'rate_limits', ko:'범용 레이트리밋', rows:0, cols:['user_id*→','bucket*','count']},
+      {n:'chat_rate_limit', ko:'챗 레이트리밋', rows:0, cols:['user_id*→','window_start','count']},
+    ]},
+];
+
+const legend = document.getElementById('legend');
+const domainsEl = document.getElementById('domains');
+const active = new Set(DOMAINS.map(d=>d.key));
+
+function render(){
+  domainsEl.innerHTML='';
+  DOMAINS.forEach(d=>{
+    if(!active.has(d.key)) return;
+    const sec=document.createElement('section');
+    sec.className='domain';
+    sec.innerHTML=`<div class="dhead"><span class="dot" style="background:${d.color}"></span>
+      <h2>${d.name}</h2><span class="desc">${d.desc} · ${d.tables.length}개 테이블</span></div>`;
+    const grid=document.createElement('div'); grid.className='grid';
+    d.tables.forEach(t=>{
+      const cols=t.cols.map(c=>{
+        const pk=c.endsWith('*')||c.includes('*→');
+        const fk=c.includes('→');
+        const label=c.replace('*→','').replace('→','').replace('*','');
+        const cls=pk?'pk':(fk?'fk':'');
+        const suffix=fk?' 🔗':'';
+        return `<li class="${cls}">${label}${suffix}</li>`;
+      }).join('');
+      const card=document.createElement('div');
+      card.className='table-card';
+      card.style.borderLeftColor=d.color;
+      card.innerHTML=`<div class="tc-head"><span class="tc-name">${t.n}</span>
+        <span class="tc-rows">${t.rows.toLocaleString()} 행</span></div>
+        <div class="tc-ko">${t.ko}</div><ul class="cols">${cols}</ul>`;
+      grid.appendChild(card);
+    });
+    sec.appendChild(grid);
+    domainsEl.appendChild(sec);
+  });
+}
+
+DOMAINS.forEach(d=>{
+  const c=document.createElement('span');
+  c.className='chip'; c.style.background=d.color; c.textContent=d.name;
+  c.onclick=()=>{ active.has(d.key)?active.delete(d.key):active.add(d.key); c.classList.toggle('off'); render(); };
+  legend.appendChild(c);
+});
+render();
+</script>
+</body>
+</html>

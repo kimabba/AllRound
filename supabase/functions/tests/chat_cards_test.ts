@@ -2,6 +2,8 @@ import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
   buildTournamentCards,
   parseSelectedEntity,
+  renderTournamentSearchEmptyText,
+  renderTournamentSearchText,
   type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
 
@@ -38,6 +40,30 @@ Deno.test('buildTournamentCards caps at 10 items', () => {
 
 Deno.test('buildTournamentCards returns empty array for empty input', () => {
   assertEquals(buildTournamentCards([]), []);
+});
+
+Deno.test('renderTournamentSearchText summarizes results without duplicating card rows', () => {
+  const text = renderTournamentSearchText([SAMPLE_ROW], {
+    sport: 'tennis',
+    region: '광주',
+    dateRange: { from: '2026-06-15', to: '2026-06-21' },
+  });
+
+  assert(text.includes('🎾 테니스 1건'));
+  assert(text.includes('아래 카드'));
+  assert(!text.includes(SAMPLE_ROW.title));
+});
+
+Deno.test('renderTournamentSearchEmptyText is authoritative for precise empty filters', () => {
+  const text = renderTournamentSearchEmptyText({
+    sport: 'tennis',
+    region: null,
+    dateRange: { from: '2026-06-15', to: '2026-06-21' },
+  });
+
+  assert(text.includes('조건에 맞는 테니스 대회가 없습니다'));
+  assert(text.includes('2026-06-15 ~ 2026-06-21'));
+  assert(!text.includes('현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다'));
 });
 
 Deno.test('parseSelectedEntity accepts a valid tournament entity', () => {

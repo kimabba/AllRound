@@ -58,6 +58,60 @@ export async function finishAudit(
 }
 
 /**
+ * raw HTML 을 crawl_documents(raw zone)에 보관.
+ * (source, source_url) 기준 upsert — 같은 게시글은 1 row, 재크롤 시 덮어씀.
+ * raw 보관은 부가 기능이므로 실패해도 크롤 파이프라인을 중단하지 않는다.
+ */
+async function sha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function saveRawDocument(
+  audit: AuditHandle,
+  sourceUrl: string,
+  rawHtml: string,
+  tournamentId: string | null,
+  parseStatus: 'parsed' | 'failed' | 'pending' = 'parsed',
+  parseError?: string,
+): Promise<void> {
+  const contentHash = await sha256Hex(rawHtml);
+  // 파싱 실패 등으로 tournamentId 가 없을 때, 같은 게시글이 과거에 파싱 성공해
+  // 연결돼 있었다면 그 연결(tournament_id)을 끊지 않도록 기존 값을 보존한다.
+  // (일시적 파싱 실패가 멀쩡한 대회와의 링크를 지우는 데이터 손상 방지)
+  let finalTournamentId = tournamentId;
+  if (finalTournamentId === null) {
+    const { data: prev } = await audit.supabase
+      .from('crawl_documents')
+      .select('tournament_id')
+      .eq('source', audit.source)
+      .eq('source_url', sourceUrl)
+      .maybeSingle();
+    finalTournamentId = prev?.tournament_id ?? null;
+  }
+  const { error } = await audit.supabase
+    .from('crawl_documents')
+    .upsert(
+      {
+        source: audit.source,
+        source_url: sourceUrl,
+        raw_html: rawHtml,
+        content_hash: contentHash,
+        http_status: 200,
+        fetched_at: new Date().toISOString(),
+        tournament_id: finalTournamentId,
+        parse_status: parseStatus,
+        parse_error: parseError ?? null,
+      },
+      { onConflict: 'source,source_url' },
+    );
+  if (error) console.error(`saveRawDocument: ${error.message}`);
+}
+
+/**
  * source_url 기준 upsert. 신규는 status='draft' 로 들어가 관리자 승인 대기.
  *  (사이트 셀렉터가 깨지거나 등급/날짜 추출이 잘못된 false positive 가
  *   바로 사용자에게 노출되지 않도록 하는 안전 장치)
@@ -68,6 +122,7 @@ export async function upsertTournament(
   audit: AuditHandle,
   sport: 'tennis' | 'futsal',
   t: CrawlerTournament,
+  rawHtml?: string,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
   // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
@@ -108,31 +163,39 @@ export async function upsertTournament(
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
+    if (rawHtml) await saveRawDocument(audit, t.source_url, rawHtml, existing.id, 'parsed');
     audit.updated++;
     return 'updated';
   }
 
-  const { error } = await audit.supabase.from('tournaments').insert({
-    sport,
-    title: t.title,
-    organizer: t.organizer ?? null,
-    description: t.description ?? null,
-    start_date: t.start_date,
-    end_date: t.end_date ?? null,
-    application_deadline: t.application_deadline ?? null,
-    region: t.region ?? null,
-    region_code: regionCode,
-    location: t.location ?? null,
-    eligible_grades: t.eligible_grades,
-    division_label_local: t.division_label_local ?? null,
-    entry_fee: t.entry_fee ?? null,
-    prize: t.prize ?? null,
-    format: t.format ?? null,
-    source: audit.source,
-    source_url: t.source_url,
-    status: 'draft',
-  });
+  const { data: insertedRow, error } = await audit.supabase
+    .from('tournaments')
+    .insert({
+      sport,
+      title: t.title,
+      organizer: t.organizer ?? null,
+      description: t.description ?? null,
+      start_date: t.start_date,
+      end_date: t.end_date ?? null,
+      application_deadline: t.application_deadline ?? null,
+      region: t.region ?? null,
+      region_code: regionCode,
+      location: t.location ?? null,
+      eligible_grades: t.eligible_grades,
+      division_label_local: t.division_label_local ?? null,
+      entry_fee: t.entry_fee ?? null,
+      prize: t.prize ?? null,
+      format: t.format ?? null,
+      source: audit.source,
+      source_url: t.source_url,
+      status: 'draft',
+    })
+    .select('id')
+    .single();
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
+  if (rawHtml) {
+    await saveRawDocument(audit, t.source_url, rawHtml, insertedRow?.id ?? null, 'parsed');
+  }
   audit.inserted++;
   return 'inserted';
 }
@@ -237,6 +300,34 @@ export function extractApplicationDeadline(text: string): string | null {
     const r = sanitize(m2k[1], m2k[2], m2k[3]);
     if (r) return r;
   }
+
+  return null;
+}
+
+/**
+ * 본문에서 대회 장소(상세 경기장)를 추출. 없으면 null.
+ *
+ * 한국 협회 공고는 "장소:" 라벨 없이 본문 중간에 "○○테니스장"처럼 등장하는 경우가 많다.
+ * (참가비는 신청 폼/JS 에만 있어 정적 파싱으로 추출 불가 → 다루지 않음)
+ *
+ * 전략:
+ *   1) "장소|경기장|개최지|대회장" 라벨 뒤의 장소명 우선
+ *   2) 없으면 본문 첫 "[가-힣]{2,}(테니스장|정구장|구장|체육관|코트장)" 매치
+ *   false positive 방지: 2글자 이상 고유명 + 시설 접미사로 제한. status='draft' 검수로 추가 보정.
+ */
+export function extractVenue(text: string): string | null {
+  const cleaned = text.replace(/\s+/g, ' ');
+  const SUFFIX = '(?:테니스장|정구장|구장|체육관|코트장)';
+
+  // 1) 라벨 + 장소명
+  const labeled = cleaned.match(
+    new RegExp(`(?:장소|경기장|개최지|대회장)\\s*[:：]?\\s*([가-힣A-Za-z0-9·]{2,20}?${SUFFIX})`),
+  );
+  if (labeled && labeled[1].trim().length >= 3) return labeled[1].trim();
+
+  // 2) 본문 첫 시설명
+  const bare = cleaned.match(new RegExp(`([가-힣A-Za-z0-9·]{2,}${SUFFIX})`));
+  if (bare) return bare[1].trim();
 
   return null;
 }

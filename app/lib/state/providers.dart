@@ -94,16 +94,17 @@ final myFavoriteClubsProvider = FutureProvider<List<Club>>((ref) async {
   return api.myFavoriteClubs(limit: 50);
 });
 
-/// 수동 종목 오버라이드 (null이면 userSports primary 사용)
-final sportOverrideProvider = StateProvider<String?>((_) => null);
+String? primarySportFrom(List<UserSport> sports) {
+  if (sports.isEmpty) return null;
+  return sports.where((s) => s.isPrimary).firstOrNull?.sport ??
+      sports.first.sport;
+}
 
 /// 사용자의 active 종목 — 앱 전체 필터 기준.
-/// sportOverrideProvider가 설정되면 그 값을 사용, 아니면 userSports primary.
+/// 프로필의 주 종목을 사용한다.
 final activeSportProvider = Provider<String?>((ref) {
-  final override = ref.watch(sportOverrideProvider);
-  if (override != null) return override;
   final sports = ref.watch(userSportsProvider).valueOrNull ?? [];
-  return sports.where((s) => s.isPrimary).firstOrNull?.sport;
+  return primarySportFrom(sports);
 });
 
 /// 홈 자동 필터 결과 (activeSportProvider 기반)

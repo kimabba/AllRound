@@ -381,3 +381,27 @@ export function buildFallbackResult(slots: Slots): IntentResult {
     slots,
   };
 }
+
+type SportSlot = NonNullable<Slots['sport']>;
+
+export interface RequestedSportResolution {
+  explicitSport: SportSlot | null;
+  requestedSport: SportSlot | null;
+}
+
+function normalizeSportSlot(sport: string | undefined | null): SportSlot | null {
+  if (sport === 'tennis' || sport === 'futsal') return sport;
+  return null;
+}
+
+export function resolveRequestedSport(
+  explicitSport: string | undefined | null,
+  clientActiveSport: string | undefined | null,
+): RequestedSportResolution {
+  const normalizedExplicitSport = normalizeSportSlot(explicitSport);
+  const normalizedActiveSport = normalizeSportSlot(clientActiveSport);
+  return {
+    explicitSport: normalizedExplicitSport,
+    requestedSport: normalizedExplicitSport ?? normalizedActiveSport,
+  };
+}
