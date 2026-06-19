@@ -26,7 +26,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   bool _loadingMy = false;
 
   // 클럽 찾기 탭
-  final String _q = '';
   List<Club>? _clubs;
   bool _loading = false;
   String? _searchError;
@@ -80,7 +79,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           (sport) => api.searchClubs(
             sport: sport,
             region: _clubFilters.region,
-            q: _q,
           ),
         ),
       );
@@ -361,9 +359,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final now = DateTime.now();
     final posts = [
       for (final post in _previewRecruitingPosts)
-        post.copyWith(
-            isClosed:
-                post.isClosed || _closedRecruitingPostIds.contains(post.id)),
+        if (_closedRecruitingPostIds.contains(post.id) && !post.isClosed)
+          post.copyWith(isClosed: true, closedAt: now)
+        else
+          post,
     ].where((post) {
       if (!interests.contains(post.sport)) return false;
       if (post.isClosed && post.closedAt != null) {
@@ -1973,7 +1972,8 @@ class _SimpleClubTile extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               _SimpleClubAvatar(club: item, size: 72),
-              if (item.createdAt != null)
+              if (item.createdAt != null &&
+                  DateTime.now().difference(item.createdAt!).inDays <= 7)
                 Positioned(
                   left: -6,
                   top: -6,
@@ -2325,305 +2325,6 @@ String _formatFee(double value) {
   if (amount >= 100000) return '10만원+';
   if (amount % 10000 == 0) return '${amount ~/ 10000}만원';
   return '${amount ~/ 1000}천원';
-}
-
-// ─── 클럽 찾기 탭 ────────────────────────────────────────────────────────────
-
-// 클럽 찾기 탭 구조를 되돌릴 때 참고할 수 있도록 남겨둔 기존 컴포넌트.
-// ignore: unused_element
-class _SearchTab extends StatelessWidget {
-  final String q;
-  final Set<String> interests;
-  final List<Club>? myClubs;
-  final bool loadingMy;
-  final List<Club>? clubs;
-  final bool loading;
-  final String? error;
-  final Set<String> favoriteIds;
-  final _ClubSearchFilters filters;
-  final ValueChanged<Set<String>> onInterestsChanged;
-  final ValueChanged<String> onQueryChanged;
-  final ValueChanged<_ClubSearchFilters> onFiltersChanged;
-  final VoidCallback onSearch;
-  final VoidCallback onJoined;
-
-  const _SearchTab({
-    required this.q,
-    required this.interests,
-    required this.myClubs,
-    required this.loadingMy,
-    required this.clubs,
-    required this.loading,
-    // ignore: unused_element_parameter
-    this.error,
-    required this.favoriteIds,
-    required this.filters,
-    required this.onInterestsChanged,
-    required this.onQueryChanged,
-    required this.onFiltersChanged,
-    required this.onSearch,
-    required this.onJoined,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isLocalPreview =
-        Uri.base.host == '127.0.0.1' || Uri.base.host == 'localhost';
-    final effectiveClubs = clubs ??
-        (AppConfig.userDesignPreview || isLocalPreview
-            ? _previewSearchClubs
-            : null);
-    final visibleClubs = effectiveClubs
-        ?.where((club) => interests.contains(club.sport))
-        .where((club) => _matchesClientFilters(club, filters))
-        .toList();
-    final newClubs = _newClubs(visibleClubs ?? const []);
-    final recommendedClubs = _recommendedClubs(visibleClubs ?? const []);
-    final joinedClubs =
-        (myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
-    final managedClubs = joinedClubs.where((club) => club.isManager).toList();
-
-    return Column(
-      children: [
-        Container(
-          color: cs.surfaceContainerLow,
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.md,
-          ),
-          child: Column(
-            children: [
-              _ClubFindControlCard(
-                filters: filters,
-                interests: interests,
-                onFilterTap: () => _openFilterSheet(context),
-                onInterestTap: () => _openInterestSheet(context),
-              ),
-              if (filters.hasActive) ...[
-                const SizedBox(height: AppSpacing.sm),
-                _ActiveFilterChips(
-                  filters: filters,
-                  onClear: () => onFiltersChanged(filters.cleared()),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                decoration: InputDecoration(
-                  hintText: '클럽명·설명 검색',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  filled: true,
-                  fillColor: cs.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: cs.outlineVariant),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: cs.outlineVariant),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
-                  ),
-                ),
-                onChanged: onQueryChanged,
-                onSubmitted: (_) => onSearch(),
-              ),
-            ],
-          ),
-        ),
-        if (loading) LinearProgressIndicator(color: cs.primary),
-        Expanded(
-          child: error != null
-              ? AppEmptyState(
-                  icon: Icons.wifi_off_rounded,
-                  title: error!,
-                  description: '네트워크 연결을 확인하고 다시 시도해 주세요.',
-                  actionLabel: '다시 시도',
-                  onAction: onSearch,
-                )
-              : effectiveClubs == null
-                  ? const SizedBox.shrink()
-                  : visibleClubs!.isEmpty
-                      ? const AppEmptyState(
-                          icon: Icons.groups_rounded,
-                          title: '등록된 클럽이 없습니다',
-                          description: '다른 검색어나 필터로 시도해 보세요.',
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.lg,
-                          ),
-                          children: [
-                            if (newClubs.isNotEmpty) ...[
-                              _ClubSectionHeader(
-                                title: '내 주변에 새로 생겼어요',
-                                actionLabel: '더보기',
-                                onAction: onSearch,
-                              ),
-                              _NewClubGrid(
-                                clubs: newClubs,
-                                favoriteIds: favoriteIds,
-                                onJoined: onJoined,
-                              ),
-                              const SizedBox(height: AppSpacing.xl),
-                            ],
-                            if (managedClubs.isNotEmpty) ...[
-                              _TeamRecruitingEntryCard(
-                                managedClubs: managedClubs,
-                              ),
-                              const SizedBox(height: AppSpacing.xl),
-                            ],
-                            _JoinedClubSection(
-                              clubs: joinedClubs,
-                              loading: loadingMy,
-                              favoriteIds: favoriteIds,
-                              onJoined: onJoined,
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
-                            _InterestSettingsCard(
-                              interests: interests,
-                              onTap: () => _openInterestSheet(context),
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
-                            if (recommendedClubs.isNotEmpty) ...[
-                              _ClubSectionHeader(
-                                title: '맞춤추천',
-                                subtitle: filters.hasActive
-                                    ? filters.labels.join(' · ')
-                                    : '내 관심 종목 기준',
-                              ),
-                              for (final club in recommendedClubs.take(3))
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.sm,
-                                  ),
-                                  child: _ClubCard(
-                                    club: club,
-                                    showRole: false,
-                                    isFavorite: favoriteIds.contains(club.id),
-                                    onChanged: onJoined,
-                                  ),
-                                ),
-                              const SizedBox(height: AppSpacing.lg),
-                            ],
-                            _ClubSectionHeader(
-                              title: '전체 클럽',
-                              subtitle: '${visibleClubs.length}개',
-                            ),
-                            for (final club in visibleClubs)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpacing.sm,
-                                ),
-                                child: _ClubCard(
-                                  club: club,
-                                  showRole: false,
-                                  isFavorite: favoriteIds.contains(club.id),
-                                  onChanged: onJoined,
-                                ),
-                              ),
-                          ],
-                        ),
-        ),
-      ],
-    );
-  }
-
-  bool _matchesClientFilters(Club club, _ClubSearchFilters filters) {
-    if (filters.region != null && club.region != filters.region) return false;
-    if (filters.gender != null &&
-        club.genderPreference != null &&
-        club.genderPreference != filters.gender) {
-      return false;
-    }
-    if (filters.days.isNotEmpty &&
-        club.meetingDays.isNotEmpty &&
-        club.meetingDays.every((day) => !filters.days.contains(day))) {
-      return false;
-    }
-    if (club.monthlyFee != null &&
-        (club.monthlyFee! < filters.feeRange.start ||
-            club.monthlyFee! > filters.feeRange.end)) {
-      return false;
-    }
-    return true;
-  }
-
-  List<Club> _newClubs(List<Club> source) {
-    final now = DateTime.now();
-    final recent = source.where((club) {
-      final createdAt = club.createdAt;
-      if (createdAt == null) return false;
-      return now.difference(createdAt).inDays <= 7;
-    }).toList()
-      ..sort((a, b) {
-        final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bDate.compareTo(aDate);
-      });
-    if (recent.isNotEmpty) return recent.take(4).toList();
-    return source.take(4).toList();
-  }
-
-  List<Club> _recommendedClubs(List<Club> source) {
-    final scored = [
-      for (final club in source)
-        (
-          club: club,
-          score: (filters.region != null && club.region == filters.region
-                  ? 4
-                  : 0) +
-              (filters.gender != null && club.genderPreference == filters.gender
-                  ? 2
-                  : 0) +
-              (filters.days.isNotEmpty &&
-                      club.meetingDays.any(filters.days.contains)
-                  ? 2
-                  : 0) +
-              (club.monthlyFee != null &&
-                      club.monthlyFee! >= filters.feeRange.start &&
-                      club.monthlyFee! <= filters.feeRange.end
-                  ? 1
-                  : 0) +
-              club.memberCount,
-        ),
-    ]..sort((a, b) => b.score.compareTo(a.score));
-    return scored.map((item) => item.club).toList();
-  }
-
-  Future<void> _openFilterSheet(BuildContext context) async {
-    final cs = Theme.of(context).colorScheme;
-    final result = await showModalBottomSheet<_ClubFilterResult>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _ClubFilterSheet(
-        initialFilters: filters,
-        initialInterests: interests,
-        title: '클럽 찾기 조건',
-        icon: Icons.tune_rounded,
-        accentColor: cs.primaryContainer,
-        onAccentColor: cs.onPrimaryContainer,
-      ),
-    );
-    if (result != null) {
-      onFiltersChanged(result.filters);
-      onInterestsChanged(result.interests);
-    }
-  }
-
-  Future<void> _openInterestSheet(BuildContext context) async {
-    final result = await showModalBottomSheet<Set<String>>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => _InterestSheet(initialInterests: interests),
-    );
-    if (result != null && result.isNotEmpty) onInterestsChanged(result);
-  }
 }
 
 class _ClubFindControlCard extends StatelessWidget {
