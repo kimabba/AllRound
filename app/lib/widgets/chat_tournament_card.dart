@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_ui.dart';
 import '../theme/tokens.dart';
-import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 
 /// 채팅 안에 렌더되는 대회 카드. raw id 는 표시하지 않는다.
@@ -17,8 +16,6 @@ class ChatTournamentCard extends StatelessWidget {
     required this.onAction,
   });
 
-  static const _actions = ['상세 알려줘', '신청 방법 알려줘', '마감 확인해줘'];
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -26,15 +23,9 @@ class ChatTournamentCard extends StatelessWidget {
     final isTennis = item.sport == 'tennis';
     final accent = isTennis ? cs.tertiary : cs.secondary;
 
-    final meta = <String>[
-      sportLabelFromString(item.sport),
-      if (item.region != null) item.region!,
-      item.endDate != null && item.endDate != item.startDate
-          ? '${item.startDate} ~ ${item.endDate}'
-          : item.startDate,
-      if (item.entryFee != null) '${item.entryFee}원',
-      if (item.format != null) item.format!,
-    ].where((s) => s.isNotEmpty).join(' · ');
+    final dateText = item.endDate != null && item.endDate != item.startDate
+        ? '${item.startDate} ~ ${item.endDate}'
+        : item.startDate;
 
     return AppCard(
       variant: AppCardVariant.outlined,
@@ -61,32 +52,91 @@ class ChatTournamentCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            meta,
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-          ),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              for (final action in _actions)
-                OutlinedButton(
-                  onPressed: () => onAction(action, item.id),
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 4,
-                    ),
-                  ),
-                  child: Text(action, style: tt.labelMedium),
-                ),
-            ],
+          _InfoRow(
+            icon: Icons.calendar_today_rounded,
+            label: '일정',
+            value: dateText,
+            cs: cs,
+            tt: tt,
+          ),
+          if (item.location != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _InfoRow(
+              icon: Icons.location_on_rounded,
+              label: '장소',
+              value: item.location!,
+              cs: cs,
+              tt: tt,
+            ),
+          ],
+          if (item.applicationDeadline != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _InfoRow(
+              icon: Icons.timer_rounded,
+              label: '신청 마감',
+              value: item.applicationDeadline!,
+              cs: cs,
+              tt: tt,
+            ),
+          ],
+          if (item.entryFee != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _InfoRow(
+              icon: Icons.payments_rounded,
+              label: '참가비',
+              value: '${item.entryFee}원',
+              cs: cs,
+              tt: tt,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => onAction('상세 알려줘', item.id),
+              child: const Text('상세 보기'),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.cs,
+    required this.tt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: cs.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Text(
+          '$label  ',
+          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

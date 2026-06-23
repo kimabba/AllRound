@@ -9,6 +9,7 @@ class TournamentChatCardItem {
   final String? location;
   final String startDate;
   final String? endDate;
+  final String? applicationDeadline;
   final bool eligible;
   final List<String> eligibleGrades;
   final int? entryFee;
@@ -22,6 +23,7 @@ class TournamentChatCardItem {
     this.location,
     required this.startDate,
     this.endDate,
+    this.applicationDeadline,
     required this.eligible,
     required this.eligibleGrades,
     this.entryFee,
@@ -48,6 +50,7 @@ class TournamentChatCardItem {
       location: j['location'] as String?,
       startDate: startDate,
       endDate: j['end_date'] as String?,
+      applicationDeadline: j['application_deadline'] as String?,
       eligible: (j['eligible'] as bool?) ?? false,
       eligibleGrades:
           (j['eligible_grades'] as List?)?.whereType<String>().toList() ??
