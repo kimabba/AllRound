@@ -128,7 +128,6 @@ class _DetailBody extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final isTennis = t.sport == 'tennis';
     final accentColor = isTennis ? cs.primary : cs.tertiary;
-    final grades = _displayGrades(t);
     final futsalCategory = t.sport == 'futsal'
         ? futsalEventCategoryLabel(t.futsalEventCategory)
         : '';
@@ -153,177 +152,109 @@ class _DetailBody extends StatelessWidget {
                 const _DetailPreviewBanner(),
                 const SizedBox(height: AppSpacing.md),
               ],
-              _TournamentHero(
-                tournament: t,
-                grades: grades,
-                accentColor: accentColor,
-                dateText: _dateText(),
-              ),
+
+              // ── 통합 헤더 ──
+              _StatusPill(status: t.status),
               const SizedBox(height: AppSpacing.md),
-              _QuickInfoGrid(
-                rows: [
-                  _QuickInfo(
-                    icon: Icons.calendar_month_rounded,
-                    label: '대회일',
-                    value: _dateText(),
-                  ),
-                  _QuickInfo(
-                    icon: Icons.event_busy_rounded,
-                    label: '신청 마감',
-                    value: t.applicationDeadline == null
-                        ? '주최 문의'
-                        : df.format(t.applicationDeadline!),
-                    accent: t.applicationDeadline == null ? null : cs.error,
-                  ),
-                  _QuickInfo(
-                    icon: Icons.place_rounded,
-                    label: '장소',
-                    value: t.location ?? t.region ?? '장소 확인 필요',
-                  ),
-                  _QuickInfo(
-                    icon: Icons.payments_rounded,
-                    label: '참가비',
-                    value: t.entryFee == null
-                        ? '주최 문의'
-                        : '${t.entryFeeUnit == 'per_person' ? '인당' : '팀당'} ${_feeFormat.format(t.entryFee!)}원',
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '출전 조건',
-                      style:
-                          tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        _InfoChip(
-                          icon: Icons.sports_rounded,
-                          label: sportLabelFromString(t.sport),
-                          color: accentColor,
-                        ),
-                        if (futsalCategory.isNotEmpty)
-                          _InfoChip(
-                            icon: Icons.flag_rounded,
-                            label: futsalCategory,
-                            color: cs.secondary,
-                          ),
-                        _InfoChip(
-                          icon: Icons.emoji_events_rounded,
-                          label: grades,
-                          color: accentColor,
-                        ),
-                        if (t.isJointEvent)
-                          _InfoChip(
-                            icon: Icons.groups_rounded,
-                            label: '통합 대회',
-                            color: cs.secondary,
-                          ),
-                        if (t.format != null)
-                          _InfoChip(
-                            icon: Icons.format_list_numbered_rounded,
-                            label: t.format!,
-                            color: cs.primary,
-                          ),
-                      ],
-                    ),
-                  ],
+              Text(
+                t.title,
+                style: tt.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  height: 1.18,
                 ),
               ),
+              if (t.organizer != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  t.organizer!,
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
 
-              // 1. 기본 정보 (기본 열림)
-              _AccordionSection(
-                icon: Icons.info_outline_rounded,
-                title: '기본 정보',
-                initiallyExpanded: true,
-                children: [
-                  _InfoRow(
-                    icon: Icons.sports_rounded,
-                    label: '종목',
-                    value: sportLabelFromString(t.sport),
-                  ),
-                  if (futsalCategory.isNotEmpty)
-                    _InfoRow(
-                      icon: Icons.flag_rounded,
-                      label: '분류',
-                      value: futsalCategory,
-                    ),
-                  _InfoRow(
-                    icon: Icons.calendar_today_rounded,
-                    label: '대회일',
-                    value: _dateText(),
-                  ),
-                  if (t.region != null)
-                    _InfoRow(
-                      icon: Icons.place_rounded,
-                      label: '지역',
-                      value: t.region!,
-                    ),
-                  if (t.location != null)
-                    _InfoRow(
-                      icon: Icons.location_on_rounded,
-                      label: '장소',
-                      value: t.location!,
-                    ),
-                  if (t.organizer != null)
-                    _InfoRow(
-                      icon: Icons.business_rounded,
-                      label: '주최',
-                      value: t.organizer!,
-                    ),
-                ],
+              // ── 핵심 정보 (행 레이아웃) ──
+              _DetailInfoRow(
+                icon: Icons.calendar_today_rounded,
+                label: '대회일',
+                value: _dateText(),
               ),
+              if (t.applicationDeadline != null)
+                _DetailInfoRow(
+                  icon: Icons.timer_rounded,
+                  label: '신청 마감',
+                  value: df.format(t.applicationDeadline!),
+                  valueColor: cs.error,
+                ),
+              _DetailInfoRow(
+                icon: Icons.location_on_rounded,
+                label: '장소',
+                value: t.location ?? t.region ?? '장소 확인 필요',
+              ),
+              _DetailInfoRow(
+                icon: Icons.payments_rounded,
+                label: '참가비',
+                value: t.entryFee == null
+                    ? '주최 문의'
+                    : '${t.entryFeeUnit == 'per_person' ? '인당' : '팀당'} ${_feeFormat.format(t.entryFee!)}원',
+              ),
+              if (t.format != null)
+                _DetailInfoRow(
+                  icon: Icons.format_list_numbered_rounded,
+                  label: '형식',
+                  value: t.format!,
+                ),
+              if (futsalCategory.isNotEmpty)
+                _DetailInfoRow(
+                  icon: Icons.flag_rounded,
+                  label: '분류',
+                  value: futsalCategory,
+                ),
 
-              // 2. 출전 등급
-              _AccordionSection(
-                icon: Icons.emoji_events_rounded,
-                title: '출전 등급',
-                initiallyExpanded: true,
+              const SizedBox(height: AppSpacing.lg),
+              Divider(color: cs.outlineVariant),
+              const SizedBox(height: AppSpacing.lg),
+
+              // ── 출전 부서 ──
+              Text(
+                '출전 부서',
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: [
-                  _InfoRow(
-                    icon: Icons.emoji_events_rounded,
-                    label: '부서',
-                    value: grades,
-                  ),
+                  for (final g in t.eligibleGrades)
+                    Chip(
+                      label: Text(
+                        divisionLabel(g) != g ? divisionLabel(g) : gradeLabel(g),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: accentColor.withValues(alpha: 0.1),
+                      side: BorderSide.none,
+                    ),
                   if (t.isJointEvent)
-                    _InfoRow(
-                      icon: Icons.groups_rounded,
-                      label: '통합',
-                      value: '통합 대회',
+                    Chip(
+                      label: const Text('통합 대회'),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: cs.secondaryContainer,
+                      side: BorderSide.none,
                     ),
                 ],
               ),
 
-              // 3. 참가 안내
+              const SizedBox(height: AppSpacing.lg),
+
+              // 3. 참가 안내 (상세 정보가 있을 때만)
+              if (t.prize != null || t.sourceUrl != null)
               _AccordionSection(
                 icon: Icons.how_to_reg_rounded,
                 title: '참가 안내',
                 initiallyExpanded: false,
                 children: [
-                  if (t.applicationDeadline != null)
-                    _InfoRow(
-                      icon: Icons.event_busy_rounded,
-                      label: '신청 마감',
-                      value: df.format(t.applicationDeadline!),
-                      accent: cs.error,
-                      showIcon: false,
-                    ),
-                  if (t.entryFee != null)
-                    _InfoRow(
-                      icon: Icons.payments_rounded,
-                      label: '참가비',
-                      value:
-                          '${t.entryFeeUnit == 'per_person' ? '인당' : '팀당'} ${_feeFormat.format(t.entryFee!)}원',
-                      showIcon: false,
-                    ),
                   if (t.prize != null)
                     _InfoRow(
                       icon: Icons.workspace_premium_rounded,
@@ -411,107 +342,6 @@ class _DetailBody extends StatelessWidget {
       a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-class _TournamentHero extends StatelessWidget {
-  const _TournamentHero({
-    required this.tournament,
-    required this.grades,
-    required this.accentColor,
-    required this.dateText,
-  });
-
-  final Tournament tournament;
-  final String grades;
-  final Color accentColor;
-  final String dateText;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final isTennis = tournament.sport == 'tennis';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accentColor.withValues(alpha: 0.18),
-            cs.surfaceContainerLowest,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentColor.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.86),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(
-                  isTennis
-                      ? Icons.sports_tennis_rounded
-                      : Icons.sports_soccer_rounded,
-                  color: accentColor,
-                  size: 30,
-                ),
-              ),
-              const Spacer(),
-              _StatusPill(status: tournament.status),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            tournament.title,
-            style: tt.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              height: 1.18,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            [
-              if (tournament.organizer != null) tournament.organizer!,
-              dateText,
-            ].join(' · '),
-            style: tt.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.45,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              _InfoChip(
-                icon: Icons.place_rounded,
-                label: tournament.region ?? '지역 확인 필요',
-                color: accentColor,
-              ),
-              _InfoChip(
-                icon: Icons.emoji_events_rounded,
-                label: grades,
-                color: accentColor,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _StatusPill extends StatelessWidget {
   const _StatusPill({required this.status});
 
@@ -544,123 +374,44 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _QuickInfo {
-  const _QuickInfo({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.accent,
-  });
-
+class _DetailInfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final Color? accent;
-}
+  final Color? valueColor;
 
-class _QuickInfoGrid extends StatelessWidget {
-  const _QuickInfoGrid({required this.rows});
-
-  final List<_QuickInfo> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: rows.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.75,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing: AppSpacing.sm,
-      ),
-      itemBuilder: (context, index) => _QuickInfoTile(info: rows[index]),
-    );
-  }
-}
-
-class _QuickInfoTile extends StatelessWidget {
-  const _QuickInfoTile({required this.info});
-
-  final _QuickInfo info;
+  const _DetailInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final color = info.accent ?? cs.primary;
-
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(info.icon, size: 18, color: color),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                info.label,
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                info.value,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: tt.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  height: 1.18,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: AppSpacing.xs),
-          Flexible(
+          Icon(icon, size: 18, color: cs.onSurfaceVariant),
+          const SizedBox(width: AppSpacing.sm),
+          SizedBox(
+            width: 72,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: tt.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: valueColor,
+              ),
             ),
           ),
         ],
@@ -668,6 +419,7 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
 
 class _DetailPreviewBanner extends StatelessWidget {
   const _DetailPreviewBanner();
