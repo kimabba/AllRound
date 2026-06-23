@@ -262,8 +262,10 @@ class _SportImpactPainter extends CustomPainter {
         colors: [Color(0xFFFFFFFF), Color(0xFFD9F66F), Color(0xFF7AB719)],
       ).createShader(Rect.fromCircle(center: ball, radius: 31))
       ..color = Colors.white.withValues(alpha: ballOpacity);
-    canvas.saveLayer(Rect.largest,
-        Paint()..color = Colors.white.withValues(alpha: ballOpacity));
+    canvas.saveLayer(
+      Rect.fromCircle(center: ball, radius: 40),
+      Paint()..color = Colors.white.withValues(alpha: ballOpacity),
+    );
     canvas.drawCircle(ball, 31, ballPaint);
 
     final seamPaint = Paint()

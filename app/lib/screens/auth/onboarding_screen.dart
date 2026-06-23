@@ -195,7 +195,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  void _prepareExistingSports(List<UserSport>? sports) {
+  void _prepareExistingSports(
+    List<UserSport>? sports,
+    List<UserTennisOrg>? tennisOrgs,
+  ) {
     if (_existingSportsReady || sports == null) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -223,6 +226,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           .where((entry) => entry.value != null)
           .map((entry) => entry.key)
           .firstOrNull;
+      final restoredRegionCode =
+          _regionCode ?? _restoreRegionCode(tennisOrgs ?? const []);
+      final restoredRegionLabel =
+          _regionDisplayLabel ?? _restoreRegionDisplayLabel(restoredRegionCode);
       setState(() {
         _selectedGrade
           ..clear()
@@ -230,9 +237,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         _primarySport = selectedGrade[primarySport] == null
             ? (fallbackSport ?? primarySport)
             : primarySport;
+        _regionCode = restoredRegionCode;
+        _regionDisplayLabel = restoredRegionLabel;
         _existingSportsReady = true;
       });
     });
+  }
+
+  String? _restoreRegionCode(List<UserTennisOrg> tennisOrgs) {
+    for (final org in tennisOrgs) {
+      final code = org.regionCode;
+      if (code != null && code.isNotEmpty) return code;
+    }
+    return null;
+  }
+
+  String? _restoreRegionDisplayLabel(String? code) {
+    if (code == null) return null;
+    return _onboardingRegionChoices
+        .where((choice) => choice.code == code)
+        .map((choice) => choice.label)
+        .firstOrNull;
   }
 
   void _selectGrade(Sport sport, String? grade) {
@@ -417,7 +442,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     _prepareNickname();
     _prepareProfilePhoto();
-    _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
+    _prepareExistingSports(
+      ref.watch(userSportsProvider).valueOrNull,
+      ref.watch(userTennisOrgsProvider).valueOrNull,
+    );
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
