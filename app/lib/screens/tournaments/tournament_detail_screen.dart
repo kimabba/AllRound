@@ -692,18 +692,6 @@ List<_DescSection> _parseDescription(String raw, {required String sportLabel}) {
   return sections;
 }
 
-String _displayGrades(Tournament t) {
-  final local = t.divisionLabelLocal?.trim();
-  if (local == null || local.isEmpty) {
-    return formatEligibleGrades(t.eligibleGrades);
-  }
-
-  return local
-      .split(RegExp(r'\s*(?:·|,|/)\s*'))
-      .where((part) => part.trim().isNotEmpty)
-      .map((part) => divisionLabel(part.trim()))
-      .join(' · ');
-}
 
 class _DescriptionLine extends StatelessWidget {
   const _DescriptionLine({required this.section});
@@ -805,13 +793,11 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final Color? accent;
   final bool showIcon;
   const _InfoRow({
     required this.icon,
     required this.label,
     required this.value,
-    this.accent,
     this.showIcon = true,
   });
 
