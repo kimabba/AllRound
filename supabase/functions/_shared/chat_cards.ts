@@ -7,6 +7,7 @@ export interface TournamentCardRow {
   title: string;
   start_date: string;
   end_date: string | null;
+  application_deadline: string | null;
   region: string | null;
   location: string | null;
   eligible_grades: string[];
@@ -22,6 +23,7 @@ export interface TournamentCardItem {
   location: string | null;
   start_date: string;
   end_date: string | null;
+  application_deadline: string | null;
   eligible: boolean;
   eligible_grades: string[];
   entry_fee: number | null;
@@ -52,6 +54,7 @@ export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardI
     location: r.location,
     start_date: r.start_date,
     end_date: r.end_date,
+    application_deadline: r.application_deadline ?? null,
     eligible: true,
     eligible_grades: r.eligible_grades ?? [],
     entry_fee: r.entry_fee,
@@ -87,8 +90,6 @@ export function renderTournamentSearchText(
     `## ${heading} ${rows.length}건${filterText(ctx)}`,
     '',
     '조건에 맞는 대회를 찾았습니다. 아래 카드에서 일정을 확인하고 필요한 항목을 선택해 주세요.',
-    '',
-    '_DB 등록 정보 기준. 상세는 협회나 공식 홈페이지에서 확인하세요._',
   ].join('\n');
 }
 
