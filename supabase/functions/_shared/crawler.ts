@@ -321,7 +321,9 @@ export function extractVenue(text: string): string | null {
 
   // 1) "장 소" (공백 포함) 라벨 뒤 장소명
   const labeledSpaced = cleaned.match(
-    new RegExp(`장\\s*소\\s*[:：]?\\s*([가-힣A-Za-z0-9·()（）\\s]{2,30}?(?:${SUFFIX}|외\\s*보조경기장))`),
+    new RegExp(
+      `장\\s*소\\s*[:：]?\\s*([가-힣A-Za-z0-9·()（）\\s]{2,30}?(?:${SUFFIX}|외\\s*보조경기장))`,
+    ),
   );
   if (labeledSpaced) {
     const v = labeledSpaced[1].replace(/\s+/g, '').trim();
