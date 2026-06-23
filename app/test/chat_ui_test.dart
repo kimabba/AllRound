@@ -126,7 +126,7 @@ void main() {
       expect(find.textContaining('광주'), findsWidgets);
       expect(find.textContaining('11111111'), findsNothing);
 
-      await tester.tap(find.text('상세 알려줘'));
+      await tester.tap(find.text('상세 보기'));
       await tester.pump();
       expect(sent, '상세 알려줘');
     });
