@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config.dart';
 import '../../models/tournament.dart';
@@ -13,6 +18,20 @@ import '../../widgets/app_chip.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/matchup_logo.dart';
 
+const _profileAvatarPrefsKey = 'profile.avatar.base64';
+const _onboardingRegionChoices = <_RegionChoice>[
+  _RegionChoice(code: 'seoul_metro', label: '서울'),
+  _RegionChoice(code: 'seoul_metro', label: '경기'),
+  _RegionChoice(code: 'seoul_metro', label: '인천'),
+  _RegionChoice(code: 'busan_ulsan_gn', label: '부산·울산·경남'),
+  _RegionChoice(code: 'daegu_gb', label: '대구·경북'),
+  _RegionChoice(code: 'chungcheong', label: '충청'),
+  _RegionChoice(code: 'gwangju', label: '광주'),
+  _RegionChoice(code: 'jeonnam', label: '전남'),
+  _RegionChoice(code: 'gangwon', label: '강원'),
+  _RegionChoice(code: 'jeju', label: '제주'),
+];
+
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -22,6 +41,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final TextEditingController _nickname = TextEditingController();
+  Uint8List? _avatarBytes;
   int _step = 0;
   bool _nicknameReady = false;
 
@@ -34,6 +54,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   // 권역 (테니스 한정, 선택)
   String? _regionCode;
+  String? _regionDisplayLabel;
 
   // Multi-org (테니스 한정, 다중)
   final List<_OrgDraft> _orgs = [];
@@ -41,6 +62,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   bool _busy = false;
   String? _error;
+  bool _existingSportsReady = false;
+  bool _profilePhotoReady = false;
 
   bool get _canSubmit =>
       _selectedGrade.values.any((v) => v != null) &&
@@ -62,6 +85,126 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ? metadataName.trim()
         : (user?.email?.split('@').first ?? '');
     _nicknameReady = true;
+  }
+
+  Future<void> _prepareProfilePhoto() async {
+    if (_profilePhotoReady) return;
+    _profilePhotoReady = true;
+    final prefs = await SharedPreferences.getInstance();
+    final avatarBase64 = prefs.getString(_profileAvatarPrefsKey);
+    if (!mounted || avatarBase64 == null || avatarBase64.isEmpty) return;
+    setState(() => _avatarBytes = base64Decode(avatarBase64));
+  }
+
+  Future<void> _pickProfilePhoto(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 88,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileAvatarPrefsKey, base64Encode(bytes));
+    if (!mounted) return;
+    setState(() => _avatarBytes = bytes);
+  }
+
+  Future<void> _removeProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_profileAvatarPrefsKey);
+    if (!mounted) return;
+    setState(() => _avatarBytes = null);
+  }
+
+  Future<void> _showProfilePhotoSheet() async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _PhotoSheetAction(
+                  icon: Icons.photo_camera_rounded,
+                  label: '카메라로 촬영',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickProfilePhoto(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                _PhotoSheetAction(
+                  icon: Icons.photo_library_rounded,
+                  label: '앨범에서 선택',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickProfilePhoto(ImageSource.gallery);
+                  },
+                ),
+                if (_avatarBytes != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _PhotoSheetAction(
+                    icon: Icons.delete_outline_rounded,
+                    label: '프로필 사진 삭제',
+                    accentColor: cs.error,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _removeProfilePhoto();
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _prepareExistingSports(List<UserSport>? sports) {
+    if (_existingSportsReady || sports == null || sports.isEmpty) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _existingSportsReady) return;
+
+      final selectedGrade = Map<Sport, String?>.from(_selectedGrade);
+      for (final userSport in sports) {
+        selectedGrade[sportFromString(userSport.sport)] = userSport.grade;
+      }
+
+      final primary =
+          sports.where((sport) => sport.isPrimary).firstOrNull ?? sports.first;
+      setState(() {
+        _selectedGrade
+          ..clear()
+          ..addAll(selectedGrade);
+        _primarySport = sportFromString(primary.sport);
+        _existingSportsReady = true;
+      });
+    });
   }
 
   void _selectGrade(Sport sport, String? grade) {
@@ -246,6 +389,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     _prepareNickname();
+    _prepareProfilePhoto();
+    _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -350,46 +495,130 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           icon: Icons.sports_soccer_rounded,
         ),
         const SizedBox(height: AppSpacing.xl),
-        Text(
-          '프로필 이름',
-          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          '앱 안에서 표시될 닉네임이에요.',
-          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: cs.secondaryContainer,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: cs.secondary.withValues(alpha: 0.18),
-                width: 4,
+        AppCard(
+          variant: AppCardVariant.elevated,
+          borderRadius: BorderRadius.circular(24),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '프로필 설정',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
-            ),
-            child: Icon(Icons.person_rounded, size: 48, color: cs.secondary),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '사진과 닉네임은 클럽, 대회 신청 화면에서 보여집니다.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Center(
+                child: GestureDetector(
+                  onTap: _showProfilePhotoSheet,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 108,
+                        height: 108,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              cs.primaryContainer,
+                              cs.secondaryContainer,
+                            ],
+                          ),
+                          border: Border.all(
+                            color: cs.primary.withValues(alpha: 0.16),
+                            width: 5,
+                          ),
+                          image: _avatarBytes == null
+                              ? null
+                              : DecorationImage(
+                                  image: MemoryImage(_avatarBytes!),
+                                  fit: BoxFit.cover,
+                                ),
+                        ),
+                        child: _avatarBytes == null
+                            ? Icon(
+                                Icons.person_rounded,
+                                size: 54,
+                                color: cs.primary,
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cs.surface, width: 3),
+                            boxShadow: AppShadows.cardFor(
+                              Theme.of(context).brightness,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.camera_alt_rounded,
+                            color: cs.onPrimary,
+                            size: 17,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: _nickname,
+                maxLength: 10,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '닉네임',
+                  hintText: '닉네임을 입력하세요',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Material(
+                color: cs.primaryContainer.withValues(alpha: 0.58),
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _showProfilePhotoSheet,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_a_photo_rounded, color: cs.primary),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            '카메라 촬영 또는 앨범에서 사진 선택',
+                            style: tt.labelLarge?.copyWith(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: cs.primary),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        TextField(
-          controller: _nickname,
-          maxLength: 10,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            hintText: '닉네임을 입력하세요',
-            prefixIcon: Icon(Icons.badge_outlined),
-            counterText: '',
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          '원하시면 닉네임을 수정할 수 있어요.',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -426,11 +655,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            for (final code in regionCodes)
+            for (final region in _onboardingRegionChoices)
               _RegionOption(
-                label: regionLabel(code),
-                selected: _regionCode == code,
-                onTap: () => setState(() => _regionCode = code),
+                label: region.label,
+                selected: _regionCode == region.code &&
+                    _regionDisplayLabel == region.label,
+                onTap: () => setState(() {
+                  _regionCode = region.code;
+                  _regionDisplayLabel = region.label;
+                }),
               ),
           ],
         ),
@@ -451,7 +684,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '${_regionCode == null ? '' : '${regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
+          '${_regionCode == null ? '' : '${_regionDisplayLabel ?? regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -955,6 +1188,76 @@ class _SportHintCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PhotoSheetAction extends StatelessWidget {
+  const _PhotoSheetAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.accentColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final color = accentColor ?? cs.primary;
+
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  label,
+                  style: tt.titleSmall?.copyWith(
+                    color: accentColor ?? cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RegionChoice {
+  final String code;
+  final String label;
+
+  const _RegionChoice({
+    required this.code,
+    required this.label,
+  });
 }
 
 class _RegionOption extends StatelessWidget {
