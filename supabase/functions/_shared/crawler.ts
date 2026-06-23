@@ -317,15 +317,26 @@ export function extractApplicationDeadline(text: string): string | null {
  */
 export function extractVenue(text: string): string | null {
   const cleaned = text.replace(/\s+/g, ' ');
-  const SUFFIX = '(?:테니스장|정구장|구장|체육관|코트장)';
+  const SUFFIX = '(?:테니스장|정구장|구장|체육관|코트장|스포츠타운)';
 
-  // 1) 라벨 + 장소명
+  // 1) "장 소" (공백 포함) 라벨 뒤 장소명
+  const labeledSpaced = cleaned.match(
+    new RegExp(
+      `장\\s*소\\s*[:：]?\\s*([가-힣A-Za-z0-9·()（）\\s]{2,30}?(?:${SUFFIX}|외\\s*보조경기장))`,
+    ),
+  );
+  if (labeledSpaced) {
+    const v = labeledSpaced[1].replace(/\s+/g, '').trim();
+    if (v.length >= 3) return v;
+  }
+
+  // 2) 라벨 + 장소명 (정상 공백 없는 경우)
   const labeled = cleaned.match(
-    new RegExp(`(?:장소|경기장|개최지|대회장)\\s*[:：]?\\s*([가-힣A-Za-z0-9·]{2,20}?${SUFFIX})`),
+    new RegExp(`(?:장소|경기장|개최지|대회장)\\s*[:：]?\\s*([가-힣A-Za-z0-9·]{2,30}?${SUFFIX})`),
   );
   if (labeled && labeled[1].trim().length >= 3) return labeled[1].trim();
 
-  // 2) 본문 첫 시설명
+  // 3) 본문 첫 시설명
   const bare = cleaned.match(new RegExp(`([가-힣A-Za-z0-9·]{2,}${SUFFIX})`));
   if (bare) return bare[1].trim();
 

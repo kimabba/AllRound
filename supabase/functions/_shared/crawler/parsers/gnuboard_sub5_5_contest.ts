@@ -230,7 +230,64 @@ async function fetchDetail(
 
   const deadline = tableDeadline ?? extractApplicationDeadline(bodyText) ?? undefined;
 
-  // description: 메타데이터 헤더 + 원문 본문 (보일러플레이트 제거)
+  // ── 참가비 추출 ──
+  // "참가비팀당 34,000원" / "참가비 팀당 30,000원" / "참가비인당 15,000원"
+  let entryFee: number | undefined;
+  let entryFeeUnit: 'per_team' | 'per_person' = 'per_team';
+  const feeMatch = bodyText.match(/참가비\s*(?:[:：]\s*)?(?:(팀당|인당)\s*)?([0-9,]+)\s*원/);
+  if (feeMatch) {
+    const amount = Number(feeMatch[2].replace(/,/g, ''));
+    if (amount > 0 && amount < 1_000_000) {
+      entryFee = amount;
+      if (feeMatch[1] === '인당') entryFeeUnit = 'per_person';
+    }
+  }
+
+  // ── 주최/주관 추출 ──
+  // "주 최영암군 체육회" / "주최 : 광주테니스협회" — 공백이 섞여 있음
+  let organizer: string | undefined;
+  const orgMatch = bodyText.match(/주\s*최\s*[:：]?\s*([가-힣A-Za-z0-9()（）\s]{2,30}?)(?:주\s*관|후\s*원|협\s*찬|참가비|$)/);
+  if (orgMatch) {
+    organizer = orgMatch[1].replace(/\s+/g, ' ').trim();
+  }
+  if (!organizer) {
+    organizer = region ? `${region}테니스협회` : undefined;
+  }
+
+  // ── 본문 정리 (보일러플레이트 최소 제거, 규정/경기방식 보존) ──
+  let rawBody = bodyText;
+
+  // 하단 푸터만 제거
+  for (const marker of ['개인정보 취급방침', 'COPYRIGHT', '홈페이지바로가기']) {
+    const idx = rawBody.indexOf(marker);
+    if (idx > 0) rawBody = rawBody.substring(0, idx);
+  }
+
+  // 사이트 네비/메뉴/폼 테이블 잔해만 제거 (규정·경기방식은 보존)
+  rawBody = rawBody
+    .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
+    .replace(/참가비\s+입금\s*×[^『」]*?(?=『|제\d+회|$)/g, '')
+    .replace(/입금대기중을\s+클릭하여[^.]*바랍니다\.?/g, '')
+    .replace(/\[신청대기\]/g, '').replace(/\[신청마감\]/g, '').replace(/\[신청중\]/g, '')
+    .replace(/\[참가불가\]/g, '').replace(/\[참가신청\]/g, '')
+    .replace(/목록보기/g, '').replace(/참가신청/g, '')
+    // 사이트 네비/메뉴 잔해
+    .replace(/선수회원신청\s*×?\s*대회일정[^『」]*?(?:테니스협회)/g, '')
+    .replace(/일상속\s*힐링운동[^『」]*?(?:테니스협회)/g, '')
+    .replace(/전문체육과\s*동호인이\s*함께하는/g, '')
+    .replace(/대회일정\s+대회그룹\s+대회일정\s+대진표관리\s+대회결과\s+대회공지사항/g, '')
+    .replace(/대회일정\s+HOME\s*>[^>]*>\s*대회일정[^『」]*?대회공지사항/g, '')
+    .replace(/부서추후공지/g, '')
+    .replace(/\s{3,}/g, '\n')
+    .trim();
+
+  // 공고 시작점 탐색 — "『SPORTS" 또는 "제N회" 이전은 네비 잔해이므로 제거
+  const contentStart = rawBody.search(/[『「]|제\d+회/);
+  if (contentStart > 50) {
+    rawBody = rawBody.substring(contentStart);
+  }
+
+  // description: 메타 + 본문 (2000자 — 규정/경기방식까지 포함)
   const descParts: string[] = [];
   if (divisionLabel) descParts.push(`참가부서: ${divisionLabel}`);
   if (deadline) descParts.push(`신청마감: ${deadline}`);
@@ -238,60 +295,7 @@ async function fetchDetail(
   if (region) descParts.push(`지역: ${region}`);
   const metaLine = descParts.join(' | ');
 
-  // 원문에서 보일러플레이트 제거 후 본문 추출
-  let rawBody = bodyText;
-
-  // 하단 푸터 제거
-  for (const marker of ['개인정보 취급방침', 'COPYRIGHT', '홈페이지바로가기']) {
-    const idx = rawBody.indexOf(marker);
-    if (idx > 0) rawBody = rawBody.substring(0, idx);
-  }
-
-  // 신청 폼 안내 보일러플레이트 제거 — 여러 변형 처리
-  const formBoilerMarkers = [
-    '참가신청 선수 변경시',
-    '이점 참고하여 신중하게 신청 바랍니다',
-  ];
-  for (const marker of formBoilerMarkers) {
-    const idx = rawBody.indexOf(marker);
-    if (idx >= 0) {
-      // 마커 이전 텍스트와 이후 텍스트를 분리
-      const before = rawBody.substring(0, idx).trim();
-      // 마커 이후에서 실제 공고 시작점 찾기 (『SPORTS 또는 제N회 등)
-      const after = rawBody.substring(idx);
-      const contentStart = after.search(/[『「]|제\d+회|풋\s*폴트|일\s*시\s+\d{4}년/);
-      if (contentStart > 0) {
-        rawBody = before + ' ' + after.substring(contentStart);
-      } else {
-        rawBody = before;
-      }
-    }
-  }
-
-  // 폼 테이블 헤더/잔해 제거 (참가부서 신청기간 경기일시 현재신청팀...)
-  rawBody = rawBody
-    .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
-    .replace(/참가비\s+입금\s*×\s*팀?참가비\s+입금\s*×\s*\.?/g, '')
-    .replace(/참가비\s+입금\s*×\s*\.?/g, '')
-    .replace(
-      /입금대기중을\s+클릭하여\s+입금계좌로\s+입금후로\s+입금일\s+입금자를\s+등록해주시기\s+바랍니다\.?/g,
-      '',
-    )
-    .replace(/\[신청대기\]/g, '')
-    .replace(/\[신청마감\]/g, '')
-    .replace(/\[신청중\]/g, '')
-    // 사이트 네비/메뉴 잔해
-    .replace(/선수회원신청\s*×?\s*대회일정.*?광주광역시테니스협회/g, '')
-    .replace(/일상속\s*힐링운동.*?광주광역시테니스협회/g, '')
-    .replace(/전문체육과\s*동호인이\s*함께하는/g, '')
-    .replace(/대회일정\s+대회그룹\s+대회일정\s+대진표관리\s+대회결과\s+대회공지사항/g, '')
-    .replace(/부서추후공지/g, '')
-    .trim();
-
-  // 원문 전체는 crawl_documents(raw zone)에 보존되므로, description 은 임베딩·표시용으로
-  // 보일러플레이트 제거 본문을 MAX_DESC_BODY 자로 제한해 잡음(긴 푸터/안내문)을 줄인다.
-  // (description 비대 → 의미검색 임베딩 품질 저하 + 앱 표시 부담)
-  const MAX_DESC_BODY = 1000;
+  const MAX_DESC_BODY = 2000;
   const trimmedBody = rawBody.length > MAX_DESC_BODY
     ? rawBody.slice(0, MAX_DESC_BODY).replace(/\s+\S*$/, '').trimEnd() + ' …'
     : rawBody;
@@ -309,7 +313,8 @@ async function fetchDetail(
     eligible_grades: gradeCodes,
     division_label_local: divisionLabel,
     source_url: detailUrl,
-    organizer: region ? `${region}테니스협회` : undefined,
+    organizer,
+    entry_fee: entryFee,
   };
   return { rawHtml: html, tournament };
 }
