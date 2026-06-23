@@ -13,6 +13,7 @@ const SAMPLE_ROW: TournamentCardRow = {
   title: '광주 생활체육 테니스 오픈',
   start_date: '2026-06-13',
   end_date: '2026-06-13',
+  application_deadline: '2026-06-10',
   region: '광주',
   location: '진월국제테니스장',
   eligible_grades: ['gj_m_gold'],

@@ -194,6 +194,7 @@ RETURNS TABLE (
   title text,
   start_date date,
   end_date date,
+  application_deadline date,
   region text,
   location text,
   eligible_grades text[],
@@ -207,6 +208,7 @@ SET search_path = public
 AS $$
   SELECT
     t.id, t.sport::text, t.title, t.start_date, t.end_date,
+    t.application_deadline,
     t.region, t.location, t.eligible_grades, t.entry_fee, t.format
   FROM public.tournaments t
   WHERE t.status = 'published'

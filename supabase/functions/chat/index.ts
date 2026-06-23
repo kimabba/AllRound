@@ -1065,6 +1065,7 @@ Deno.serve(async (req) => {
             title: t.title,
             start_date: t.start_date,
             end_date: null,
+            application_deadline: null,
             region: t.region ?? null,
             location: null,
             eligible_grades: t.eligible_grades ?? [],
