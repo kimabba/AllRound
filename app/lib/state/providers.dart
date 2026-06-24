@@ -84,14 +84,14 @@ final myFavoriteTournamentsProvider =
     FutureProvider<List<Tournament>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
-  return api.myFavoriteTournaments(limit: 50);
+  return api.myFavoriteTournaments(limit: null);
 });
 
 /// 관심 화면용 스크랩 클럽
 final myFavoriteClubsProvider = FutureProvider<List<Club>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
-  return api.myFavoriteClubs(limit: 50);
+  return api.myFavoriteClubs(limit: null);
 });
 
 String? primarySportFrom(List<UserSport> sports) {

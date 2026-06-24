@@ -11,6 +11,11 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/matchup_logo.dart';
 import 'clubs/club_create_screen.dart';
 
+typedef _ClubFavoriteToggle = Future<void> Function(
+  Club club,
+  bool isFavorite,
+);
+
 class ClubsScreen extends ConsumerStatefulWidget {
   const ClubsScreen({super.key});
 
@@ -143,17 +148,32 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
+    final favoriteIds =
+        ref.read(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _NearbyNewClubsSheet(clubs: clubs),
+      builder: (_) => _NearbyNewClubsSheet(
+        clubs: clubs,
+        favoriteIds: favoriteIds,
+        onFavoriteToggle: _toggleClubFavorite,
+      ),
     );
+  }
+
+  Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
+    await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
+    ref.invalidate(clubFavoriteIdsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final favoriteClubIds =
+        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
     final effectiveClubs = _clubs ?? _previewSearchClubs;
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
@@ -211,7 +231,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                           ),
                         ],
                         const SizedBox(height: AppSpacing.sm),
-                        _SimpleClubGrid(clubs: newClubs),
+                        _SimpleClubGrid(
+                          clubs: newClubs,
+                          favoriteIds: favoriteClubIds,
+                          onFavoriteToggle: _toggleClubFavorite,
+                        ),
                         const SizedBox(height: AppSpacing.md),
                         SizedBox(
                           width: double.infinity,
@@ -275,7 +299,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 _SimpleClubTile(
-                    club: joinedClubs.isEmpty ? null : joinedClubs.first),
+                  club: joinedClubs.isEmpty ? null : joinedClubs.first,
+                  isFavorite: joinedClubs.isEmpty
+                      ? false
+                      : favoriteClubIds.contains(joinedClubs.first.id),
+                  onFavoriteToggle: _toggleClubFavorite,
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 _SimpleSectionHeader(
                   title: '맞춤추천',
@@ -290,7 +319,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 for (final club in recommendedClubs.take(3))
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: _SimpleClubTile(club: club),
+                    child: _SimpleClubTile(
+                      club: club,
+                      isFavorite: favoriteClubIds.contains(club.id),
+                      onFavoriteToggle: _toggleClubFavorite,
+                    ),
                   ),
               ],
             ),
@@ -673,8 +706,14 @@ class _SimplePanel extends StatelessWidget {
 
 class _SimpleClubGrid extends StatelessWidget {
   final List<Club> clubs;
+  final Set<String> favoriteIds;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubGrid({required this.clubs});
+  const _SimpleClubGrid({
+    required this.clubs,
+    required this.favoriteIds,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -685,7 +724,11 @@ class _SimpleClubGrid extends StatelessWidget {
         for (final club in clubs.take(4))
           SizedBox(
             width: 180,
-            child: _SimpleClubMiniTile(club: club),
+            child: _SimpleClubMiniTile(
+              club: club,
+              isFavorite: favoriteIds.contains(club.id),
+              onFavoriteToggle: onFavoriteToggle,
+            ),
           ),
       ],
     );
@@ -694,8 +737,14 @@ class _SimpleClubGrid extends StatelessWidget {
 
 class _NearbyNewClubsSheet extends StatelessWidget {
   final List<Club> clubs;
+  final Set<String> favoriteIds;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _NearbyNewClubsSheet({required this.clubs});
+  const _NearbyNewClubsSheet({
+    required this.clubs,
+    required this.favoriteIds,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -767,7 +816,11 @@ class _NearbyNewClubsSheet extends StatelessWidget {
                         const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) {
                       final club = clubs[index];
-                      return _NearbyNewClubCard(club: club);
+                      return _NearbyNewClubCard(
+                        club: club,
+                        isFavorite: favoriteIds.contains(club.id),
+                        onFavoriteToggle: onFavoriteToggle,
+                      );
                     },
                   ),
                 ),
@@ -781,8 +834,14 @@ class _NearbyNewClubsSheet extends StatelessWidget {
 
 class _NearbyNewClubCard extends StatelessWidget {
   final Club club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _NearbyNewClubCard({required this.club});
+  const _NearbyNewClubCard({
+    required this.club,
+    required this.isFavorite,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -879,6 +938,18 @@ class _NearbyNewClubCard extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: onFavoriteToggle == null
+                ? null
+                : () => onFavoriteToggle!(club, isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+            color: isFavorite ? cs.primary : cs.onSurfaceVariant,
+          ),
         ],
       ),
     );
@@ -887,8 +958,14 @@ class _NearbyNewClubCard extends StatelessWidget {
 
 class _SimpleClubMiniTile extends StatelessWidget {
   final Club club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubMiniTile({required this.club});
+  const _SimpleClubMiniTile({
+    required this.club,
+    required this.isFavorite,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -917,6 +994,18 @@ class _SimpleClubMiniTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+          onPressed: onFavoriteToggle == null
+              ? null
+              : () => onFavoriteToggle!(club, isFavorite),
+          icon: Icon(
+            isFavorite
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_outline_rounded,
+          ),
+          color: isFavorite ? cs.primary : cs.onSurfaceVariant,
         ),
       ],
     );
@@ -1933,8 +2022,14 @@ class _OptionalPhotoPicker extends StatelessWidget {
 
 class _SimpleClubTile extends StatelessWidget {
   final Club? club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubTile({required this.club});
+  const _SimpleClubTile({
+    required this.club,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2030,6 +2125,18 @@ class _SimpleClubTile extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+              onPressed: onFavoriteToggle == null
+                  ? null
+                  : () => onFavoriteToggle!(item, isFavorite),
+              icon: Icon(
+                isFavorite
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_outline_rounded,
+              ),
+              color: isFavorite ? cs.primary : cs.onSurfaceVariant,
             ),
           ],
         ),

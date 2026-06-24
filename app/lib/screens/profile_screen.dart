@@ -52,9 +52,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
   }
 
-  Future<void> _pickProfilePhoto() async {
+  Future<void> _pickProfilePhoto(ImageSource source) async {
     final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
+      source: source,
       maxWidth: 512,
       maxHeight: 512,
       imageQuality: 88,
@@ -104,11 +104,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _SheetActionRow(
+                  icon: Icons.photo_camera_rounded,
+                  label: '카메라로 촬영',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _pickProfilePhoto(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                _SheetActionRow(
                   icon: Icons.photo_library_rounded,
                   label: '앨범에서 선택',
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    _pickProfilePhoto();
+                    _pickProfilePhoto(ImageSource.gallery);
                   },
                 ),
                 if (_avatarBytes != null) ...[

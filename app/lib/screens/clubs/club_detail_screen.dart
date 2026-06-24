@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/club_event.dart';
 import '../../models/club_post.dart';
 import '../../models/tournament.dart';
@@ -46,6 +47,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       _membersF = ref.read(apiProvider).clubMembers(club.id);
       _eventsF = ref.read(apiProvider).clubEvents(club.id);
     });
+  }
+
+  Future<void> _toggleFavorite(bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
+    await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
+    ref.invalidate(clubFavoriteIdsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
   }
 
   Future<void> _join() async {
@@ -106,11 +114,25 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isMember = club.isMember;
+    final favoriteIds =
+        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+    final isFavorite = favoriteIds.contains(club.id);
 
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         title: Text(club.name),
+        actions: [
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: () => _toggleFavorite(isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

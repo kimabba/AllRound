@@ -159,8 +159,12 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final myGradeIds = ref.watch(homeTournamentsProvider).valueOrNull
-        ?.map((t) => t.id).toSet() ?? const <String>{};
+    final myGradeIds = ref
+            .watch(homeTournamentsProvider)
+            .valueOrNull
+            ?.map((t) => t.id)
+            .toSet() ??
+        const <String>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -227,6 +231,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                                         !isFavorite,
                                       );
                                   ref.invalidate(favoriteIdsProvider);
+                                  ref.invalidate(myFavoriteTournamentsProvider);
+                                  ref.invalidate(myTournamentRecordsProvider);
                                 },
                               )
                             : _TournamentCalendarView(
@@ -264,6 +270,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                                         !isFavorite,
                                       );
                                   ref.invalidate(favoriteIdsProvider);
+                                  ref.invalidate(myFavoriteTournamentsProvider);
+                                  ref.invalidate(myTournamentRecordsProvider);
                                 },
                               ),
           ),
@@ -315,8 +323,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         case ActiveFilterKind.division:
           final value = chip.value;
           if (value != null) {
-            _divisionLabels =
-                _divisionLabels.where((l) => l != value).toSet();
+            _divisionLabels = _divisionLabels.where((l) => l != value).toSet();
           }
         case ActiveFilterKind.recruiting:
           _recruitingStatus = RecruitingStatus.all;
@@ -1351,7 +1358,6 @@ class _TournamentErrorState extends StatelessWidget {
   }
 }
 
-
 // ─── 상세검색 바텀시트 ─────────────────────────────────────────────────────────
 
 class _SearchFilterResult {
@@ -1523,8 +1529,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     );
     if (picked != null) {
       setState(() {
-        _dateFrom = DateTime(
-            picked.start.year, picked.start.month, picked.start.day);
+        _dateFrom =
+            DateTime(picked.start.year, picked.start.month, picked.start.day);
         _dateTo = DateTime(picked.end.year, picked.end.month, picked.end.day);
         // 직접 고른 범위가 표준 프리셋과 일치할 수도 있으므로 역추론.
         _datePreset = presetForRange(_dateFrom, _dateTo, now);
@@ -1700,8 +1706,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
-              Icon(Icons.calendar_today_rounded,
-                  size: 16, color: cs.primary),
+              Icon(Icons.calendar_today_rounded, size: 16, color: cs.primary),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -1746,8 +1751,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               _filterChip(
                 label: recruitingStatusLabel(status),
                 selected: _recruitingStatus == status,
-                onSelected: (_) =>
-                    setState(() => _recruitingStatus = status),
+                onSelected: (_) => setState(() => _recruitingStatus = status),
               ),
           ],
         ),
@@ -1773,8 +1777,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               _filterChip(
                 label: tennisOrgShortLabel(org),
                 selected: _hostOrg == org,
-                onSelected: (selected) =>
-                    _setHostOrg(selected ? org : null),
+                onSelected: (selected) => _setHostOrg(selected ? org : null),
               ),
           ],
         ),
