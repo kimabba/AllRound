@@ -89,6 +89,8 @@ class _TournamentDetailScreenState
                     .read(apiProvider)
                     .toggleFavorite(widget.tournamentId, !isFav);
                 ref.invalidate(favoriteIdsProvider);
+                ref.invalidate(myFavoriteTournamentsProvider);
+                ref.invalidate(myTournamentRecordsProvider);
               },
             ),
         ],

@@ -173,6 +173,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                                         !isFavorite,
                                       );
                                   ref.invalidate(favoriteIdsProvider);
+                                  ref.invalidate(myFavoriteTournamentsProvider);
+                                  ref.invalidate(myTournamentRecordsProvider);
                                 },
                               )
                             : _TournamentCalendarView(
@@ -210,6 +212,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                                         !isFavorite,
                                       );
                                   ref.invalidate(favoriteIdsProvider);
+                                  ref.invalidate(myFavoriteTournamentsProvider);
+                                  ref.invalidate(myTournamentRecordsProvider);
                                 },
                               ),
           ),
@@ -1317,6 +1321,8 @@ class _MyGradeSection extends ConsumerWidget {
                             !favs.contains(tournament.id),
                           );
                           ref.invalidate(favoriteIdsProvider);
+                          ref.invalidate(myFavoriteTournamentsProvider);
+                          ref.invalidate(myTournamentRecordsProvider);
                         },
                       ),
                     );

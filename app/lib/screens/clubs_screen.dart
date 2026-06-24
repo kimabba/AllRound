@@ -10,6 +10,11 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/matchup_logo.dart';
 import 'clubs/club_create_screen.dart';
 
+typedef _ClubFavoriteToggle = Future<void> Function(
+  Club club,
+  bool isFavorite,
+);
+
 class ClubsScreen extends ConsumerStatefulWidget {
   const ClubsScreen({super.key});
 
@@ -138,17 +143,32 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
+    final favoriteIds =
+        ref.read(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _NearbyNewClubsSheet(clubs: clubs),
+      builder: (_) => _NearbyNewClubsSheet(
+        clubs: clubs,
+        favoriteIds: favoriteIds,
+        onFavoriteToggle: _toggleClubFavorite,
+      ),
     );
+  }
+
+  Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
+    await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
+    ref.invalidate(clubFavoriteIdsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final favoriteClubIds =
+        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
     final effectiveClubs = _clubs ?? _previewSearchClubs;
     final interestClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
@@ -207,7 +227,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.sm),
-                      _SimpleClubGrid(clubs: newClubs),
+                      _SimpleClubGrid(
+                        clubs: newClubs,
+                        favoriteIds: favoriteClubIds,
+                        onFavoriteToggle: _toggleClubFavorite,
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       SizedBox(
                         width: double.infinity,
@@ -239,9 +263,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _SimpleSectionHeader(
-                        title: '맞춤추천',
+                        title: _clubFilters.hasActive ? '조건과 딱 맞는 클럽' : '맞춤추천',
                         subtitle: _clubFilters.hasActive
                             ? [
+                                '${visibleClubs.length}개',
                                 _selectedSportLabel(_clubInterests),
                                 ..._clubFilters.labels,
                               ].join(' · ')
@@ -255,7 +280,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                           Padding(
                             padding:
                                 const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _SimpleClubTile(club: club),
+                            child: _SimpleClubTile(
+                              club: club,
+                              isFavorite: favoriteClubIds.contains(club.id),
+                              onFavoriteToggle: _toggleClubFavorite,
+                            ),
                           ),
                     ],
                   ),
@@ -279,7 +308,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                           Padding(
                             padding:
                                 const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: _SimpleClubTile(club: club),
+                            child: _SimpleClubTile(
+                              club: club,
+                              isFavorite: favoriteClubIds.contains(club.id),
+                              onFavoriteToggle: _toggleClubFavorite,
+                            ),
                           ),
                     ],
                   ),
@@ -326,12 +359,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   bool _matchesClubFilters(Club club, _ClubSearchFilters filters) {
     if (filters.region != null && club.region != filters.region) return false;
-    if (!_matchesGenderPreference(club.genderPreference, filters.gender)) {
+    if (filters.gender != null && club.genderPreference != filters.gender) {
       return false;
     }
     if (filters.days.isNotEmpty &&
-        club.meetingDays.isNotEmpty &&
-        club.meetingDays.every((day) => !filters.days.contains(day))) {
+        !filters.days.every((day) => club.meetingDays.contains(day))) {
+      return false;
+    }
+    if ((filters.feeRange.start > 0 || filters.feeRange.end < 100000) &&
+        club.monthlyFee == null) {
       return false;
     }
     if (club.monthlyFee != null &&
@@ -340,12 +376,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return false;
     }
     return true;
-  }
-
-  bool _matchesGenderPreference(String? clubGender, String? selectedGender) {
-    if (selectedGender == null) return true;
-    if (clubGender == null || clubGender == '무관') return true;
-    return clubGender == selectedGender;
   }
 
   String _selectedSportLabel(Set<String> interests) {
@@ -596,7 +626,7 @@ final _previewSearchClubs = [
     memberCount: 22,
     meetingDays: const ['월', '금'],
     monthlyFee: 0,
-    genderPreference: '무관',
+    genderPreference: '남성',
     createdAt: DateTime.now().subtract(const Duration(days: 4)),
   ),
   Club(
@@ -713,7 +743,7 @@ final _previewSearchClubs = [
     memberCount: 29,
     meetingDays: const ['토'],
     monthlyFee: 10000,
-    genderPreference: '무관',
+    genderPreference: '혼성',
     createdAt: DateTime.now().subtract(const Duration(days: 10)),
   ),
   Club(
@@ -794,6 +824,110 @@ final _previewSearchClubs = [
     genderPreference: '혼성',
     createdAt: DateTime.now().subtract(const Duration(days: 9)),
   ),
+  Club(
+    id: 'preview-new-tennis-incheon-2',
+    sport: 'tennis',
+    name: '송도 레이디스 테니스',
+    region: '인천',
+    address: '송도 센트럴 테니스코트',
+    description: '여성 회원끼리 평일 오전에 치는 테니스 클럽',
+    memberCount: 19,
+    meetingDays: const ['월', '수'],
+    monthlyFee: 50000,
+    genderPreference: '여성',
+    createdAt: DateTime.now().subtract(const Duration(days: 5)),
+  ),
+  Club(
+    id: 'preview-rec-tennis-seoul-2',
+    sport: 'tennis',
+    name: '강남 선데이 테니스',
+    region: '서울',
+    address: '양재 시민의숲 테니스장',
+    description: '일요일 오전 고정 모임으로 운영되는 남성 테니스 클럽',
+    memberCount: 52,
+    meetingDays: const ['일'],
+    monthlyFee: 80000,
+    genderPreference: '남성',
+    createdAt: DateTime.now().subtract(const Duration(days: 11)),
+  ),
+  Club(
+    id: 'preview-rec-tennis-daegu-1',
+    sport: 'tennis',
+    name: '대구 믹스 랠리',
+    region: '대구',
+    address: '두류 테니스파크',
+    description: '화요일과 금요일 저녁에 복식 위주로 모이는 혼성 클럽',
+    memberCount: 28,
+    meetingDays: const ['화', '금'],
+    monthlyFee: 30000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 20)),
+  ),
+  Club(
+    id: 'preview-rec-tennis-daejeon-1',
+    sport: 'tennis',
+    name: '대전 모닝 테니스',
+    region: '대전',
+    address: '유성 테니스센터',
+    description: '수요일과 토요일 아침에 여유 있게 치는 여성 테니스 모임',
+    memberCount: 21,
+    meetingDays: const ['수', '토'],
+    monthlyFee: 20000,
+    genderPreference: '여성',
+    createdAt: DateTime.now().subtract(const Duration(days: 13)),
+  ),
+  Club(
+    id: 'preview-rec-futsal-incheon-3',
+    sport: 'futsal',
+    name: '인천 레이디스 FS',
+    region: '인천',
+    address: '부평 풋살돔',
+    description: '여성 입문자와 초급자를 위한 풋살 클럽',
+    memberCount: 25,
+    meetingDays: const ['목', '일'],
+    monthlyFee: 30000,
+    genderPreference: '여성',
+    createdAt: DateTime.now().subtract(const Duration(days: 8)),
+  ),
+  Club(
+    id: 'preview-rec-futsal-seoul-3',
+    sport: 'futsal',
+    name: '강동 믹스 풋살',
+    region: '서울',
+    address: '천호 풋살파크',
+    description: '월요일과 수요일 저녁에 모이는 혼성 풋살팀',
+    memberCount: 47,
+    meetingDays: const ['월', '수'],
+    monthlyFee: 20000,
+    genderPreference: '혼성',
+    createdAt: DateTime.now().subtract(const Duration(days: 14)),
+  ),
+  Club(
+    id: 'preview-rec-futsal-gwangju-2',
+    sport: 'futsal',
+    name: '상무 남성 풋살단',
+    region: '광주',
+    address: '상무 풋살센터',
+    description: '목요일 야간 정기전 중심의 남성 풋살 클럽',
+    memberCount: 39,
+    meetingDays: const ['목'],
+    monthlyFee: 40000,
+    genderPreference: '남성',
+    createdAt: DateTime.now().subtract(const Duration(days: 17)),
+  ),
+  Club(
+    id: 'preview-rec-futsal-busan-2',
+    sport: 'futsal',
+    name: '센텀 레이디스 풋살',
+    region: '부산',
+    address: '센텀 풋살아레나',
+    description: '부산 여성 풋살 입문자를 위한 정기 모임',
+    memberCount: 30,
+    meetingDays: const ['화', '토'],
+    monthlyFee: 50000,
+    genderPreference: '여성',
+    createdAt: DateTime.now().subtract(const Duration(days: 19)),
+  ),
 ];
 
 class _SimpleSectionHeader extends StatelessWidget {
@@ -860,8 +994,14 @@ class _SimplePanel extends StatelessWidget {
 
 class _SimpleClubGrid extends StatelessWidget {
   final List<Club> clubs;
+  final Set<String> favoriteIds;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubGrid({required this.clubs});
+  const _SimpleClubGrid({
+    required this.clubs,
+    required this.favoriteIds,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -891,7 +1031,11 @@ class _SimpleClubGrid extends StatelessWidget {
         for (final club in clubs.take(4))
           SizedBox(
             width: 180,
-            child: _SimpleClubMiniTile(club: club),
+            child: _SimpleClubMiniTile(
+              club: club,
+              isFavorite: favoriteIds.contains(club.id),
+              onFavoriteToggle: onFavoriteToggle,
+            ),
           ),
       ],
     );
@@ -900,8 +1044,14 @@ class _SimpleClubGrid extends StatelessWidget {
 
 class _NearbyNewClubsSheet extends StatelessWidget {
   final List<Club> clubs;
+  final Set<String> favoriteIds;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _NearbyNewClubsSheet({required this.clubs});
+  const _NearbyNewClubsSheet({
+    required this.clubs,
+    required this.favoriteIds,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -973,7 +1123,11 @@ class _NearbyNewClubsSheet extends StatelessWidget {
                         const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) {
                       final club = clubs[index];
-                      return _NearbyNewClubCard(club: club);
+                      return _NearbyNewClubCard(
+                        club: club,
+                        isFavorite: favoriteIds.contains(club.id),
+                        onFavoriteToggle: onFavoriteToggle,
+                      );
                     },
                   ),
                 ),
@@ -987,8 +1141,14 @@ class _NearbyNewClubsSheet extends StatelessWidget {
 
 class _NearbyNewClubCard extends StatelessWidget {
   final Club club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _NearbyNewClubCard({required this.club});
+  const _NearbyNewClubCard({
+    required this.club,
+    required this.isFavorite,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1085,6 +1245,18 @@ class _NearbyNewClubCard extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: onFavoriteToggle == null
+                ? null
+                : () => onFavoriteToggle!(club, isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+            color: isFavorite ? cs.primary : cs.onSurfaceVariant,
+          ),
         ],
       ),
     );
@@ -1093,8 +1265,14 @@ class _NearbyNewClubCard extends StatelessWidget {
 
 class _SimpleClubMiniTile extends StatelessWidget {
   final Club club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubMiniTile({required this.club});
+  const _SimpleClubMiniTile({
+    required this.club,
+    required this.isFavorite,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1135,6 +1313,18 @@ class _SimpleClubMiniTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+          onPressed: onFavoriteToggle == null
+              ? null
+              : () => onFavoriteToggle!(club, isFavorite),
+          icon: Icon(
+            isFavorite
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_outline_rounded,
+          ),
+          color: isFavorite ? cs.primary : cs.onSurfaceVariant,
         ),
       ],
     );
@@ -2151,8 +2341,14 @@ class _OptionalPhotoPicker extends StatelessWidget {
 
 class _SimpleClubTile extends StatelessWidget {
   final Club? club;
+  final bool isFavorite;
+  final _ClubFavoriteToggle? onFavoriteToggle;
 
-  const _SimpleClubTile({required this.club});
+  const _SimpleClubTile({
+    required this.club,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2268,6 +2464,18 @@ class _SimpleClubTile extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: onFavoriteToggle == null
+                ? null
+                : () => onFavoriteToggle!(item, isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+            color: isFavorite ? cs.primary : cs.onSurfaceVariant,
           ),
         ],
       ),
@@ -2456,10 +2664,18 @@ const _previewClubDistances = {
   'preview-new-tennis-2': 2.7,
   'preview-new-futsal-incheon-1': 3.1,
   'preview-new-futsal-incheon-2': 3.8,
+  'preview-new-tennis-incheon-2': 4.0,
   'preview-new-futsal-seoul-2': 4.2,
   'preview-new-tennis-seoul-1': 4.4,
   'preview-new-futsal-seoul-1': 4.8,
   'preview-new-tennis-busan-1': 5.0,
+  'preview-rec-futsal-incheon-3': 5.6,
+  'preview-rec-futsal-seoul-3': 6.2,
+  'preview-rec-tennis-seoul-2': 6.8,
+  'preview-rec-futsal-gwangju-2': 7.1,
+  'preview-rec-tennis-daegu-1': 7.7,
+  'preview-rec-tennis-daejeon-1': 8.3,
+  'preview-rec-futsal-busan-2': 8.8,
 };
 
 class _InterestSheet extends StatefulWidget {

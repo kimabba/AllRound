@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/club_event.dart';
 import '../../models/club_post.dart';
 import '../../models/tournament.dart';
@@ -46,6 +47,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       _membersF = ref.read(apiProvider).clubMembers(club.id);
       _eventsF = ref.read(apiProvider).clubEvents(club.id);
     });
+  }
+
+  Future<void> _toggleFavorite(bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
+    await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
+    ref.invalidate(clubFavoriteIdsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
   }
 
   Future<void> _join() async {
@@ -106,10 +114,24 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isMember = club.isMember;
+    final favoriteIds =
+        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+    final isFavorite = favoriteIds.contains(club.id);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(club.name),
+        actions: [
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: () => _toggleFavorite(isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -150,9 +172,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                         onChanged: _reload,
                       )
                     : _memberOnlyNotice(cs, tt),
-                isMember
-                    ? _PostsTab(club: club)
-                    : _memberOnlyNotice(cs, tt),
+                isMember ? _PostsTab(club: club) : _memberOnlyNotice(cs, tt),
               ],
             ),
           ),
@@ -409,14 +429,17 @@ class _MembersTab extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmKick(BuildContext context, WidgetRef ref, ClubMember m) async {
+  Future<void> _confirmKick(
+      BuildContext context, WidgetRef ref, ClubMember m) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('멤버 강퇴'),
         content: Text('${m.displayName ?? '이 멤버'}를 강퇴할까요?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -788,7 +811,12 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
             widget.club.id,
             tag: _activeTag,
           );
-      if (mounted) setState(() { _posts = posts; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _loading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -806,29 +834,43 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
           height: 48,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             children: [
               _TagChip(
                   label: '전체',
                   selected: _activeTag == null,
-                  onTap: () { _activeTag = null; _load(); }),
+                  onTap: () {
+                    _activeTag = null;
+                    _load();
+                  }),
               _TagChip(
                   label: '공지',
                   selected: _activeTag == 'notice',
-                  onTap: () { _activeTag = 'notice'; _load(); }),
+                  onTap: () {
+                    _activeTag = 'notice';
+                    _load();
+                  }),
               _TagChip(
                   label: '자유',
                   selected: _activeTag == 'free',
-                  onTap: () { _activeTag = 'free'; _load(); }),
+                  onTap: () {
+                    _activeTag = 'free';
+                    _load();
+                  }),
               _TagChip(
                   label: '모집',
                   selected: _activeTag == 'recruit',
-                  onTap: () { _activeTag = 'recruit'; _load(); }),
+                  onTap: () {
+                    _activeTag = 'recruit';
+                    _load();
+                  }),
               _TagChip(
                   label: '사진',
                   selected: _activeTag == 'photo',
-                  onTap: () { _activeTag = 'photo'; _load(); }),
+                  onTap: () {
+                    _activeTag = 'photo';
+                    _load();
+                  }),
             ],
           ),
         ),
@@ -837,8 +879,8 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
           child: _posts == null || _posts!.isEmpty
               ? Center(
                   child: Text('게시글이 없습니다',
-                      style: tt.bodyMedium
-                          ?.copyWith(color: cs.onSurfaceVariant)))
+                      style:
+                          tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)))
               : RefreshIndicator(
                   onRefresh: () async => _load(),
                   child: ListView.separated(
@@ -904,8 +946,7 @@ class _PostRow extends StatelessWidget {
               child: Text(post.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: tt.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w700))),
+                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700))),
         ],
       ),
       subtitle: Text(
