@@ -29,6 +29,11 @@ import {
   renderTournamentSearchText,
   type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
+import {
+  buildRegulationContextLines,
+  normalizeRegulationFields,
+  type RegulationField,
+} from '../_shared/regulation.ts';
 
 /**
  * POST /chat
@@ -83,7 +88,43 @@ interface SemanticTournament {
   start_date: string;
   region: string | null;
   eligible_grades: string[];
+  // 요강(migration 077): regulation_fields(jsonb) 는 unknown 으로 받아 narrow,
+  // regulation_body(text) 는 DB 에서 이미 ≤2500자 절단.
+  regulation_fields: RegulationField[];
+  regulation_body: string | null;
   similarity: number;
+}
+
+/**
+ * tournaments_semantic_search RPC 의 원시 행 (jsonb/nullable 미정형).
+ * regulation_fields 는 jsonb 라서 unknown. normalizeSemanticTournaments 로 narrow.
+ */
+interface RawSemanticTournament {
+  id: string;
+  sport: string;
+  title: string;
+  start_date: string;
+  region: string | null;
+  eligible_grades: string[] | null;
+  regulation_fields: unknown;
+  regulation_body: string | null;
+  similarity: number;
+}
+
+/** RPC 원시 결과(unknown jsonb 포함)를 SemanticTournament[] 로 안전하게 narrow. */
+function normalizeSemanticTournaments(rows: unknown): SemanticTournament[] {
+  if (!Array.isArray(rows)) return [];
+  return (rows as RawSemanticTournament[]).map((r) => ({
+    id: r.id,
+    sport: r.sport,
+    title: r.title,
+    start_date: r.start_date,
+    region: r.region ?? null,
+    eligible_grades: Array.isArray(r.eligible_grades) ? r.eligible_grades : [],
+    regulation_fields: normalizeRegulationFields(r.regulation_fields),
+    regulation_body: r.regulation_body ?? null,
+    similarity: r.similarity,
+  }));
 }
 
 interface SemanticRule {
@@ -138,6 +179,12 @@ const INTENT_KNN_THRESHOLD = 0.75;
 // - SQL 결과 0건이면 precise filter 결과로 보고 즉시 종료한다.
 const ROUTING_CONFIDENCE_THRESHOLD = 0.95;
 const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search']);
+
+// 요강(regulation) RAG 컨텍스트 토큰 관리 (migration 077).
+//  - 본문은 유사도 상위 N개 대회에만 포함 (fields 라벨:값 요약은 전부 포함).
+//  - 대회당 본문은 추가로 1200자 cap (DB 에서 이미 ≤2500자 절단됨).
+const REGULATION_BODY_TOP_N = 2;
+const REGULATION_BODY_CONTEXT_CAP = 1200;
 
 interface IntentClassifyRow {
   intent: string;
@@ -292,6 +339,9 @@ function buildContextPrompt(
       const ob = sportOrder(b);
       return oa !== ob ? oa - ob : a.localeCompare(b);
     });
+    // 요강 본문은 토큰 관리를 위해 유사도 상위 N개 대회에만 포함한다.
+    // (fields 라벨:값 요약은 짧으므로 매칭 대회 전부에 포함.)
+    const bodyTopIds = new Set(top.slice(0, REGULATION_BODY_TOP_N).map((t) => t.id));
     for (const sport of sortedSports) {
       const label = SPORT_LABELS[sport as 'tennis' | 'futsal'] ?? sport;
       parts.push(`[관련 대회 — ${label}]`);
@@ -301,6 +351,16 @@ function buildContextPrompt(
             escapeForData(t.region ?? '지역미상')
           } | 출전등급: ${t.eligible_grades.join(', ')}`,
         );
+        // 요강(요강 fields + 본문) 을 LLM 컨텍스트에 노출 → "경기방식/시상/참가자격"
+        // 질문에 답변 가능하게. data 종결 태그 위조 방지를 위해 escapeForData 적용.
+        const regLines = buildRegulationContextLines(
+          t.regulation_fields,
+          bodyTopIds.has(t.id) ? t.regulation_body : null,
+          { bodyCap: REGULATION_BODY_CONTEXT_CAP },
+        );
+        for (const line of regLines) {
+          parts.push(escapeForData(line));
+        }
       }
       parts.push('');
     }
@@ -951,7 +1011,7 @@ Deno.serve(async (req) => {
               ragErrored = true;
               console.error('RAG RPC error:', tRes.error?.message, rRes.error?.message);
             }
-            tournaments = (tRes.data as SemanticTournament[]) ?? [];
+            tournaments = normalizeSemanticTournaments(tRes.data);
             rules = (rRes.data as SemanticRule[]) ?? [];
 
             send('context', { tournaments, rules, venues });

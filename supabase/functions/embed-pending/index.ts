@@ -2,6 +2,7 @@ import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { embedBatch, toVectorLiteral } from '../_shared/embedding.ts';
+import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/regulation.ts';
 
 /**
  * pg_cron 이 5분마다 호출.
@@ -19,6 +20,10 @@ interface PendingTournament {
   region: string | null;
   format: string | null;
   organizer: string | null;
+  // 요강(regulation): migration 077 에서 임베딩 입력에 포함하기로 결정.
+  // regulation_fields 는 jsonb 라서 unknown 으로 받고 사용 시 narrow.
+  regulation_fields: unknown;
+  regulation_body: string | null;
 }
 
 interface PendingRule {
@@ -28,9 +33,16 @@ interface PendingRule {
 }
 
 function tournamentText(t: PendingTournament): string {
-  return [t.title, t.organizer, t.region, t.format, t.description]
+  const base = [t.title, t.organizer, t.region, t.format, t.description]
     .filter(Boolean)
     .join(' / ');
+  // 요강(요강 fields + 본문)을 임베딩 입력에 포함 → "경기방식/시상/참가자격" 류
+  // 질문이 시맨틱 검색에 매칭되도록. 본문은 임베딩 입력 비대화 방지를 위해 cap.
+  const regulation = regulationEmbeddingText(
+    normalizeRegulationFields(t.regulation_fields),
+    t.regulation_body,
+  );
+  return regulation ? `${base}\n${regulation}` : base;
 }
 
 function ruleText(r: PendingRule): string {
@@ -56,7 +68,9 @@ Deno.serve(async (req) => {
   try {
     const { data: pending } = await supabase
       .from('tournaments')
-      .select('id, title, description, region, format, organizer')
+      .select(
+        'id, title, description, region, format, organizer, regulation_fields, regulation_body',
+      )
       .is('embedding', null)
       .eq('status', 'published')
       .limit(BATCH_SIZE);
