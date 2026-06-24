@@ -64,10 +64,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _error;
   bool _existingSportsReady = false;
   bool _profilePhotoReady = false;
+  bool _sportsTouched = false;
 
-  bool get _canSubmit =>
-      _selectedGrade.values.any((v) => v != null) &&
-      _selectedGrade[_primarySport] != null;
+  Sport? get _firstRegisteredSport {
+    for (final sport in Sport.values) {
+      if (_selectedGrade[sport] != null) return sport;
+    }
+    return null;
+  }
+
+  Sport get _effectivePrimarySport {
+    if (_selectedGrade[_primarySport] != null) return _primarySport;
+    return _firstRegisteredSport ?? _primarySport;
+  }
+
+  bool get _canSubmit => _firstRegisteredSport != null;
 
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
@@ -185,23 +196,40 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _prepareExistingSports(List<UserSport>? sports) {
-    if (_existingSportsReady || sports == null || sports.isEmpty) return;
+    if (_existingSportsReady || sports == null) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _existingSportsReady) return;
+      if (_sportsTouched || sports.isEmpty) {
+        setState(() => _existingSportsReady = true);
+        return;
+      }
 
       final selectedGrade = Map<Sport, String?>.from(_selectedGrade);
+      final validSports = <UserSport>[];
       for (final userSport in sports) {
-        selectedGrade[sportFromString(userSport.sport)] = userSport.grade;
+        final sport = sportFromString(userSport.sport);
+        if (!gradesFor(sport).contains(userSport.grade)) continue;
+        selectedGrade[sport] = userSport.grade;
+        validSports.add(userSport);
       }
 
       final primary =
-          sports.where((sport) => sport.isPrimary).firstOrNull ?? sports.first;
+          validSports.where((sport) => sport.isPrimary).firstOrNull ??
+              validSports.firstOrNull;
+      final primarySport =
+          primary == null ? _primarySport : sportFromString(primary.sport);
+      final fallbackSport = selectedGrade.entries
+          .where((entry) => entry.value != null)
+          .map((entry) => entry.key)
+          .firstOrNull;
       setState(() {
         _selectedGrade
           ..clear()
           ..addAll(selectedGrade);
-        _primarySport = sportFromString(primary.sport);
+        _primarySport = selectedGrade[primarySport] == null
+            ? (fallbackSport ?? primarySport)
+            : primarySport;
         _existingSportsReady = true;
       });
     });
@@ -209,16 +237,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _selectGrade(Sport sport, String? grade) {
     setState(() {
+      _sportsTouched = true;
       _selectedGrade[sport] = grade;
-      if (grade != null && _selectedGrade[_primarySport] == null) {
+      if (grade != null) {
         _primarySport = sport;
+        return;
       }
       if (grade == null && _primarySport == sport) {
-        _primarySport = _selectedGrade.entries
-                .where((entry) => entry.value != null)
-                .map((entry) => entry.key)
-                .firstOrNull ??
-            sport;
+        _primarySport = _firstRegisteredSport ?? sport;
       }
     });
   }
@@ -322,6 +348,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       // 1) user_sports
       final sports = <UserSport>[];
+      final primarySport = _effectivePrimarySport;
       for (final s in Sport.values) {
         final grade = _selectedGrade[s];
         if (grade == null) continue;
@@ -329,7 +356,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           UserSport(
             sport: sportToString(s),
             grade: grade,
-            isPrimary: s == _primarySport,
+            isPrimary: s == primarySport,
           ),
         );
       }
@@ -739,11 +766,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   children: [
                     Radio<Sport>(
                       // ignore: deprecated_member_use
-                      groupValue: _primarySport,
+                      groupValue: _effectivePrimarySport,
                       value: sport,
                       // ignore: deprecated_member_use
-                      onChanged: (v) =>
-                          setState(() => _primarySport = v ?? sport),
+                      onChanged: (v) => setState(() {
+                        _sportsTouched = true;
+                        _primarySport = v ?? sport;
+                      }),
                     ),
                     Text(
                       '기본 종목',
