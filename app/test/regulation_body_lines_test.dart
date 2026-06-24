@@ -44,8 +44,26 @@ void main() {
       ]);
     });
 
-    test('순수 헤더 표행(숫자 없음)은 렌더 생략', () {
+    test('알려진 헤더행(첫 셀=경기종목)은 렌더 생략', () {
       final lines = parseRegulationBody('경기종목 | 경기일자 | 참가비 입금계좌');
+      expect(lines, isEmpty);
+    });
+
+    test('숫자 없는 일반 텍스트 파이프 행은 보존 (헤더 오인 금지)', () {
+      // "남자부 | 여자부" 는 숫자가 없지만 헤더가 아니다 → tableRow 로 보존.
+      final lines = parseRegulationBody('남자부 | 여자부');
+      expect(lines.single.kind, RegulationLineKind.tableRow);
+      expect(lines.single.cells, ['남자부', '여자부']);
+    });
+
+    test('알려진 헤더 라벨이 아닌 첫 셀 → 보존', () {
+      final lines = parseRegulationBody('우승 | 준우승 | 3위');
+      expect(lines.single.kind, RegulationLineKind.tableRow);
+      expect(lines.single.cells, ['우승', '준우승', '3위']);
+    });
+
+    test('첫 셀이 헤더 라벨(부서)이면 숫자 유무와 무관하게 생략', () {
+      final lines = parseRegulationBody('부서 | 인원 | 비고');
       expect(lines, isEmpty);
     });
 

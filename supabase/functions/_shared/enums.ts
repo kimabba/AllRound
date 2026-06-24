@@ -99,6 +99,23 @@ export function isValidEntryFeeUnit(value: string): value is EntryFeeUnit {
 }
 
 // =========================
+// Recruiting status — 모집상태 서버 필터 (RPC p_recruiting)
+// =========================
+
+export const RECRUITING_STATES = ['open', 'closed'] as const;
+export type RecruitingState = typeof RECRUITING_STATES[number];
+
+/**
+ * 모집상태 쿼리 파라미터 정규화.
+ * 'open' | 'closed' 만 허용하고, 그 외(빈값/오타/null/undefined)는 null 로 반환한다.
+ * null = RPC p_recruiting NULL = 필터 미적용.
+ */
+export function parseRecruiting(raw: unknown): RecruitingState | null {
+  if (typeof raw !== 'string') return null;
+  return (RECRUITING_STATES as readonly string[]).includes(raw) ? (raw as RecruitingState) : null;
+}
+
+// =========================
 // Tennis Divisions — 협회별 부서 코드 ({org}_{div} 형식)
 // tournaments.eligible_grades 에 저장되는 값
 // =========================

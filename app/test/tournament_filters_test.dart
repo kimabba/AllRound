@@ -92,87 +92,17 @@ void main() {
     });
   });
 
-  group('isClosed', () {
-    final today = DateTime(2026, 6, 24);
-
-    test('deadline == null → 마감 아님', () {
-      expect(isClosed(null, today), isFalse);
+  group('recruitingStatusToParam (서버 쿼리 매핑)', () {
+    test('all → null (미전송)', () {
+      expect(recruitingStatusToParam(RecruitingStatus.all), isNull);
     });
 
-    test('deadline 과거 → 마감', () {
-      expect(isClosed(DateTime(2026, 6, 23), today), isTrue);
+    test('recruiting → "open"', () {
+      expect(recruitingStatusToParam(RecruitingStatus.recruiting), 'open');
     });
 
-    test('deadline 오늘 → 마감 아님 (>= today)', () {
-      expect(isClosed(DateTime(2026, 6, 24), today), isFalse);
-    });
-
-    test('deadline 미래 → 마감 아님', () {
-      expect(isClosed(DateTime(2026, 6, 25), today), isFalse);
-    });
-
-    test('시각이 달라도 날짜만 비교 (오늘 늦은 시각 deadline → 마감 아님)', () {
-      expect(isClosed(DateTime(2026, 6, 24, 1, 0), DateTime(2026, 6, 24, 23, 59)),
-          isFalse);
-    });
-  });
-
-  group('matchesRecruiting', () {
-    final today = DateTime(2026, 6, 24);
-
-    test('all → 항상 통과', () {
-      expect(matchesRecruiting(RecruitingStatus.all, null, today), isTrue);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.all, DateTime(2020, 1, 1), today),
-          isTrue);
-    });
-
-    test('recruiting: null/오늘/미래 통과, 과거 탈락', () {
-      expect(matchesRecruiting(RecruitingStatus.recruiting, null, today),
-          isTrue);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.recruiting, DateTime(2026, 6, 24), today),
-          isTrue);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.recruiting, DateTime(2026, 7, 1), today),
-          isTrue);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.recruiting, DateTime(2026, 6, 23), today),
-          isFalse);
-    });
-
-    test('closed: 과거만 통과, null/오늘/미래 탈락', () {
-      expect(matchesRecruiting(RecruitingStatus.closed, null, today), isFalse);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.closed, DateTime(2026, 6, 24), today),
-          isFalse);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.closed, DateTime(2026, 6, 25), today),
-          isFalse);
-      expect(
-          matchesRecruiting(
-              RecruitingStatus.closed, DateTime(2026, 6, 23), today),
-          isTrue);
-    });
-
-    test('recruiting/closed 는 상호 배타 (deadline 별로 정확히 한쪽)', () {
-      final deadlines = [
-        null,
-        DateTime(2026, 6, 23),
-        DateTime(2026, 6, 24),
-        DateTime(2026, 6, 25),
-      ];
-      for (final d in deadlines) {
-        final r = matchesRecruiting(RecruitingStatus.recruiting, d, today);
-        final c = matchesRecruiting(RecruitingStatus.closed, d, today);
-        expect(r, isNot(c), reason: 'deadline=$d 는 정확히 한 상태여야 함');
-      }
+    test('closed → "closed"', () {
+      expect(recruitingStatusToParam(RecruitingStatus.closed), 'closed');
     });
   });
 

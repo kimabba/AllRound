@@ -18,7 +18,8 @@ import '../models/tournament.dart';
 /// `tournaments-search` Edge Function 쿼리 파라미터를 조립한다.
 ///
 /// 비어 있는 값은 키 자체를 생략한다(Edge Function 쿼리키:
-/// region_code, org, division_codes, date_from, date_to).
+/// region_code, org, division_codes, date_from, date_to, recruiting).
+/// [recruiting] 은 'open' | 'closed' (null 이면 미전송).
 /// 순수 함수 — 단위 테스트 가능.
 Map<String, String> buildTournamentSearchQuery({
   String? sport,
@@ -28,6 +29,7 @@ Map<String, String> buildTournamentSearchQuery({
   DateTime? dateTo,
   String? hostOrg,
   List<String> divisionCodes = const [],
+  String? recruiting,
   bool onlyMyGrade = true,
   String? query,
   int limit = 50,
@@ -41,6 +43,7 @@ Map<String, String> buildTournamentSearchQuery({
     if (dateTo != null) 'date_to': _ymdStatic(dateTo),
     if (hostOrg != null && hostOrg.isNotEmpty) 'org': hostOrg,
     if (divisionCodes.isNotEmpty) 'division_codes': divisionCodes.join(','),
+    if (recruiting != null && recruiting.isNotEmpty) 'recruiting': recruiting,
     'only_my_grade': onlyMyGrade.toString(),
     if (query != null && query.isNotEmpty) 'q': query,
     'limit': limit.toString(),
@@ -88,6 +91,7 @@ class ApiService {
     DateTime? dateTo,
     String? hostOrg,
     List<String> divisionCodes = const [],
+    String? recruiting,
     bool onlyMyGrade = true,
     String? query,
     int limit = 50,
@@ -104,6 +108,7 @@ class ApiService {
           dateTo: dateTo,
           hostOrg: hostOrg,
           divisionCodes: divisionCodes,
+          recruiting: recruiting,
           onlyMyGrade: onlyMyGrade,
           query: query,
           limit: limit,

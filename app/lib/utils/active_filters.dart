@@ -14,7 +14,7 @@ enum ActiveFilterKind {
   region,
   dateRange,
   hostOrg,
-  division, // value = 부서 라벨(테니스) 또는 등급 코드(풋살)
+  division, // value = 부서 라벨(테니스) 또는 grade 코드(풋살) — source of truth
   recruiting,
   onlyMyGrade,
 }
@@ -67,6 +67,7 @@ String dateRangeChipLabel(DateTime? from, DateTime? to, DateTime now) {
 /// 현재 필터 상태 → 활성 요약 칩 목록.
 ///
 /// [sport] 는 'tennis' | 'futsal' (division 라벨 표시 방식 결정).
+/// [divisionLabels] 는 source of truth(테니스: 부서 라벨, 풋살: grade 코드).
 /// 칩 순서: 검색어 → 지역 → 기간 → 협회 → 부서(라벨별) → 모집상태 → 내 등급만.
 List<ActiveFilterChipData> activeFilterChips({
   required String? sport,
@@ -75,7 +76,7 @@ List<ActiveFilterChipData> activeFilterChips({
   required DateTime? dateFrom,
   required DateTime? dateTo,
   required String? hostOrg,
-  required Set<String> divisionCodes,
+  required Set<String> divisionLabels,
   required RecruitingStatus recruiting,
   required bool onlyMyGrade,
   required DateTime now,
@@ -112,31 +113,14 @@ List<ActiveFilterChipData> activeFilterChips({
     ));
   }
 
-  // 부서/등급: 라벨 단위로 개별 칩. 제거 시 그 라벨/등급만 해제.
-  if (divisionCodes.isNotEmpty) {
-    if (isTennis) {
-      // 코드 집합 → 표시 라벨(첫 등장 순서, 유니크). 협회 스코프 무관하게
-      // 코드가 속한 라벨을 역추출한다.
-      final seen = <String>{};
-      for (final code in divisionCodes) {
-        final label = divisionLabel(code);
-        if (seen.add(label)) {
-          chips.add(ActiveFilterChipData(
-            kind: ActiveFilterKind.division,
-            value: label,
-            label: label,
-          ));
-        }
-      }
-    } else {
-      for (final code in divisionCodes) {
-        chips.add(ActiveFilterChipData(
-          kind: ActiveFilterKind.division,
-          value: code,
-          label: gradeLabel(code),
-        ));
-      }
-    }
+  // 부서/등급: 라벨 단위로 개별 칩. value 는 source-of-truth 라벨/grade.
+  // 테니스: 라벨이 곧 표시명. 풋살: grade 코드 → 한글 라벨 표시.
+  for (final value in divisionLabels) {
+    chips.add(ActiveFilterChipData(
+      kind: ActiveFilterKind.division,
+      value: value,
+      label: isTennis ? value : gradeLabel(value),
+    ));
   }
 
   if (recruiting != RecruitingStatus.all) {
@@ -154,10 +138,4 @@ List<ActiveFilterChipData> activeFilterChips({
   }
 
   return chips;
-}
-
-/// 테니스 division 코드 집합에서 특정 라벨에 해당하는 코드만 제거한다.
-/// (요약 칩의 라벨 단위 제거용 — 협회 스코프 무관, 라벨로 매칭.)
-Set<String> removeTennisDivisionLabel(Set<String> codes, String label) {
-  return codes.where((c) => divisionLabel(c) != label).toSet();
 }

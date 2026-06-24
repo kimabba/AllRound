@@ -8,6 +8,7 @@ import {
   isValidGrade,
   isValidPlayerOrigin,
   parseDivisionCodes,
+  parseRecruiting,
   rankOf,
   REGION_CODES,
   regionCodeFromLabel,
@@ -176,6 +177,32 @@ Deno.test('parseDivisionCodes returns null for empty / null / undefined', () => 
 Deno.test('parseDivisionCodes returns null when all segments are invalid/empty', () => {
   assertEquals(parseDivisionCodes(',  , ,'), null);
   assertEquals(parseDivisionCodes('BAD,also-bad'), null);
+});
+
+// ─── parseRecruiting ─────────────────────────────────────────
+
+Deno.test('parseRecruiting accepts open / closed', () => {
+  assertEquals(parseRecruiting('open'), 'open');
+  assertEquals(parseRecruiting('closed'), 'closed');
+});
+
+Deno.test('parseRecruiting rejects uppercase / mixed case (no normalization)', () => {
+  assertEquals(parseRecruiting('OPEN'), null);
+  assertEquals(parseRecruiting('Closed'), null);
+  assertEquals(parseRecruiting(' open '), null); // no trim — exact match only
+});
+
+Deno.test('parseRecruiting rejects typos / unknown values', () => {
+  assertEquals(parseRecruiting('opened'), null);
+  assertEquals(parseRecruiting('close'), null);
+  assertEquals(parseRecruiting('recruiting'), null);
+});
+
+Deno.test('parseRecruiting returns null for empty / null / undefined / non-string', () => {
+  assertEquals(parseRecruiting(''), null);
+  assertEquals(parseRecruiting(null), null);
+  assertEquals(parseRecruiting(undefined), null);
+  assertEquals(parseRecruiting(123), null);
 });
 
 // ─── isValidPlayerOrigin ─────────────────────────────────────

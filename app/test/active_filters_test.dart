@@ -12,7 +12,7 @@ void main() {
     DateTime? dateFrom,
     DateTime? dateTo,
     String? hostOrg,
-    Set<String> divisionCodes = const {},
+    Set<String> divisionLabels = const {},
     RecruitingStatus recruiting = RecruitingStatus.all,
     bool onlyMyGrade = false,
   }) =>
@@ -23,7 +23,7 @@ void main() {
         dateFrom: dateFrom,
         dateTo: dateTo,
         hostOrg: hostOrg,
-        divisionCodes: divisionCodes,
+        divisionLabels: divisionLabels,
         recruiting: recruiting,
         onlyMyGrade: onlyMyGrade,
         now: now,
@@ -71,7 +71,7 @@ void main() {
         dateFrom: DateTime(2026, 6, 1),
         dateTo: DateTime(2026, 6, 30),
         hostOrg: 'gj',
-        divisionCodes: {'gj_m_gold'},
+        divisionLabels: {'골드부'},
         recruiting: RecruitingStatus.closed,
         onlyMyGrade: true,
       );
@@ -110,9 +110,9 @@ void main() {
     });
   });
 
-  group('부서 칩 (테니스: 라벨 단위)', () {
-    test('같은 라벨 여러 협회 코드 → 라벨 1개 칩', () {
-      final chips = chipsFor(divisionCodes: {'gj_m_gold', 'jn_m_gold'});
+  group('부서 칩 (테니스: 라벨 source of truth)', () {
+    test('라벨 1개 → 칩 1개, value=label=라벨', () {
+      final chips = chipsFor(divisionLabels: {'골드부'});
       final division =
           chips.where((c) => c.kind == ActiveFilterKind.division).toList();
       expect(division.length, 1);
@@ -121,40 +121,34 @@ void main() {
     });
 
     test('서로 다른 라벨 → 각각 칩', () {
-      final chips = chipsFor(divisionCodes: {'gj_m_gold', 'gj_m_general'});
+      final chips = chipsFor(divisionLabels: {'골드부', '일반부'});
       final labels = chips
           .where((c) => c.kind == ActiveFilterKind.division)
           .map((c) => c.label)
           .toSet();
       expect(labels, {'골드부', '일반부'});
     });
+
+    test('라벨은 협회 스코프 무관 — 코드로 확장되지 않음(stale 방지)', () {
+      // 라벨만 보관하므로 칩에 gj_m_gold 같은 코드가 새어나오지 않는다.
+      final chips = chipsFor(divisionLabels: {'골드부'});
+      final division =
+          chips.firstWhere((c) => c.kind == ActiveFilterKind.division);
+      expect(division.value, '골드부');
+      expect(division.value, isNot(contains('_')));
+    });
   });
 
-  group('등급 칩 (풋살: 코드 단위)', () {
-    test('풋살 등급 → 한글 라벨, value=코드', () {
+  group('등급 칩 (풋살: grade 코드 source of truth)', () {
+    test('풋살 grade → 한글 라벨 표시, value=grade 코드', () {
       final chips = chipsFor(
         sport: 'futsal',
-        divisionCodes: {'intro', 'advanced'},
+        divisionLabels: {'intro', 'advanced'},
       );
       final division =
           chips.where((c) => c.kind == ActiveFilterKind.division).toList();
       expect(division.map((c) => c.label).toSet(), {'입문', '고급'});
       expect(division.map((c) => c.value).toSet(), {'intro', 'advanced'});
-    });
-  });
-
-  group('removeTennisDivisionLabel', () {
-    test('해당 라벨 코드만 제거 (다른 협회 같은 라벨 포함)', () {
-      final result = removeTennisDivisionLabel(
-        {'gj_m_gold', 'jn_m_gold', 'gj_m_general'},
-        '골드부',
-      );
-      expect(result, {'gj_m_general'});
-    });
-
-    test('없는 라벨 → 변화 없음', () {
-      final input = {'gj_m_gold'};
-      expect(removeTennisDivisionLabel(input, '일반부'), input);
     });
   });
 }

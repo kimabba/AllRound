@@ -337,3 +337,29 @@ Deno.test('extractRegulationBody returns null when no content table', () => {
   );
   assertEquals(extractRegulationBody(dom), null);
 });
+
+Deno.test('extractRegulationBody drops only known header rows, keeps text/data rows (P2⑤)', () => {
+  // 콘텐츠표 후보가 되도록 화이트리스트 라벨(주최) 한 행을 포함.
+  const dom = parseFixture(
+    '<html><body><table>' +
+      '<tr><td>주 최</td><td>영암군 체육회</td></tr>' +
+      // 알려진 헤더 행("경기종목 …") → 제외
+      '<tr><td>경기종목</td><td>경기일자</td><td>참가비 입금계좌</td></tr>' +
+      // 헤더 뒤 데이터 행 → 보존
+      '<tr><td>남자일반부(192팀)</td><td>7월 4일</td><td>농협 667-02-238327</td></tr>' +
+      // 숫자 없는 일반 텍스트 다칸 행 → 보존 (과도 제거 금지)
+      '<tr><td>남자부</td><td>여자부</td></tr>' +
+      '</table></body></html>',
+  );
+  const body = extractRegulationBody(dom)!;
+  const lines = body.split('\n');
+  // 알려진 헤더 행만 제거
+  assert(!lines.includes('경기종목 | 경기일자 | 참가비 입금계좌'), `header leaked: ${body}`);
+  // 데이터 행 보존
+  assert(
+    lines.includes('남자일반부(192팀) | 7월 4일 | 농협 667-02-238327'),
+    `data row dropped: ${body}`,
+  );
+  // 숫자 없는 텍스트 다칸 행 보존 — 2칸이지만 화이트리스트/헤더 라벨 아니라 "라벨: 값"
+  assert(lines.includes('남자부: 여자부'), `text row dropped: ${body}`);
+});

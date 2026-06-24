@@ -66,9 +66,27 @@ final _dash = RegExp(r'^-\s?(.*)$');
 // 라벨:값 — 라벨은 1~14자, 콜론/파이프 미포함, 콜론 뒤 공백.
 final _labelValue = RegExp(r'^([^:|]{1,14}):\s+(.*)$');
 
-/// 표 헤더행(셀에 숫자가 하나도 없는 순수 헤더)인지.
-bool _isPureHeaderTable(List<String> cells) =>
-    cells.every((c) => !RegExp(r'\d').hasMatch(c));
+/// 표 헤더 셀로 알려진 라벨(첫 셀이 이 중 하나면 헤더행으로 본다).
+/// 예: "경기종목 | 경기일자 | 참가비 입금계좌" 의 첫 셀 "경기종목".
+const _knownHeaderFirstCells = <String>{
+  '경기종목',
+  '종목',
+  '부서',
+  '부서명',
+  '경기일자',
+  '구분',
+  '항목',
+};
+
+/// 표 헤더행인지 — 너무 광범위하게 잡지 않도록 좁힌다.
+///
+/// 이전엔 "셀에 숫자가 하나도 없으면 헤더"로 판정해, 실제 텍스트 파이프 행
+/// (예: "남자부 | 여자부")까지 삭제됐다. 이제 **첫 셀이 알려진 헤더 라벨**일
+/// 때만 헤더로 보고 생략한다. 일반 텍스트 파이프 행은 보존된다.
+bool _isPureHeaderTable(List<String> cells) {
+  if (cells.isEmpty) return false;
+  return _knownHeaderFirstCells.contains(cells.first);
+}
 
 /// regulation_body 전체를 줄 단위로 분류한다.
 /// - "\r\n" 정규화, 양끝 트림, 빈 줄 제외.

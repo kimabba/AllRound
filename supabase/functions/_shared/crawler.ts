@@ -148,6 +148,21 @@ export async function upsertTournament(
     if (t.description !== undefined && !existing.manual_description) {
       updatePayload.description = t.description ?? null;
     }
+    // 요강 정형 데이터 보존 처리 (P2⑥ 데이터 무결성):
+    //   파서가 추출에 성공하면 해당 값을 undefined 가 아닌 값/빈배열로 채운다.
+    //   일시적 파싱 미스(레이아웃 변형 등)로 추출이 비면 undefined 로 들어오는데,
+    //   이때 컬럼을 payload 에서 제외해 기존 구조화 데이터를 null 로 지우지 않고
+    //   보존한다. (값이 정의돼 있을 때만 set — description 의 manual_description
+    //   가드와 동일 취지)
+    if (t.regulation_fields !== undefined) {
+      updatePayload.regulation_fields = t.regulation_fields;
+    }
+    if (t.regulation_notes !== undefined) {
+      updatePayload.regulation_notes = t.regulation_notes;
+    }
+    if (t.regulation_body !== undefined) {
+      updatePayload.regulation_body = t.regulation_body;
+    }
     const { error } = await audit.supabase
       .from('tournaments')
       .update({
@@ -163,11 +178,6 @@ export async function upsertTournament(
         entry_fee: t.entry_fee ?? null,
         prize: t.prize ?? null,
         format: t.format ?? null,
-        // 요강 정형 필드는 신규 컬럼이라 manual_description 보존 대상이 아니다.
-        // 매 크롤마다 원본 표에서 다시 추출하므로 항상 갱신한다.
-        regulation_fields: t.regulation_fields ?? null,
-        regulation_notes: t.regulation_notes ?? null,
-        regulation_body: t.regulation_body ?? null,
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
@@ -439,6 +449,14 @@ function rowCellTexts(row: QueryableNode): string[] {
 const APPLICATION_TABLE_TOKENS = ['참가부서', '신청기간', '신청하기', '입금내역', '현재신청팀'];
 
 /**
+ * 콘텐츠표 안의 "알려진 컬럼 헤더 행" 첫 셀 라벨(공백 정규화 후).
+ * 예: "경기종목 | 경기일자 | 참가비 입금계좌" 헤더 행. 바로 뒤 데이터 행이
+ * 같은 정보를 담으므로 헤더 행은 본문에서 제외한다. (P2⑤ — 좁은 범위:
+ * 첫 셀이 이 라벨인 다칸 행만 제외하고, 숫자 없는 일반 텍스트 행은 보존.)
+ */
+const CONTENT_HEADER_FIRST_LABELS: ReadonlySet<string> = new Set(['경기종목']);
+
+/**
  * 콘텐츠 <table> 을 선택한다.
  *
  * 협회 공고는 보통 2개의 표를 가진다:
@@ -576,6 +594,13 @@ export function extractRegulationBody(
 
     // (a) 화이트리스트 2칸 라벨 행 제외 (값이 있는 정의형 행만)
     if (nonEmpty.length === 2 && cells.length >= 2 && REGULATION_LABELS.has(firstLabel)) {
+      continue;
+    }
+
+    // (e) 알려진 컬럼 헤더 행 제외 — 첫 셀이 "경기종목" 등 헤더 라벨인 다칸 행만.
+    //     바로 뒤 데이터 행이 같은 정보를 담으므로 헤더는 중복 노이즈다.
+    //     (좁은 범위: "남자부 | 여자부" 같은 일반 텍스트 다칸 행은 보존)
+    if (nonEmpty.length >= 2 && CONTENT_HEADER_FIRST_LABELS.has(firstLabel)) {
       continue;
     }
 

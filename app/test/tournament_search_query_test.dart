@@ -61,5 +61,19 @@ void main() {
       final q = buildTournamentSearchQuery(divisionCodes: const ['intro']);
       expect(q['division_codes'], 'intro');
     });
+
+    test('recruiting → recruiting 키 (open/closed)', () {
+      expect(buildTournamentSearchQuery(recruiting: 'open')['recruiting'],
+          'open');
+      expect(buildTournamentSearchQuery(recruiting: 'closed')['recruiting'],
+          'closed');
+    });
+
+    test('recruiting null/빈문자열 → 키 생략', () {
+      expect(buildTournamentSearchQuery().containsKey('recruiting'), isFalse);
+      expect(
+          buildTournamentSearchQuery(recruiting: '').containsKey('recruiting'),
+          isFalse);
+    });
   });
 }

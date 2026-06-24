@@ -28,7 +28,10 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   DateTime? _dateFrom;
   DateTime? _dateTo;
   String? _hostOrg;
-  Set<String> _divisionCodes = const {};
+
+  /// 부서 선택의 source of truth = 라벨(테니스: 부서 라벨, 풋살: grade 코드).
+  /// 코드는 API 호출 시점에 현재 _hostOrg 로 해석한다(협회 제거 시 union 재확장).
+  Set<String> _divisionLabels = const {};
   RecruitingStatus _recruitingStatus = RecruitingStatus.all;
   List<Tournament>? _results;
   bool _loading = false;
@@ -37,24 +40,44 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   _TournamentViewMode _viewMode = _TournamentViewMode.list;
   late DateTime _selectedDate;
   late DateTime _focusedMonth;
+  String? _lastSearchedSport;
 
   DateTime get _today {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
 
-  /// 모집 상태는 백엔드 미지원 → 서버 결과를 받은 뒤 클라이언트에서 거른다.
-  /// limit:100 이후 필터라 대량 데이터에선 누락 가능하나, 현재 규모(수십 건)에선 충분.
-  List<Tournament> _applyClientFilters(List<Tournament> input) {
-    if (_recruitingStatus == RecruitingStatus.all) return input;
-    final today = _today;
-    return input
-        .where((t) =>
-            matchesRecruiting(_recruitingStatus, t.applicationDeadline, today))
-        .toList();
+  bool get _isTennis => ref.read(activeSportProvider) == 'tennis';
+
+  /// 현재 _divisionLabels 를 현재 _hostOrg 스코프로 백엔드 코드로 해석.
+  /// 테니스: org 있으면 그 협회 코드만, 없으면 전 협회 union.
+  /// 풋살: 라벨 Set 이 곧 grade 코드.
+  List<String> _resolveDivisionCodes() {
+    if (!_isTennis) return _divisionLabels.toList();
+    final org = _hostOrg;
+    final codes = org == null
+        ? tennisCodesForLabels(_divisionLabels)
+        : tennisCodesForLabelsInOrg(org, _divisionLabels);
+    return codes.toList();
+  }
+
+  /// 종목 전환 시 종목 특화 필터(_hostOrg, 부서 라벨)를 초기화한다.
+  /// 종목 무관 필터(지역/기간/모집상태/검색어)는 유지.
+  void _onSportChanged() {
+    final sport = ref.read(activeSportProvider);
+    if (sport == _lastSearchedSport) {
+      _search();
+      return;
+    }
+    setState(() {
+      _hostOrg = null;
+      _divisionLabels = const {};
+    });
+    _search();
   }
 
   Future<void> _search() async {
+    _lastSearchedSport = ref.read(activeSportProvider);
     setState(() {
       _loading = true;
       _error = null;
@@ -62,8 +85,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     final api = ref.read(apiProvider);
     if (!kReleaseMode && AppConfig.apiBaseUrl.contains('127.0.0.1')) {
       setState(() {
-        _results = _applyClientFilters(
-            _previewTournaments(ref.read(activeSportProvider)));
+        _results = _previewTournaments(ref.read(activeSportProvider));
         _usingPreviewData = true;
         _loading = false;
       });
@@ -72,6 +94,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
 
     List<Tournament> res;
     try {
+      // 모집 상태는 서버 측 필터(recruiting 쿼리키)로 처리한다.
       res = await api.searchTournaments(
         sport: ref.read(activeSportProvider),
         onlyMyGrade: _onlyMyGrade,
@@ -80,14 +103,14 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         dateFrom: _dateFrom,
         dateTo: _dateTo,
         hostOrg: _hostOrg,
-        divisionCodes: _divisionCodes.toList(),
+        divisionCodes: _resolveDivisionCodes(),
+        recruiting: recruitingStatusToParam(_recruitingStatus),
         limit: 100,
       );
     } catch (e) {
       if (!kReleaseMode && mounted) {
         setState(() {
-          _results = _applyClientFilters(
-              _previewTournaments(ref.read(activeSportProvider)));
+          _results = _previewTournaments(ref.read(activeSportProvider));
           _usingPreviewData = true;
           _error = null;
           _loading = false;
@@ -105,7 +128,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     }
     if (mounted) {
       setState(() {
-        _results = _applyClientFilters(res);
+        _results = res;
         _usingPreviewData = false;
         _loading = false;
       });
@@ -133,7 +156,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(activeSportProvider, (_, __) => _search());
+    ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
     final myGradeIds = ref.watch(homeTournamentsProvider).valueOrNull
@@ -256,7 +279,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _regionCode != null,
       _dateFrom != null || _dateTo != null,
       _hostOrg != null,
-      _divisionCodes.isNotEmpty,
+      _divisionLabels.isNotEmpty,
       _recruitingStatus != RecruitingStatus.all,
     ].where((active) => active).length;
   }
@@ -269,7 +292,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _dateFrom = null;
       _dateTo = null;
       _hostOrg = null;
-      _divisionCodes = const {};
+      _divisionLabels = const {};
       _recruitingStatus = RecruitingStatus.all;
     });
   }
@@ -281,13 +304,15 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         dateFrom: _dateFrom,
         dateTo: _dateTo,
         hostOrg: _hostOrg,
-        divisionCodes: _divisionCodes,
+        divisionLabels: _divisionLabels,
         recruiting: _recruitingStatus,
         onlyMyGrade: _onlyMyGrade,
         now: DateTime.now(),
       );
 
   /// 요약 칩의 X → 그 필터만 해제하고 즉시 재검색.
+  /// 부서 칩 제거는 라벨 단위(테니스 라벨 / 풋살 grade). 협회 칩 제거는
+  /// _hostOrg 만 해제하고 부서 라벨은 보존 → 다음 검색에서 union 재확장.
   void _removeActiveFilter(ActiveFilterChipData chip) {
     setState(() {
       switch (chip.kind) {
@@ -303,10 +328,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         case ActiveFilterKind.division:
           final value = chip.value;
           if (value != null) {
-            // 테니스: 라벨 단위 제거(divisionLabel 매칭), 풋살: 등급 코드 제거.
-            _divisionCodes = _divisionCodes.contains(value)
-                ? (_divisionCodes.where((c) => c != value).toSet())
-                : removeTennisDivisionLabel(_divisionCodes, value);
+            _divisionLabels =
+                _divisionLabels.where((l) => l != value).toSet();
           }
         case ActiveFilterKind.recruiting:
           _recruitingStatus = RecruitingStatus.all;
@@ -413,7 +436,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           dateFrom: _dateFrom,
           dateTo: _dateTo,
           hostOrg: _hostOrg,
-          divisionCodes: _divisionCodes,
+          divisionLabels: _divisionLabels,
           recruiting: _recruitingStatus,
         ),
       ),
@@ -426,7 +449,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         _dateFrom = result.dateFrom;
         _dateTo = result.dateTo;
         _hostOrg = result.hostOrg;
-        _divisionCodes = result.divisionCodes;
+        _divisionLabels = result.divisionLabels;
         _recruitingStatus = result.recruiting;
       });
       _search();
@@ -441,7 +464,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       if (_regionCode != null) '지역',
       if (_dateFrom != null || _dateTo != null) '기간',
       if (_hostOrg != null) '협회',
-      if (_divisionCodes.isNotEmpty) '부서',
+      if (_divisionLabels.isNotEmpty) '부서',
       if (_recruitingStatus != RecruitingStatus.all)
         recruitingStatusLabel(_recruitingStatus),
     ];
@@ -1418,7 +1441,9 @@ class _SearchFilterResult {
   final DateTime? dateFrom;
   final DateTime? dateTo;
   final String? hostOrg;
-  final Set<String> divisionCodes;
+
+  /// 부서 선택의 source of truth = 라벨(테니스: 부서 라벨, 풋살: grade 코드).
+  final Set<String> divisionLabels;
   final RecruitingStatus recruiting;
 
   const _SearchFilterResult({
@@ -1428,7 +1453,7 @@ class _SearchFilterResult {
     this.dateFrom,
     this.dateTo,
     this.hostOrg,
-    this.divisionCodes = const {},
+    this.divisionLabels = const {},
     this.recruiting = RecruitingStatus.all,
   });
 }
@@ -1475,21 +1500,17 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     _datePreset =
         presetForRange(initial.dateFrom, initial.dateTo, DateTime.now());
 
-    // 기존 divisionCodes 를 UI 선택 상태로 역매핑.
+    // 부서 선택은 이미 라벨 source of truth → 그대로 받는다.
+    // 테니스: 현재 협회 스코프에 존재하는 라벨만 유지(스코프 밖 라벨 제거).
     if (_isTennis) {
-      final org = _hostOrg;
-      // 협회가 선택돼 있으면 그 협회 라벨만, 아니면 전 협회 union 라벨로 역매핑.
-      _selectedDivisionLabels = {
-        for (final label in _divisionLabelsForScope(org))
-          if (_codesForLabelInScope(org, label)
-              .any(initial.divisionCodes.contains))
-            label,
-      };
+      final allowed = _divisionLabelsForScope(_hostOrg).toSet();
+      _selectedDivisionLabels =
+          initial.divisionLabels.where(allowed.contains).toSet();
       _selectedFutsalGrades = const {};
     } else {
       _selectedFutsalGrades = {
         for (final g in futsalGrades)
-          if (initial.divisionCodes.contains(g)) g,
+          if (initial.divisionLabels.contains(g)) g,
       };
       _selectedDivisionLabels = const {};
     }
@@ -1500,28 +1521,16 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   List<String> _divisionLabelsForScope(String? org) =>
       org == null ? tennisDivisionLabels() : tennisDivisionLabelsForOrg(org);
 
-  /// 현재 협회 스코프에서 라벨 → 코드.
-  /// org == null → 전 협회 합집합, org != null → 그 협회 코드만.
-  List<String> _codesForLabelInScope(String? org, String label) => org == null
-      ? tennisCodesForLabel(label)
-      : tennisCodesForLabelInOrg(org, label);
-
   @override
   void dispose() {
     _queryCtrl.dispose();
     super.dispose();
   }
 
-  /// 현재 부서/등급 선택을 백엔드 코드 집합으로 변환.
-  /// 협회 스코프 인지: org 선택 시 그 org 코드만, 미선택 시 전 협회 합집합.
-  Set<String> _resolveDivisionCodes() {
-    if (_isTennis) {
-      final org = _hostOrg;
-      if (org == null) return tennisCodesForLabels(_selectedDivisionLabels);
-      return tennisCodesForLabelsInOrg(org, _selectedDivisionLabels);
-    }
-    return Set<String>.from(_selectedFutsalGrades);
-  }
+  /// 현재 부서/등급 선택 라벨 집합(source of truth).
+  /// 테니스: 부서 라벨, 풋살: grade 코드.
+  Set<String> _selectedDivisionResult() =>
+      _isTennis ? _selectedDivisionLabels : _selectedFutsalGrades;
 
   /// 협회(_hostOrg) 변경 시: 새 스코프에 없는 선택 라벨은 자동 해제.
   void _setHostOrg(String? org) {
@@ -1542,7 +1551,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
         dateFrom: _dateFrom,
         dateTo: _dateTo,
         hostOrg: _isTennis ? _hostOrg : null,
-        divisionCodes: _resolveDivisionCodes(),
+        divisionLabels: _selectedDivisionResult(),
         recruiting: _recruitingStatus,
       ),
     );

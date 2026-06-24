@@ -92,31 +92,20 @@ String recruitingStatusLabel(RecruitingStatus status) {
   }
 }
 
-/// 마감 여부 판정 (application_deadline 기준).
+/// 모집 상태 → 서버 쿼리 파라미터(`recruiting` 키) 값.
 ///
-/// 마감: deadline 이 있고, deadline(날짜) 이 today(날짜) 보다 이전.
-/// deadline == null 이면 마감 아님(상시 모집으로 간주).
-bool isClosed(DateTime? deadline, DateTime today) {
-  if (deadline == null) return false;
-  return dateOnly(deadline).isBefore(dateOnly(today));
-}
-
-/// 선택된 모집 상태와 대회 deadline 이 매칭되는지.
-///
-/// - all: 항상 true
-/// - recruiting: deadline == null || deadline >= today
-/// - closed: deadline != null && deadline < today
-bool matchesRecruiting(
-  RecruitingStatus status,
-  DateTime? deadline,
-  DateTime today,
-) {
+/// 서버(tournaments-search → tournaments_for_user)가 application_deadline
+/// 기준으로 필터한다. all 은 필터 없음(null).
+/// - recruiting → 'open'
+/// - closed → 'closed'
+/// - all → null
+String? recruitingStatusToParam(RecruitingStatus status) {
   switch (status) {
     case RecruitingStatus.all:
-      return true;
+      return null;
     case RecruitingStatus.recruiting:
-      return !isClosed(deadline, today);
+      return 'open';
     case RecruitingStatus.closed:
-      return isClosed(deadline, today);
+      return 'closed';
   }
 }
