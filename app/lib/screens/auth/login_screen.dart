@@ -232,6 +232,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    // 로컬 관리자 모드(make admin): 컨슈머 카카오·마케팅·온보딩 카피를 숨기고
+    // 이메일·구글 로그인만 노출. 실제 권한은 서버 RLS.
+    final adminMode = AppConfig.adminMode;
 
     return Scaffold(
       body: Container(
@@ -262,7 +265,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const _IntroDots(),
                       const SizedBox(height: AppSpacing.xxl),
                       Text(
-                        '주말마다\n같이 뛸 사람을 찾고 있나요?',
+                        adminMode ? '관리자 로그인' : '주말마다\n같이 뛸 사람을 찾고 있나요?',
                         textAlign: TextAlign.left,
                         style: tt.headlineMedium?.copyWith(
                           color: Colors.white,
@@ -272,7 +275,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
-                        '축구/풋살부터 테니스까지, 내 근처\n모임부터 대회까지 한눈에 확인하세요.',
+                        adminMode
+                            ? '관리자 계정(이메일·구글)으로 로그인하세요.'
+                            : '축구/풋살부터 테니스까지, 내 근처\n모임부터 대회까지 한눈에 확인하세요.',
                         style: tt.bodyMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.86),
                           height: 1.7,
@@ -309,19 +314,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
-                      _KakaoStartButton(
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                        '카카오 로그인은 준비 중입니다. 이메일 로그인을 이용해 주세요.'),
-                                  ),
-                                );
-                              },
-                      ),
-                      const SizedBox(height: AppSpacing.md),
+                      if (!adminMode) ...[
+                        _KakaoStartButton(
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          '카카오 로그인은 준비 중입니다. 이메일 로그인을 이용해 주세요.'),
+                                    ),
+                                  );
+                                },
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                       if (AppConfig.googleWebClientId.isNotEmpty ||
                           AppConfig.googleIosClientId.isNotEmpty) ...[
                         _SocialButton(
@@ -342,21 +349,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Text(
-                        '시작하면 이용약관과 개인정보 처리방침에\n동의한 것으로 간주됩니다.',
-                        textAlign: TextAlign.center,
-                        style: tt.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.64),
-                          height: 1.45,
+                      if (!adminMode) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          '시작하면 이용약관과 개인정보 처리방침에\n동의한 것으로 간주됩니다.',
+                          textAlign: TextAlign.center,
+                          style: tt.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.64),
+                            height: 1.45,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _MarketingConsentRow(
-                        value: _marketingConsent,
-                        onChanged: (value) =>
-                            setState(() => _marketingConsent = value ?? false),
-                      ),
+                        const SizedBox(height: AppSpacing.md),
+                        _MarketingConsentRow(
+                          value: _marketingConsent,
+                          onChanged: (value) =>
+                              setState(() => _marketingConsent = value ?? false),
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                     ],
                   ),

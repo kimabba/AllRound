@@ -55,7 +55,7 @@ app:
 # 터미널 3: 웹 어드민 대시보드 (Chrome)
 admin:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
-	cd app && flutter run -d chrome --dart-define-from-file=.env.local
+	cd app && flutter run -d chrome --dart-define-from-file=.env.local --dart-define=ADMIN_MODE=true
 
 # ────────────────────────────────────────────────────
 # 정적 검증
