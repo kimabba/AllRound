@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../models/tournament.dart';
+import '../models/tournament_card_info.dart';
 import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import 'app_card.dart';
@@ -56,7 +57,9 @@ class TournamentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: 상태 + D-day + 날짜
+            // Row 1: 상태 배지 + (내 등급) + D-day 배지
+            // 날짜는 라벨 없이 섞이면 마감/대회일을 혼동시키므로 여기서 빼고,
+            // 아래 정보 블록에서 라벨과 함께 명시한다.
             Row(
               children: [
                 _StatusChip(
@@ -72,24 +75,13 @@ class TournamentCard extends StatelessWidget {
                     background: cs.primaryContainer,
                   ),
                 ],
-                if (_deadlineText().isNotEmpty) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    _deadlineText(),
-                    style: tt.labelSmall?.copyWith(
-                      color: cs.error,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
                 const Spacer(),
-                Icon(Icons.calendar_today_rounded,
-                    size: 13, color: cs.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Text(
-                  _dateText(),
-                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
+                if (_dday.isNotEmpty)
+                  _StatusChip(
+                    label: _dday,
+                    foreground: cs.onError,
+                    background: cs.error,
+                  ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -125,21 +117,51 @@ class TournamentCard extends StatelessWidget {
                 ],
               ),
             ],
+            const SizedBox(height: AppSpacing.md),
+
+            // 정보 블록: 라벨로 명확히 구분한 3줄(대회일 · 신청 마감 · 위치).
+            // "대회"와 "신청"을 각각 라벨링해 날짜 혼동을 없앤다.
+            _InfoLine(
+              icon: Icons.event_rounded,
+              label: '대회',
+              value: _dateText(),
+            ),
+            const SizedBox(height: 4),
+            if (_deadlineText().isNotEmpty) ...[
+              _InfoLine(
+                icon: Icons.how_to_reg_rounded,
+                label: '신청',
+                value: _deadlineText(),
+                // 마감일은 신청 의사결정에 핵심 → 살짝 강조(임박이면 error색).
+                emphasize: true,
+                emphasizeColor: _deadlineSoon ? cs.error : null,
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (_locationText().isNotEmpty)
+              // 위치는 사용자에게 매우 중요 → place 아이콘 + 본문 크기로 눈에 띄게.
+              Row(
+                children: [
+                  Icon(Icons.place_rounded, size: 16, color: cs.primary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _locationText(),
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: AppSpacing.sm),
 
-            // Row 4: 지역 + 등급 + 즐겨찾기
+            // Row 5: 등급 + 즐겨찾기
             Row(
               children: [
-                if (tournament.region != null) ...[
-                  Icon(Icons.place_rounded,
-                      size: 14, color: cs.onSurfaceVariant),
-                  const SizedBox(width: 2),
-                  Text(
-                    tournament.region!,
-                    style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                ],
                 Expanded(
                   child: Text(
                     grades.isEmpty ? '전체 등급' : '🏆 $grades',
@@ -173,12 +195,25 @@ class TournamentCard extends StatelessWidget {
     );
   }
 
-  String _dateText() {
-    final start = _df.format(tournament.startDate);
-    final end = tournament.endDate;
-    if (end == null || _isSameDay(tournament.startDate, end)) return start;
-    return '$start~${_df.format(end)}';
-  }
+  DeadlineInfo get _deadlineInfo =>
+      DeadlineInfo.compute(tournament.applicationDeadline, DateTime.now());
+
+  /// D-day 배지 텍스트(1~7일·당일에만 노출).
+  String get _dday => _deadlineInfo.ddayBadge;
+
+  /// 마감 임박(D-Day 또는 7일 이내) 여부 — 신청 줄 강조 색 판정에 사용.
+  bool get _deadlineSoon =>
+      _deadlineInfo.status == DeadlineStatus.today ||
+      _deadlineInfo.status == DeadlineStatus.soon;
+
+  String _dateText() =>
+      tournamentDateText(tournament.startDate, tournament.endDate, _df.format);
+
+  String _deadlineText() =>
+      applicationDeadlineText(tournament.applicationDeadline, _df.format);
+
+  String _locationText() =>
+      locationText(tournament.location, tournament.region);
 
   _StatusBadgeData _status(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -235,21 +270,67 @@ class TournamentCard extends StatelessWidget {
     };
   }
 
-  String _deadlineText() {
-    final deadline = tournament.applicationDeadline;
-    if (deadline == null) return '';
-    final today = DateTime.now();
-    final daysLeft = deadline
-        .difference(DateTime(today.year, today.month, today.day))
-        .inDays;
-    if (daysLeft < 0) return '';
-    if (daysLeft == 0) return 'D-Day';
-    if (daysLeft <= 7) return 'D-$daysLeft';
-    return '';
-  }
+}
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+/// 라벨이 붙은 정보 한 줄: [아이콘] [라벨칩] 값.
+/// "대회 / 신청"을 명시 라벨로 구분해 날짜 혼동을 없앤다. 값이 길면 ellipsis.
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+    this.emphasizeColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  /// true면 값 텍스트를 살짝 강조(굵게 + [emphasizeColor] 적용).
+  final bool emphasize;
+  final Color? emphasizeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final valueColor =
+        emphasizeColor ?? (emphasize ? cs.onSurface : cs.onSurfaceVariant);
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: cs.onSurfaceVariant),
+        const SizedBox(width: 6),
+        // 라벨: 작은 캡슐로 "무엇에 대한 날짜인지" 즉시 인지시킨다.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: tt.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            style: tt.labelSmall?.copyWith(
+              color: valueColor,
+              fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _CategoryChip extends StatelessWidget {
