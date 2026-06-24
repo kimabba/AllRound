@@ -8,6 +8,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/matchup_logo.dart';
 import '../../widgets/tournament_card.dart';
@@ -27,6 +28,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   DateTime? _dateTo;
   String? _hostOrg;
   Set<String> _divisionCodes = const {};
+  RecruitingStatus _recruitingStatus = RecruitingStatus.all;
   List<Tournament>? _results;
   bool _loading = false;
   bool _usingPreviewData = false;
@@ -40,6 +42,17 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     return DateTime(now.year, now.month, now.day);
   }
 
+  /// 모집 상태는 백엔드 미지원 → 서버 결과를 받은 뒤 클라이언트에서 거른다.
+  /// limit:100 이후 필터라 대량 데이터에선 누락 가능하나, 현재 규모(수십 건)에선 충분.
+  List<Tournament> _applyClientFilters(List<Tournament> input) {
+    if (_recruitingStatus == RecruitingStatus.all) return input;
+    final today = _today;
+    return input
+        .where((t) =>
+            matchesRecruiting(_recruitingStatus, t.applicationDeadline, today))
+        .toList();
+  }
+
   Future<void> _search() async {
     setState(() {
       _loading = true;
@@ -48,7 +61,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     final api = ref.read(apiProvider);
     if (!kReleaseMode && AppConfig.apiBaseUrl.contains('127.0.0.1')) {
       setState(() {
-        _results = _previewTournaments(ref.read(activeSportProvider));
+        _results = _applyClientFilters(
+            _previewTournaments(ref.read(activeSportProvider)));
         _usingPreviewData = true;
         _loading = false;
       });
@@ -71,7 +85,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     } catch (e) {
       if (!kReleaseMode && mounted) {
         setState(() {
-          _results = _previewTournaments(ref.read(activeSportProvider));
+          _results = _applyClientFilters(
+              _previewTournaments(ref.read(activeSportProvider)));
           _usingPreviewData = true;
           _error = null;
           _loading = false;
@@ -89,7 +104,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     }
     if (mounted) {
       setState(() {
-        _results = res;
+        _results = _applyClientFilters(res);
         _usingPreviewData = false;
         _loading = false;
       });
@@ -239,6 +254,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _dateFrom != null || _dateTo != null,
       _hostOrg != null,
       _divisionCodes.isNotEmpty,
+      _recruitingStatus != RecruitingStatus.all,
     ].where((active) => active).length;
   }
 
@@ -251,6 +267,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _dateTo = null;
       _hostOrg = null;
       _divisionCodes = const {};
+      _recruitingStatus = RecruitingStatus.all;
     });
   }
 
@@ -311,6 +328,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           dateTo: _dateTo,
           hostOrg: _hostOrg,
           divisionCodes: _divisionCodes,
+          recruiting: _recruitingStatus,
         ),
       ),
     );
@@ -323,6 +341,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         _dateTo = result.dateTo;
         _hostOrg = result.hostOrg;
         _divisionCodes = result.divisionCodes;
+        _recruitingStatus = result.recruiting;
       });
       _search();
     }
@@ -337,6 +356,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       if (_dateFrom != null || _dateTo != null) '기간',
       if (_hostOrg != null) '협회',
       if (_divisionCodes.isNotEmpty) '부서',
+      if (_recruitingStatus != RecruitingStatus.all)
+        recruitingStatusLabel(_recruitingStatus),
     ];
     final filterLabel =
         activeFilters.isEmpty ? '전체 대회 기준' : '${activeFilters.join(' · ')} 적용됨';
@@ -1312,6 +1333,7 @@ class _SearchFilterResult {
   final DateTime? dateTo;
   final String? hostOrg;
   final Set<String> divisionCodes;
+  final RecruitingStatus recruiting;
 
   const _SearchFilterResult({
     required this.query,
@@ -1321,6 +1343,7 @@ class _SearchFilterResult {
     this.dateTo,
     this.hostOrg,
     this.divisionCodes = const {},
+    this.recruiting = RecruitingStatus.all,
   });
 }
 
@@ -1346,6 +1369,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   String? _hostOrg;
   late Set<String> _selectedDivisionLabels;
   late Set<String> _selectedFutsalGrades;
+  late RecruitingStatus _recruitingStatus;
+  late DatePreset _datePreset;
 
   bool get _isTennis => widget.sport == 'tennis';
 
@@ -1359,6 +1384,10 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     _dateFrom = initial.dateFrom;
     _dateTo = initial.dateTo;
     _hostOrg = initial.hostOrg;
+    _recruitingStatus = initial.recruiting;
+    // 기존 범위 → 프리셋 역추론(표준 프리셋이면 강조, 아니면 custom).
+    _datePreset =
+        presetForRange(initial.dateFrom, initial.dateTo, DateTime.now());
 
     // 기존 divisionCodes 를 UI 선택 상태로 역매핑.
     if (_isTennis) {
@@ -1402,6 +1431,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
         dateTo: _dateTo,
         hostOrg: _isTennis ? _hostOrg : null,
         divisionCodes: _resolveDivisionCodes(),
+        recruiting: _recruitingStatus,
       ),
     );
   }
@@ -1413,9 +1443,25 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
       _regionCode = null;
       _dateFrom = null;
       _dateTo = null;
+      _datePreset = DatePreset.all;
       _hostOrg = null;
       _selectedDivisionLabels = {};
       _selectedFutsalGrades = {};
+      _recruitingStatus = RecruitingStatus.all;
+    });
+  }
+
+  /// 프리셋 칩 선택 → 범위 환원. custom 은 picker 를 띄운다.
+  void _selectDatePreset(DatePreset preset) {
+    if (preset == DatePreset.custom) {
+      _pickDateRange();
+      return;
+    }
+    final (from, to) = dateRangeForPreset(preset, DateTime.now());
+    setState(() {
+      _datePreset = preset;
+      _dateFrom = from;
+      _dateTo = to;
     });
   }
 
@@ -1439,6 +1485,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
         _dateFrom = DateTime(
             picked.start.year, picked.start.month, picked.start.day);
         _dateTo = DateTime(picked.end.year, picked.end.month, picked.end.day);
+        // 직접 고른 범위가 표준 프리셋과 일치할 수도 있으므로 역추론.
+        _datePreset = presetForRange(_dateFrom, _dateTo, now);
       });
     }
   }
@@ -1507,6 +1555,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       ],
                       const SizedBox(height: AppSpacing.lg),
                       _buildDivisionSection(cs, tt),
+                      const SizedBox(height: AppSpacing.lg),
+                      _buildRecruitingSection(cs, tt),
                       const SizedBox(height: AppSpacing.sm),
                       SwitchListTile(
                         title: Text(
@@ -1593,34 +1643,71 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(tt, '기간'),
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _pickDateRange,
-                icon: const Icon(Icons.calendar_today_rounded, size: 18),
-                label: Text(
-                  hasRange
-                      ? '${_formatDate(_dateFrom!)} ~ ${_formatDate(_dateTo!)}'
-                      : '전체 기간',
+            for (final preset in DatePreset.values)
+              _filterChip(
+                label: datePresetLabel(preset),
+                selected: _datePreset == preset,
+                onSelected: (_) => _selectDatePreset(preset),
+              ),
+          ],
+        ),
+        if (hasRange) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded,
+                  size: 16, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  '${_formatDate(_dateFrom!)} ~ ${_formatDate(_dateTo!)}',
+                  style: tt.labelLarge?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-            if (hasRange) ...[
-              const SizedBox(width: AppSpacing.sm),
               IconButton(
                 onPressed: () => setState(() {
                   _dateFrom = null;
                   _dateTo = null;
+                  _datePreset = DatePreset.all;
                 }),
-                icon: const Icon(Icons.close_rounded),
+                icon: const Icon(Icons.close_rounded, size: 18),
                 tooltip: '기간 해제',
+                visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
                   backgroundColor: cs.surfaceContainerHighest,
                 ),
               ),
             ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRecruitingSection(ColorScheme cs, TextTheme tt) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel(tt, '모집 상태'),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final status in RecruitingStatus.values)
+              _filterChip(
+                label: recruitingStatusLabel(status),
+                selected: _recruitingStatus == status,
+                onSelected: (_) =>
+                    setState(() => _recruitingStatus = status),
+              ),
           ],
         ),
       ],
