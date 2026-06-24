@@ -32,11 +32,16 @@ class TournamentCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
-    final grades = tournament.eligibleGrades
+    // 출전 부서: 카드는 한 줄이라 앞 3개만 보이고 나머지는 "외 N개"로 명시한다.
+    // (전에는 take(3) 으로 조용히 잘려 상세 화면의 전체 부서와 어긋나 보였다.)
+    final allGrades = tournament.eligibleGrades
         .map((g) => divisionLabel(g) != g ? divisionLabel(g) : gradeLabel(g))
         .toSet()
-        .take(3)
-        .join(' · ');
+        .toList();
+    final extraGrades = allGrades.length - 3;
+    final grades = extraGrades > 0
+        ? '${allGrades.take(3).join(' · ')} 외 $extraGrades개'
+        : allGrades.join(' · ');
     final futsalCategory = tournament.sport == 'futsal'
         ? futsalEventCategoryLabel(tournament.futsalEventCategory)
         : '';
