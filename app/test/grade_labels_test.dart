@@ -88,4 +88,55 @@ void main() {
       }
     });
   });
+
+  group('org-scoped division helpers', () {
+    test('tennisDivisionLabelsForOrg(gj) → 광주 부서 라벨만, 첫 등장 순서', () {
+      final labels = tennisDivisionLabelsForOrg('gj');
+      expect(labels.first, '오픈부');
+      expect(labels, contains('골드부'));
+      expect(labels, contains('부부부'));
+      // 유니크
+      expect(labels.toSet().length, labels.length);
+      // gj 전용: gj division 의 라벨 집합과 일치
+      final gjLabels = divisionsForOrg('gj').map((d) => d.label).toSet();
+      expect(labels.toSet(), gjLabels);
+    });
+
+    test('tennisDivisionLabelsForOrg(kata) → 부수제 1~5부/여자부', () {
+      final labels = tennisDivisionLabelsForOrg('kata');
+      expect(labels, ['1부', '2부', '3부', '4부', '5부', '여자부']);
+    });
+
+    test('미등록 org → 빈 리스트', () {
+      expect(tennisDivisionLabelsForOrg('nope'), isEmpty);
+    });
+
+    test('tennisCodesForLabelInOrg(gj, 골드부) → gj_m_gold 만 (jn 제외)', () {
+      final codes = tennisCodesForLabelInOrg('gj', '골드부');
+      expect(codes, ['gj_m_gold']);
+      expect(codes, isNot(contains('jn_m_gold')));
+    });
+
+    test('tennisCodesForLabelInOrg(jn, 골드부) → jn_m_gold 만', () {
+      expect(tennisCodesForLabelInOrg('jn', '골드부'), ['jn_m_gold']);
+    });
+
+    test('해당 org 에 없는 라벨 → 빈 리스트', () {
+      // 부부부는 kta 에 없다
+      expect(tennisCodesForLabelInOrg('kta', '부부부'), isEmpty);
+    });
+
+    test('tennisCodesForLabelsInOrg → org 스코프 합집합', () {
+      final codes = tennisCodesForLabelsInOrg('gj', {'골드부', '일반부'});
+      expect(codes, containsAll(['gj_m_gold', 'gj_m_general']));
+      expect(codes, isNot(contains('jn_m_gold')));
+    });
+
+    test('org 스코프 union 은 전 협회 union 의 부분집합', () {
+      final gjGold = tennisCodesForLabelInOrg('gj', '골드부').toSet();
+      final allGold = tennisCodesForLabel('골드부').toSet();
+      expect(allGold.containsAll(gjGold), isTrue);
+      expect(gjGold.length, lessThan(allGold.length));
+    });
+  });
 }

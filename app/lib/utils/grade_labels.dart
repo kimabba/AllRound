@@ -218,6 +218,34 @@ Set<String> tennisCodesForLabels(Iterable<String> labels) {
   return codes;
 }
 
+/// 특정 협회(org)의 부서 라벨: 첫 등장 순서를 보존한 유니크 라벨.
+/// org 가 미등록이면 빈 리스트.
+List<String> tennisDivisionLabelsForOrg(String org) {
+  final seen = <String>{};
+  final ordered = <String>[];
+  for (final d in divisionsForOrg(org)) {
+    if (seen.add(d.label)) ordered.add(d.label);
+  }
+  return ordered;
+}
+
+/// 특정 협회(org) 안에서 라벨 → 그 org 의 부서 코드.
+/// 같은 org 내에 동일 라벨이 여럿이면 모두 포함(보통 1개).
+List<String> tennisCodesForLabelInOrg(String org, String label) =>
+    divisionsForOrg(org)
+        .where((d) => d.label == label)
+        .map((d) => d.code)
+        .toList();
+
+/// 특정 협회(org) 안에서 라벨 집합 → 그 org 의 부서 코드 집합.
+Set<String> tennisCodesForLabelsInOrg(String org, Iterable<String> labels) {
+  final codes = <String>{};
+  for (final label in labels) {
+    codes.addAll(tennisCodesForLabelInOrg(org, label));
+  }
+  return codes;
+}
+
 /// eligible_grades 코드 배열 → "골드부 · 일반부 · 신인부" 표시 문자열
 String formatEligibleGrades(List<String> codes) {
   if (codes.isEmpty) return '-';

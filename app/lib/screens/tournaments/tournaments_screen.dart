@@ -7,6 +7,7 @@ import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
@@ -173,6 +174,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
               ],
             ),
           ),
+          if (_viewMode == _TournamentViewMode.list)
+            _buildActiveFilterChipsRow(cs),
           if (_loading) LinearProgressIndicator(color: cs.primary),
           if (_usingPreviewData) const _PreviewDataBanner(),
           Expanded(
@@ -269,6 +272,89 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _divisionCodes = const {};
       _recruitingStatus = RecruitingStatus.all;
     });
+  }
+
+  List<ActiveFilterChipData> get _activeFilterChips => activeFilterChips(
+        sport: ref.read(activeSportProvider),
+        query: _q,
+        regionCode: _regionCode,
+        dateFrom: _dateFrom,
+        dateTo: _dateTo,
+        hostOrg: _hostOrg,
+        divisionCodes: _divisionCodes,
+        recruiting: _recruitingStatus,
+        onlyMyGrade: _onlyMyGrade,
+        now: DateTime.now(),
+      );
+
+  /// 요약 칩의 X → 그 필터만 해제하고 즉시 재검색.
+  void _removeActiveFilter(ActiveFilterChipData chip) {
+    setState(() {
+      switch (chip.kind) {
+        case ActiveFilterKind.query:
+          _q = '';
+        case ActiveFilterKind.region:
+          _regionCode = null;
+        case ActiveFilterKind.dateRange:
+          _dateFrom = null;
+          _dateTo = null;
+        case ActiveFilterKind.hostOrg:
+          _hostOrg = null;
+        case ActiveFilterKind.division:
+          final value = chip.value;
+          if (value != null) {
+            // 테니스: 라벨 단위 제거(divisionLabel 매칭), 풋살: 등급 코드 제거.
+            _divisionCodes = _divisionCodes.contains(value)
+                ? (_divisionCodes.where((c) => c != value).toSet())
+                : removeTennisDivisionLabel(_divisionCodes, value);
+          }
+        case ActiveFilterKind.recruiting:
+          _recruitingStatus = RecruitingStatus.all;
+        case ActiveFilterKind.onlyMyGrade:
+          _onlyMyGrade = false;
+      }
+    });
+    _search();
+  }
+
+  Widget _buildActiveFilterChipsRow(ColorScheme cs) {
+    final chips = _activeFilterChips;
+    if (chips.isEmpty) return const SizedBox.shrink();
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      color: cs.surfaceContainerLow,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final chip in chips)
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: InputChip(
+                  label: Text(chip.label),
+                  onDeleted: () => _removeActiveFilter(chip),
+                  deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                  backgroundColor: cs.primaryContainer,
+                  side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+                  labelStyle: tt.labelMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildQuickFilters(ColorScheme cs) {
@@ -1391,9 +1477,11 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
 
     // 기존 divisionCodes 를 UI 선택 상태로 역매핑.
     if (_isTennis) {
+      final org = _hostOrg;
+      // 협회가 선택돼 있으면 그 협회 라벨만, 아니면 전 협회 union 라벨로 역매핑.
       _selectedDivisionLabels = {
-        for (final label in tennisDivisionLabels())
-          if (tennisCodesForLabel(label)
+        for (final label in _divisionLabelsForScope(org))
+          if (_codesForLabelInScope(org, label)
               .any(initial.divisionCodes.contains))
             label,
       };
@@ -1407,6 +1495,17 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     }
   }
 
+  /// 현재 협회 스코프의 부서 라벨 목록.
+  /// org == null → 전 협회 union, org != null → 그 협회만.
+  List<String> _divisionLabelsForScope(String? org) =>
+      org == null ? tennisDivisionLabels() : tennisDivisionLabelsForOrg(org);
+
+  /// 현재 협회 스코프에서 라벨 → 코드.
+  /// org == null → 전 협회 합집합, org != null → 그 협회 코드만.
+  List<String> _codesForLabelInScope(String? org, String label) => org == null
+      ? tennisCodesForLabel(label)
+      : tennisCodesForLabelInOrg(org, label);
+
   @override
   void dispose() {
     _queryCtrl.dispose();
@@ -1414,11 +1513,24 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   }
 
   /// 현재 부서/등급 선택을 백엔드 코드 집합으로 변환.
+  /// 협회 스코프 인지: org 선택 시 그 org 코드만, 미선택 시 전 협회 합집합.
   Set<String> _resolveDivisionCodes() {
     if (_isTennis) {
-      return tennisCodesForLabels(_selectedDivisionLabels);
+      final org = _hostOrg;
+      if (org == null) return tennisCodesForLabels(_selectedDivisionLabels);
+      return tennisCodesForLabelsInOrg(org, _selectedDivisionLabels);
     }
     return Set<String>.from(_selectedFutsalGrades);
+  }
+
+  /// 협회(_hostOrg) 변경 시: 새 스코프에 없는 선택 라벨은 자동 해제.
+  void _setHostOrg(String? org) {
+    setState(() {
+      _hostOrg = org;
+      final allowed = _divisionLabelsForScope(org).toSet();
+      _selectedDivisionLabels =
+          _selectedDivisionLabels.where(allowed.contains).toSet();
+    });
   }
 
   void _apply() {
@@ -1726,15 +1838,14 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
             _filterChip(
               label: '전체',
               selected: _hostOrg == null,
-              onSelected: (_) => setState(() => _hostOrg = null),
+              onSelected: (_) => _setHostOrg(null),
             ),
             for (final org in tennisOrgs)
               _filterChip(
                 label: tennisOrgShortLabel(org),
                 selected: _hostOrg == org,
-                onSelected: (selected) => setState(
-                  () => _hostOrg = selected ? org : null,
-                ),
+                onSelected: (selected) =>
+                    _setHostOrg(selected ? org : null),
               ),
           ],
         ),
@@ -1745,8 +1856,9 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   Widget _buildDivisionSection(ColorScheme cs, TextTheme tt) {
     final List<Widget> chips;
     if (_isTennis) {
+      // 협회 선택 시 그 협회 부서만, 미선택 시 전 협회 union 라벨.
       chips = [
-        for (final label in tennisDivisionLabels())
+        for (final label in _divisionLabelsForScope(_hostOrg))
           _filterChip(
             label: label,
             selected: _selectedDivisionLabels.contains(label),
@@ -1780,10 +1892,29 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
       ];
     }
 
+    final scopeHint = _isTennis && _hostOrg != null
+        ? '${tennisOrgShortLabel(_hostOrg!)} 부서'
+        : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(tt, _isTennis ? '부서' : '등급'),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildSectionLabel(tt, _isTennis ? '부서' : '등급'),
+            if (scopeHint != null) ...[
+              const SizedBox(width: AppSpacing.xs),
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Text(
+                  scopeHint,
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ],
+        ),
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
