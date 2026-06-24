@@ -18,6 +18,7 @@ export interface CrawlerTournament {
   format?: string;
   regulation_fields?: Array<{ label: string; value: string }>;
   regulation_notes?: string[];
+  regulation_body?: string;
   source_url: string;
 }
 
@@ -166,6 +167,7 @@ export async function upsertTournament(
         // 매 크롤마다 원본 표에서 다시 추출하므로 항상 갱신한다.
         regulation_fields: t.regulation_fields ?? null,
         regulation_notes: t.regulation_notes ?? null,
+        regulation_body: t.regulation_body ?? null,
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
@@ -194,6 +196,7 @@ export async function upsertTournament(
       format: t.format ?? null,
       regulation_fields: t.regulation_fields ?? null,
       regulation_notes: t.regulation_notes ?? null,
+      regulation_body: t.regulation_body ?? null,
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',
@@ -421,46 +424,182 @@ function normalizeValue(raw: string): string {
   return raw.replace(/\s+/g, ' ').trim();
 }
 
+/** 한 <tr> 의 셀 텍스트 배열을 normalizeValue 한 결과로 반환. */
+function rowCellTexts(row: QueryableNode): string[] {
+  const cells = row.querySelectorAll('td');
+  const out: string[] = [];
+  for (let c = 0; c < cells.length; c++) {
+    const cell = asTextNode(cells[c]);
+    out.push(normalizeValue(cell?.textContent ?? ''));
+  }
+  return out;
+}
+
+/** 신청현황표 헤더 토큰 — 이 표는 라이브 카운트(63/192)라 본문에서 제외. */
+const APPLICATION_TABLE_TOKENS = ['참가부서', '신청기간', '신청하기', '입금내역', '현재신청팀'];
+
 /**
- * DOM <table> 의 각 <tr> 를 순회하며, 첫 셀 텍스트를 공백제거 정규화한 라벨이
- * 화이트리스트에 있으면 인접한(두 번째) 셀 텍스트를 value 로 push.
+ * 콘텐츠 <table> 을 선택한다.
+ *
+ * 협회 공고는 보통 2개의 표를 가진다:
+ *   - 신청현황표: 헤더가 "참가부서 | 신청기간 | 경기일시 | 현재신청팀 | …" 이고
+ *     "63 / 192" 같은 라이브 신청 카운트를 담는다 → 요강 본문 대상 아님.
+ *   - 콘텐츠표: 일시/장소/주최/시상내역/참가자격/접수마감 등 공고 본문.
+ *
+ * 선택 규칙:
+ *   - 화이트리스트 라벨(장소/주최 등)을 첫 셀에 가장 많이 포함한 <table> 선택.
+ *   - 단, 신청현황표 토큰(참가부서/신청기간/신청하기 …)을 헤더로 가진 표는 제외.
+ *   - 후보가 없으면 null (요강 추출 자체를 skip).
+ *
+ * 이 표를 fields/body 추출의 공통 스코프로 써서 신청현황표 행 오캡처를 막는다.
+ */
+function findRegulationTable(doc: QueryableNode): QueryableNode | null {
+  const tables = doc.querySelectorAll('table');
+  let best: QueryableNode | null = null;
+  let bestScore = 0;
+  for (let i = 0; i < tables.length; i++) {
+    const table = asQueryableNode(tables[i]);
+    if (!table) continue;
+    const rows = table.querySelectorAll('tr');
+    let labelHits = 0;
+    let applicationTokenHits = 0;
+    for (let r = 0; r < rows.length; r++) {
+      const row = asQueryableNode(rows[r]);
+      if (!row) continue;
+      const cells = rowCellTexts(row);
+      if (cells.length === 0) continue;
+      const firstLabel = normalizeLabel(cells[0]);
+      if (REGULATION_LABELS.has(firstLabel)) labelHits++;
+      for (const cell of cells) {
+        const norm = normalizeLabel(cell);
+        if (APPLICATION_TABLE_TOKENS.some((tok) => norm.includes(tok))) {
+          applicationTokenHits++;
+          break;
+        }
+      }
+    }
+    // 신청현황표(토큰 2개 이상)는 콘텐츠표 후보에서 제외.
+    if (applicationTokenHits >= 2) continue;
+    if (labelHits > bestScore) {
+      bestScore = labelHits;
+      best = table;
+    }
+  }
+  return best;
+}
+
+/**
+ * 콘텐츠표의 각 <tr> 를 순회하며, 첫 셀 라벨이 화이트리스트면 둘째 셀을 value 로 push.
  *
  * 규칙:
- *   - 원본 표 순서 보존 (querySelectorAll 의 문서 순서를 그대로 따른다).
+ *   - 콘텐츠표(findRegulationTable)로 스코프 → 신청현황표 행 오캡처 방지.
+ *   - 원본 표 순서 보존.
  *   - 라벨 내부 공백 정규화 ("장 소" → "장소").
- *   - 값이 비어 있으면(빈 셀) skip.
- *   - 같은 라벨이 두 번 나오면 첫 번째만 채택(중복 무시) — 컬럼 헤더 행 등에서
- *     같은 라벨이 재등장해 덮어쓰는 것을 방지.
- *
- * 주의(구현상 한계):
- *   협회 표에는 "경기종목 | 경기일자 | 참가비 입금계좌" 처럼 라벨 화이트리스트
- *   단어가 컬럼 헤더로 쓰이는 행도 있다. 이 경우 두 번째 셀("경기일자")이
- *   값으로 들어가 의미가 어긋날 수 있다. 화이트리스트는 라벨:값 정의형 행을
- *   가정하므로, 검수(status='draft')에서 이런 헤더성 값은 걸러진다.
+ *   - 빈 값 셀 / 중복 라벨(first-wins) 제외.
  */
 export function extractRegulationFields(
   doc: QueryableNode,
 ): Array<{ label: string; value: string }> {
+  const table = findRegulationTable(doc);
+  if (!table) return [];
   const out: Array<{ label: string; value: string }> = [];
   const seen = new Set<string>();
-  const rows = doc.querySelectorAll('tr');
+  const rows = table.querySelectorAll('tr');
   for (let r = 0; r < rows.length; r++) {
     const row = asQueryableNode(rows[r]);
     if (!row) continue;
-    const cells = row.querySelectorAll('td');
+    const cells = rowCellTexts(row);
     if (cells.length < 2) continue;
-    const labelCell = asTextNode(cells[0]);
-    const valueCell = asTextNode(cells[1]);
-    if (!labelCell || !valueCell) continue;
-    const label = normalizeLabel(labelCell.textContent ?? '');
+    const label = normalizeLabel(cells[0]);
     if (!REGULATION_LABELS.has(label)) continue;
     if (seen.has(label)) continue;
-    const value = normalizeValue(valueCell.textContent ?? '');
+    const value = cells[1];
     if (!value) continue; // 빈 값 셀 제외
     seen.add(label);
     out.push({ label, value });
   }
   return out;
+}
+
+/**
+ * 콘텐츠표를 행 구조를 살려 "읽기 쉬운 완전 본문"으로 직렬화.
+ *
+ * regulation_fields(요약)·regulation_notes(※)·배너를 제외한 나머지 풍부한 내용
+ * (일시/경기일정+입금계좌/시상내역/참가자격/접수마감/경기방식 등)을 담는다.
+ *
+ * 제외 행:
+ *   (a) 첫 셀이 화이트리스트 라벨인 2칸 행 (= regulation_fields).
+ *   (b) ※ 로 시작하는 행 (= regulation_notes).
+ *   (c) 빈/공백뿐인 행.
+ *   (d) 배너/홍보 행: 『』 포함, "Sports 7330", "풋 폴트", 또는 대회 title 과
+ *       동일하거나 title 을 포함하는 행.
+ *
+ * 직렬화:
+ *   - 2칸: "라벨: 값" (라벨 내부 공백 정규화 "일 시" → "일시").
+ *   - 3칸: "셀1 | 셀2 | 셀3".
+ *   - 1칸: 텍스트 그대로 (◈/◎/● 줄 등).
+ *   - 그 외 N칸: " | " join.
+ *   행을 "\n" 으로 join, trim, 12000자 cap. 내용 없으면 null.
+ */
+export function extractRegulationBody(
+  doc: QueryableNode,
+  title?: string,
+): string | null {
+  const table = findRegulationTable(doc);
+  if (!table) return null;
+  const titleNorm = normalizeLabel(title ?? '');
+  const lines: string[] = [];
+  const rows = table.querySelectorAll('tr');
+  for (let r = 0; r < rows.length; r++) {
+    const row = asQueryableNode(rows[r]);
+    if (!row) continue;
+    const cells = rowCellTexts(row);
+    const nonEmpty = cells.filter((c) => c !== '');
+    if (nonEmpty.length === 0) continue; // (c) 빈 행 제외
+
+    const joinedForCheck = nonEmpty.join(' ');
+    const firstLabel = normalizeLabel(cells[0] ?? '');
+
+    // (b) ※ 노트 행 제외
+    if (joinedForCheck.startsWith('※')) continue;
+
+    // (d) 배너/홍보 행 제외
+    if (
+      joinedForCheck.includes('『') || joinedForCheck.includes('』') ||
+      joinedForCheck.includes('Sports 7330') || joinedForCheck.includes('풋 폴트') ||
+      (titleNorm.length > 0 &&
+        (normalizeLabel(joinedForCheck) === titleNorm ||
+          normalizeLabel(joinedForCheck).includes(titleNorm)))
+    ) {
+      continue;
+    }
+
+    // (a) 화이트리스트 2칸 라벨 행 제외 (값이 있는 정의형 행만)
+    if (nonEmpty.length === 2 && cells.length >= 2 && REGULATION_LABELS.has(firstLabel)) {
+      continue;
+    }
+
+    // 직렬화
+    let line: string;
+    if (nonEmpty.length === 2 && cells.length >= 2 && cells[0] !== '' && cells[1] !== '') {
+      // "라벨: 값" — 라벨 내부 공백 정규화
+      line = `${firstLabel}: ${cells[1]}`;
+    } else if (nonEmpty.length >= 3) {
+      line = nonEmpty.join(' | ');
+    } else {
+      line = nonEmpty.join(' ');
+    }
+    line = line.trim();
+    if (line) lines.push(line);
+  }
+
+  const body = lines.join('\n').trim();
+  if (!body) return null;
+  // 완전성 우선: 가장 긴 공고(영암 ~8.6k자, 경기방식·준수사항 포함)도 누락 없이
+  // 담되 runaway 만 차단. regulation_body 는 임베딩 대상이 아니라(설명은 description)
+  // 길이가 RAG 에 영향 없음.
+  const MAX = 12000;
+  return body.length > MAX ? body.slice(0, MAX).replace(/\s+\S*$/, '').trimEnd() + ' …' : body;
 }
 
 /** 노트 1건 정규화·검증 후 (중복 아니면) 수집기에 push. */

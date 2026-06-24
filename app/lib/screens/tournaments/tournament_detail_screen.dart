@@ -278,28 +278,39 @@ class _DetailBody extends StatelessWidget {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// 대회 요강 아코디언 본문.
-  /// 우선순위: 구조화 요강(regulationFields/Notes) → 평문 description 폴백 → 빈 안내.
+  /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
+  /// 그것도 없으면 "아직 공지되지 않았습니다".
   List<Widget> _buildRegulationChildren(
     BuildContext context, {
     required bool hasDescription,
   }) {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
+    //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = <RegulationField>[...t.regulationFields];
+    final hasBody =
+        t.regulationBody != null && t.regulationBody!.trim().isNotEmpty;
     bool hasLabel(String label) =>
         fields.any((f) => f.label.replaceAll(' ', '') == label);
 
-    if (t.prize != null && t.prize!.trim().isNotEmpty && !hasLabel('시상')) {
-      fields.add(RegulationField(label: '시상', value: t.prize!.trim()));
-    }
-    if (t.format != null && t.format!.trim().isNotEmpty && !hasLabel('경기방식')) {
-      fields.add(RegulationField(label: '경기방식', value: t.format!.trim()));
+    if (!hasBody) {
+      if (t.prize != null && t.prize!.trim().isNotEmpty && !hasLabel('시상')) {
+        fields.add(RegulationField(label: '시상', value: t.prize!.trim()));
+      }
+      if (t.format != null &&
+          t.format!.trim().isNotEmpty &&
+          !hasLabel('경기방식')) {
+        fields.add(RegulationField(label: '경기방식', value: t.format!.trim()));
+      }
     }
 
     final notes = t.regulationNotes;
 
-    if (fields.isNotEmpty || notes.isNotEmpty) {
-      return [
-        if (fields.isNotEmpty)
+    if (fields.isNotEmpty || hasBody || notes.isNotEmpty) {
+      final children = <Widget>[];
+
+      // (a) 라벨/값 행
+      if (fields.isNotEmpty) {
+        children.add(
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
             child: Column(
@@ -310,9 +321,26 @@ class _DetailBody extends StatelessWidget {
               ],
             ),
           ),
-        if (notes.isNotEmpty) _RegulationNotes(notes: notes),
-        const SizedBox(height: AppSpacing.sm),
-      ];
+        );
+      }
+
+      // (b) 전체 요강 본문 ("\n" 보존)
+      if (hasBody) {
+        children.add(
+          _RegulationBody(
+            body: t.regulationBody!,
+            withDivider: fields.isNotEmpty,
+          ),
+        );
+      }
+
+      // (c) 안내(※) 불릿
+      if (notes.isNotEmpty) {
+        children.add(_RegulationNotes(notes: notes));
+      }
+
+      children.add(const SizedBox(height: AppSpacing.sm));
+      return children;
     }
 
     // 2) 폴백: 평문 description 을 그대로 줄바꿈 렌더 (라벨 분리 금지).
@@ -700,6 +728,53 @@ class _RegulationNotes extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 전체 요강 본문: 구분선 + "전체 요강" 소제목 + 여러 줄 본문.
+/// 크롤러가 "\n" 줄바꿈으로 정리한 본문을 그대로 보존해 렌더한다.
+/// ◈/◎/● 등 마커가 포함된 줄도 변형 없이 그대로 보인다.
+class _RegulationBody extends StatelessWidget {
+  const _RegulationBody({required this.body, this.withDivider = true});
+
+  final String body;
+  final bool withDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    // 양끝 빈 줄만 제거하고 내부 "\n" 줄바꿈은 보존한다.
+    final lines = body.replaceAll('\r\n', '\n').trim().split('\n');
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 56),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          if (withDivider) ...[
+            Divider(color: cs.outlineVariant),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          Text(
+            '전체 요강',
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (final line in lines)
+            Text(
+              line.isEmpty ? ' ' : line,
+              style: tt.bodyMedium?.copyWith(
+                height: 1.55,
+                color: cs.onSurface,
               ),
             ),
         ],

@@ -12,6 +12,7 @@ import { DOMParser } from 'deno-dom';
 import {
   extractApplicationDeadline,
   extractDate,
+  extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
   extractVenue,
@@ -252,4 +253,87 @@ Deno.test('extractRegulationNotes falls back to text split when no <p> notes', (
     '<html><body><div>대회 안내 ※ 보험 가입함 ※ 우천 시 변경</div></body></html>',
   );
   assertEquals(extractRegulationNotes(dom), ['보험 가입함', '우천 시 변경']);
+});
+
+// =============================================================================
+// 대회 요강 완전 본문 — extractRegulationBody
+//
+// 콘텐츠표(화이트리스트 라벨 다수)를 행 구조를 살려 직렬화하되 fields/notes/배너/
+// 빈행을 제외한다. 신청현황표(참가부서/신청기간/63·192)는 표 단위로 제외.
+// =============================================================================
+
+// 실원본 모사: 신청현황표(TABLE 0) + 콘텐츠표(TABLE 1).
+const BODY_FIXTURE = `
+<html><body>
+<table>
+  <tr><td>참가부서</td><td>신청기간</td><td>경기일시</td><td>현재신청팀</td><td>신청하기</td><td>입금내역</td></tr>
+  <tr><td>남자일반부</td><td>2026년 6월 23일 ~ 7월 1일 [신청중]</td><td>2026년 7월 4일</td><td>63 / 192</td><td></td><td></td></tr>
+</table>
+<table>
+  <tr><td>『Sports 7330』 일주일에 3번</td></tr>
+  <tr><td>제5회 영암월출산배 전남 생활체육 테니스대회</td></tr>
+  <tr><td>풋 폴트를 하지 맙시다</td></tr>
+  <tr><td>일 시</td><td>2026년 7월 4일(토) / 남자일반부(09:00)</td></tr>
+  <tr><td>※ 우천 시 일정 추후 안내</td></tr>
+  <tr><td>장 소</td><td>영암종합스포츠타운테니스장</td></tr>
+  <tr><td>주 최</td><td>영암군 체육회</td></tr>
+  <tr><td>경기종목</td><td>경기일자</td><td>참가비 입금계좌</td></tr>
+  <tr><td>남자일반부(192팀)</td><td>7월 4일(토) 09시00분</td><td>입금계좌 : 농협 667-02-238327</td></tr>
+  <tr><td></td><td></td><td></td></tr>
+  <tr><td>참가신청 및접수마감</td><td>◈ 2026년 7월 1일 18:00까지</td></tr>
+  <tr><td>◈ 남자일반부</td></tr>
+  <tr><td>- 우 승 : 시상금 110만원</td></tr>
+</table>
+</body></html>
+`;
+
+Deno.test('extractRegulationBody serializes content table with row structure', () => {
+  const dom = parseFixture(BODY_FIXTURE);
+  const body = extractRegulationBody(dom, '제5회 영암월출산배 전남 생활체육 테니스대회');
+  assert(body !== null, 'body should not be null');
+  const lines = body!.split('\n');
+  // 2칸 → "라벨: 값" (라벨 내부 공백 정규화 "일 시" → "일시")
+  assert(
+    lines.includes('일시: 2026년 7월 4일(토) / 남자일반부(09:00)'),
+    `missing 일시 line: ${body}`,
+  );
+  // 3칸 → "셀1 | 셀2 | 셀3"
+  assert(
+    lines.includes('남자일반부(192팀) | 7월 4일(토) 09시00분 | 입금계좌 : 농협 667-02-238327'),
+    `missing 3-col line: ${body}`,
+  );
+  // 1칸 → 텍스트 그대로 (◈ 줄)
+  assert(lines.includes('◈ 남자일반부'), `missing 1-col ◈ line: ${body}`);
+  assert(lines.includes('- 우 승 : 시상금 110만원'), `missing 시상 detail: ${body}`);
+  // 비-화이트리스트 라벨 행은 "라벨: 값" 으로 보존 (접수마감)
+  assert(
+    lines.includes('참가신청및접수마감: ◈ 2026년 7월 1일 18:00까지'),
+    `missing 접수마감 line: ${body}`,
+  );
+});
+
+Deno.test('extractRegulationBody excludes fields, notes, banners, empty, application table', () => {
+  const dom = parseFixture(BODY_FIXTURE);
+  const body = extractRegulationBody(dom, '제5회 영암월출산배 전남 생활체육 테니스대회')!;
+  // (a) 화이트리스트 라벨 행 제외 (fields 와 중복 방지)
+  assert(!body.includes('장 소') && !body.includes('장소:'), `장소 leaked: ${body}`);
+  assert(!body.includes('주 최') && !body.includes('주최:'), `주최 leaked: ${body}`);
+  // (b) ※ 노트 행 제외
+  assert(!body.includes('※ 우천'), `※ note leaked: ${body}`);
+  // (c) 배너 행 제외 (『』, Sports 7330, 풋 폴트, title)
+  assert(!body.includes('Sports 7330'), `banner leaked: ${body}`);
+  assert(!body.includes('풋 폴트'), `풋 폴트 banner leaked: ${body}`);
+  assert(!body.includes('영암월출산배'), `title banner leaked: ${body}`);
+  // 신청현황표(TABLE 0) 전체 제외 — 라이브 카운트/헤더 없어야 함
+  assert(!body.includes('63 / 192'), `application count leaked: ${body}`);
+  assert(!body.includes('참가부서'), `application header leaked: ${body}`);
+  assert(!body.includes('신청기간'), `application header leaked: ${body}`);
+});
+
+Deno.test('extractRegulationBody returns null when no content table', () => {
+  // 화이트리스트 라벨이 없는 표뿐이면 콘텐츠표 후보 없음 → null.
+  const dom = parseFixture(
+    '<html><body><table><tr><td>아무 텍스트</td></tr></table></body></html>',
+  );
+  assertEquals(extractRegulationBody(dom), null);
 });

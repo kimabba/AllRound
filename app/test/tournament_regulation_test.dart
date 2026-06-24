@@ -93,6 +93,47 @@ void main() {
     });
   });
 
+  group('Tournament.fromJson — regulation_body', () {
+    test('정상: 여러 줄 문자열을 "\\n" 보존하여 파싱', () {
+      final body = '◈ 시상내역\n우승: 트로피\n준우승: 메달\n\n◎ 입금계좌\n123-456';
+      final j = _baseJson()..['regulation_body'] = body;
+      final t = Tournament.fromJson(j);
+      expect(t.regulationBody, body);
+      expect(t.regulationBody!.split('\n').length, 6);
+      expect(t.regulationBody, contains('◈'));
+    });
+
+    test('누락: regulation_body 없으면 null', () {
+      final t = Tournament.fromJson(_baseJson());
+      expect(t.regulationBody, isNull);
+    });
+
+    test('형식이상: 비문자열이면 null', () {
+      final j = _baseJson()..['regulation_body'] = 42;
+      final t = Tournament.fromJson(j);
+      expect(t.regulationBody, isNull);
+    });
+
+    test('형식이상: 빈/공백 문자열이면 null', () {
+      expect(
+        Tournament.fromJson(_baseJson()..['regulation_body'] = '')
+            .regulationBody,
+        isNull,
+      );
+      expect(
+        Tournament.fromJson(_baseJson()..['regulation_body'] = '   \n  ')
+            .regulationBody,
+        isNull,
+      );
+    });
+
+    test('내부 줄바꿈은 보존, 원문 유지', () {
+      final j = _baseJson()..['regulation_body'] = '첫 줄\n둘째 줄';
+      final t = Tournament.fromJson(j);
+      expect(t.regulationBody, '첫 줄\n둘째 줄');
+    });
+  });
+
   group('RegulationField.tryFromJson', () {
     test('비-Map 입력은 null', () {
       expect(RegulationField.tryFromJson('x'), isNull);

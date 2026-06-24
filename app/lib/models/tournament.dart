@@ -48,6 +48,8 @@ class Tournament {
   // 마이그레이션 073: 구조화 요강
   final List<RegulationField> regulationFields;
   final List<String> regulationNotes;
+  // 마이그레이션 074: 읽기 쉬운 완전 본문 (여러 줄, "\n" 보존)
+  final String? regulationBody;
 
   Tournament({
     required this.id,
@@ -76,6 +78,7 @@ class Tournament {
     this.futsalEventCategory,
     this.regulationFields = const [],
     this.regulationNotes = const [],
+    this.regulationBody,
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) {
@@ -110,6 +113,11 @@ class Tournament {
             .where((s) => s.isNotEmpty)
             .toList(growable: false)
         : const <String>[];
+
+    // regulation_body: 여러 줄 문자열. 비문자열/빈 문자열이면 null.
+    final rawBody = j['regulation_body'];
+    final regulationBody =
+        rawBody is String && rawBody.trim().isNotEmpty ? rawBody : null;
 
     return Tournament(
       id: j['id'] as String,
@@ -148,6 +156,7 @@ class Tournament {
           j['event_category'] as String?,
       regulationFields: regulationFields,
       regulationNotes: regulationNotes,
+      regulationBody: regulationBody,
     );
   }
 }

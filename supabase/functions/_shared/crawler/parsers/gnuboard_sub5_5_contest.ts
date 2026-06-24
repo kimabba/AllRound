@@ -25,6 +25,7 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractGJDivisions,
+  extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
   extractVenue,
@@ -185,6 +186,10 @@ async function fetchDetail(
   // split 에서 발생하던 표/상금표 run-on 오염을 방지한다 (dom 전달이 핵심).
   const regulationFields = extractRegulationFields(dom);
   const regulationNotes = extractRegulationNotes(dom);
+  // 완전 본문: 콘텐츠표 행 구조를 살려 fields/notes/배너 제외분(시상내역/참가자격/
+  // 경기일정+입금계좌/접수마감/경기방식 등)을 줄바꿈 본문으로 재구성. title 을
+  // 넘겨 배너 행(대회명) 제외에 사용한다.
+  const regulationBody = extractRegulationBody(dom, title);
 
   // ── 테이블 기반 날짜 추출 (신청기간 / 경기일시 컬럼 구분) ──
   // 테이블 헤더: 참가부서 | 신청기간 | 경기일시 | ...
@@ -209,11 +214,13 @@ async function fetchDetail(
       if (tds.length <= Math.max(matchDateColIdx, deadlineColIdx)) continue;
 
       if (matchDateColIdx >= 0 && !tableStartDate) {
-        const cellText = ((tds[matchDateColIdx] as unknown as { textContent: string }).textContent ?? '').trim();
+        const cellText =
+          ((tds[matchDateColIdx] as unknown as { textContent: string }).textContent ?? '').trim();
         tableStartDate = extractDate(cellText);
       }
       if (deadlineColIdx >= 0 && !tableDeadline) {
-        const cellText = ((tds[deadlineColIdx] as unknown as { textContent: string }).textContent ?? '').trim();
+        const cellText =
+          ((tds[deadlineColIdx] as unknown as { textContent: string }).textContent ?? '').trim();
         // 신청기간: "2026년 6월 22일 ~ 2026년 7월 01일 18시 까지" → 마지막 날짜가 마감일
         const allDates: string[] = [];
         const dateRegex = /(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/g;
@@ -257,7 +264,9 @@ async function fetchDetail(
   // ── 주최/주관 추출 ──
   // "주 최영암군 체육회" / "주최 : 광주테니스협회" — 공백이 섞여 있음
   let organizer: string | undefined;
-  const orgMatch = bodyText.match(/주\s*최\s*[:：]?\s*([가-힣A-Za-z0-9()（）\s]{2,30}?)(?:주\s*관|후\s*원|협\s*찬|참가비|$)/);
+  const orgMatch = bodyText.match(
+    /주\s*최\s*[:：]?\s*([가-힣A-Za-z0-9()（）\s]{2,30}?)(?:주\s*관|후\s*원|협\s*찬|참가비|$)/,
+  );
   if (orgMatch) {
     organizer = orgMatch[1].replace(/\s+/g, ' ').trim();
   }
@@ -328,6 +337,7 @@ async function fetchDetail(
     entry_fee: entryFee,
     regulation_fields: regulationFields.length > 0 ? regulationFields : undefined,
     regulation_notes: regulationNotes.length > 0 ? regulationNotes : undefined,
+    regulation_body: regulationBody ?? undefined,
   };
   return { rawHtml: html, tournament };
 }
