@@ -18,6 +18,10 @@ class ClubsScreen extends ConsumerStatefulWidget {
 }
 
 class _ClubsScreenState extends ConsumerState<ClubsScreen> {
+  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김. GPS 기반 재구현 예정 (#97).
+  // false → 섹션 미노출. 코드·헬퍼는 보존하므로 true 로 되돌리면 복구됨.
+  final bool _nearbyNewClubsEnabled = false;
+
   // 내 클럽 탭
   List<Club>? _myClubs;
   bool _loadingMy = false;
@@ -185,40 +189,43 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             ),
             sliver: SliverList.list(
               children: [
-                _SimplePanel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SimpleSectionHeader(
-                        title: '내 주변에 새로 생겼어요',
-                        subtitle: '반경 5km · 최근 7일',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      if (_loading || _loadingMy)
-                        const LinearProgressIndicator(),
-                      if (_searchError != null) ...[
+                // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
+                if (_nearbyNewClubsEnabled) ...[
+                  _SimplePanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _SimpleSectionHeader(
+                          title: '내 주변에 새로 생겼어요',
+                          subtitle: '반경 5km · 최근 7일',
+                        ),
                         const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          _searchError!,
-                          style: TextStyle(color: cs.error),
+                        if (_loading || _loadingMy)
+                          const LinearProgressIndicator(),
+                        if (_searchError != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _searchError!,
+                            style: TextStyle(color: cs.error),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.sm),
+                        _SimpleClubGrid(clubs: newClubs),
+                        const SizedBox(height: AppSpacing.md),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                _openNearbyNewClubsSheet(nearbyNewClubs),
+                            icon: const Icon(Icons.near_me_rounded),
+                            label: const Text('내 주변 새 클럽 더보기'),
+                          ),
                         ),
                       ],
-                      const SizedBox(height: AppSpacing.sm),
-                      _SimpleClubGrid(clubs: newClubs),
-                      const SizedBox(height: AppSpacing.md),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              _openNearbyNewClubsSheet(nearbyNewClubs),
-                          icon: const Icon(Icons.near_me_rounded),
-                          label: const Text('내 주변 새 클럽 더보기'),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 _SimpleActionCard(
                   icon: Icons.location_on_rounded,
                   title: '맞춤 조건 설정',
