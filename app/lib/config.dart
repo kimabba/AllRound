@@ -53,6 +53,15 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// 로컬 관리자 모드 (`make admin` → `--dart-define=ADMIN_MODE=true`).
+  /// 로그인 화면을 관리자용으로 보여준다(컨슈머 카카오·마케팅·온보딩 카피 숨김,
+  /// 이메일·구글 로그인만). 실제 관리자 권한은 서버 RLS/Edge(`users.role='admin'`)가
+  /// 진실의 원천 — 이 플래그는 UI 표시용일 뿐 권한을 부여하지 않는다.
+  static const adminMode = bool.fromEnvironment(
+    'ADMIN_MODE',
+    defaultValue: false,
+  );
+
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
