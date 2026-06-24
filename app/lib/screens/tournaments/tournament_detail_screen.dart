@@ -979,17 +979,29 @@ class _RegulationPlainText extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final style = tt.bodySmall?.copyWith(
+      height: 1.6,
+      color: cs.onSurfaceVariant,
+    );
+    // 카드와 중복되는 메타라인 제거 + 부서 접수 항목 줄바꿈.
+    final lines = cleanPlainRegulationLines(description);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.sm,
       ),
-      child: Text(
-        description.trim(),
-        style: tt.bodySmall?.copyWith(
-          height: 1.6,
-          color: cs.onSurfaceVariant,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (lines.isEmpty)
+            Text(description.trim(), style: style)
+          else
+            for (var i = 0; i < lines.length; i++)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpacing.xs),
+                child: Text(lines[i], style: style),
+              ),
+        ],
       ),
     );
   }

@@ -122,4 +122,28 @@ void main() {
       expect(parseRegulationBody('   \n  \n'), isEmpty);
     });
   });
+
+  group('cleanPlainRegulationLines (단순 공고 평문 폴백)', () {
+    test('중복 메타라인 제거 + 부서 접수 항목 줄바꿈', () {
+      const desc =
+          '참가부서: 오픈부 · 일반부 | 신청마감: 2026-06-24 | 대회일: 2026-06-27 | 지역: 전남\n\n'
+          '전라남도테니스협회  제19회 전라남도지사기 시, 군 테니스대회  선수 변경시 대기 마지막(대기) 순으로 변경됩니다. 이점 참고하여 신중하게 신청 바랍니다  '
+          '남자단체전 2026년 6월 01일 ~ 2026년 6월 24일 1800시 까지  2026년 6월 27일 21 / 90  '
+          '여자단체전 2026년 6월 01일 ~ 2026년 6월 24일 1800시 까지  2026년 6월 27일 21 / 90';
+      final lines = cleanPlainRegulationLines(desc);
+      expect(lines.any((l) => l.startsWith('참가부서:')), isFalse);
+      expect(lines.where((l) => l.startsWith('남자단체전')).length, 1);
+      expect(lines.where((l) => l.startsWith('여자단체전')).length, 1);
+      expect(lines.first.contains('전라남도테니스협회'), isTrue);
+      expect(lines.every((l) => !l.contains('  ')), isTrue);
+    });
+
+    test('메타라인 없는 평문은 그대로 한 줄', () {
+      expect(cleanPlainRegulationLines('준비 중인 대회입니다.'), ['준비 중인 대회입니다.']);
+    });
+
+    test('빈/공백 → 빈 리스트', () {
+      expect(cleanPlainRegulationLines('   '), isEmpty);
+    });
+  });
 }

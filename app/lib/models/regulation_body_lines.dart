@@ -196,3 +196,42 @@ List<RegulationLine> _classify(String line) {
   // 7) 일반 문단
   return [RegulationLine(kind: RegulationLineKind.paragraph, text: line)];
 }
+
+// 메타라인 머리("참가부서:" 등) — 카드와 중복되는 줄 판정용.
+final _metaLineHead = RegExp(r'^(참가부서|신청마감|접수마감|대회일|지역)\s*:');
+
+// 부서별 접수 항목 시작 직전("… 남자단체전 2026년 …")의 공백.
+final _beforeDivisionEntry = RegExp(
+  r'\s+(?=(?:남자|여자)?(?:단체전|일반부|오픈부|신인부|골드부|지도자부|'
+  r'마스터즈부|베테랑부|크로스대회)\s*\d{4}\s*년)',
+);
+
+/// 구조화 데이터가 없는 단순 공고의 평문 description 을 보기 좋게 정리한다.
+/// - 카드와 중복되는 메타라인("참가부서:.. | 신청마감:.. | 대회일:.. | 지역:..") 제거
+/// - 부서별 접수 항목("남자단체전 2026년 …") 앞에서 줄바꿈
+/// 마커가 없는 일반 텍스트는 문단을 그대로 유지(과한 가공 금지).
+/// 정리 결과가 비면 빈 리스트 → 호출부는 원문 폴백.
+List<String> cleanPlainRegulationLines(String description) {
+  final normalized = description.replaceAll('\r\n', '\n').trim();
+  if (normalized.isEmpty) return const [];
+
+  // 1) 중복 메타라인 제거: 빈 줄로 나눈 첫 블록이 메타라인이면 버린다.
+  final blocks = normalized.split(RegExp(r'\n{2,}'));
+  if (blocks.length > 1 &&
+      blocks.first.contains(' | ') &&
+      _metaLineHead.hasMatch(blocks.first.trim())) {
+    blocks.removeAt(0);
+  }
+  var body = blocks.join('\n\n').trim();
+  if (body.isEmpty) return const [];
+
+  // 2) 부서 접수 항목 앞에서 줄바꿈.
+  body = body.replaceAll(_beforeDivisionEntry, '\n');
+
+  // 3) 줄 단위 공백 정규화.
+  return body
+      .split('\n')
+      .map((l) => l.replaceAll(RegExp(r'[ \t]+'), ' ').trim())
+      .where((l) => l.isNotEmpty)
+      .toList(growable: false);
+}
