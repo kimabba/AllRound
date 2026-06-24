@@ -3,15 +3,22 @@
 class ClubMember {
   final String userId;
   final String role; // 'owner' | 'manager' | 'member'
+  final bool canCreateEvent;
+  final bool canPostNotice;
   final String? displayName;
   final DateTime? joinedAt;
 
   ClubMember({
     required this.userId,
     required this.role,
+    this.canCreateEvent = false,
+    this.canPostNotice = false,
     this.displayName,
     this.joinedAt,
   });
+
+  bool get isOwner => role == 'owner';
+  bool get isManager => role == 'manager';
 
   String get roleLabel => switch (role) {
         'owner' => '클럽장',
@@ -24,6 +31,8 @@ class ClubMember {
     return ClubMember(
       userId: j['user_id'] as String,
       role: (j['role'] as String?) ?? 'member',
+      canCreateEvent: (j['can_create_event'] as bool?) ?? false,
+      canPostNotice: (j['can_post_notice'] as bool?) ?? false,
       displayName: user?['name'] as String?,
       joinedAt: j['joined_at'] != null
           ? DateTime.tryParse(j['joined_at'] as String)

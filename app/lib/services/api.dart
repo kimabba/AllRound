@@ -436,6 +436,49 @@ class ApiService {
     _check(res);
   }
 
+  Future<void> setClubMemberRole({
+    required String clubId,
+    required String targetUserId,
+    required String role,
+  }) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'set_manager',
+        'target_user_id': targetUserId,
+        'role': role,
+      }),
+    );
+    _check(res);
+  }
+
+  Future<void> updateClubMonthlyFee(String clubId, int? monthlyFee) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'update_monthly_fee',
+        'monthly_fee': monthlyFee,
+      }),
+    );
+    _check(res);
+  }
+
+  Future<void> deleteClub(String clubId) async {
+    final res = await http.post(
+      _uri('clubs-join'),
+      headers: await _authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'delete_club',
+      }),
+    );
+    _check(res);
+  }
+
   /// 클럽 가입 신청 목록 조회 (owner/manager 전용).
   Future<List<Map<String, dynamic>>> pendingJoinRequests(String clubId) async {
     final rows = await _supabase
@@ -467,7 +510,9 @@ class ApiService {
   Future<List<ClubMember>> clubMembers(String clubId) async {
     final rows = await _supabase
         .from('club_members')
-        .select('user_id, role, joined_at, users(name)')
+        .select(
+          'user_id, role, can_create_event, can_post_notice, joined_at, users(name)',
+        )
         .eq('club_id', clubId)
         .eq('status', 'active')
         .order('joined_at');
