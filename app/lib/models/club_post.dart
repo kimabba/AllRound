@@ -3,7 +3,7 @@ class ClubPost {
   final String clubId;
   final String authorId;
   final String? authorName;
-  final String tag; // notice, free, recruit, photo
+  final String tag; // notice, event, free, recruit, photo
   final String title;
   final String body;
   final List<String> imageUrls;
@@ -44,12 +44,15 @@ class ClubPost {
   }
 
   String get tagLabel => switch (tag) {
-    'notice' => '공지',
-    'free' => '자유',
-    'recruit' => '모집',
-    'photo' => '사진',
-    _ => tag,
-  };
+        'notice' => '공지',
+        'event' => '일정',
+        'free' => '일반',
+        'recruit' => '모집',
+        'photo' => '사진',
+        _ => tag,
+      };
+
+  bool get shouldNotifyMembers => tag == 'notice' || tag == 'event';
 }
 
 class ClubPostComment {

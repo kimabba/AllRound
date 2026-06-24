@@ -538,6 +538,16 @@ class ApiService {
         .toList();
   }
 
+  Future<ClubEvent> clubEvent(String eventId) async {
+    final row = await _supabase
+        .from('club_events')
+        .select('*, club_event_attendees(user_id, status)')
+        .eq('id', eventId)
+        .single();
+    final uid = _supabase.auth.currentUser?.id;
+    return ClubEvent.fromJson(row, currentUserId: uid);
+  }
+
   /// 모임 생성.
   Future<void> createClubEvent({
     required String clubId,
@@ -961,6 +971,15 @@ class ApiService {
     if (tag != null) query = query.eq('tag', tag);
     final rows = await query.order('created_at', ascending: false).limit(50);
     return rows.map((r) => ClubPost.fromJson(r)).toList();
+  }
+
+  Future<ClubPost> clubPost(String postId) async {
+    final row = await _supabase
+        .from('club_posts')
+        .select('*, users!author_id(name), club_post_comments(id)')
+        .eq('id', postId)
+        .single();
+    return ClubPost.fromJson(row);
   }
 
   Future<ClubPost> createPost({

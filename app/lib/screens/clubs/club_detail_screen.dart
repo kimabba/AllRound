@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
@@ -1683,10 +1684,66 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   bool _loading = true;
   String? _activeTag;
 
+  bool get _canWriteNotice => widget.club.isOwner;
+  bool get _canWriteEvent => widget.club.isManager;
+  bool get _canWritePost => widget.club.isMember;
+  bool get _canDeletePost => widget.club.isOwner;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _createPost() async {
+    final post = await showModalBottomSheet<ClubPost>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _PostCreateSheet(
+        club: widget.club,
+        canWriteNotice: _canWriteNotice,
+        canWriteEvent: _canWriteEvent,
+      ),
+    );
+    if (post == null || !mounted) return;
+    setState(() => _activeTag = null);
+    await _load();
+  }
+
+  Future<void> _deletePost(ClubPost post) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('게시글 삭제'),
+        content: Text('${post.title} 글을 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(apiProvider).deletePost(post.id);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('게시글을 삭제했습니다')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -1711,55 +1768,65 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
-          height: 56,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.sm,
-            ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.xs,
+          ),
+          child: Row(
             children: [
-              _TagChip(
-                label: '전체',
-                selected: _activeTag == null,
-                onTap: () {
-                  _activeTag = null;
-                  _load();
-                },
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _TagChip(
+                        label: '전체',
+                        selected: _activeTag == null,
+                        onTap: () {
+                          _activeTag = null;
+                          _load();
+                        },
+                      ),
+                      _TagChip(
+                        label: '공지',
+                        selected: _activeTag == 'notice',
+                        onTap: () {
+                          _activeTag = 'notice';
+                          _load();
+                        },
+                      ),
+                      _TagChip(
+                        label: '일정',
+                        selected: _activeTag == 'event',
+                        onTap: () {
+                          _activeTag = 'event';
+                          _load();
+                        },
+                      ),
+                      _TagChip(
+                        label: '일반',
+                        selected: _activeTag == 'free',
+                        onTap: () {
+                          _activeTag = 'free';
+                          _load();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              _TagChip(
-                label: '공지',
-                selected: _activeTag == 'notice',
-                onTap: () {
-                  _activeTag = 'notice';
-                  _load();
-                },
-              ),
-              _TagChip(
-                label: '자유',
-                selected: _activeTag == 'free',
-                onTap: () {
-                  _activeTag = 'free';
-                  _load();
-                },
-              ),
-              _TagChip(
-                label: '모집',
-                selected: _activeTag == 'recruit',
-                onTap: () {
-                  _activeTag = 'recruit';
-                  _load();
-                },
-              ),
-              _TagChip(
-                label: '사진',
-                selected: _activeTag == 'photo',
-                onTap: () {
-                  _activeTag = 'photo';
-                  _load();
-                },
-              ),
+              if (_canWritePost) ...[
+                const SizedBox(width: AppSpacing.sm),
+                FilledButton.icon(
+                  onPressed: _createPost,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('글쓰기'),
+                ),
+              ],
             ],
           ),
         ),
@@ -1778,7 +1845,11 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
                     itemCount: _posts!.length,
                     itemBuilder: (_, i) => Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _PostRow(post: _posts![i]),
+                      child: _PostRow(
+                        post: _posts![i],
+                        canDelete: _canDeletePost,
+                        onDelete: () => _deletePost(_posts![i]),
+                      ),
                     ),
                   ),
                 ),
@@ -1808,9 +1879,187 @@ class _TagChip extends StatelessWidget {
   }
 }
 
+class _PostCreateSheet extends ConsumerStatefulWidget {
+  final Club club;
+  final bool canWriteNotice;
+  final bool canWriteEvent;
+
+  const _PostCreateSheet({
+    required this.club,
+    required this.canWriteNotice,
+    required this.canWriteEvent,
+  });
+
+  @override
+  ConsumerState<_PostCreateSheet> createState() => _PostCreateSheetState();
+}
+
+class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  bool _busy = false;
+  late String _tag;
+
+  @override
+  void initState() {
+    super.initState();
+    _tag = widget.canWriteNotice
+        ? 'notice'
+        : (widget.canWriteEvent ? 'event' : 'free');
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  List<_PostTagChoice> get _choices => [
+        if (widget.canWriteNotice)
+          const _PostTagChoice(
+            tag: 'notice',
+            label: '공지',
+            description: '클럽 멤버에게 알림이 갑니다',
+          ),
+        if (widget.canWriteEvent)
+          const _PostTagChoice(
+            tag: 'event',
+            label: '일정',
+            description: '클럽 멤버에게 알림이 갑니다',
+          ),
+        const _PostTagChoice(
+          tag: 'free',
+          label: '일반',
+          description: '게시판에만 표시됩니다',
+        ),
+      ];
+
+  Future<void> _submit() async {
+    final title = _title.text.trim();
+    final body = _body.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('제목과 내용을 입력해주세요')),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final post = await ref.read(apiProvider).createPost(
+            clubId: widget.club.id,
+            tag: _tag,
+            title: title,
+            body: body,
+          );
+      if (mounted) Navigator.pop(context, post);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('게시글 등록 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final tt = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg + bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '게시글 작성',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: _choices
+                  .map(
+                    (choice) => ChoiceChip(
+                      label: Text(choice.label),
+                      selected: _tag == choice.tag,
+                      onSelected: (_) => setState(() => _tag = choice.tag),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _choices.firstWhere((choice) => choice.tag == _tag).description,
+              style: tt.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(labelText: '제목'),
+              maxLength: 80,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _body,
+              decoration: const InputDecoration(labelText: '내용'),
+              minLines: 5,
+              maxLines: 8,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+              ),
+              child: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('등록'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostTagChoice {
+  final String tag;
+  final String label;
+  final String description;
+
+  const _PostTagChoice({
+    required this.tag,
+    required this.label,
+    required this.description,
+  });
+}
+
 class _PostRow extends StatelessWidget {
   final ClubPost post;
-  const _PostRow({required this.post});
+  final bool canDelete;
+  final VoidCallback onDelete;
+
+  const _PostRow({
+    required this.post,
+    required this.canDelete,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1818,62 +2067,81 @@ class _PostRow extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return AppCard(
       variant: AppCardVariant.outlined,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => context.push('/clubs/${post.clubId}/posts/${post.id}'),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: post.tag == 'notice'
-                            ? cs.errorContainer
-                            : cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(AppRadius.xs),
-                      ),
-                      child: Text(
-                        post.tagLabel,
-                        style: tt.labelSmall?.copyWith(
-                          color: post.tag == 'notice'
-                              ? cs.onErrorContainer
-                              : cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: post.tag == 'notice'
+                                ? cs.errorContainer
+                                : (post.tag == 'event'
+                                    ? cs.primaryContainer
+                                    : cs.surfaceContainerHighest),
+                            borderRadius: BorderRadius.circular(AppRadius.xs),
+                          ),
+                          child: Text(
+                            post.tagLabel,
+                            style: tt.labelSmall?.copyWith(
+                              color: post.tag == 'notice'
+                                  ? cs.onErrorContainer
+                                  : (post.tag == 'event'
+                                      ? cs.onPrimaryContainer
+                                      : cs.onSurfaceVariant),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            post.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        post.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              if (post.imageUrls.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Icon(Icons.image_rounded, size: 18, color: cs.onSurfaceVariant),
+              ],
+              if (canDelete) ...[
+                const SizedBox(width: AppSpacing.xs),
+                IconButton(
+                  tooltip: '삭제',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded),
                 ),
               ],
-            ),
+            ],
           ),
-          if (post.imageUrls.isNotEmpty) ...[
-            const SizedBox(width: AppSpacing.sm),
-            Icon(Icons.image_rounded, size: 18, color: cs.onSurfaceVariant),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -1885,6 +2153,261 @@ class _PostRow extends StatelessWidget {
     if (diff.inDays < 1) return '${diff.inHours}시간 전';
     if (diff.inDays < 7) return '${diff.inDays}일 전';
     return '${dt.month}/${dt.day}';
+  }
+}
+
+class ClubPostDetailScreen extends ConsumerStatefulWidget {
+  final String postId;
+
+  const ClubPostDetailScreen({super.key, required this.postId});
+
+  @override
+  ConsumerState<ClubPostDetailScreen> createState() =>
+      _ClubPostDetailScreenState();
+}
+
+class _ClubPostDetailScreenState extends ConsumerState<ClubPostDetailScreen> {
+  late Future<ClubPost> _postF;
+
+  @override
+  void initState() {
+    super.initState();
+    _postF = ref.read(apiProvider).clubPost(widget.postId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('게시글')),
+      body: FutureBuilder<ClubPost>(
+        future: _postF,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final post = snap.data;
+          if (post == null) {
+            return const _EmptyState(
+              icon: Icons.forum_outlined,
+              title: '게시글을 찾을 수 없습니다',
+              message: '삭제되었거나 접근 권한이 없는 글입니다.',
+            );
+          }
+          final isNotice = post.tag == 'notice';
+          final isEvent = post.tag == 'event';
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isNotice
+                          ? cs.errorContainer
+                          : (isEvent
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerHighest),
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
+                    ),
+                    child: Text(
+                      post.tagLabel,
+                      style: tt.labelMedium?.copyWith(
+                        color: isNotice
+                            ? cs.onErrorContainer
+                            : (isEvent
+                                ? cs.onPrimaryContainer
+                                : cs.onSurfaceVariant),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  if (post.shouldNotifyMembers) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Icon(
+                      Icons.notifications_active_outlined,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '알림 대상',
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                post.title,
+                style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                '${post.authorName ?? '익명'} · ${_fmtDateTime(post.createdAt)}',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppCard(
+                variant: AppCardVariant.outlined,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Text(
+                  post.body,
+                  style: tt.bodyLarge?.copyWith(height: 1.55),
+                ),
+              ),
+              if (post.imageUrls.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                AppCard(
+                  variant: AppCardVariant.outlined,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Icon(Icons.image_rounded, color: cs.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text('첨부 이미지 ${post.imageUrls.length}장'),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class ClubEventDetailScreen extends ConsumerStatefulWidget {
+  final String eventId;
+
+  const ClubEventDetailScreen({super.key, required this.eventId});
+
+  @override
+  ConsumerState<ClubEventDetailScreen> createState() =>
+      _ClubEventDetailScreenState();
+}
+
+class _ClubEventDetailScreenState extends ConsumerState<ClubEventDetailScreen> {
+  late Future<ClubEvent> _eventF;
+
+  @override
+  void initState() {
+    super.initState();
+    _eventF = ref.read(apiProvider).clubEvent(widget.eventId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('일정')),
+      body: FutureBuilder<ClubEvent>(
+        future: _eventF,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final event = snap.data;
+          if (event == null) {
+            return const _EmptyState(
+              icon: Icons.event_busy_rounded,
+              title: '일정을 찾을 수 없습니다',
+              message: '삭제되었거나 접근 권한이 없는 일정입니다.',
+            );
+          }
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            children: [
+              AppCard(
+                variant: AppCardVariant.outlined,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
+                      ),
+                      child: Text(
+                        '일정',
+                        style: tt.labelMedium?.copyWith(
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      event.title,
+                      style: tt.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _InfoLine(
+                      icon: Icons.calendar_today_rounded,
+                      text: _fmtDateTime(event.startsAt),
+                    ),
+                    if ((event.locationText ?? '').isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _InfoLine(
+                        icon: Icons.place_outlined,
+                        text: event.locationText!,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    _InfoLine(
+                      icon: Icons.group_rounded,
+                      text: '참석 ${event.goingCount}명',
+                    ),
+                    if ((event.description ?? '').isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        event.description!,
+                        style: tt.bodyLarge?.copyWith(height: 1.5),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _InfoLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: cs.primary),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(text)),
+      ],
+    );
   }
 }
 

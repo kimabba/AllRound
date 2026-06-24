@@ -158,6 +158,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => ClubDetailScreen(club: state.extra as Club),
       ),
       GoRoute(
+        path: '/clubs/:clubId/posts/:postId',
+        builder: (_, state) => ClubPostDetailScreen(
+          postId: state.pathParameters['postId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/clubs/:clubId/events/:eventId',
+        builder: (_, state) => ClubEventDetailScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
+      ),
+      GoRoute(
         path: '/tournaments/:id',
         builder: (_, state) =>
             TournamentDetailScreen(tournamentId: state.pathParameters['id']!),
