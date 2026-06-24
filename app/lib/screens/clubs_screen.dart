@@ -221,6 +221,18 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     _clubNameQuery = value;
                   }),
                 ),
+                const SizedBox(height: AppSpacing.md),
+                _SimpleActionCard(
+                  icon: Icons.location_on_rounded,
+                  title: '맞춤 조건 설정',
+                  subtitle: [
+                    _selectedSportLabel(_clubInterests),
+                    ..._clubFilters.labels,
+                  ].join(' · '),
+                  action: '설정',
+                  color: const Color(0xFFEAF7F1),
+                  onTap: _openClubFilterSheet,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 _SimpleSectionHeader(
                   title: hasClubNameQuery ? '검색결과' : '맞춤추천',
@@ -294,18 +306,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                _SimpleActionCard(
-                  icon: Icons.location_on_rounded,
-                  title: '맞춤 조건 설정',
-                  subtitle: [
-                    _selectedSportLabel(_clubInterests),
-                    ..._clubFilters.labels,
-                  ].join(' · '),
-                  action: '설정',
-                  color: const Color(0xFFEAF7F1),
-                  onTap: _openClubFilterSheet,
-                ),
-                const SizedBox(height: AppSpacing.xl),
                 if (managedClubs.isNotEmpty) ...[
                   _SimpleActionCard(
                     icon: Icons.person_add_alt_1_rounded,
