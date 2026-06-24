@@ -10,6 +10,7 @@ import '../utils/club_labels.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/club_avatar.dart';
 import 'clubs/club_create_screen.dart';
 
 typedef _ClubFavoriteToggle = Future<void> Function(
@@ -38,6 +39,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   bool _loading = false;
   String? _searchError;
   _ClubSearchFilters _clubFilters = const _ClubSearchFilters();
+  String _clubNameQuery = '';
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
   final Set<String> _closedRecruitingPostIds = {};
@@ -178,11 +180,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final effectiveClubs = _clubs ?? _previewSearchClubs;
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
+        .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
         .where((club) => _matchesClubFilters(club, _clubFilters))
         .toList();
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
     final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
+    final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final joinedClubs = (_myClubs ?? _previewManagedClubs)
         .where((club) => club.isMember)
         .toList();
@@ -211,6 +215,44 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             ),
             sliver: SliverList.list(
               children: [
+                _ClubSearchField(
+                  value: _clubNameQuery,
+                  onChanged: (value) => setState(() {
+                    _clubNameQuery = value;
+                  }),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _SimpleSectionHeader(
+                  title: hasClubNameQuery ? '검색결과' : '맞춤추천',
+                  subtitle: hasClubNameQuery
+                      ? '"${_clubNameQuery.trim()}"'
+                      : _clubFilters.hasActive
+                          ? [
+                              _selectedSportLabel(_clubInterests),
+                              ..._clubFilters.labels,
+                            ].join(' · ')
+                          : '${_selectedSportLabel(_clubInterests)} 기준',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (recommendedClubs.isEmpty)
+                  AppEmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: hasClubNameQuery ? '검색된 클럽이 없습니다' : '추천할 클럽이 없습니다',
+                    description: hasClubNameQuery
+                        ? '다른 단어로 다시 검색해 보세요.'
+                        : '맞춤 조건을 조정해 보세요.',
+                  )
+                else
+                  for (final club in recommendedClubs.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: _SimpleClubTile(
+                        club: club,
+                        isFavorite: favoriteClubIds.contains(club.id),
+                        onFavoriteToggle: _toggleClubFavorite,
+                      ),
+                    ),
+                const SizedBox(height: AppSpacing.lg),
                 // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
                 if (_nearbyNewClubsEnabled) ...[
                   _SimplePanel(
@@ -306,26 +348,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       : favoriteClubIds.contains(joinedClubs.first.id),
                   onFavoriteToggle: _toggleClubFavorite,
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                _SimpleSectionHeader(
-                  title: '맞춤추천',
-                  subtitle: _clubFilters.hasActive
-                      ? [
-                          _selectedSportLabel(_clubInterests),
-                          ..._clubFilters.labels,
-                        ].join(' · ')
-                      : '${_selectedSportLabel(_clubInterests)} 기준',
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final club in recommendedClubs.take(3))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: _SimpleClubTile(
-                      club: club,
-                      isFavorite: favoriteClubIds.contains(club.id),
-                      onFavoriteToggle: _toggleClubFavorite,
-                    ),
-                  ),
               ],
             ),
           ),
@@ -644,6 +666,78 @@ final _previewSearchClubs = [
     createdAt: DateTime.now().subtract(const Duration(days: 21)),
   ),
 ];
+
+class _ClubSearchField extends StatefulWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ClubSearchField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ClubSearchField> createState() => _ClubSearchFieldState();
+}
+
+class _ClubSearchFieldState extends State<_ClubSearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ClubSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.text = widget.value;
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.value.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '클럽 이름 검색',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: widget.value.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '검색어 지우기',
+                onPressed: () => widget.onChanged(''),
+                icon: const Icon(Icons.close_rounded),
+              ),
+        filled: true,
+        fillColor: cs.surfaceContainerLowest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+      ),
+    );
+  }
+}
 
 class _SimpleSectionHeader extends StatelessWidget {
   final String title;
@@ -2155,92 +2249,8 @@ class _SimpleClubAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spec = _clubLogoSpec(club);
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: spec.background,
-        borderRadius: BorderRadius.circular(size * 0.22),
-      ),
-      child: Icon(
-        spec.icon,
-        color: spec.foreground,
-        size: size * 0.48,
-      ),
-    );
+    return ClubAvatar(club: club, size: size);
   }
-
-  _ClubLogoSpec _clubLogoSpec(Club club) {
-    final name = club.name;
-    if (name.contains('리얼')) {
-      return const _ClubLogoSpec(
-        icon: Icons.shield_rounded,
-        background: Color(0xFFE8F2FF),
-        foreground: Color(0xFF2563EB),
-      );
-    }
-    if (name.contains('올라운드')) {
-      return const _ClubLogoSpec(
-        icon: Icons.all_inclusive_rounded,
-        background: Color(0xFFEAF7F1),
-        foreground: Color(0xFF059669),
-      );
-    }
-    if (name.contains('위너스')) {
-      return const _ClubLogoSpec(
-        icon: Icons.emoji_events_rounded,
-        background: Color(0xFFFFF4D6),
-        foreground: Color(0xFFF59E0B),
-      );
-    }
-    if (name.contains('랠리')) {
-      return const _ClubLogoSpec(
-        icon: Icons.sports_tennis_rounded,
-        background: Color(0xFFFFF0D8),
-        foreground: Color(0xFFFF7A1A),
-      );
-    }
-    if (name.contains('첨단')) {
-      return const _ClubLogoSpec(
-        icon: Icons.bolt_rounded,
-        background: Color(0xFFEDE9FE),
-        foreground: Color(0xFF7C3AED),
-      );
-    }
-    if (name.contains('주말')) {
-      return const _ClubLogoSpec(
-        icon: Icons.wb_sunny_rounded,
-        background: Color(0xFFFFF7ED),
-        foreground: Color(0xFFEA580C),
-      );
-    }
-    if (club.sport == 'tennis') {
-      return const _ClubLogoSpec(
-        icon: Icons.sports_tennis_rounded,
-        background: Color(0xFFFFF0D8),
-        foreground: Color(0xFFFF7A1A),
-      );
-    }
-    return const _ClubLogoSpec(
-      icon: Icons.sports_soccer_rounded,
-      background: Color(0xFFE8F6D6),
-      foreground: Color(0xFF7DCD18),
-    );
-  }
-}
-
-class _ClubLogoSpec {
-  final IconData icon;
-  final Color background;
-  final Color foreground;
-
-  const _ClubLogoSpec({
-    required this.icon,
-    required this.background,
-    required this.foreground,
-  });
 }
 
 class _ClubSearchFilters {
