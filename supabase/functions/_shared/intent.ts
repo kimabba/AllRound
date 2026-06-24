@@ -291,7 +291,10 @@ export function extractSlots(text: string, now: Date = new Date()): Slots {
 //
 // 매칭 정확도가 부족한 케이스는 의도적으로 null 반환 → 임베딩/폴백으로 넘김.
 // 카테고리 정확도 < 룰 누락 (recall) 우선 — false positive 보다 false negative 가 안전.
-const TOURNAMENT_KW = /(대회|토너먼트|시합|컵|오픈|선수권)/;
+// "장배" 는 회장배·협회장배·시장배·구청장배·이사장배·위원장배 등 "~장배" 대회명을 모두 커버.
+// "회장기·협회장기·장관기" 는 "~기" 대회명 (단독 "기" 는 false positive 과다 → 한정).
+// recall 우선 정책상 "성장배경" 등 드문 오매칭은 감수 (false negative > false positive 회피).
+const TOURNAMENT_KW = /(대회|토너먼트|시합|컵|오픈|선수권|장배|회장기|협회장기|장관기|왕중왕전)/;
 const CLUB_KW = /(클럽|동호회|동호인\s*모임)/;
 const RULE_KW = /(룰|규칙|규정|규약|룰북)/;
 const VENUE_KW = /(구장|풋살장|테니스장|경기장|연습장|코트|체육관|실내.*장|실외.*장)/;
