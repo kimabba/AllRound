@@ -90,6 +90,14 @@ class ChatTournamentCard extends StatelessWidget {
               tt: tt,
             ),
           ],
+          if (item.regulationFields.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _RegulationSummary(
+              fields: item.regulationFields,
+              cs: cs,
+              tt: tt,
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             width: double.infinity,
@@ -100,6 +108,55 @@ class ChatTournamentCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 요강 요약 — 라벨/값 칩 2~3개를 작게 wrap 으로 표시. 카드가 길어지지 않게 한다.
+class _RegulationSummary extends StatelessWidget {
+  final List<RegulationField> fields;
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  const _RegulationSummary({
+    required this.fields,
+    required this.cs,
+    required this.tt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        for (final f in fields)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: AppRadius.pill,
+            ),
+            child: RichText(
+              text: TextSpan(
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                children: [
+                  TextSpan(text: '${f.label} '),
+                  TextSpan(
+                    text: f.value,
+                    style: tt.labelSmall?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

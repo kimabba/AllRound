@@ -1,6 +1,11 @@
 // Chat a2ui 카드 빌더 + selected_entity 검증 (순수 함수, 테스트 대상).
 // 권한 판정은 호출자(Edge Function)가 담당. 여기서는 표시-안전 변환과 형식 검증만 한다.
 
+import { normalizeRegulationFields, type RegulationField } from './regulation.ts';
+
+// 카드에 노출할 요강 라벨:값 최대 개수 (카드가 과도하게 길어지지 않도록).
+const MAX_CARD_REGULATION_FIELDS = 3;
+
 export interface TournamentCardRow {
   id: string;
   sport: 'tennis' | 'futsal';
@@ -13,6 +18,8 @@ export interface TournamentCardRow {
   eligible_grades: string[];
   entry_fee: number | null;
   format: string | null;
+  // 요강(migration 077/078): jsonb 라서 unknown 으로 받아 buildTournamentCards 에서 narrow.
+  regulation_fields?: unknown;
 }
 
 export interface TournamentCardItem {
@@ -28,6 +35,8 @@ export interface TournamentCardItem {
   eligible_grades: string[];
   entry_fee: number | null;
   format: string | null;
+  // 프론트 카드(chat_tournament_card.dart)가 렌더하는 요강 요약 (최대 3개).
+  regulation_fields: RegulationField[];
 }
 
 export interface DateRange {
@@ -59,6 +68,11 @@ export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardI
     eligible_grades: r.eligible_grades ?? [],
     entry_fee: r.entry_fee,
     format: r.format,
+    // 요강 jsonb → RegulationField[] narrow 후 상위 3개만 카드에 노출.
+    regulation_fields: normalizeRegulationFields(r.regulation_fields).slice(
+      0,
+      MAX_CARD_REGULATION_FIELDS,
+    ),
   }));
 }
 

@@ -43,6 +43,67 @@ Deno.test('buildTournamentCards returns empty array for empty input', () => {
   assertEquals(buildTournamentCards([]), []);
 });
 
+Deno.test('buildTournamentCards defaults regulation_fields to [] when absent', () => {
+  const cards = buildTournamentCards([SAMPLE_ROW]);
+  assertEquals(cards[0].regulation_fields, []);
+});
+
+Deno.test('buildTournamentCards normalizes regulation_fields jsonb', () => {
+  const row: TournamentCardRow = {
+    ...SAMPLE_ROW,
+    regulation_fields: [
+      { label: '장소', value: '진월국제테니스장' },
+      { label: '시상', value: '메달' },
+    ],
+  };
+  const cards = buildTournamentCards([row]);
+  assertEquals(cards[0].regulation_fields, [
+    { label: '장소', value: '진월국제테니스장' },
+    { label: '시상', value: '메달' },
+  ]);
+});
+
+Deno.test('buildTournamentCards caps regulation_fields at 3', () => {
+  const row: TournamentCardRow = {
+    ...SAMPLE_ROW,
+    regulation_fields: [
+      { label: '장소', value: 'A' },
+      { label: '주최', value: 'B' },
+      { label: '시상', value: 'C' },
+      { label: '참가비', value: 'D' },
+      { label: '경기방식', value: 'E' },
+    ],
+  };
+  const cards = buildTournamentCards([row]);
+  assertEquals(cards[0].regulation_fields.length, 3);
+  assertEquals(cards[0].regulation_fields.map((f) => f.label), ['장소', '주최', '시상']);
+});
+
+Deno.test('buildTournamentCards drops malformed regulation_fields entries', () => {
+  const row: TournamentCardRow = {
+    ...SAMPLE_ROW,
+    // jsonb 라 unknown — 비객체/빈값/비문자 항목은 normalizeRegulationFields 가 제거.
+    regulation_fields: [
+      { label: '장소', value: '코트A' },
+      { label: '', value: '값없음라벨' },
+      { label: '시상', value: '' },
+      null,
+      'garbage',
+    ] as unknown,
+  };
+  const cards = buildTournamentCards([row]);
+  assertEquals(cards[0].regulation_fields, [{ label: '장소', value: '코트A' }]);
+});
+
+Deno.test('buildTournamentCards tolerates non-array regulation_fields', () => {
+  const row: TournamentCardRow = {
+    ...SAMPLE_ROW,
+    regulation_fields: { label: 'x', value: 'y' } as unknown,
+  };
+  const cards = buildTournamentCards([row]);
+  assertEquals(cards[0].regulation_fields, []);
+});
+
 Deno.test('renderTournamentSearchText summarizes results without duplicating card rows', () => {
   const text = renderTournamentSearchText([SAMPLE_ROW], {
     sport: 'tennis',

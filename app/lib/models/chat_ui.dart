@@ -1,6 +1,39 @@
 // 채팅 a2ui 카드 모델. 서버 `ui` SSE 이벤트의 blocks 를 타입 안전하게 파싱한다.
 // 파싱 실패는 예외 대신 빈 결과로 흡수해 마크다운 답변이 항상 렌더되도록 한다.
 
+/// 요강 요약 한 줄 (예: {label: '사용구', value: '헤드 챔피언십'}).
+class RegulationField {
+  final String label;
+  final String value;
+
+  const RegulationField({required this.label, required this.value});
+
+  /// label/value 가 모두 비어있지 않은 String 일 때만 반환, 아니면 null.
+  static RegulationField? tryFromJson(Map<String, dynamic> j) {
+    final label = j['label'];
+    final value = j['value'];
+    if (label is! String || value is! String) return null;
+    final l = label.trim();
+    final v = value.trim();
+    if (l.isEmpty || v.isEmpty) return null;
+    return RegulationField(label: l, value: v);
+  }
+
+  /// `regulation_fields` 리스트를 안전 파싱. 누락/형식이상은 빈 리스트로 흡수.
+  /// 최대 3개로 제한한다.
+  static List<RegulationField> listFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    final result = <RegulationField>[];
+    for (final e in raw) {
+      if (e is! Map) continue;
+      final field = RegulationField.tryFromJson(e.cast<String, dynamic>());
+      if (field != null) result.add(field);
+      if (result.length >= 3) break;
+    }
+    return result;
+  }
+}
+
 class TournamentChatCardItem {
   final String id;
   final String title;
@@ -14,6 +47,7 @@ class TournamentChatCardItem {
   final List<String> eligibleGrades;
   final int? entryFee;
   final String? format;
+  final List<RegulationField> regulationFields;
 
   const TournamentChatCardItem({
     required this.id,
@@ -28,6 +62,7 @@ class TournamentChatCardItem {
     required this.eligibleGrades,
     this.entryFee,
     this.format,
+    this.regulationFields = const [],
   });
 
   /// 필수 필드(id, title, sport, start_date)가 없으면 null 을 반환해 호출자가 건너뛴다.
@@ -57,6 +92,7 @@ class TournamentChatCardItem {
               const [],
       entryFee: j['entry_fee'] as int?,
       format: j['format'] as String?,
+      regulationFields: RegulationField.listFromJson(j['regulation_fields']),
     );
   }
 }

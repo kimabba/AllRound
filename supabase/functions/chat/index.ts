@@ -731,6 +731,8 @@ Deno.serve(async (req) => {
               p_date_to: dateRange?.to ?? null,
               p_only_my_grade: true,
               p_match_count: 10,
+              // 채팅은 모집중('open') 대회만 제안 — 마감된 대회 추천 방지 (migration 078).
+              p_recruiting: 'open',
             },
           );
 
@@ -1131,6 +1133,8 @@ Deno.serve(async (req) => {
             eligible_grades: t.eligible_grades ?? [],
             entry_fee: null,
             format: null,
+            // semantic 경로(077): 이미 narrow 된 regulation_fields 를 카드로 전달.
+            regulation_fields: t.regulation_fields,
           }));
           send('ui', {
             blocks: [
