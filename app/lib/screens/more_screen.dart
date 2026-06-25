@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
 import '../theme/tokens.dart';
-import '../widgets/matchup_logo.dart';
+import '../widgets/allround_logo.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});

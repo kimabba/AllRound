@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/tournament.dart';
+import 'package:allround/models/tournament.dart';
 
 Map<String, dynamic> _baseJson() => {
       'id': 't1',

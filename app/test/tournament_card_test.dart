@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:matchup/models/tournament.dart';
-import 'package:matchup/widgets/tournament_card.dart';
+import 'package:allround/models/tournament.dart';
+import 'package:allround/widgets/tournament_card.dart';
 
 void main() {
   // 카드가 DateFormat('M/d (E)','ko') 를 쓰므로 ko 로케일 데이터를 준비한다.

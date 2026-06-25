@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/tournament.dart';
-import 'package:matchup/state/providers.dart';
+import 'package:allround/models/tournament.dart';
+import 'package:allround/state/providers.dart';
 
 void main() {
   test('primarySportFrom returns the primary registered sport', () {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/services/api.dart';
+import 'package:allround/services/api.dart';
 
 void main() {
   group('buildTournamentSearchQuery', () {

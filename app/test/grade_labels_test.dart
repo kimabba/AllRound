@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/utils/grade_labels.dart';
+import 'package:allround/utils/grade_labels.dart';
 
 void main() {
   group('grade_labels', () {
