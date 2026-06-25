@@ -90,6 +90,8 @@ class _TournamentDetailScreenState
                     .read(apiProvider)
                     .toggleFavorite(widget.tournamentId, !isFav);
                 ref.invalidate(favoriteIdsProvider);
+                ref.invalidate(myFavoriteTournamentsProvider);
+                ref.invalidate(myTournamentRecordsProvider);
               },
             ),
         ],
@@ -231,7 +233,9 @@ class _DetailBody extends StatelessWidget {
                   for (final g in t.eligibleGrades)
                     Chip(
                       label: Text(
-                        divisionLabel(g) != g ? divisionLabel(g) : gradeLabel(g),
+                        divisionLabel(g) != g
+                            ? divisionLabel(g)
+                            : gradeLabel(g),
                       ),
                       visualDensity: VisualDensity.compact,
                       backgroundColor: accentColor.withValues(alpha: 0.1),
@@ -454,7 +458,6 @@ class _DetailInfoRow extends StatelessWidget {
   }
 }
 
-
 class _DetailPreviewBanner extends StatelessWidget {
   const _DetailPreviewBanner();
 
@@ -595,6 +598,7 @@ class _TournamentDetailError extends StatelessWidget {
     );
   }
 }
+
 class _AccordionSection extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -824,8 +828,7 @@ class _RegulationBody extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('• ',
-                  style: base.copyWith(color: cs.primary, height: 1.5)),
+              Text('• ', style: base.copyWith(color: cs.primary, height: 1.5)),
               Expanded(
                 child: Text(
                   line.text,
@@ -842,7 +845,8 @@ class _RegulationBody extends StatelessWidget {
 
       case RegulationLineKind.numbered:
         return Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.xs, left: AppSpacing.sm),
+          padding:
+              const EdgeInsets.only(top: AppSpacing.xs, left: AppSpacing.sm),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -873,8 +877,8 @@ class _RegulationBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('– ',
-                  style: base.copyWith(
-                      color: cs.onSurfaceVariant, height: 1.5)),
+                  style:
+                      base.copyWith(color: cs.onSurfaceVariant, height: 1.5)),
               Expanded(
                 child: Text(
                   line.text,

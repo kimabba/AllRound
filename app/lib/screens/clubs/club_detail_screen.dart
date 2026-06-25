@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/club_event.dart';
 import '../../models/club_post.dart';
 import '../../models/tournament.dart';
@@ -46,6 +47,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       _membersF = ref.read(apiProvider).clubMembers(club.id);
       _eventsF = ref.read(apiProvider).clubEvents(club.id);
     });
+  }
+
+  Future<void> _toggleFavorite(bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
+    await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
+    ref.invalidate(clubFavoriteIdsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
   }
 
   Future<void> _join() async {
@@ -106,26 +114,44 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isMember = club.isMember;
+    final favoriteIds =
+        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+    final isFavorite = favoriteIds.contains(club.id);
 
     return Scaffold(
+      backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         title: Text(club.name),
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(text: '소개'),
-            Tab(text: '멤버'),
-            Tab(text: '일정'),
-            Tab(text: '게시판'),
-          ],
-        ),
+        actions: [
+          IconButton(
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+            onPressed: () => _toggleFavorite(isFavorite),
+            icon: Icon(
+              isFavorite
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_outline_rounded,
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: (isMember && _tab.index == 2)
-          ? null // FAB는 일정 탭 내부에서 노출 (탭 index 추적 복잡 회피)
-          : null,
       body: Column(
         children: [
           _Header(club: club),
+          Material(
+            color: cs.surface,
+            child: TabBar(
+              controller: _tab,
+              labelStyle: tt.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+              tabs: const [
+                Tab(text: '소개'),
+                Tab(text: '멤버'),
+                Tab(text: '일정'),
+                Tab(text: '게시판'),
+              ],
+            ),
+          ),
           Expanded(
             child: TabBarView(
               controller: _tab,
@@ -150,9 +176,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                         onChanged: _reload,
                       )
                     : _memberOnlyNotice(cs, tt),
-                isMember
-                    ? _PostsTab(club: club)
-                    : _memberOnlyNotice(cs, tt),
+                isMember ? _PostsTab(club: club) : _memberOnlyNotice(cs, tt),
               ],
             ),
           ),
@@ -161,20 +185,15 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     );
   }
 
-  Widget _memberOnlyNotice(ColorScheme cs, TextTheme tt) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.lock_outline_rounded,
-                  size: 40, color: cs.onSurfaceVariant),
-              const SizedBox(height: AppSpacing.md),
-              Text('가입 후 이용할 수 있어요',
-                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-            ],
+  Widget _memberOnlyNotice(ColorScheme cs, TextTheme tt) => ListView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        children: [
+          _EmptyState(
+            icon: Icons.lock_outline_rounded,
+            title: '가입 후 이용할 수 있어요',
+            message: '멤버, 일정, 게시판은 클럽 멤버에게만 공개됩니다.',
           ),
-        ),
+        ],
       );
 }
 
@@ -188,54 +207,201 @@ class _Header extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isTennis = club.sport == 'tennis';
-    final accent = isTennis ? cs.tertiary : cs.secondary;
-    final meta = [
-      sportLabelFromString(club.sport),
-      if (club.region != null) club.region!,
-      '${club.memberCount}명',
-    ].join(' · ');
+    final accent = AppSportColors.forSport(club.sport);
+    final description = club.description?.trim();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl, AppSpacing.md, AppSpacing.xl, AppSpacing.md),
-      color: cs.surfaceContainerLowest,
-      child: Row(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: club.logoUrl == null || club.logoUrl!.isEmpty
-                ? Icon(
-                    isTennis
-                        ? Icons.sports_tennis_rounded
-                        : Icons.sports_soccer_rounded,
-                    color: accent,
-                    size: 30,
-                  )
-                : Image.network(
-                    club.logoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Icon(
-                      isTennis
-                          ? Icons.sports_tennis_rounded
-                          : Icons.sports_soccer_rounded,
-                      color: accent,
-                    ),
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: AppCard(
+        variant: AppCardVariant.outlined,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ClubLogo(club: club, size: 80),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          _MetaChip(
+                            icon: isTennis
+                                ? Icons.sports_tennis_rounded
+                                : Icons.sports_soccer_rounded,
+                            label: sportLabelFromString(club.sport),
+                            color: accent,
+                          ),
+                          if (club.region != null && club.region!.isNotEmpty)
+                            _MetaChip(
+                              icon: Icons.place_outlined,
+                              label: club.region!,
+                            ),
+                          _MetaChip(
+                            icon: Icons.groups_rounded,
+                            label: '${club.memberCount}명',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        club.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          height: 1.12,
+                        ),
+                      ),
+                      if (club.isMember) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        _RolePill(club: club),
+                      ],
+                    ],
                   ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              meta,
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
             ),
+            if (description != null && description.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                description,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClubLogo extends StatelessWidget {
+  final Club club;
+  final double size;
+  const _ClubLogo({required this.club, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final isTennis = club.sport == 'tennis';
+    final accent = AppSportColors.forSport(club.sport);
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
+      child: club.logoUrl == null || club.logoUrl!.isEmpty
+          ? Icon(
+              isTennis
+                  ? Icons.sports_tennis_rounded
+                  : Icons.sports_soccer_rounded,
+              color: accent,
+              size: size * 0.46,
+            )
+          : Image.network(
+              club.logoUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Icon(
+                isTennis
+                    ? Icons.sports_tennis_rounded
+                    : Icons.sports_soccer_rounded,
+                color: accent,
+                size: size * 0.42,
+              ),
+            ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fg = color ?? cs.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: (color ?? cs.primary)
+            .withValues(alpha: color == null ? 0.08 : 0.14),
+        borderRadius: AppRadius.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RolePill extends StatelessWidget {
+  final Club club;
+  const _RolePill({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = club.isOwner ? '클럽장' : (club.isManager ? '운영진' : '멤버');
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onPrimaryContainer,
+              fontWeight: FontWeight.w900,
+            ),
       ),
     );
   }
@@ -258,27 +424,111 @@ class _IntroTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final description = club.description?.trim();
+    final hasContactInfo = [
+      club.address,
+      club.contact,
+      club.website,
+    ].any((value) => value != null && value.trim().isNotEmpty);
+    final hasActivityInfo = club.meetingDays.isNotEmpty ||
+        club.monthlyFee != null ||
+        (club.genderPreference != null && club.genderPreference!.isNotEmpty);
+
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        if (club.description != null && club.description!.isNotEmpty) ...[
-          Text(club.description!, style: tt.bodyMedium),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        if (club.contact != null)
-          _infoRow(context, Icons.call_outlined, club.contact!),
-        if (club.address != null)
-          _infoRow(context, Icons.place_outlined, club.address!),
-        if (club.website != null)
-          _infoRow(
-            context,
-            Icons.link_rounded,
-            club.website!,
-            onTap: () => launchUrl(
-              Uri.parse(club.website!),
-              mode: LaunchMode.externalApplication,
+        AppCard(
+          variant: AppCardVariant.elevated,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '클럽 소개',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                description == null || description.isEmpty
+                    ? '아직 소개가 등록되지 않았어요.'
+                    : description,
+                style: tt.bodyMedium?.copyWith(
+                  color: description == null || description.isEmpty
+                      ? cs.onSurfaceVariant
+                      : cs.onSurface,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (hasActivityInfo) ...[
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            variant: AppCardVariant.outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '활동 정보',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    if (club.meetingDays.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.calendar_month_rounded,
+                        label: club.meetingDays.join('·'),
+                      ),
+                    if (club.genderPreference != null &&
+                        club.genderPreference!.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.wc_rounded,
+                        label: club.genderPreference!,
+                      ),
+                    if (club.monthlyFee != null)
+                      _InfoChip(
+                        icon: Icons.payments_outlined,
+                        label: '${club.monthlyFee! ~/ 10000}만원',
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
+        ],
+        if (hasContactInfo) ...[
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            variant: AppCardVariant.outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '연락 및 위치',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (club.address != null && club.address!.isNotEmpty)
+                  _infoRow(context, Icons.place_outlined, club.address!),
+                if (club.contact != null && club.contact!.isNotEmpty)
+                  _infoRow(context, Icons.call_outlined, club.contact!),
+                if (club.website != null && club.website!.isNotEmpty)
+                  _infoRow(
+                    context,
+                    Icons.link_rounded,
+                    club.website!,
+                    onTap: () => launchUrl(
+                      Uri.parse(club.website!),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xl),
         if (!club.isMember)
           FilledButton.icon(
@@ -309,7 +559,9 @@ class _IntroTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.sm),
             child: Text(
-              club.isOwner ? '클럽장' : (club.isManager ? '운영진' : '멤버'),
+              club.isOwner
+                  ? '클럽장으로 참여 중'
+                  : (club.isManager ? '운영진으로 참여 중' : '멤버로 참여 중'),
               textAlign: TextAlign.center,
               style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
             ),
@@ -343,6 +595,115 @@ class _IntroTab extends StatelessWidget {
   }
 }
 
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InfoChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoleLabelChip extends StatelessWidget {
+  final String label;
+  const _RoleLabelChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSecondaryContainer,
+              fontWeight: FontWeight.w900,
+            ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Center(
+      child: AppCard(
+        variant: AppCardVariant.outlined,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              child: Icon(icon, color: cs.onPrimaryContainer),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── 멤버 탭 ──────────────────────────────────────────────────────
 class _MembersTab extends ConsumerWidget {
   final Future<List<ClubMember>> future;
@@ -363,44 +724,73 @@ class _MembersTab extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return const Center(child: Text('멤버를 불러오지 못했습니다.'));
+          return const _EmptyState(
+            icon: Icons.error_outline_rounded,
+            title: '멤버를 불러오지 못했습니다',
+            message: '잠시 후 다시 시도해주세요.',
+          );
         }
         final members = snap.data ?? const [];
         if (members.isEmpty) {
-          return const Center(child: Text('멤버가 없습니다'));
+          return const _EmptyState(
+            icon: Icons.group_outlined,
+            title: '아직 멤버가 없습니다',
+            message: '첫 멤버가 들어오면 여기에 표시됩니다.',
+          );
         }
-        return ListView.separated(
-          padding: const EdgeInsets.all(AppSpacing.md),
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppSpacing.lg),
           itemCount: members.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, i) {
             final m = members[i];
             final cs = Theme.of(context).colorScheme;
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  (m.displayName ?? '?').characters.first,
-                  style: TextStyle(color: cs.onPrimaryContainer),
+            final tt = Theme.of(context).textTheme;
+            final initial = (m.displayName ?? '?').characters.first;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: AppCard(
+                variant: AppCardVariant.outlined,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
                 ),
-              ),
-              title: Text(m.displayName ?? '익명'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (m.role != 'member')
-                    Chip(
-                      label: Text(m.roleLabel),
-                      visualDensity: VisualDensity.compact,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: cs.primaryContainer,
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
-                  if (club.isOwner && m.role == 'member')
-                    IconButton(
-                      icon: Icon(Icons.person_remove_rounded,
-                          color: cs.error, size: 20),
-                      tooltip: '강퇴',
-                      onPressed: () => _confirmKick(context, ref, m),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        m.displayName ?? '익명',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                ],
+                    if (m.role != 'member')
+                      _RoleLabelChip(label: m.roleLabel)
+                    else if (club.isOwner)
+                      IconButton(
+                        icon: Icon(
+                          Icons.person_remove_rounded,
+                          color: cs.error,
+                          size: 20,
+                        ),
+                        tooltip: '강퇴',
+                        onPressed: () => _confirmKick(context, ref, m),
+                      ),
+                  ],
+                ),
               ),
             );
           },
@@ -409,14 +799,21 @@ class _MembersTab extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmKick(BuildContext context, WidgetRef ref, ClubMember m) async {
+  Future<void> _confirmKick(
+    BuildContext context,
+    WidgetRef ref,
+    ClubMember m,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('멤버 강퇴'),
         content: Text('${m.displayName ?? '이 멤버'}를 강퇴할까요?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -466,25 +863,35 @@ class _EventsTab extends ConsumerWidget {
               return const Center(child: CircularProgressIndicator());
             }
             if (snap.hasError) {
-              return Center(child: Text('일정을 불러오지 못했습니다.'));
+              return const _EmptyState(
+                icon: Icons.error_outline_rounded,
+                title: '일정을 불러오지 못했습니다',
+                message: '잠시 후 다시 시도해주세요.',
+              );
             }
             final events = snap.data ?? const [];
             if (events.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Text(
-                    '다가오는 모임이 없어요.\n아래 버튼으로 모임을 만들어보세요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
+              return const Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  96,
+                ),
+                child: _EmptyState(
+                  icon: Icons.event_available_outlined,
+                  title: '다가오는 모임이 없어요',
+                  message: '아래 버튼으로 정기 모임이나 번개 모임을 만들어보세요.',
                 ),
               );
             }
             return ListView.builder(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md, AppSpacing.md, AppSpacing.md, 88),
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                88,
+              ),
               itemCount: events.length,
               itemBuilder: (context, i) => _EventCard(
                 event: events[i],
@@ -550,77 +957,77 @@ class _EventCardState extends ConsumerState<_EventCard> {
     final tt = Theme.of(context).textTheme;
     final e = widget.event;
 
-    return AppCard(
-      variant: AppCardVariant.elevated,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Spacer(),
-              Text('${e.goingCount}명 참석',
-                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(e.title,
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Icon(Icons.schedule_rounded,
-                  size: 15, color: cs.onSurfaceVariant),
-              const SizedBox(width: 4),
-              Text(_fmtDateTime(e.startsAt),
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-            ],
-          ),
-          if (e.locationText != null && e.locationText!.isNotEmpty) ...[
-            const SizedBox(height: 2),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: AppCard(
+        variant: AppCardVariant.elevated,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _InfoChip(
+              icon: Icons.event_available_rounded,
+              label: '${e.goingCount}명 참석',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(e.title,
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: AppSpacing.xs),
             Row(
               children: [
-                Icon(Icons.place_outlined,
+                Icon(Icons.schedule_rounded,
                     size: 15, color: cs.onSurfaceVariant),
                 const SizedBox(width: 4),
+                Text(_fmtDateTime(e.startsAt),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+              ],
+            ),
+            if (e.locationText != null && e.locationText!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(Icons.place_outlined,
+                      size: 15, color: cs.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(e.locationText!,
+                        style:
+                            tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ],
+            if (e.description != null && e.description!.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(e.description!, style: tt.bodyMedium),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
                 Expanded(
-                  child: Text(e.locationText!,
-                      style:
-                          tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  child: FilledButton.tonal(
+                    onPressed: _busy ? null : () => _respond(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: e.iAmGoing ? cs.primary : null,
+                      foregroundColor: e.iAmGoing ? cs.onPrimary : null,
+                    ),
+                    child: const Text('참석'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _busy ? null : () => _respond(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
+                          e.myStatus == 'not_going' ? cs.error : null,
+                    ),
+                    child: const Text('불참'),
+                  ),
                 ),
               ],
             ),
           ],
-          if (e.description != null && e.description!.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(e.description!, style: tt.bodyMedium),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: _busy ? null : () => _respond(true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: e.iAmGoing ? cs.primary : null,
-                    foregroundColor: e.iAmGoing ? cs.onPrimary : null,
-                  ),
-                  child: const Text('참석'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : () => _respond(false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor:
-                        e.myStatus == 'not_going' ? cs.error : null,
-                  ),
-                  child: const Text('불참'),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -788,7 +1195,12 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
             widget.club.id,
             tag: _activeTag,
           );
-      if (mounted) setState(() { _posts = posts; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _loading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -796,56 +1208,77 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
     return Column(
       children: [
-        // 태그 필터 바
         SizedBox(
-          height: 48,
+          height: 56,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
             children: [
               _TagChip(
-                  label: '전체',
-                  selected: _activeTag == null,
-                  onTap: () { _activeTag = null; _load(); }),
+                label: '전체',
+                selected: _activeTag == null,
+                onTap: () {
+                  _activeTag = null;
+                  _load();
+                },
+              ),
               _TagChip(
-                  label: '공지',
-                  selected: _activeTag == 'notice',
-                  onTap: () { _activeTag = 'notice'; _load(); }),
+                label: '공지',
+                selected: _activeTag == 'notice',
+                onTap: () {
+                  _activeTag = 'notice';
+                  _load();
+                },
+              ),
               _TagChip(
-                  label: '자유',
-                  selected: _activeTag == 'free',
-                  onTap: () { _activeTag = 'free'; _load(); }),
+                label: '자유',
+                selected: _activeTag == 'free',
+                onTap: () {
+                  _activeTag = 'free';
+                  _load();
+                },
+              ),
               _TagChip(
-                  label: '모집',
-                  selected: _activeTag == 'recruit',
-                  onTap: () { _activeTag = 'recruit'; _load(); }),
+                label: '모집',
+                selected: _activeTag == 'recruit',
+                onTap: () {
+                  _activeTag = 'recruit';
+                  _load();
+                },
+              ),
               _TagChip(
-                  label: '사진',
-                  selected: _activeTag == 'photo',
-                  onTap: () { _activeTag = 'photo'; _load(); }),
+                label: '사진',
+                selected: _activeTag == 'photo',
+                onTap: () {
+                  _activeTag = 'photo';
+                  _load();
+                },
+              ),
             ],
           ),
         ),
         if (_loading) const LinearProgressIndicator(),
         Expanded(
           child: _posts == null || _posts!.isEmpty
-              ? Center(
-                  child: Text('게시글이 없습니다',
-                      style: tt.bodyMedium
-                          ?.copyWith(color: cs.onSurfaceVariant)))
+              ? const _EmptyState(
+                  icon: Icons.forum_outlined,
+                  title: '게시글이 없습니다',
+                  message: '클럽 소식이 올라오면 여기에 표시됩니다.',
+                )
               : RefreshIndicator(
                   onRefresh: () async => _load(),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(12),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
                     itemCount: _posts!.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) => _PostRow(post: _posts![i]),
+                    itemBuilder: (_, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: _PostRow(post: _posts![i]),
+                    ),
                   ),
                 ),
         ),
@@ -864,9 +1297,12 @@ class _TagChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: AppSpacing.sm),
       child: FilterChip(
-          label: Text(label), selected: selected, onSelected: (_) => onTap()),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+      ),
     );
   }
 }
@@ -879,42 +1315,65 @@ class _PostRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 4),
-      title: Row(
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: post.tag == 'notice'
-                  ? cs.errorContainer
-                  : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(post.tagLabel,
-                style: tt.labelSmall?.copyWith(
-                  color: post.tag == 'notice'
-                      ? cs.onErrorContainer
-                      : cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                )),
-          ),
-          const SizedBox(width: 8),
           Expanded(
-              child: Text(post.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w700))),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: post.tag == 'notice'
+                            ? cs.errorContainer
+                            : cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
+                      ),
+                      child: Text(
+                        post.tagLabel,
+                        style: tt.labelSmall?.copyWith(
+                          color: post.tag == 'notice'
+                              ? cs.onErrorContainer
+                              : cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        post.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          if (post.imageUrls.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Icon(Icons.image_rounded, size: 18, color: cs.onSurfaceVariant),
+          ],
         ],
       ),
-      subtitle: Text(
-        '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
-        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-      ),
-      trailing: post.imageUrls.isNotEmpty
-          ? Icon(Icons.image_rounded, size: 16, color: cs.onSurfaceVariant)
-          : null,
     );
   }
 

@@ -230,15 +230,19 @@ class ApiService {
     return rows.map((r) => r['tournament_id'] as String).toSet();
   }
 
-  Future<List<Tournament>> myFavoriteTournaments({int limit = 5}) async {
+  Future<List<Tournament>> myFavoriteTournaments({int? limit = 5}) async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return [];
-    final rows = await _supabase
+    var query = _supabase
         .from('tournament_favorites')
-        .select('created_at, tournaments(*, tennis_tournament_details(*), futsal_tournament_details(*))')
+        .select(
+            'created_at, tournaments(*, tennis_tournament_details(*), futsal_tournament_details(*))')
         .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .limit(limit);
+        .order('created_at', ascending: false);
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+    final rows = await query;
 
     return (rows as List)
         .map((row) => row as Map<String, dynamic>)
@@ -276,15 +280,18 @@ class ApiService {
     return rows.map((r) => r['club_id'] as String).toSet();
   }
 
-  Future<List<Club>> myFavoriteClubs({int limit = 50}) async {
+  Future<List<Club>> myFavoriteClubs({int? limit = 50}) async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return [];
-    final rows = await _supabase
+    var query = _supabase
         .from('club_favorites')
         .select('created_at, clubs(*)')
         .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .limit(limit);
+        .order('created_at', ascending: false);
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+    final rows = await query;
 
     return (rows as List)
         .map((row) => row as Map<String, dynamic>)
@@ -977,9 +984,10 @@ class ApiService {
     final userId = _supabase.auth.currentUser!.id;
     final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
     await _supabase.storage.from('club-posts').uploadBinary(
-      path, bytes,
-      fileOptions: FileOptions(contentType: contentType, upsert: true),
-    );
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
+        );
     return _supabase.storage.from('club-posts').getPublicUrl(path);
   }
 
@@ -995,25 +1003,21 @@ class ApiService {
   }
 
   Future<int> unreadNotificationCount() async {
-    final res = await _supabase
-        .from('notifications')
-        .select('id')
-        .eq('is_read', false);
+    final res =
+        await _supabase.from('notifications').select('id').eq('is_read', false);
     return (res as List).length;
   }
 
   Future<void> markNotificationRead(String id) async {
     await _supabase
         .from('notifications')
-        .update({'is_read': true})
-        .eq('id', id);
+        .update({'is_read': true}).eq('id', id);
   }
 
   Future<void> markAllNotificationsRead() async {
     await _supabase
         .from('notifications')
-        .update({'is_read': true})
-        .eq('is_read', false);
+        .update({'is_read': true}).eq('is_read', false);
   }
 
   // ===== helpers =====
@@ -1113,7 +1117,8 @@ class ApiService {
   Future<List<ScheduleShare>> mySharedSchedules() async {
     final rows = await _supabase
         .from('schedule_shares')
-        .select('*, shared_by_user:users!shared_by(name), shared_with_user:users!shared_with(name)')
+        .select(
+            '*, shared_by_user:users!shared_by(name), shared_with_user:users!shared_with(name)')
         .order('created_at', ascending: false);
     return rows.map((r) => ScheduleShare.fromJson(r)).toList();
   }
@@ -1121,8 +1126,7 @@ class ApiService {
   Future<void> respondToShare(String shareId, {required bool accept}) async {
     await _supabase
         .from('schedule_shares')
-        .update({'status': accept ? 'accepted' : 'declined'})
-        .eq('id', shareId);
+        .update({'status': accept ? 'accepted' : 'declined'}).eq('id', shareId);
   }
 
   Future<void> deleteShare(String shareId) async {
