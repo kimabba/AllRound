@@ -10,7 +10,7 @@ import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
-import '../widgets/matchup_logo.dart';
+import '../widgets/allround_logo.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
   const RulesScreen({super.key});

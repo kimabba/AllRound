@@ -11,7 +11,7 @@ import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
-import '../../widgets/matchup_logo.dart';
+import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/tournament_card_info.dart';
+import 'package:allround/models/tournament_card_info.dart';
 
 void main() {
   // 날짜만 비교하므로 테스트는 intl 로케일 초기화 없이 간단한 포매터를 주입한다.

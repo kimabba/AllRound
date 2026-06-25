@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-class MatchUpLogo extends StatelessWidget {
-  const MatchUpLogo({
+class AllRoundLogo extends StatelessWidget {
+  const AllRoundLogo({
     super.key,
     this.fontSize = 24,
     this.textColor,
@@ -85,7 +85,7 @@ class BrandedAppBarTitle extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        MatchUpLogo(fontSize: 18, textColor: textColor, dotColor: dotColor),
+        AllRoundLogo(fontSize: 18, textColor: textColor, dotColor: dotColor),
         const SizedBox(width: 10),
         Container(width: 1, height: 18, color: cs.outlineVariant),
         const SizedBox(width: 10),

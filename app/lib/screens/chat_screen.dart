@@ -8,7 +8,7 @@ import '../services/api.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/chat_tournament_card.dart';
-import '../widgets/matchup_logo.dart';
+import '../widgets/allround_logo.dart';
 
 class _Msg {
   final String role;

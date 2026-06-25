@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/speed_measurement.dart';
-import 'package:matchup/services/speed_calculator.dart';
+import 'package:allround/models/speed_measurement.dart';
+import 'package:allround/services/speed_calculator.dart';
 
 void main() {
   group('SpeedCalculator', () {

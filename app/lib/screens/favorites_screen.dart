@@ -9,7 +9,7 @@ import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
-import '../widgets/matchup_logo.dart';
+import '../widgets/allround_logo.dart';
 import '../widgets/tournament_card.dart';
 
 class FavoritesScreen extends ConsumerStatefulWidget {

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Match-up
+# 올라운드 (AllRound)
 
 **테니스·풋살 동호인 통합 정보 앱**
 
@@ -19,7 +19,7 @@
 
 테니스·풋살 동호인은 (1) 종목별 일반 규칙, (2) 대회별 규칙, (3) 본인 등급으로 출전 가능한 대회, (4) 최신 대회 일정 — 이 4가지를 **한 번에 확인하기 어렵습니다**.
 
-**Match-up**은 회원가입 단계에서 종목·등급을 등록받아, 본인 등급으로 출전 가능한 대회만 홈에 자동 필터링해서 보여줍니다. 즐겨찾기·푸시 알림(D-3·신청 마감), 종목별 룰북, AI 챗봇(Gemini Search Grounding + RAG), 동호회 디렉토리, **스피드건**(모바일 전용, 비디오 분석)이 보조합니다.
+**올라운드**은 회원가입 단계에서 종목·등급을 등록받아, 본인 등급으로 출전 가능한 대회만 홈에 자동 필터링해서 보여줍니다. 즐겨찾기·푸시 알림(D-3·신청 마감), 종목별 룰북, AI 챗봇(Gemini Search Grounding + RAG), 동호회 디렉토리, **스피드건**(모바일 전용, 비디오 분석)이 보조합니다.
 
 ## 종목 · 등급 모델
 
@@ -141,7 +141,7 @@ update public.users set role='admin' where email='your@email.com';
 ## 디렉토리 구조
 
 ```
-Match-up/
+올라운드/
 ├── Makefile                        로컬 개발 명령어 (setup / backend / app / check)
 ├── app/                            Flutter 앱
 │   ├── .env.local.example          환경변수 템플릿 (JSON, --dart-define-from-file 용)
@@ -178,7 +178,7 @@ Match-up/
 
 ## 프로젝트 관리
 
-- Linear: [Match-up App (Flutter + Supabase)](https://linear.app/ssfak/project/match-up-app-flutter-supabase-8c50f8db4e20)
+- Linear: [올라운드 App (Flutter + Supabase)](https://linear.app/ssfak/project/match-up-app-flutter-supabase-8c50f8db4e20)
 
 ## 라이선스
 

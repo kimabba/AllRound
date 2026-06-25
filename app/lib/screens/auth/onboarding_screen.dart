@@ -11,7 +11,7 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_chip.dart';
 import '../../widgets/app_toast.dart';
-import '../../widgets/matchup_logo.dart';
+import '../../widgets/allround_logo.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -795,7 +795,7 @@ class _OnboardingTopBar extends StatelessWidget {
             tooltip: onBack == null ? '닫기' : '이전',
           ),
           const SizedBox(width: AppSpacing.sm),
-          const MatchUpLogo(fontSize: 18),
+          const AllRoundLogo(fontSize: 18),
           const SizedBox(width: AppSpacing.sm),
           Container(width: 1, height: 18, color: cs.outlineVariant),
           const SizedBox(width: AppSpacing.sm),
