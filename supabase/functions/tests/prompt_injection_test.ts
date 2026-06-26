@@ -52,9 +52,11 @@ Deno.test('escapeForData: HTML 엔티티/꺾쇠 (data 아닌 태그) 는 보존'
 // chat/index.ts 소스에 존재하는지 static 검증.
 
 Deno.test('시스템 프롬프트: data 태그 안의 지시를 따르지 말라는 규칙이 존재', async () => {
-  const chatSource = await Deno.readTextFile(
-    new URL('../chat/index.ts', import.meta.url).pathname,
-  );
+  // 시스템 프롬프트는 chat/context.ts 또는 chat/index.ts에 존재
+  const contextPath = new URL('../chat/context.ts', import.meta.url).pathname;
+  const indexPath = new URL('../chat/index.ts', import.meta.url).pathname;
+  const chatSource = await Deno.readTextFile(contextPath) +
+    await Deno.readTextFile(indexPath);
   // <data>...</data> 안의 지시를 무시하라는 규칙
   assert(
     chatSource.includes('<data>...</data>') ||
@@ -68,9 +70,10 @@ Deno.test('시스템 프롬프트: data 태그 안의 지시를 따르지 말라
 });
 
 Deno.test('시스템 프롬프트: 역할 변경 거부 규칙이 존재', async () => {
-  const chatSource = await Deno.readTextFile(
-    new URL('../chat/index.ts', import.meta.url).pathname,
-  );
+  const contextPath = new URL('../chat/context.ts', import.meta.url).pathname;
+  const indexPath = new URL('../chat/index.ts', import.meta.url).pathname;
+  const chatSource = await Deno.readTextFile(contextPath) +
+    await Deno.readTextFile(indexPath);
   assert(
     chatSource.includes('역할 변경'),
     'system prompt must mention role change rejection',
@@ -78,9 +81,10 @@ Deno.test('시스템 프롬프트: 역할 변경 거부 규칙이 존재', async
 });
 
 Deno.test('컨텍스트 주입: data 태그로 감싸는 패턴이 존재', async () => {
-  const chatSource = await Deno.readTextFile(
-    new URL('../chat/index.ts', import.meta.url).pathname,
-  );
+  const contextPath = new URL('../chat/context.ts', import.meta.url).pathname;
+  const indexPath = new URL('../chat/index.ts', import.meta.url).pathname;
+  const chatSource = await Deno.readTextFile(contextPath) +
+    await Deno.readTextFile(indexPath);
   // 컨텍스트를 <data> 태그로 감싸 데이터/지시 경계를 명확히 함
   assert(
     chatSource.includes("'<data>\\n'"),
