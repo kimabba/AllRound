@@ -52,7 +52,12 @@ import type {
   VenueRow,
 } from './types.ts';
 import { INTENT_KNN_THRESHOLD, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
-import { buildContextPrompt, buildSystemPrompt, computeUserContextHash, hashUserId } from './context.ts';
+import {
+  buildContextPrompt,
+  buildSystemPrompt,
+  computeUserContextHash,
+  hashUserId,
+} from './context.ts';
 import { performRagSearch, performVenueSearch } from './rag.ts';
 import { cacheIncrementHit, cacheInsert, cacheLookup } from './cache.ts';
 import { buildDbCitations, buildTournamentCardBlocks, streamLlmResponse } from './stream.ts';
