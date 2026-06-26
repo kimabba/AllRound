@@ -6,6 +6,9 @@ import '../../models/admin.dart';
 import '../../models/crawl_source.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import 'crawl_logs_tab.dart';
+import 'crawl_sources_tab.dart';
+import 'draft_approval_widgets.dart';
 import 'knowledge_base_tab.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -29,7 +32,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   // Phase 3: 일괄 승인/거부용 선택 상태 + 필터 chip.
   final Set<String> _selectedDraftIds = {};
-  _DraftFilter _draftFilter = _DraftFilter.all;
+  DraftFilter _draftFilter = DraftFilter.all;
   bool _bulkActionInFlight = false;
 
   // Tab 2: crawl_sources DB rows + per-row toggle/delete pending flags
@@ -138,11 +141,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   /// 현재 필터에 매칭되는 draft 행만 반환. UI 렌더링과 "전체 선택" 모두 이 결과 사용.
   List<Map<String, dynamic>> get _filteredDrafts {
     switch (_draftFilter) {
-      case _DraftFilter.all:
+      case DraftFilter.all:
         return _drafts;
-      case _DraftFilter.crawler:
+      case DraftFilter.crawler:
         return _drafts.where((r) => r['submission_kind'] == 'crawler').toList();
-      case _DraftFilter.user:
+      case DraftFilter.user:
         return _drafts.where((r) => r['submission_kind'] == 'user').toList();
     }
   }
@@ -537,9 +540,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   }
 
   Future<void> _openSourceEditor({CrawlSource? source}) async {
-    final result = await showDialog<_SourceFormResult>(
+    final result = await showDialog<SourceFormResult>(
       context: context,
-      builder: (ctx) => _SourceFormDialog(initial: source),
+      builder: (ctx) => SourceFormDialog(initial: source),
     );
     if (result == null) return;
     try {
@@ -637,7 +640,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         padding: const EdgeInsets.all(12),
         itemCount: _logs.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => _LogCard(log: _logs[i]),
+        itemBuilder: (_, i) => LogCard(log: _logs[i]),
       ),
     );
   }
@@ -671,21 +674,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             children: [
               FilterChip(
                 label: Text('전체 (${_drafts.length})'),
-                selected: _draftFilter == _DraftFilter.all,
+                selected: _draftFilter == DraftFilter.all,
                 onSelected: (_) =>
-                    setState(() => _draftFilter = _DraftFilter.all),
+                    setState(() => _draftFilter = DraftFilter.all),
               ),
               FilterChip(
                 label: Text('크롤러 ($crawlerCount)'),
-                selected: _draftFilter == _DraftFilter.crawler,
+                selected: _draftFilter == DraftFilter.crawler,
                 onSelected: (_) =>
-                    setState(() => _draftFilter = _DraftFilter.crawler),
+                    setState(() => _draftFilter = DraftFilter.crawler),
               ),
               FilterChip(
                 label: Text('사용자 제보 ($userCount)'),
-                selected: _draftFilter == _DraftFilter.user,
+                selected: _draftFilter == DraftFilter.user,
                 onSelected: (_) =>
-                    setState(() => _draftFilter = _DraftFilter.user),
+                    setState(() => _draftFilter = DraftFilter.user),
               ),
             ],
           ),
@@ -812,7 +815,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                         children: [
                           Row(
                             children: [
-                              _SubmissionKindBadge(kind: kind),
+                              SubmissionKindBadge(kind: kind),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -983,7 +986,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
           final s = _sources[i];
-          return _SourceCard(
+          return SourceCard(
             source: s,
             toggling: _togglingIds.contains(s.id),
             running: _runningIds.contains(s.id),
@@ -993,496 +996,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             onRun: () => _runManual(s),
           );
         },
-      ),
-    );
-  }
-}
-
-// ── Source card widget ───────────────────────────────────────────────────────
-
-class _SourceCard extends StatelessWidget {
-  const _SourceCard({
-    required this.source,
-    required this.toggling,
-    required this.running,
-    required this.onToggle,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onRun,
-  });
-
-  final CrawlSource source;
-  final bool toggling;
-  final bool running;
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onRun;
-
-  String _fmtTs(DateTime? dt) {
-    if (dt == null) return '실행 이력 없음';
-    final l = dt.toLocal();
-    return '${l.year}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')} '
-        '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
-  }
-
-  Color _statusColor(String? status) {
-    switch (status) {
-      case 'ok':
-        return Colors.green;
-      case 'no_change':
-        return Colors.blueGrey;
-      case 'error':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tagStyle = theme.textTheme.bodySmall;
-    final statusColor = _statusColor(source.lastStatus);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(source.name, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(source.slug,
-                          style: tagStyle?.copyWith(color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                if (toggling)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Switch(value: source.enabled, onChanged: onToggle),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(source.url,
-                style: tagStyle, overflow: TextOverflow.ellipsis, maxLines: 2),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                _Chip(label: source.sourceType),
-                if (source.sport != null) _Chip(label: source.sport!),
-                if (source.region != null) _Chip(label: source.region!),
-                _Chip(label: 'cron: ${source.scheduleCron}'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('parser: ${source.parserModule}', style: tagStyle),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '최근 실행: ${_fmtTs(source.lastCrawledAt)}'
-                  '${source.lastStatus != null ? ' · ${source.lastStatus}' : ''}'
-                  '${source.lastFetchedCount != null ? ' · fetched ${source.lastFetchedCount}' : ''}',
-                  style: tagStyle,
-                ),
-              ],
-            ),
-            if (source.lastError != null && source.lastError!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(source.lastError!,
-                  style: tagStyle?.copyWith(color: Colors.red)),
-            ],
-            if (source.notes != null && source.notes!.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text('메모: ${source.notes!}',
-                  style: tagStyle?.copyWith(fontStyle: FontStyle.italic)),
-            ],
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: (running || !source.enabled) ? null : onRun,
-                  icon: running
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.play_arrow),
-                  label: Text(running ? '실행 중...' : '수동 실행'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit),
-                  label: const Text('수정'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  label: const Text('삭제', style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Phase 3: 검수 큐 필터 + submission_kind 배지 ─────────────────────────────
-
-enum _DraftFilter { all, crawler, user }
-
-class _SubmissionKindBadge extends StatelessWidget {
-  const _SubmissionKindBadge({required this.kind});
-  final String kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final isUser = kind == 'user';
-    final color = isUser ? Colors.green.shade700 : Colors.blue.shade700;
-    final label = isUser ? '사용자 제보' : '크롤러';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color),
-      ),
-      child: Text(
-        label,
-        style:
-            TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(label, style: const TextStyle(fontSize: 12)),
-    );
-  }
-}
-
-// ── Source create/edit dialog ────────────────────────────────────────────────
-
-class _SourceFormResult {
-  final String name;
-  final String slug;
-  final String url;
-  final String? sport;
-  final String? region;
-  final String sourceType;
-  final String parserModule;
-  final String scheduleCron;
-  final bool enabled;
-  final String? notes;
-
-  _SourceFormResult({
-    required this.name,
-    required this.slug,
-    required this.url,
-    required this.sport,
-    required this.region,
-    required this.sourceType,
-    required this.parserModule,
-    required this.scheduleCron,
-    required this.enabled,
-    required this.notes,
-  });
-}
-
-class _SourceFormDialog extends StatefulWidget {
-  const _SourceFormDialog({this.initial});
-  final CrawlSource? initial;
-
-  @override
-  State<_SourceFormDialog> createState() => _SourceFormDialogState();
-}
-
-class _SourceFormDialogState extends State<_SourceFormDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name;
-  late final TextEditingController _slug;
-  late final TextEditingController _url;
-  late final TextEditingController _sport;
-  late final TextEditingController _region;
-  late final TextEditingController _parserModule;
-  late final TextEditingController _scheduleCron;
-  late final TextEditingController _notes;
-  String _sourceType = 'board';
-  bool _enabled = true;
-
-  static const _sourceTypes = ['board', 'rss', 'json_api', 'sitemap'];
-
-  @override
-  void initState() {
-    super.initState();
-    final i = widget.initial;
-    _name = TextEditingController(text: i?.name ?? '');
-    _slug = TextEditingController(text: i?.slug ?? '');
-    _url = TextEditingController(text: i?.url ?? '');
-    _sport = TextEditingController(text: i?.sport ?? '');
-    _region = TextEditingController(text: i?.region ?? '');
-    _parserModule = TextEditingController(text: i?.parserModule ?? '');
-    _scheduleCron =
-        TextEditingController(text: i?.scheduleCron ?? '0 21 * * *');
-    _notes = TextEditingController(text: i?.notes ?? '');
-    _sourceType = i?.sourceType ?? 'board';
-    _enabled = i?.enabled ?? true;
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _slug.dispose();
-    _url.dispose();
-    _sport.dispose();
-    _region.dispose();
-    _parserModule.dispose();
-    _scheduleCron.dispose();
-    _notes.dispose();
-    super.dispose();
-  }
-
-  String? _required(String? v) => (v == null || v.trim().isEmpty) ? '필수' : null;
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    final sport = _sport.text.trim();
-    final region = _region.text.trim();
-    final notes = _notes.text.trim();
-    Navigator.pop(
-      context,
-      _SourceFormResult(
-        name: _name.text.trim(),
-        slug: _slug.text.trim(),
-        url: _url.text.trim(),
-        sport: sport.isEmpty ? null : sport,
-        region: region.isEmpty ? null : region,
-        sourceType: _sourceType,
-        parserModule: _parserModule.text.trim(),
-        scheduleCron: _scheduleCron.text.trim(),
-        enabled: _enabled,
-        notes: notes.isEmpty ? null : notes,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEdit = widget.initial != null;
-    return AlertDialog(
-      title: Text(isEdit ? '크롤 소스 수정' : '크롤 소스 추가'),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _name,
-                  decoration: const InputDecoration(
-                    labelText: '이름 (사람이 보는 식별자)',
-                  ),
-                  validator: _required,
-                ),
-                TextFormField(
-                  controller: _slug,
-                  enabled:
-                      !isEdit, // slug is the unique key — don't allow rename
-                  decoration: InputDecoration(
-                    labelText: 'slug (코드 식별자, 영문 소문자/하이픈)',
-                    helperText: isEdit ? '생성 후에는 변경할 수 없습니다' : null,
-                  ),
-                  validator: _required,
-                ),
-                TextFormField(
-                  controller: _url,
-                  decoration: const InputDecoration(labelText: 'URL (listing)'),
-                  validator: _required,
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _sport,
-                        decoration: const InputDecoration(
-                          labelText: 'sport (tennis/futsal/빈칸)',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _region,
-                        decoration: const InputDecoration(
-                          labelText: 'region (한글, 전국이면 빈칸)',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _sourceType,
-                  decoration: const InputDecoration(labelText: 'source_type'),
-                  items: _sourceTypes
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _sourceType = v ?? 'board'),
-                ),
-                TextFormField(
-                  controller: _parserModule,
-                  decoration: const InputDecoration(
-                    labelText: 'parser_module (예: tennis-gwangju-board)',
-                  ),
-                  validator: _required,
-                ),
-                TextFormField(
-                  controller: _scheduleCron,
-                  decoration: const InputDecoration(
-                    labelText: 'schedule_cron (예: 0 21 * * *)',
-                    helperText: 'Phase 2 dispatcher 도입 이후 동적 스케줄로 적용',
-                  ),
-                  validator: _required,
-                ),
-                TextFormField(
-                  controller: _notes,
-                  decoration: const InputDecoration(labelText: '메모 (선택)'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  title: const Text('enabled'),
-                  value: _enabled,
-                  onChanged: (v) => setState(() => _enabled = v),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        FilledButton(onPressed: _submit, child: Text(isEdit ? '저장' : '추가')),
-      ],
-    );
-  }
-}
-
-// ── Log card widget ───────────────────────────────────────────────────────────
-
-class _LogCard extends StatelessWidget {
-  const _LogCard({required this.log});
-  final CrawlAuditLog log;
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'running':
-        return Colors.blue;
-      case 'success':
-        return Colors.green;
-      case 'partial':
-        return Colors.orange;
-      case 'failed':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(log.status);
-    final started = log.startedAt.toLocal();
-    final ts =
-        '${started.year}-${started.month.toString().padLeft(2, '0')}-${started.day.toString().padLeft(2, '0')} '
-        '${started.hour.toString().padLeft(2, '0')}:${started.minute.toString().padLeft(2, '0')}';
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(log.source,
-                      style: Theme.of(context).textTheme.titleSmall),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: color),
-                  ),
-                  child: Text(log.status,
-                      style: TextStyle(color: color, fontSize: 12)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(ts, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 4),
-            Text(
-                'fetched: ${log.fetchedCount}  inserted: ${log.insertedCount}  updated: ${log.updatedCount}',
-                style: Theme.of(context).textTheme.bodySmall),
-            if (log.error != null) ...[
-              const SizedBox(height: 4),
-              Text(log.error!,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: Colors.red)),
-            ],
-          ],
-        ),
       ),
     );
   }
