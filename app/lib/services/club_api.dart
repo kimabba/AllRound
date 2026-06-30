@@ -149,6 +149,49 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
+  Future<void> setClubMemberRole({
+    required String clubId,
+    required String targetUserId,
+    required String role,
+  }) async {
+    final res = await http.post(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'set_manager',
+        'target_user_id': targetUserId,
+        'role': role,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> updateClubMonthlyFee(String clubId, int? monthlyFee) async {
+    final res = await http.post(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'update_monthly_fee',
+        'monthly_fee': monthlyFee,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> deleteClub(String clubId) async {
+    final res = await http.post(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'delete_club',
+      }),
+    );
+    check(res);
+  }
+
   Future<List<Map<String, dynamic>>> pendingJoinRequests(String clubId) async {
     final rows = await supabase
         .from('club_join_requests')
@@ -178,7 +221,9 @@ mixin ClubApi on ApiBase {
   Future<List<ClubMember>> clubMembers(String clubId) async {
     final rows = await supabase
         .from('club_members')
-        .select('user_id, role, joined_at, users(name)')
+        .select(
+          'user_id, role, can_create_event, can_post_notice, joined_at, users(name)',
+        )
         .eq('club_id', clubId)
         .eq('status', 'active')
         .order('joined_at');
