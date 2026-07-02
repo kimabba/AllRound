@@ -10,6 +10,7 @@ import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/clubs/club_tiles.dart';
 import '../widgets/tournament_card.dart';
 
 class FavoritesScreen extends ConsumerStatefulWidget {
@@ -220,8 +221,6 @@ class _FavoriteClubCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final isTennis = club.sport == 'tennis';
-    final accent = isTennis ? cs.tertiary : cs.secondary;
     final meta = [
       sportLabelFromString(club.sport),
       if (club.region != null) club.region,
@@ -233,20 +232,7 @@ class _FavoriteClubCard extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              isTennis
-                  ? Icons.sports_tennis_rounded
-                  : Icons.sports_soccer_rounded,
-              color: accent,
-            ),
-          ),
+          SimpleClubAvatar(club: club, size: 56),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -279,7 +265,7 @@ class _FavoriteClubCard extends StatelessWidget {
             tooltip: '관심 해제',
             onPressed: onFavoriteToggle,
             icon: const Icon(Icons.bookmark_rounded),
-            color: accent,
+            color: cs.primary,
           ),
         ],
       ),

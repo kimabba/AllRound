@@ -28,6 +28,14 @@ void main() {
       expect(clubRegionMatches('경기', '서울'), isFalse);
     });
 
+    test('club name query matches partial words and compact input', () {
+      const name = '해운대 웨이브 FS';
+      expect(clubNameMatchesQuery(name, '해운대'), isTrue);
+      expect(clubNameMatchesQuery(name, '웨이브 fs'), isTrue);
+      expect(clubNameMatchesQuery(name, '해운대웨이브'), isTrue);
+      expect(clubNameMatchesQuery(name, '분당'), isFalse);
+    });
+
     test('monthly fee label includes context', () {
       expect(clubMonthlyFeeLabel(40000), '월회비 4만원');
       expect(clubMonthlyFeeLabel(0), '월회비 무료');

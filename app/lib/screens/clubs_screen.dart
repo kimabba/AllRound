@@ -7,6 +7,7 @@ import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
@@ -34,6 +35,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   bool _loading = false;
   String? _searchError;
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
+  String _clubNameQuery = '';
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
   final Set<String> _closedRecruitingPostIds = {};
@@ -175,11 +177,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final effectiveClubs = _clubs ?? _previewSearchClubs;
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
+        .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
         .where((club) => _matchesClubFilters(club, _clubFilters))
         .toList();
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
     final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
+    final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final joinedClubs = (_myClubs ?? _previewManagedClubs)
         .where((club) => club.isMember)
         .toList();
@@ -208,6 +212,58 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             ),
             sliver: SliverList.list(
               children: [
+                _ClubSearchField(
+                  value: _clubNameQuery,
+                  onChanged: (value) => setState(() {
+                    _clubNameQuery = value;
+                  }),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SimpleActionCard(
+                  icon: Icons.location_on_rounded,
+                  title: '맞춤 조건 설정',
+                  subtitle: [
+                    _selectedSportLabel(_clubInterests),
+                    ..._clubFilters.labels,
+                  ].join(' · '),
+                  action: '설정',
+                  color: const Color(0xFFEAF7F1),
+                  onTap: _openClubFilterSheet,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SimpleSectionHeader(
+                  title: hasClubNameQuery ? '검색결과' : '맞춤추천',
+                  subtitle: hasClubNameQuery
+                      ? '"${_clubNameQuery.trim()}"'
+                      : _clubFilters.hasActive
+                          ? [
+                              _selectedSportLabel(_clubInterests),
+                              ..._clubFilters.labels,
+                            ].join(' · ')
+                          : '${_selectedSportLabel(_clubInterests)} 기준',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (recommendedClubs.isEmpty)
+                  AppEmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: hasClubNameQuery ? '검색된 클럽이 없습니다' : '추천할 클럽이 없습니다',
+                    description: hasClubNameQuery
+                        ? '다른 단어로 다시 검색해 보세요.'
+                        : '맞춤 조건을 조정해 보세요.',
+                  )
+                else
+                  for (final club in hasClubNameQuery
+                      ? recommendedClubs
+                      : recommendedClubs.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: SimpleClubTile(
+                        club: club,
+                        isFavorite: favoriteClubIds.contains(club.id),
+                        onFavoriteToggle: _toggleClubFavorite,
+                      ),
+                    ),
+                const SizedBox(height: AppSpacing.lg),
                 // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
                 if (_nearbyNewClubsEnabled) ...[
                   SimplePanel(
@@ -249,18 +305,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                SimpleActionCard(
-                  icon: Icons.location_on_rounded,
-                  title: '맞춤 조건 설정',
-                  subtitle: [
-                    _selectedSportLabel(_clubInterests),
-                    ..._clubFilters.labels,
-                  ].join(' · '),
-                  action: '설정',
-                  color: const Color(0xFFEAF7F1),
-                  onTap: _openClubFilterSheet,
-                ),
-                const SizedBox(height: AppSpacing.xl),
                 if (managedClubs.isNotEmpty) ...[
                   SimpleActionCard(
                     icon: Icons.person_add_alt_1_rounded,
@@ -303,26 +347,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       : favoriteClubIds.contains(joinedClubs.first.id),
                   onFavoriteToggle: _toggleClubFavorite,
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                SimpleSectionHeader(
-                  title: '맞춤추천',
-                  subtitle: _clubFilters.hasActive
-                      ? [
-                          _selectedSportLabel(_clubInterests),
-                          ..._clubFilters.labels,
-                        ].join(' · ')
-                      : '${_selectedSportLabel(_clubInterests)} 기준',
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final club in recommendedClubs.take(3))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: SimpleClubTile(
-                      club: club,
-                      isFavorite: favoriteClubIds.contains(club.id),
-                      onFavoriteToggle: _toggleClubFavorite,
-                    ),
-                  ),
               ],
             ),
           ),
@@ -572,3 +596,75 @@ final _previewSearchClubs = [
     createdAt: DateTime.now().subtract(const Duration(days: 21)),
   ),
 ];
+
+class _ClubSearchField extends StatefulWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ClubSearchField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ClubSearchField> createState() => _ClubSearchFieldState();
+}
+
+class _ClubSearchFieldState extends State<_ClubSearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ClubSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.text = widget.value;
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.value.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '클럽 이름 검색',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: widget.value.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '검색어 지우기',
+                onPressed: () => widget.onChanged(''),
+                icon: const Icon(Icons.close_rounded),
+              ),
+        filled: true,
+        fillColor: cs.surfaceContainerLowest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+      ),
+    );
+  }
+}

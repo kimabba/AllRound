@@ -467,15 +467,22 @@ class SimpleClubAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: spec.background,
         borderRadius: BorderRadius.circular(size * 0.22),
       ),
-      child: Icon(
-        spec.icon,
-        color: spec.foreground,
-        size: size * 0.48,
-      ),
+      child: club.logoUrl == null || club.logoUrl!.isEmpty
+          ? Icon(spec.icon, color: spec.foreground, size: size * 0.48)
+          : Image.network(
+              club.logoUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Icon(
+                spec.icon,
+                color: spec.foreground,
+                size: size * 0.48,
+              ),
+            ),
     );
   }
 
