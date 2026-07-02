@@ -467,14 +467,16 @@ class SimpleClubAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: spec.background,
         borderRadius: BorderRadius.circular(size * 0.22),
       ),
-      child: Icon(
-        spec.icon,
-        color: spec.foreground,
-        size: size * 0.48,
+      child: _ClubAvatarImage(
+        logoUrl: club.logoUrl,
+        fallbackIcon: spec.icon,
+        fallbackColor: spec.foreground,
+        iconSize: size * 0.48,
       ),
     );
   }
@@ -534,6 +536,38 @@ class SimpleClubAvatar extends StatelessWidget {
       icon: Icons.sports_soccer_rounded,
       background: Color(0xFFE8F6D6),
       foreground: Color(0xFF7DCD18),
+    );
+  }
+}
+
+class _ClubAvatarImage extends StatelessWidget {
+  final String? logoUrl;
+  final IconData fallbackIcon;
+  final Color fallbackColor;
+  final double iconSize;
+
+  const _ClubAvatarImage({
+    required this.logoUrl,
+    required this.fallbackIcon,
+    required this.fallbackColor,
+    required this.iconSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final url = logoUrl?.trim();
+    final fallback = Icon(
+      fallbackIcon,
+      color: fallbackColor,
+      size: iconSize,
+    );
+
+    if (url == null || url.isEmpty) return fallback;
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
     );
   }
 }

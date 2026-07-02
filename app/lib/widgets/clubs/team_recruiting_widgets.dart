@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/tournament.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../app_card.dart';
 import 'club_tiles.dart';
 
 class RecruitingPostPreview {
@@ -20,6 +22,7 @@ class RecruitingPostPreview {
   final int keeperCount;
   final int totalCount;
   final String cost;
+  final String? intro;
   final bool isClosed;
   final DateTime? closedAt;
 
@@ -38,6 +41,7 @@ class RecruitingPostPreview {
     required this.keeperCount,
     required this.totalCount,
     required this.cost,
+    this.intro,
     this.isClosed = false,
     this.closedAt,
   });
@@ -61,6 +65,7 @@ class RecruitingPostPreview {
       keeperCount: keeperCount,
       totalCount: totalCount,
       cost: cost,
+      intro: intro,
       isClosed: isClosed ?? this.isClosed,
       closedAt: closedAt ?? this.closedAt,
     );
@@ -72,6 +77,9 @@ class RecruitingPostPreview {
     }
     return '$totalCount명';
   }
+
+  String get introText =>
+      intro?.trim().isNotEmpty == true ? intro!.trim() : '자세한 모집 조건을 확인해보세요.';
 }
 
 class TeamRecruitingBoard extends StatelessWidget {
@@ -80,6 +88,7 @@ class TeamRecruitingBoard extends StatelessWidget {
   final bool canManage;
   final ValueChanged<bool> onShowOpenOnlyChanged;
   final ValueChanged<RecruitingPostPreview> onClosePost;
+  final ValueChanged<RecruitingPostPreview> onOpenPost;
 
   const TeamRecruitingBoard({
     super.key,
@@ -88,6 +97,7 @@ class TeamRecruitingBoard extends StatelessWidget {
     required this.canManage,
     required this.onShowOpenOnlyChanged,
     required this.onClosePost,
+    required this.onOpenPost,
   });
 
   @override
@@ -153,6 +163,7 @@ class TeamRecruitingBoard extends StatelessWidget {
                   post: post,
                   canManage: canManage,
                   onClose: () => onClosePost(post),
+                  onTap: () => onOpenPost(post),
                 ),
               ),
         ],
@@ -165,12 +176,14 @@ class TeamRecruitingPostCard extends StatelessWidget {
   final RecruitingPostPreview post;
   final bool canManage;
   final VoidCallback onClose;
+  final VoidCallback onTap;
 
   const TeamRecruitingPostCard({
     super.key,
     required this.post,
     required this.canManage,
     required this.onClose,
+    required this.onTap,
   });
 
   @override
@@ -183,13 +196,11 @@ class TeamRecruitingPostCard extends StatelessWidget {
         ? cs.surfaceContainerHighest
         : (isFutsal ? const Color(0xFFE6F7C7) : const Color(0xFFE8EEFF));
 
-    return Container(
+    return AppCard(
+      onTap: onTap,
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.75)),
-      ),
+      borderRadius: BorderRadius.circular(20),
+      variant: AppCardVariant.outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -350,6 +361,285 @@ class MiniInfoChip extends StatelessWidget {
               color: cs.onSurface,
               fontSize: 12,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TeamRecruitingDetailScreen extends StatelessWidget {
+  final RecruitingPostPreview post;
+  final Club? club;
+
+  const TeamRecruitingDetailScreen({
+    super.key,
+    required this.post,
+    this.club,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final isFutsal = post.sport == 'futsal';
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('팀원모집 상세'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
+          children: [
+            AppCard(
+              variant: AppCardVariant.elevated,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (club != null)
+                        SimpleClubAvatar(club: club!, size: 58)
+                      else
+                        _RecruitingFallbackBadge(sport: post.sport),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                RecruitingStatusPill(isClosed: post.isClosed),
+                                MiniInfoChip(
+                                  icon: isFutsal
+                                      ? Icons.sports_soccer_rounded
+                                      : Icons.sports_tennis_rounded,
+                                  label: sportLabelFromString(post.sport),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              post.clubName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.labelLarge?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              post.title,
+                              style: tt.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    post.introText,
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _RecruitingDetailSection(
+              title: '모집 조건',
+              children: [
+                _RecruitingDetailRow(
+                  icon: Icons.people_alt_rounded,
+                  label: '성별',
+                  value: post.gender,
+                ),
+                _RecruitingDetailRow(
+                  icon: Icons.badge_rounded,
+                  label: '실력',
+                  value: post.grade,
+                ),
+                _RecruitingDetailRow(
+                  icon: Icons.groups_rounded,
+                  label: '모집 인원',
+                  value: post.countLabel,
+                ),
+                _RecruitingDetailRow(
+                  icon: Icons.cake_rounded,
+                  label: '나이대',
+                  value: post.age,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _RecruitingDetailSection(
+              title: '운동 정보',
+              children: [
+                _RecruitingDetailRow(
+                  icon: Icons.schedule_rounded,
+                  label: '일정',
+                  value: post.schedule,
+                ),
+                _RecruitingDetailRow(
+                  icon: Icons.place_rounded,
+                  label: '장소',
+                  value: post.place,
+                ),
+                _RecruitingDetailRow(
+                  icon: Icons.payments_rounded,
+                  label: '비용',
+                  value: post.cost,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _RecruitingDetailSection(
+              title: '작성자 소개',
+              children: [
+                _RecruitingDetailRow(
+                  icon: Icons.info_outline_rounded,
+                  label: '안내',
+                  value: club?.description ?? '클럽 운영자가 작성한 팀원모집 글입니다.',
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            FilledButton.icon(
+              onPressed: club == null
+                  ? null
+                  : () {
+                      context.push('/clubs/${club!.id}', extra: club);
+                    },
+              icon: const Icon(Icons.groups_rounded),
+              label: const Text('클럽 상세 보기'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('참여 문의 기능은 준비 중입니다.')),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+              label: const Text('참여 문의하기'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecruitingFallbackBadge extends StatelessWidget {
+  final String sport;
+
+  const _RecruitingFallbackBadge({required this.sport});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isFutsal = sport == 'futsal';
+    return Container(
+      width: 58,
+      height: 58,
+      decoration: BoxDecoration(
+        color: isFutsal ? const Color(0xFFE6F7C7) : const Color(0xFFE8EEFF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Icon(
+        isFutsal ? Icons.sports_soccer_rounded : Icons.sports_tennis_rounded,
+        color: cs.primary,
+      ),
+    );
+  }
+}
+
+class _RecruitingDetailSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _RecruitingDetailSection({
+    required this.title,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _RecruitingDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _RecruitingDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: cs.primary),
+          const SizedBox(width: AppSpacing.sm),
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: tt.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
         ],

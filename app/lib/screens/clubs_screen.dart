@@ -7,6 +7,7 @@ import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
@@ -33,6 +34,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   List<Club>? _clubs;
   bool _loading = false;
   String? _searchError;
+  String _clubNameQuery = '';
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
@@ -167,6 +169,33 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     ref.invalidate(myFavoriteClubsProvider);
   }
 
+  Club? _clubForRecruitingPost(RecruitingPostPreview post) {
+    final candidates = [
+      ...?_clubs,
+      ...?_myClubs,
+      ..._previewSearchClubs,
+      ..._previewManagedClubs,
+    ];
+    for (final club in candidates) {
+      if (club.name == post.clubName && club.sport == post.sport) {
+        return club;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _openRecruitingDetail(RecruitingPostPreview post) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamRecruitingDetailScreen(
+          post: post,
+          club: _clubForRecruitingPost(post),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -175,11 +204,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final effectiveClubs = _clubs ?? _previewSearchClubs;
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
+        .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
         .where((club) => _matchesClubFilters(club, _clubFilters))
         .toList();
+    final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
     final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
+    final displayedRecommendationClubs =
+        hasClubNameQuery ? recommendedClubs : recommendedClubs.take(3).toList();
     final joinedClubs = (_myClubs ?? _previewManagedClubs)
         .where((club) => club.isMember)
         .toList();
@@ -208,6 +241,53 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             ),
             sliver: SliverList.list(
               children: [
+                _ClubSearchField(
+                  value: _clubNameQuery,
+                  onChanged: (value) => setState(() {
+                    _clubNameQuery = value;
+                  }),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SimpleSectionHeader(
+                  title: hasClubNameQuery ? '검색결과' : '맞춤추천',
+                  subtitle: hasClubNameQuery
+                      ? '"${_clubNameQuery.trim()}"'
+                      : (_clubFilters.hasActive
+                          ? [
+                              _selectedSportLabel(_clubInterests),
+                              ..._clubFilters.labels,
+                            ].join(' · ')
+                          : '${_selectedSportLabel(_clubInterests)} 기준'),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (_loading || _loadingMy) const LinearProgressIndicator(),
+                if (_searchError != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    _searchError!,
+                    style: TextStyle(color: cs.error),
+                  ),
+                ],
+                if (displayedRecommendationClubs.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    child: AppEmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: '조건에 맞는 클럽이 없습니다',
+                      description: '검색어를 줄이거나 맞춤 조건을 바꿔보세요.',
+                    ),
+                  )
+                else
+                  for (final club in displayedRecommendationClubs)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: SimpleClubTile(
+                        club: club,
+                        isFavorite: favoriteClubIds.contains(club.id),
+                        onFavoriteToggle: _toggleClubFavorite,
+                      ),
+                    ),
+                const SizedBox(height: AppSpacing.lg),
                 // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
                 if (_nearbyNewClubsEnabled) ...[
                   SimplePanel(
@@ -281,6 +361,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   onClosePost: (post) {
                     setState(() => _closedRecruitingPostIds.add(post.id));
                   },
+                  onOpenPost: _openRecruitingDetail,
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Row(
@@ -303,26 +384,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       : favoriteClubIds.contains(joinedClubs.first.id),
                   onFavoriteToggle: _toggleClubFavorite,
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                SimpleSectionHeader(
-                  title: '맞춤추천',
-                  subtitle: _clubFilters.hasActive
-                      ? [
-                          _selectedSportLabel(_clubInterests),
-                          ..._clubFilters.labels,
-                        ].join(' · ')
-                      : '${_selectedSportLabel(_clubInterests)} 기준',
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final club in recommendedClubs.take(3))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: SimpleClubTile(
-                      club: club,
-                      isFavorite: favoriteClubIds.contains(club.id),
-                      onFavoriteToggle: _toggleClubFavorite,
-                    ),
-                  ),
               ],
             ),
           ),
@@ -416,6 +477,66 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 }
 
+class _ClubSearchField extends StatefulWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ClubSearchField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ClubSearchField> createState() => _ClubSearchFieldState();
+}
+
+class _ClubSearchFieldState extends State<_ClubSearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ClubSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '클럽 이름으로 검색',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: widget.value.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '검색어 지우기',
+                onPressed: () {
+                  _controller.clear();
+                  widget.onChanged('');
+                },
+                icon: const Icon(Icons.close_rounded),
+              ),
+      ),
+    );
+  }
+}
+
 final _previewManagedClubs = [
   Club(
     id: 'preview-managed-futsal',
@@ -455,6 +576,7 @@ final _previewRecruitingPosts = [
     keeperCount: 1,
     totalCount: 5,
     cost: '10,000원',
+    intro: '정기적으로 주말 저녁에 뛰는 팀입니다. 초급자도 부담 없이 참여할 수 있어요.',
   ),
   RecruitingPostPreview(
     id: 'preview-recruiting-tennis-open-1',
@@ -471,6 +593,7 @@ final _previewRecruitingPosts = [
     keeperCount: 0,
     totalCount: 2,
     cost: '코트비 N분의 1',
+    intro: '복식 랠리를 함께할 멤버를 찾고 있습니다. 랠리가 가능한 초보도 환영합니다.',
   ),
   RecruitingPostPreview(
     id: 'preview-recruiting-futsal-closed-1',
@@ -487,6 +610,7 @@ final _previewRecruitingPosts = [
     keeperCount: 0,
     totalCount: 0,
     cost: '마감',
+    intro: '평일 야간에 가볍게 합류할 게스트를 모집했던 글입니다.',
     isClosed: true,
     closedAt: DateTime(2026, 6, 17, 18),
   ),

@@ -60,6 +60,23 @@ bool clubRegionMatches(String? clubRegion, String filterRegion) {
   return club == filter || club.startsWith(filter) || filter.startsWith(club);
 }
 
+bool clubNameMatchesQuery(String clubName, String query) {
+  final tokens = query
+      .trim()
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .where((token) => token.isNotEmpty)
+      .toList();
+  if (tokens.isEmpty) return true;
+
+  final name = clubName.toLowerCase();
+  final compactName = name.replaceAll(RegExp(r'\s+'), '');
+  final compactQuery = tokens.join();
+  if (compactName.contains(compactQuery)) return true;
+
+  return tokens.every(name.contains);
+}
+
 String clubMonthlyFeeLabel(int fee) {
   if (fee <= 0) return '월회비 무료';
   if (fee % 10000 == 0) return '월회비 ${fee ~/ 10000}만원';
