@@ -1,4 +1,4 @@
-package com.tennischat.tennis_chatbot
+package kr.matchpoint.app
 
 import io.flutter.embedding.android.FlutterActivity
 
