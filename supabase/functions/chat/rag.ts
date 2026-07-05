@@ -87,9 +87,7 @@ export async function performVenueSearch(
 ): Promise<{ venues: VenueRow[]; errored: boolean }> {
   try {
     const regionDisplay = regionSlot
-      ? (REGION_LABELS[regionSlot as RegionCode]
-        ? REGION_LABELS[regionSlot as RegionCode] + '시'
-        : null)
+      ? (REGION_LABELS[regionSlot as RegionCode] ?? null)
       : null;
     const { data: vData, error: vErr } = await supabase.rpc('venues_search', {
       p_sport: requestedSport ?? null,
