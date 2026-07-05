@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../models/admin.dart';
 import '../models/crawl_source.dart';
 import '../models/tournament.dart';
@@ -66,7 +64,7 @@ mixin AdminApi on ApiBase {
 
   Future<void> approveClub(String clubId,
       {required bool approve, String? reason}) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-approve'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -193,7 +191,7 @@ mixin AdminApi on ApiBase {
     String slug, {
     bool force = true,
   }) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('crawl-dispatch'),
       headers: await authHeaders(),
       body: jsonEncode({'slug': slug, 'force': force}),

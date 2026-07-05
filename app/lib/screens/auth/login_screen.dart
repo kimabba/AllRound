@@ -85,8 +85,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } on AuthException catch (e) {
       setState(() => _error = e.message);
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      setState(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -128,10 +128,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         OAuthProvider.google,
         redirectTo: 'io.matchup.app://login-callback/',
       );
-    } catch (e) {
+    } catch (_) {
       _authSubscription?.cancel();
       _authSubscription = null;
-      setState(() => _error = e.toString());
+      setState(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

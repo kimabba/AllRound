@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
@@ -15,7 +14,7 @@ mixin ClubApi on ApiBase {
 
   Future<List<Club>> searchClubs(
       {String? sport, String? region, String? q}) async {
-    final res = await http.get(
+    final res = await httpGet(
       uri('clubs-search', {
         if (sport != null) 'sport': sport,
         if (region != null) 'region': region,
@@ -31,7 +30,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<List<Club>> myClubs() async {
-    final res = await http.get(
+    final res = await httpGet(
       uri('clubs-search', {'mine': 'true'}),
       headers: await authHeaders(),
     );
@@ -55,7 +54,7 @@ mixin ClubApi on ApiBase {
     int? monthlyFee,
     String? genderPreference,
   }) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-create'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -119,7 +118,7 @@ mixin ClubApi on ApiBase {
   // ── 가입 / 탈퇴 ──────────────────────────────────────────────
 
   Future<void> joinClub(String clubId, {String? message}) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -132,7 +131,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<void> cancelJoinClub(String clubId) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({'club_id': clubId, 'action': 'cancel'}),
@@ -141,7 +140,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<void> leaveClub(String clubId) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({'club_id': clubId, 'action': 'leave'}),
@@ -150,7 +149,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<void> kickMember(String clubId, String targetUserId) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -167,7 +166,7 @@ mixin ClubApi on ApiBase {
     required String targetUserId,
     required String role,
   }) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -181,7 +180,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<void> updateClubMonthlyFee(String clubId, int? monthlyFee) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -194,7 +193,7 @@ mixin ClubApi on ApiBase {
   }
 
   Future<void> deleteClub(String clubId) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-join'),
       headers: await authHeaders(),
       body: jsonEncode({
@@ -217,7 +216,7 @@ mixin ClubApi on ApiBase {
 
   Future<void> reviewJoinRequest(String requestId,
       {required bool approve, String? reason}) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('clubs-review-join'),
       headers: await authHeaders(),
       body: jsonEncode({

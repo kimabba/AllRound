@@ -1,5 +1,3 @@
-import 'package:http/http.dart' as http;
-
 import '../models/tournament.dart';
 import 'api_base.dart';
 
@@ -55,7 +53,7 @@ mixin RulesApi on ApiBase {
     await supabase
         .from('rule_articles')
         .update({'embedding': null, 'embedding_updated_at': null}).eq('id', id);
-    final res = await http.post(
+    final res = await httpPost(
       uri('embed-pending'),
       headers: await authHeaders(),
     );
