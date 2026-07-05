@@ -9,9 +9,12 @@
 
 set -e
 
-KEYSTORE_FILE="upload-keystore.jks"
+KEYSTORE_DIR="keystore"
+KEYSTORE_FILE="$KEYSTORE_DIR/upload-keystore.jks"
 KEY_ALIAS="upload"
 VALIDITY_DAYS=10000
+
+mkdir -p "$KEYSTORE_DIR"
 
 if [ -f "$KEYSTORE_FILE" ]; then
   echo "이미 존재합니다: $KEYSTORE_FILE"
@@ -39,7 +42,7 @@ echo ""
 echo "  storePassword=<입력한 비밀번호>"
 echo "  keyPassword=<입력한 비밀번호>"
 echo "  keyAlias=$KEY_ALIAS"
-echo "  storeFile=../../$KEYSTORE_FILE"
+echo "  storeFile=../$KEYSTORE_FILE"
 echo ""
 echo "중요: $KEYSTORE_FILE 파일을 안전한 곳에 백업하세요."
 echo "      이 파일을 잃어버리면 앱 업데이트를 할 수 없습니다."

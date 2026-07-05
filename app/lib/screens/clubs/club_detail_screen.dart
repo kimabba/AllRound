@@ -13,9 +13,13 @@ import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 
 /// 클럽 상세 전체화면: 소개 / 멤버 / 일정 탭.
+///
+/// [club]이 전달되면 즉시 표시, 없으면 [clubId]로 서버에서 로드.
 class ClubDetailScreen extends ConsumerStatefulWidget {
-  final Club club;
-  const ClubDetailScreen({super.key, required this.club});
+  final Club? club;
+  final String? clubId;
+  const ClubDetailScreen({super.key, this.club, this.clubId})
+      : assert(club != null || clubId != null);
 
   @override
   ConsumerState<ClubDetailScreen> createState() => _ClubDetailScreenState();
@@ -23,26 +27,59 @@ class ClubDetailScreen extends ConsumerStatefulWidget {
 
 class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab;
+  TabController? _tab;
   bool _inFlight = false;
   Future<List<ClubMember>>? _membersF;
   Future<List<ClubEvent>>? _eventsF;
   int? _monthlyFee;
 
-  Club get club => widget.club;
+  Club? _club;
+  bool _loading = false;
+  String? _error;
+
+  Club get club => _club!;
   bool get _canManageClub => club.isOwner || club.isManager;
 
   @override
   void initState() {
     super.initState();
+    if (widget.club != null) {
+      _club = widget.club;
+      _initTab();
+    } else {
+      _fetchClub();
+    }
+  }
+
+  void _initTab() {
     _monthlyFee = club.monthlyFee;
     _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
     if (club.isMember) _reload();
   }
 
+  Future<void> _fetchClub() async {
+    setState(() => _loading = true);
+    try {
+      final fetched =
+          await ref.read(apiProvider).getClub(widget.clubId!);
+      if (!mounted) return;
+      setState(() {
+        _club = fetched;
+        _loading = false;
+      });
+      _initTab();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
-    _tab.dispose();
+    _tab?.dispose();
     super.dispose();
   }
 
@@ -117,6 +154,40 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: cs.surfaceContainerLowest,
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null || _club == null) {
+      return Scaffold(
+        backgroundColor: cs.surfaceContainerLowest,
+        appBar: AppBar(),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 48, color: cs.onSurfaceVariant),
+              const SizedBox(height: 12),
+              Text(
+                '클럽을 불러올 수 없습니다',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: _fetchClub,
+                child: const Text('다시 시도'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final isMember = club.isMember;
     final favoriteIds =
         ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
@@ -146,7 +217,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           Material(
             color: cs.surface,
             child: TabBar(
-              controller: _tab,
+              controller: _tab!,
               labelStyle: tt.labelLarge?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -161,7 +232,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           ),
           Expanded(
             child: TabBarView(
-              controller: _tab,
+              controller: _tab!,
               children: [
                 _IntroTab(
                   club: club,

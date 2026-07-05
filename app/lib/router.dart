@@ -151,7 +151,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clubs/:id',
-        builder: (_, state) => ClubDetailScreen(club: state.extra as Club),
+        builder: (_, state) {
+          final club = state.extra as Club?;
+          return club != null
+              ? ClubDetailScreen(club: club)
+              : ClubDetailScreen(clubId: state.pathParameters['id']!);
+        },
       ),
       GoRoute(
         path: '/tournaments/:id',
