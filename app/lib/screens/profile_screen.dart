@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/providers.dart';
@@ -253,6 +254,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 const MyTournamentRecordsSection(),
                 const SizedBox(height: AppSpacing.xl),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => context.push('/onboarding'),
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('맞춤 설정'),
+                  ),
+                ),
                 SportsSection(sports: sports),
                 const SizedBox(height: AppSpacing.xl),
                 tennisOrgs.when(

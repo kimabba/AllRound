@@ -20,23 +20,9 @@ class MoreScreen extends ConsumerWidget {
       _MenuItem(
         icon: Icons.person_rounded,
         label: 'MY',
-        subtitle: '프로필, 내 클럽, 대회 기록 확인',
+        subtitle: '프로필, 종목 설정, 내 클럽, 대회 기록',
         color: const Color(0xFF2563EB),
         onTap: () => context.go('/profile'),
-      ),
-      _MenuItem(
-        icon: Icons.tune_rounded,
-        label: '맞춤 설정',
-        subtitle: '활동 지역, 종목, 등급 수정',
-        color: AppSportColors.futsal,
-        onTap: () => context.push('/onboarding'),
-      ),
-      _MenuItem(
-        icon: Icons.calendar_month_rounded,
-        label: '친구 일정',
-        subtitle: '내 일정과 참여 기록 확인',
-        color: const Color(0xFF7C3AED),
-        onTap: () => context.go('/friend-schedule'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
@@ -55,14 +41,6 @@ class MoreScreen extends ConsumerWidget {
         color: AppSportColors.tennis,
         onTap: () => context.go('/rules'),
       ),
-      if (!kIsWeb)
-        _MenuItem(
-          icon: Icons.speed_rounded,
-          label: '스피드건',
-          subtitle: '공 속도 측정',
-          color: const Color(0xFFEF4444),
-          onTap: () => context.go('/speed-gun'),
-        ),
       if (kIsWeb && isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
