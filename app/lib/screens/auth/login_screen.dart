@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,7 +11,7 @@ import '../../theme/tokens.dart';
 const Color _primaryBlue = Color(0xFF1E3A8A);
 const Color _primaryBlueSoft = Color(0xFF1E40AF);
 const Color _futsalGreen = Color(0xFF84CC16);
-const Color _kakaoYellow = Color(0xFFFEE500);
+
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,9 +28,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   bool _marketingConsent = false;
   String? _error;
+  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _email.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
@@ -67,7 +71,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final supa = ref.read(supabaseProvider);
       if (_signUp) {
-        await supa.auth.signUp(email: email, password: password);
+        await supa.auth.signUp(
+          email: email,
+          password: password,
+          data: {
+            'marketing_consent': _marketingConsent,
+            if (_marketingConsent)
+              'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        );
       } else {
         await supa.auth.signInWithPassword(email: email, password: password);
       }
@@ -97,11 +109,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final supa = ref.read(supabaseProvider);
+      final consent = _marketingConsent;
+      _authSubscription?.cancel();
+      _authSubscription = supa.auth.onAuthStateChange.listen((data) async {
+        if (data.event == AuthChangeEvent.signedIn) {
+          _authSubscription?.cancel();
+          _authSubscription = null;
+          await supa.auth.updateUser(
+            UserAttributes(data: {
+              'marketing_consent': consent,
+              if (consent)
+                'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
+            }),
+          );
+        }
+      });
       await supa.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'io.matchup.app://login-callback/',
       );
     } catch (e) {
+      _authSubscription?.cancel();
+      _authSubscription = null;
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -232,7 +261,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    // 로컬 관리자 모드(make admin): 컨슈머 카카오·마케팅·온보딩 카피를 숨기고
+    // 로컬 관리자 모드(make admin): 마케팅·온보딩 카피를 숨기고
     // 이메일·구글 로그인만 노출. 실제 권한은 서버 RLS.
     final adminMode = AppConfig.adminMode;
 
@@ -314,21 +343,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
-                      if (!adminMode) ...[
-                        _KakaoStartButton(
-                          onPressed: _busy
-                              ? null
-                              : () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          '카카오 로그인은 준비 중입니다. 이메일 로그인을 이용해 주세요.'),
-                                    ),
-                                  );
-                                },
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                      ],
                       if (AppConfig.googleWebClientId.isNotEmpty ||
                           AppConfig.googleIosClientId.isNotEmpty) ...[
                         _SocialButton(
@@ -499,40 +513,6 @@ class _IntroDot extends StatelessWidget {
   }
 }
 
-class _KakaoStartButton extends StatelessWidget {
-  const _KakaoStartButton({required this.onPressed});
-
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(64),
-        backgroundColor: _kakaoYellow,
-        foregroundColor: Colors.black,
-        disabledBackgroundColor: Colors.white.withValues(alpha: 0.35),
-        disabledForegroundColor: Colors.black.withValues(alpha: 0.38),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        elevation: 10,
-        shadowColor: Colors.black.withValues(alpha: 0.22),
-      ),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble_rounded, size: 22),
-          SizedBox(width: AppSpacing.md),
-          Text(
-            '카카오로 시작하기',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MarketingConsentRow extends StatelessWidget {
   const _MarketingConsentRow({
     required this.value,
@@ -557,7 +537,7 @@ class _MarketingConsentRow extends StatelessWidget {
               onChanged: onChanged,
               side: const BorderSide(color: Colors.white, width: 1.6),
               checkColor: Colors.black,
-              activeColor: _kakaoYellow,
+              activeColor: Colors.white,
             ),
             Text(
               '마케팅 정보 수신 동의 (선택)',
