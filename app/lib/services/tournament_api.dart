@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../models/match_record.dart';
 import '../models/schedule_share.dart';
 import '../models/tournament.dart';
@@ -64,7 +62,7 @@ mixin TournamentApi on ApiBase {
     int limit = 50,
     int offset = 0,
   }) async {
-    final res = await http.get(
+    final res = await httpGet(
       uri(
         'tournaments-search',
         buildTournamentSearchQuery(
@@ -92,7 +90,7 @@ mixin TournamentApi on ApiBase {
   }
 
   Future<Tournament> submitTournament(Map<String, dynamic> payload) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('tournaments-submit'),
       headers: await authHeaders(),
       body: jsonEncode(payload),
@@ -104,7 +102,7 @@ mixin TournamentApi on ApiBase {
 
   Future<void> approveTournament(String id,
       {bool approve = true, String? reason}) async {
-    final res = await http.post(
+    final res = await httpPost(
       uri('tournaments-approve'),
       headers: await authHeaders(),
       body: jsonEncode({
