@@ -102,6 +102,19 @@ mixin ClubApi on ApiBase {
     return supabase.storage.from('club-logos').getPublicUrl(path);
   }
 
+  /// 단일 클럽 상세 조회 (딥링크 등 ID만 있을 때 사용).
+  Future<Club> getClub(String clubId) async {
+    final uid = supabase.auth.currentUser?.id;
+    var query = supabase.from('clubs').select(
+          '*, club_members!left(role, status)',
+        );
+    if (uid != null) {
+      query = query.eq('club_members.user_id', uid);
+    }
+    final row = await query.eq('id', clubId).single();
+    return Club.fromJson(row);
+  }
+
   // ── 가입 / 탈퇴 ──────────────────────────────────────────────
 
   Future<void> joinClub(String clubId, {String? message}) async {
