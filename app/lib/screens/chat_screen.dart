@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,21 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_ui.dart';
 import '../services/api.dart';
+import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
-
-class _Msg {
-  final String role;
-  String content;
-  List<Map<String, dynamic>> citations;
-  List<ChatUiBlock> uiBlocks;
-
-  _Msg({required this.role, required this.content})
-      : citations = <Map<String, dynamic>>[],
-        uiBlocks = <ChatUiBlock>[];
-}
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -29,38 +21,42 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
+  static const _firstByteTimeout = Duration(seconds: 15);
+
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
-  final _messages = <_Msg>[];
-  String? _conversationId;
-  bool _busy = false;
+  StreamSubscription<ChatStreamEvent>? _streamSub;
 
   @override
   void dispose() {
+    _streamSub?.cancel();
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  void _stopStreaming() {
+    _streamSub?.cancel();
+    _streamSub = null;
+    ref.read(chatProvider).finishStreaming();
+  }
+
   Future<void> _send() async {
     final text = _ctrl.text.trim();
-    if (text.isEmpty || _busy) return;
+    final chat = ref.read(chatProvider);
+    if (text.isEmpty || chat.busy) return;
     _ctrl.clear();
 
-    setState(() {
-      _messages.add(_Msg(role: 'user', content: text));
-      _messages.add(_Msg(role: 'assistant', content: ''));
-      _busy = true;
-    });
+    chat.addUserMessage(text);
     _scrollToBottom();
 
-    final assistantIdx = _messages.length - 1;
+    final assistantIdx = chat.lastAssistantIndex;
     final api = ref.read(apiProvider);
 
     await _consumeChatStream(
       api.chat(
         message: text,
-        conversationId: _conversationId,
+        conversationId: chat.conversationId,
         activeSport: ref.read(activeSportProvider),
       ),
       assistantIdx,
@@ -68,21 +64,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _sendWithEntity(String message, String entityId) async {
-    if (_busy) return;
-    setState(() {
-      _messages.add(_Msg(role: 'user', content: message));
-      _messages.add(_Msg(role: 'assistant', content: ''));
-      _busy = true;
-    });
+    final chat = ref.read(chatProvider);
+    if (chat.busy) return;
+
+    chat.addUserMessage(message);
     _scrollToBottom();
 
-    final assistantIdx = _messages.length - 1;
+    final assistantIdx = chat.lastAssistantIndex;
     final api = ref.read(apiProvider);
 
     await _consumeChatStream(
       api.chat(
         message: message,
-        conversationId: _conversationId,
+        conversationId: chat.conversationId,
         activeSport: ref.read(activeSportProvider),
         selectedEntity: {'type': 'tournament', 'id': entityId},
       ),
@@ -92,51 +86,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _consumeChatStream(
       Stream<ChatStreamEvent> stream, int assistantIdx) async {
-    try {
-      await for (final evt in stream) {
-        if (!mounted) return;
+    final chat = ref.read(chatProvider);
+    final completer = Completer<void>();
+
+    _streamSub = stream
+        .timeout(_firstByteTimeout, onTimeout: (sink) {
+          sink.addError(TimeoutException(
+              '응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'));
+          sink.close();
+        })
+        .listen(
+      (evt) {
+        if (!mounted) {
+          _streamSub?.cancel();
+          if (!completer.isCompleted) completer.complete();
+          return;
+        }
         switch (evt.event) {
           case 'meta':
-            _conversationId = evt.data['conversation_id'] as String?;
+            chat.setConversationId(
+                evt.data['conversation_id'] as String?);
           case 'delta':
-            setState(() {
-              _messages[assistantIdx].content +=
-                  evt.data['text'] as String? ?? '';
-            });
+            chat.appendContent(
+                assistantIdx, evt.data['text'] as String? ?? '');
             _scrollToBottom();
           case 'citation':
             final items = (evt.data['items'] as List?) ?? const [];
-            setState(() {
-              _messages[assistantIdx].citations = [
-                ..._messages[assistantIdx].citations,
-                ...items.cast<Map<String, dynamic>>(),
-              ];
-            });
+            chat.setCitations(
+                assistantIdx, items.cast<Map<String, dynamic>>());
           case 'ui':
             final blocks = ChatUiBlock.listFromEvent(evt.data);
             if (blocks.isNotEmpty) {
-              setState(() {
-                _messages[assistantIdx].uiBlocks = [
-                  ..._messages[assistantIdx].uiBlocks,
-                  ...blocks,
-                ];
-              });
+              chat.addUiBlocks(assistantIdx, blocks);
               _scrollToBottom();
             }
           case 'error':
-            setState(() {
-              _messages[assistantIdx].content +=
-                  '\n\n[오류] ${_formatChatError(evt.data['message'])}';
-            });
+            chat.appendContent(assistantIdx,
+                '\n\n[오류] ${_formatChatError(evt.data['message'])}');
         }
-      }
-    } catch (e) {
-      setState(() {
-        _messages[assistantIdx].content += '\n\n[연결 실패] ${_formatChatError(e)}';
-      });
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      },
+      onError: (Object e) {
+        chat.appendContent(
+            assistantIdx, '\n\n[연결 실패] ${_formatChatError(e)}');
+      },
+      onDone: () {
+        chat.finishStreaming();
+        _streamSub = null;
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+
+    return completer.future;
   }
 
   String _formatChatError(Object? error) {
@@ -175,13 +175,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final chat = ref.watch(chatProvider);
+    final messages = chat.messages;
+    final busy = chat.busy;
 
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '라운드 코치')),
+      appBar: AppBar(
+        title: const BrandedAppBarTitle(title: '라운드 코치'),
+        actions: [
+          if (messages.isNotEmpty)
+            IconButton(
+              onPressed: busy ? null : () => ref.read(chatProvider).reset(),
+              icon: const Icon(Icons.add_comment_outlined),
+              tooltip: '새 대화',
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty
+            child: messages.isEmpty
                 ? _EmptyHint(onSend: sendText)
                 : ListView.builder(
                     controller: _scroll,
@@ -189,19 +202,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       horizontal: AppSpacing.lg,
                       vertical: AppSpacing.md,
                     ),
-                    itemCount: _messages.length,
+                    itemCount: messages.length,
                     itemBuilder: (_, i) => _MessageBubble(
-                      msg: _messages[i],
+                      msg: messages[i],
                       onCardAction: _sendWithEntity,
                     ),
                   ),
           ),
-          if (_busy)
+          if (busy)
             LinearProgressIndicator(
               color: cs.primary,
               backgroundColor: cs.surfaceContainerLow,
             ),
-          _InputBar(controller: _ctrl, busy: _busy, onSend: _send),
+          _InputBar(
+            controller: _ctrl,
+            busy: busy,
+            onSend: _send,
+            onStop: _stopStreaming,
+          ),
         ],
       ),
     );
@@ -365,10 +383,12 @@ class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final bool busy;
   final VoidCallback onSend;
+  final VoidCallback onStop;
   const _InputBar({
     required this.controller,
     required this.busy,
     required this.onSend,
+    required this.onStop,
   });
 
   @override
@@ -405,20 +425,28 @@ class _InputBar extends StatelessWidget {
                   ),
                 ),
                 textInputAction: TextInputAction.send,
-                maxLines: null,
+                maxLines: 4,
                 onSubmitted: (_) => onSend(),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            IconButton.filled(
-              onPressed: busy ? null : onSend,
-              icon: const Icon(Icons.arrow_upward_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                disabledBackgroundColor: cs.surfaceContainerHigh,
-              ),
-            ),
+            busy
+                ? IconButton.filled(
+                    onPressed: onStop,
+                    icon: const Icon(Icons.stop_rounded),
+                    style: IconButton.styleFrom(
+                      backgroundColor: cs.error,
+                      foregroundColor: cs.onError,
+                    ),
+                  )
+                : IconButton.filled(
+                    onPressed: onSend,
+                    icon: const Icon(Icons.arrow_upward_rounded),
+                    style: IconButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                    ),
+                  ),
           ],
         ),
       ),
@@ -428,7 +456,7 @@ class _InputBar extends StatelessWidget {
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.msg, required this.onCardAction});
-  final _Msg msg;
+  final ChatMessage msg;
   final void Function(String message, String entityId) onCardAction;
 
   @override

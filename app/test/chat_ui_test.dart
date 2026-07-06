@@ -233,7 +233,7 @@ void main() {
       expect(find.textContaining('광주'), findsWidgets);
       expect(find.textContaining('11111111'), findsNothing);
 
-      await tester.tap(find.text('상세 보기'));
+      await tester.tap(find.text('AI 상세 설명'));
       await tester.pump();
       expect(sent, '상세 알려줘');
     });
@@ -291,7 +291,7 @@ void main() {
       ));
 
       expect(find.text('영암 오픈'), findsOneWidget);
-      expect(find.text('상세 보기'), findsOneWidget);
+      expect(find.text('AI 상세 설명'), findsOneWidget);
     });
   });
 }

@@ -53,7 +53,7 @@ export async function* streamChat(
   const body: Record<string, unknown> = {
     contents: history,
     generationConfig: {
-      temperature: opts.temperature ?? 0.4,
+      temperature: opts.temperature ?? 0.2,
       maxOutputTokens: opts.maxOutputTokens ?? 2048,
       // thinking 항상 비활성 — grounding 제거 이후 빈 응답 케이스도 사라짐.
       // thought=true 파트는 아래 reader 루프에서 필터링해 채팅엔 노출 안 됨.
@@ -72,7 +72,8 @@ export async function* streamChat(
 
   if (!res.ok || !res.body) {
     const err = await res.text();
-    yield { type: 'error', error: `Gemini error ${res.status}: ${err}` };
+    console.error(`Gemini API error ${res.status}:`, err);
+    yield { type: 'error', error: 'AI 응답을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.' };
     return;
   }
 
