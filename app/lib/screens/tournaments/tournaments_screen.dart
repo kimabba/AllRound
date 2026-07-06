@@ -898,81 +898,78 @@ class _CalendarDayCell extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final currentDate = date;
     if (currentDate == null) {
-      return const SizedBox(height: 46);
+      return const SizedBox(height: 50);
     }
 
     final isSelected = _isSameDay(currentDate, selectedDate);
     final isToday = _isSameDay(currentDate, today);
+    final barColor = isSelected ? cs.onPrimary : cs.primary;
 
     return InkWell(
       onTap: () => onTap(currentDate),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        height: 46,
-        child: Center(
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Stack(
+        height: 50,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: isSelected ? 34 : 30,
+              height: isSelected ? 34 : 30,
+              decoration: BoxDecoration(
+                color: isSelected ? cs.primary : Colors.transparent,
+                shape: BoxShape.circle,
+                border: isToday && !isSelected
+                    ? Border.all(color: cs.primary, width: 1.5)
+                    : null,
+              ),
               alignment: Alignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: isSelected ? 36 : 32,
-                  height: isSelected ? 36 : 32,
-                  decoration: BoxDecoration(
-                    color: isSelected ? cs.primary : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: isToday && !isSelected
-                        ? Border.all(color: cs.primary, width: 1.3)
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${currentDate.day}',
-                    style: tt.labelLarge?.copyWith(
-                      color: isSelected ? cs.onPrimary : cs.onSurface,
-                      fontWeight: isSelected || isToday
-                          ? FontWeight.w900
-                          : FontWeight.w700,
-                    ),
-                  ),
+              child: Text(
+                '${currentDate.day}',
+                style: tt.labelLarge?.copyWith(
+                  color: isSelected ? cs.onPrimary : cs.onSurface,
+                  fontWeight: isSelected || isToday
+                      ? FontWeight.w900
+                      : FontWeight.w700,
                 ),
-                if (count > 0)
-                  Positioned(
-                    right: count > 1 ? 0 : 6,
-                    bottom: count > 1 ? 0 : 4,
-                    child: count == 1
-                        ? Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: isSelected ? cs.onPrimary : cs.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          )
-                        : Container(
-                            height: 16,
-                            constraints: const BoxConstraints(minWidth: 16),
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isSelected ? cs.onPrimary : cs.primary,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '$count',
-                              style: tt.labelSmall?.copyWith(
-                                color: isSelected ? cs.primary : cs.onPrimary,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            SizedBox(
+              height: 6,
+              child: count > 0
+                  ? count == 1
+                      ? Container(
+                          width: 16,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: barColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        )
+                      : Container(
+                          height: 6,
+                          constraints: const BoxConstraints(minWidth: 18),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: barColor,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              color: isSelected ? cs.primary : cs.onPrimary,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
                             ),
                           ),
-                  ),
-              ],
+                        )
+                  : null,
             ),
-          ),
+          ],
         ),
       ),
     );

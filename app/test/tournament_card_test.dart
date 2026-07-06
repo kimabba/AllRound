@@ -5,7 +5,7 @@ import 'package:allround/models/tournament.dart';
 import 'package:allround/widgets/tournament_card.dart';
 
 void main() {
-  // 카드가 DateFormat('M/d (E)','ko') 를 쓰므로 ko 로케일 데이터를 준비한다.
+  // 카드가 DateFormat('M.dd (E)','ko') 를 쓰므로 ko 로케일 데이터를 준비한다.
   setUpAll(() async {
     await initializeDateFormatting('ko');
   });
@@ -40,7 +40,7 @@ void main() {
   testWidgets('대회일 라벨과 날짜를 렌더한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament()));
     expect(find.text('대회'), findsOneWidget);
-    expect(find.textContaining('6/13'), findsWidgets);
+    expect(find.textContaining('6.13'), findsWidgets);
   });
 
   testWidgets('신청 마감 라벨과 "~M/D 마감" 텍스트를 렌더한다', (tester) async {
@@ -48,8 +48,8 @@ void main() {
       wrap(makeTournament(applicationDeadline: DateTime(2026, 6, 20))),
     );
     expect(find.text('신청'), findsOneWidget);
-    // 포맷이 'M/d (E)' 라 "~6/20 (토) 마감" 형태가 된다.
-    expect(find.textContaining('6/20'), findsOneWidget);
+    // 포맷이 'M.dd (E)' 라 "~6.20 (토) 마감" 형태가 된다.
+    expect(find.textContaining('6.20'), findsOneWidget);
     expect(find.textContaining('마감'), findsWidgets);
   });
 

@@ -26,7 +26,7 @@ class TournamentCard extends StatelessWidget {
   final VoidCallback? onFavoriteToggle;
   final bool compact;
 
-  static final _df = DateFormat('M/d (E)', 'ko');
+  static final _df = DateFormat('M.dd (E)', 'ko');
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +125,7 @@ class TournamentCard extends StatelessWidget {
               icon: Icons.event_rounded,
               label: '대회',
               value: _dateText(),
+              prominent: true,
             ),
             const SizedBox(height: 4),
             if (_deadlineText().isNotEmpty) ...[
@@ -132,7 +133,7 @@ class TournamentCard extends StatelessWidget {
                 icon: Icons.how_to_reg_rounded,
                 label: '신청',
                 value: _deadlineText(),
-                // 마감일은 신청 의사결정에 핵심 → 살짝 강조(임박이면 error색).
+                prominent: true,
                 emphasize: true,
                 emphasizeColor: _deadlineSoon ? cs.error : null,
               ),
@@ -281,6 +282,7 @@ class _InfoLine extends StatelessWidget {
     required this.value,
     this.emphasize = false,
     this.emphasizeColor,
+    this.prominent = false,
   });
 
   final IconData icon;
@@ -291,17 +293,28 @@ class _InfoLine extends StatelessWidget {
   final bool emphasize;
   final Color? emphasizeColor;
 
+  /// true면 값 텍스트를 크고 진하게 표시(대회일 등 핵심 정보).
+  final bool prominent;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final valueColor =
-        emphasizeColor ?? (emphasize ? cs.onSurface : cs.onSurfaceVariant);
+    final valueColor = emphasizeColor ??
+        ((emphasize || prominent) ? cs.onSurface : cs.onSurfaceVariant);
+    final valueStyle = prominent
+        ? tt.bodySmall?.copyWith(
+            color: valueColor,
+            fontWeight: FontWeight.w800,
+          )
+        : tt.labelSmall?.copyWith(
+            color: valueColor,
+            fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
+          );
     return Row(
       children: [
-        Icon(icon, size: 14, color: cs.onSurfaceVariant),
+        Icon(icon, size: prominent ? 16 : 14, color: cs.onSurfaceVariant),
         const SizedBox(width: 6),
-        // 라벨: 작은 캡슐로 "무엇에 대한 날짜인지" 즉시 인지시킨다.
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
           decoration: BoxDecoration(
@@ -320,10 +333,7 @@ class _InfoLine extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: tt.labelSmall?.copyWith(
-              color: valueColor,
-              fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
-            ),
+            style: valueStyle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
