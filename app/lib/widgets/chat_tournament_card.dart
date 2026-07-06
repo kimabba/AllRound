@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../models/chat_ui.dart';
 import '../theme/tokens.dart';
@@ -27,31 +28,52 @@ class ChatTournamentCard extends StatelessWidget {
         ? '${item.startDate} ~ ${item.endDate}'
         : item.startDate;
 
-    return AppCard(
-      variant: AppCardVariant.outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isTennis
-                    ? Icons.sports_tennis_rounded
-                    : Icons.sports_soccer_rounded,
-                color: accent,
-                size: 20,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+    return GestureDetector(
+      onTap: () => context.push('/tournaments/${item.id}'),
+      child: AppCard(
+        variant: AppCardVariant.outlined,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isTennis
+                      ? Icons.sports_tennis_rounded
+                      : Icons.sports_soccer_rounded,
+                  color: accent,
+                  size: 20,
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                if (item.eligible)
+                  Container(
+                    margin: const EdgeInsets.only(left: AppSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer,
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Text(
+                      '출전 가능',
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           const SizedBox(height: AppSpacing.sm),
           _InfoRow(
             icon: Icons.calendar_today_rounded,
@@ -103,10 +125,11 @@ class ChatTournamentCard extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () => onAction('상세 알려줘', item.id),
-              child: const Text('상세 보기'),
+              child: const Text('AI 상세 설명'),
             ),
           ),
         ],
+      ),
       ),
     );
   }
