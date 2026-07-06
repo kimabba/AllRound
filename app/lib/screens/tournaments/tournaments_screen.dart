@@ -937,7 +937,7 @@ class _CalendarDayCell extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             SizedBox(
-              height: 6,
+              height: 10,
               child: count > 0
                   ? count == 1
                       ? Container(
@@ -949,13 +949,13 @@ class _CalendarDayCell extends StatelessWidget {
                           ),
                         )
                       : Container(
-                          height: 6,
+                          height: 10,
                           constraints: const BoxConstraints(minWidth: 18),
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: barColor,
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             '$count',

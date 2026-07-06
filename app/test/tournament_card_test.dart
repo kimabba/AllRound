@@ -43,7 +43,7 @@ void main() {
     expect(find.textContaining('6.13'), findsWidgets);
   });
 
-  testWidgets('신청 마감 라벨과 "~M/D 마감" 텍스트를 렌더한다', (tester) async {
+  testWidgets('신청 마감 라벨과 "~M.dd 마감" 텍스트를 렌더한다', (tester) async {
     await tester.pumpWidget(
       wrap(makeTournament(applicationDeadline: DateTime(2026, 6, 20))),
     );

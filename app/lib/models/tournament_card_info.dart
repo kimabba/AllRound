@@ -75,8 +75,8 @@ bool isSameCalendarDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// 대회일/기간 라벨 뒤에 붙는 날짜 텍스트.
-/// 단일일이면 "M/d (E)", 다중일이면 "시작~종료".
-/// [format] 은 DateFormat('M/d (E)','ko').format 같은 포매터를 주입.
+/// 단일일이면 "M.dd (E)", 다중일이면 "시작~종료".
+/// [format] 은 DateFormat('M.dd (E)','ko').format 같은 포매터를 주입.
 String tournamentDateText(
   DateTime startDate,
   DateTime? endDate,
@@ -87,7 +87,7 @@ String tournamentDateText(
   return '$start~${format(endDate)}';
 }
 
-/// 신청 마감 텍스트. "~M/D 마감" 형태. 마감일 미정이면 빈 문자열.
+/// 신청 마감 텍스트. "~M.dd 마감" 형태. 마감일 미정이면 빈 문자열.
 /// 마감이 지났어도 마감일 자체는 정보로 유용하므로 텍스트는 항상 만든다
 /// (상태 배지가 '마감'을 별도로 알린다).
 String applicationDeadlineText(
