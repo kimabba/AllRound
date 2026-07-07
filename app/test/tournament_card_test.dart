@@ -43,14 +43,12 @@ void main() {
     expect(find.textContaining('6/13'), findsWidgets);
   });
 
-  testWidgets('신청 마감 라벨과 "~M/D 마감" 텍스트를 렌더한다', (tester) async {
+  testWidgets('목록 카드는 신청 마감 정보를 노출하지 않는다', (tester) async {
     await tester.pumpWidget(
       wrap(makeTournament(applicationDeadline: DateTime(2026, 6, 20))),
     );
-    expect(find.text('신청'), findsOneWidget);
-    // 포맷이 'M/d (E)' 라 "~6/20 (토) 마감" 형태가 된다.
-    expect(find.textContaining('6/20'), findsOneWidget);
-    expect(find.textContaining('마감'), findsWidgets);
+    expect(find.text('신청'), findsNothing);
+    expect(find.textContaining('6/20'), findsNothing);
   });
 
   testWidgets('location 을 region 과 함께 노출한다', (tester) async {

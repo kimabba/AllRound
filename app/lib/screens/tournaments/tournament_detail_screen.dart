@@ -184,6 +184,10 @@ class _DetailBody extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
+              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
+                _TournamentPosterCard(url: t.posterUrl!.trim()),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               // ── 핵심 정보 (행 레이아웃) ──
               _DetailInfoRow(
@@ -414,6 +418,61 @@ class _StatusPill extends StatelessWidget {
               color: color,
               fontWeight: FontWeight.w900,
             ),
+      ),
+    );
+  }
+}
+
+class _TournamentPosterCard extends StatelessWidget {
+  const _TournamentPosterCard({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return ClipRRect(
+      borderRadius: AppRadius.card,
+      child: AspectRatio(
+        aspectRatio: 4 / 5,
+        child: Image.network(
+          url,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              color: cs.surfaceContainerLow,
+              child: const Center(child: CircularProgressIndicator()),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: cs.surfaceContainerLow,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.broken_image_outlined,
+                    size: 36,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '포스터 이미지를 불러오지 못했습니다.',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

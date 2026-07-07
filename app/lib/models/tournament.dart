@@ -36,6 +36,7 @@ class Tournament {
   final String? prize;
   final String? format;
   final String? sourceUrl;
+  final String? posterUrl;
   final String status;
   // Phase 2 신규
   final String? regionCode;
@@ -68,6 +69,7 @@ class Tournament {
     this.prize,
     this.format,
     this.sourceUrl,
+    this.posterUrl,
     required this.status,
     this.regionCode,
     this.hostAssociations = const [],
@@ -140,6 +142,7 @@ class Tournament {
       prize: j['prize'] as String?,
       format: j['format'] as String?,
       sourceUrl: j['source_url'] as String?,
+      posterUrl: j['poster_url'] as String?,
       status: j['status'] as String,
       regionCode: j['region_code'] as String?,
       hostAssociations: hostAssoc,

@@ -777,6 +777,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
               startDate.length >= 10 ? startDate.substring(0, 10) : startDate;
           final region = t['region'] as String? ?? '';
           final sourceUrl = t['source_url'] as String? ?? '';
+          final posterUrl = t['poster_url'] as String? ?? '';
           final source = t['source'] as String? ?? '';
           final kind = t['submission_kind'] as String? ?? 'crawler';
           final submitterEmail = t['submitted_by_email'] as String?;
@@ -839,6 +840,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                             const SizedBox(height: 2),
                             Text(
                               sourceUrl,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (posterUrl.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '포스터: $posterUrl',
                               style: Theme.of(context).textTheme.bodySmall,
                               overflow: TextOverflow.ellipsis,
                             ),

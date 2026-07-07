@@ -15,7 +15,7 @@ mixin AdminApi on ApiBase {
         .select(
           'id, sport, title, organizer, description, start_date, end_date, '
           'application_deadline, region, location, eligible_grades, entry_fee, '
-          'format, source, source_url, submitted_by, created_at',
+          'format, source, source_url, poster_url, submitted_by, created_at',
         )
         .eq('status', 'draft')
         .order('created_at', ascending: false);

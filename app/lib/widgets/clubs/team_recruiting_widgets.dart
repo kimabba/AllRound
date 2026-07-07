@@ -584,10 +584,19 @@ class _RecruitingDetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return Container(
+      width: double.infinity,
+      padding: AppSpacing.cardInner,
+      decoration: BoxDecoration(
+        color: isLight ? Colors.white : cs.surfaceContainerLow,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: cs.outlineVariant),
+        boxShadow: isLight ? AppShadows.card : null,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

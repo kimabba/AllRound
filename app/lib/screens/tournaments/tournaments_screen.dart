@@ -37,6 +37,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   bool _loading = false;
   bool _usingPreviewData = false;
   String? _error;
+
   /// null = 전체 목록 모드. 날짜를 선택하면 그 날짜의 대회만 필터.
   DateTime? _selectedDate;
   late DateTime _focusedMonth;
@@ -228,13 +229,12 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                             }),
                             onClearDate: () =>
                                 setState(() => _selectedDate = null),
-                            onSelectNextTournamentDate: (date) =>
-                                setState(() {
+                            onSelectNextTournamentDate: (date) => setState(() {
                               _selectedDate = date;
                               _focusedMonth = DateTime(date.year, date.month);
                             }),
-                            onTap: (tournament) => context
-                                .push('/tournaments/${tournament.id}'),
+                            onTap: (tournament) =>
+                                context.push('/tournaments/${tournament.id}'),
                             onFavoriteToggle: (tournament, isFavorite) async {
                               await ref.read(apiProvider).toggleFavorite(
                                     tournament.id,

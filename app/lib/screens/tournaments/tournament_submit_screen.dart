@@ -26,6 +26,7 @@ class _TournamentSubmitScreenState
   final _location = TextEditingController();
   final _description = TextEditingController();
   final _sourceUrl = TextEditingController();
+  final _posterUrl = TextEditingController();
   Sport _sport = Sport.tennis;
   String _tennisOrg = 'gj'; // 테니스 주최 협회
   DateTime? _startDate;
@@ -41,6 +42,7 @@ class _TournamentSubmitScreenState
     _location.dispose();
     _description.dispose();
     _sourceUrl.dispose();
+    _posterUrl.dispose();
     super.dispose();
   }
 
@@ -74,7 +76,8 @@ class _TournamentSubmitScreenState
       await ref.read(apiProvider).submitTournament({
         'sport': sportToString(_sport),
         'title': _title.text.trim(),
-        if (_organizer.text.trim().isNotEmpty) 'organizer': _organizer.text.trim(),
+        if (_organizer.text.trim().isNotEmpty)
+          'organizer': _organizer.text.trim(),
         if (_description.text.trim().isNotEmpty)
           'description': _description.text.trim(),
         'start_date': _startDate!.toIso8601String().substring(0, 10),
@@ -83,7 +86,10 @@ class _TournamentSubmitScreenState
         'eligible_grades': gradeList,
         if (_sport == Sport.tennis)
           'division_label_local': formatEligibleGrades(gradeList),
-        if (_sourceUrl.text.trim().isNotEmpty) 'source_url': _sourceUrl.text.trim(),
+        if (_sourceUrl.text.trim().isNotEmpty)
+          'source_url': _sourceUrl.text.trim(),
+        if (_posterUrl.text.trim().isNotEmpty)
+          'poster_url': _posterUrl.text.trim(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,12 +106,12 @@ class _TournamentSubmitScreenState
 
   // 테니스 협회 선택 목록 (제보에서 자주 쓰이는 협회만)
   static const _tennisOrgOptions = <(String, String)>[
-    ('gj',    '광주협회 (GJTA)'),
-    ('jn',    '전남협회 (JNTA)'),
-    ('kta',   'KTA'),
-    ('kata',  'KATA'),
-    ('ktfs',  'KTFS'),
-    ('kstf',  'KSTF (시니어)'),
+    ('gj', '광주협회 (GJTA)'),
+    ('jn', '전남협회 (JNTA)'),
+    ('kta', 'KTA'),
+    ('kata', 'KATA'),
+    ('ktfs', 'KTFS'),
+    ('kstf', 'KSTF (시니어)'),
     ('local', '지역/클럽 자체'),
   ];
 
@@ -198,7 +204,8 @@ class _TournamentSubmitScreenState
                   Text(
                     _startDate == null
                         ? '날짜를 선택하세요'
-                        : DateFormat('yyyy년 M월 d일 (E)', 'ko').format(_startDate!),
+                        : DateFormat('yyyy년 M월 d일 (E)', 'ko')
+                            .format(_startDate!),
                     style: tt.bodyMedium?.copyWith(
                       color: _startDate == null ? cs.onSurfaceVariant : null,
                     ),
@@ -230,7 +237,8 @@ class _TournamentSubmitScreenState
                 value: _tennisOrg,
                 decoration: _inputDeco('협회 선택'),
                 items: _tennisOrgOptions
-                    .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                    .map(
+                        (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
                     .toList(),
                 onChanged: (v) => setState(() {
                   _tennisOrg = v!;
@@ -288,6 +296,14 @@ class _TournamentSubmitScreenState
               controller: _sourceUrl,
               decoration: _inputDeco('원본 공고 URL'),
               keyboardType: TextInputType.url,
+              validator: _optionalHttpUrlValidator,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _posterUrl,
+              decoration: _inputDeco('포스터 이미지 URL'),
+              keyboardType: TextInputType.url,
+              validator: _optionalHttpUrlValidator,
             ),
 
             if (_error != null) ...[
@@ -296,7 +312,8 @@ class _TournamentSubmitScreenState
                 variant: AppCardVariant.outlined,
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
+                    Icon(Icons.error_outline_rounded,
+                        color: cs.error, size: 18),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -328,6 +345,19 @@ class _TournamentSubmitScreenState
           vertical: AppSpacing.md,
         ),
       );
+
+  String? _optionalHttpUrlValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return '올바른 URL을 입력해주세요';
+    }
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      return 'http:// 또는 https:// 링크만 사용할 수 있어요';
+    }
+    return null;
+  }
 }
 
 class _Label extends StatelessWidget {
