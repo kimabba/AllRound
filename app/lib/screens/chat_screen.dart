@@ -465,7 +465,12 @@ class _MessageBubble extends StatelessWidget {
                           ),
                         ),
                       ),
-                if (msg.citations.isNotEmpty) ...[
+                // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
+                // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
+                if (msg.citations.isNotEmpty &&
+                    !msg.uiBlocks.any((b) =>
+                        b.tournamentItems.isNotEmpty ||
+                        b.clubItems.isNotEmpty)) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Divider(
                     color: cs.outlineVariant.withValues(alpha: 0.5),
