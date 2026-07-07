@@ -197,6 +197,17 @@ function monthRange(today: Date, month: number): DateRange {
   return { from: formatKstDate(first), to: formatKstDate(last) };
 }
 
+/** "다음 달" → 다음 달 전체. Date.UTC 가 12→1월 연도 넘어감을 자동 처리. */
+function nextMonthRange(today: Date): DateRange {
+  const kst = new Date(today.getTime() + KST_OFFSET_MS);
+  const year = kst.getUTCFullYear();
+  const month0 = kst.getUTCMonth(); // 0-based 현재 월
+  const first = new Date(Date.UTC(year, month0 + 1, 1) - KST_OFFSET_MS);
+  const lastUtc = new Date(Date.UTC(year, month0 + 2, 1) - KST_OFFSET_MS);
+  const last = addDays(lastUtc, -1);
+  return { from: formatKstDate(first), to: formatKstDate(last) };
+}
+
 /** "5/24", "5월 24일" 등 단일 날짜 → 그 날 하루. */
 function singleDayRange(today: Date, month: number, day: number): DateRange {
   const kst = new Date(today.getTime() + KST_OFFSET_MS);
@@ -256,6 +267,17 @@ export function extractDateRange(text: string, now: Date = new Date()): DateRang
   if (/오늘|금일/.test(text)) {
     const iso = formatKstDate(today);
     return { from: iso, to: iso };
+  }
+
+  // "다음 달" / "담달" / "익월" — "이번 달" 보다 먼저 (substring 충돌 방지).
+  if (/다음\s*달|담달|익월/.test(text)) {
+    return nextMonthRange(today);
+  }
+
+  // "이번 달" / "금월" — 현재 KST 월 전체.
+  if (/이번\s*달|금월/.test(text)) {
+    const kst = new Date(today.getTime() + KST_OFFSET_MS);
+    return monthRange(today, kst.getUTCMonth() + 1);
   }
 
   // "5월", "12월" 단독 — "5월 24일" 패턴이 위에서 잡혔으면 도달 안 함.
