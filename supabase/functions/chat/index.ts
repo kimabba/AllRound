@@ -493,7 +493,9 @@ Deno.serve(async (req) => {
             .limit(10);
 
           if (explicitSport) clubQuery = clubQuery.eq('sport', explicitSport);
-          if (regionLabel) clubQuery = clubQuery.eq('region', regionLabel);
+          // clubs.region 은 자유 텍스트("광주" vs "광주광역시")라 부분일치.
+          // (정확일치 시 "광주" 검색으로 "광주광역시" 등록 클럽이 누락됨)
+          if (regionLabel) clubQuery = clubQuery.ilike('region', `%${regionLabel}%`);
 
           const { data: clubs, error: clubErr } = await clubQuery;
 
