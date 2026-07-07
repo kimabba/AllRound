@@ -278,6 +278,30 @@ Deno.serve(async (req) => {
           intentResult = buildFallbackResult(slots);
         }
 
+        // ---- 짧은 후속 질문 이어받기 ----
+        // "다음달은?", "광주는?" 처럼 대회 키워드가 없어 분류되지 않은 후속 질문은,
+        // 직전 turn 이 대회 검색이었다면 대회 검색으로 이어받아 기간·지역만 갱신한다.
+        // venue/club 등 명확한 다른 의도(ROUTABLE)는 덮지 않는다.
+        if (
+          !ROUTABLE_INTENTS.has(intentResult.intent) &&
+          (slots.date_range || slots.region)
+        ) {
+          const priorMsgs = (prior ?? []) as { role: string; content: string }[];
+          let lastUserIntent: string | null = null;
+          for (let i = priorMsgs.length - 1; i >= 0; i--) {
+            if (priorMsgs[i].role === 'user') {
+              lastUserIntent = classifyByRule(priorMsgs[i].content)?.intent ?? null;
+              break;
+            }
+          }
+          if (lastUserIntent === 'tournament_search') {
+            intentResult = buildRuleResult(
+              { intent: 'tournament_search', rule: 'followup_carryover' },
+              slots,
+            );
+          }
+        }
+
         send('intent', {
           intent: intentResult.intent,
           confidence: intentResult.confidence,
@@ -315,6 +339,27 @@ Deno.serve(async (req) => {
             conversation_id: conversationId,
           }),
         );
+
+        // ---- match_schedule: 개인 매치 일정 데이터 미비 → 결정적 안내 fallback ----
+        // RAG 로 흘리면 무관한 대회/룰을 긁어오므로 안내로 종료한다.
+        if (intentResult.intent === 'match_schedule') {
+          const dr = intentResult.slots.date_range;
+          const scheduleText = '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
+            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
+            (dr ? '\n이 기간의 대회가 궁금하면 "이 기간 대회 알려줘"라고 말씀해 주세요.' : '');
+          send('context', { tournaments: [], rules: [] });
+          send('delta', { text: scheduleText });
+          await supabase.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: scheduleText,
+            citations: [],
+          });
+          send('done', {});
+          controller.close();
+          return;
+        }
 
         // ---- Unregistered sport refusal (룰북/구장 등 공개 정보는 허용) ----
         const refusalExemptIntents: ReadonlySet<Intent> = new Set<Intent>([
@@ -545,9 +590,13 @@ Deno.serve(async (req) => {
               p_region: regionLabel,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
-              p_only_my_grade: true,
+              // 채팅 기본 검색은 필터를 걸지 않는다(내 등급 필터는 백로그 JY-101).
+              p_only_my_grade: false,
               p_match_count: 10,
-              p_recruiting: 'open',
+              // 일정 조회는 마감 여부와 무관하게 유효 → 모집상태 필터 없음 + 마감(closed) 대회 포함.
+              // (migration 079: p_include_closed + 다가오는 대회 우선 정렬)
+              p_recruiting: null,
+              p_include_closed: true,
             },
           );
 

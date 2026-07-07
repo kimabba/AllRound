@@ -179,6 +179,21 @@ Deno.test('날짜 범위: 다음 주 > 이번 주말 > 이번 주 우선순위',
     from: '2026-06-08',
     to: '2026-06-14',
   });
+  // "이번 달" = 현재 KST 월 전체
+  assertEquals(extractDateRange('이번 달 대회 일정 알려줘', FIXED_NOW), {
+    from: '2026-06-01',
+    to: '2026-06-30',
+  });
+  // "다음 달" = 다음 KST 월 전체
+  assertEquals(extractDateRange('다음달은?', FIXED_NOW), {
+    from: '2026-07-01',
+    to: '2026-07-31',
+  });
+  // "다음 달" 연말 → 다음 해 1월 (Date.UTC overflow)
+  assertEquals(extractDateRange('다음 달 대회', new Date('2026-12-15T00:00:00+09:00')), {
+    from: '2027-01-01',
+    to: '2027-01-31',
+  });
 });
 
 Deno.test('routing 가능 여부: rule 분류 tournament_search 만 LLM 우회 대상', () => {
