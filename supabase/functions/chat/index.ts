@@ -8,7 +8,8 @@
  *  1. Rate limit check (shared utility)
  *  2. Embedding + intent classification (rule -> embedding KNN fallback)
  *  3. Unregistered sport -> refuse (LLM bypass)
- *  4. Day 5-6 routing: tournament_search with confidence >= 0.95
+ *  4. Routing (confidence >= 0.95): tournament_search / tournament_detail / club_search
+ *     + match_schedule 결정적 안내, selected_entity(tournament|club) 상세
  *  5. Semantic cache lookup -> HIT = instant return
  *  6. MISS -> RAG (tournaments + rules semantic search) -> Gemini Flash-Lite
  *  7. Cache insert on success
@@ -34,11 +35,20 @@ import {
   resolveRequestedSport,
 } from '../_shared/intent.ts';
 import {
+  buildClubCards,
   buildTournamentCards,
+  type ClubCardRow,
+  type ClubDetailRow,
   parseSelectedEntity,
+  renderClubDetailText,
+  renderClubSearchEmptyText,
+  renderClubSearchText,
+  renderTournamentDetailIntroText,
+  renderTournamentDetailText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
   type TournamentCardRow,
+  type TournamentDetailRow,
 } from '../_shared/chat_cards.ts';
 
 import type {
@@ -62,7 +72,17 @@ import { performRagSearch, performVenueSearch } from './rag.ts';
 import { cacheIncrementHit, cacheInsert, cacheLookup } from './cache.ts';
 import { buildDbCitations, buildTournamentCardBlocks, streamLlmResponse } from './stream.ts';
 
-const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search']);
+const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
+  'tournament_search',
+  'tournament_detail',
+  'club_search',
+]);
+
+// "정보 없음" refusal 문구. systemPrompt 도 LLM 에게 이 문구로 답하도록 지시하므로,
+// 하드코딩/LLM 생성 양쪽을 CORE substring 으로 감지해 카드·인용 노출을 억제한다.
+const NO_INFO_REFUSAL_CORE = '매치업 DB에 해당 정보가 등록되어 있지 않습니다';
+const NO_INFO_REFUSAL =
+  `현재 ${NO_INFO_REFUSAL_CORE}. 협회 또는 공식 홈페이지에 직접 문의해 주세요.`;
 
 function isIntentValue(value: string): value is Intent {
   return (INTENT_VALUES as readonly string[]).includes(value);
@@ -148,13 +168,18 @@ Deno.serve(async (req) => {
       try {
         send('meta', { conversation_id: conversationId });
 
-        // ---- Card action follow-up: selected_entity(tournament) ----
+        // ---- Card action follow-up: selected_entity (결정적 상세 응답, LLM 미사용) ----
+        const entityNotFoundText = '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
+          '정보가 변경되었거나 접근 권한이 없을 수 있습니다.';
+
         if (selectedEntity?.type === 'tournament') {
           const { data: selRow, error: selErr } = await supabase
             .from('tournaments')
             .select(
               'id, sport, title, region, location, start_date, end_date, ' +
-                'application_deadline, entry_fee, format, eligible_grades',
+                'application_deadline, entry_fee, format, eligible_grades, ' +
+                'organizer, prize, regulation_fields, regulation_body, ' +
+                'regulation_notes, source_url',
             )
             .eq('id', selectedEntity.id)
             .maybeSingle();
@@ -164,14 +189,72 @@ Deno.serve(async (req) => {
           }
           if (!selRow) {
             send('context', { tournaments: [], rules: [] });
-            send('delta', {
-              text: '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
-                '정보가 변경되었거나 접근 권한이 없을 수 있습니다.',
-            });
+            send('delta', { text: entityNotFoundText });
             send('done', {});
             controller.close();
             return;
           }
+
+          const detailRow = selRow as unknown as TournamentDetailRow;
+          const answerText = renderTournamentDetailText(detailRow);
+          const citations: DbCitation[] = [
+            { type: 'db', source: 'tournaments', id: detailRow.id, title: detailRow.title },
+          ];
+
+          send('context', { tournaments: [], rules: [] });
+          send('delta', { text: answerText });
+          send('citation', { items: citations });
+
+          await supabase.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: answerText,
+            citations,
+          });
+
+          send('done', {});
+          controller.close();
+          return;
+        }
+
+        if (selectedEntity?.type === 'club') {
+          const { data: clubRow, error: clubErr } = await supabase
+            .from('clubs')
+            .select(
+              'id, sport, name, region, address, description, member_count, ' +
+                'monthly_fee, meeting_days, gender_preference, contact',
+            )
+            .eq('id', selectedEntity.id)
+            .eq('status', 'approved')
+            .maybeSingle();
+
+          if (clubErr) {
+            throw new Error(`club visibility check failed: ${clubErr.message}`);
+          }
+
+          send('context', { tournaments: [], rules: [] });
+          if (!clubRow) {
+            send('delta', { text: entityNotFoundText });
+            send('done', {});
+            controller.close();
+            return;
+          }
+
+          const answerText = renderClubDetailText(clubRow as unknown as ClubDetailRow);
+          send('delta', { text: answerText });
+
+          await supabase.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: answerText,
+            citations: [],
+          });
+
+          send('done', {});
+          controller.close();
+          return;
         }
 
         // ---- Embedding (reused for cache lookup + RAG) ----
@@ -248,6 +331,30 @@ Deno.serve(async (req) => {
           intentResult = buildFallbackResult(slots);
         }
 
+        // ---- 짧은 후속 질문 이어받기 ----
+        // "다음달은?", "광주는?" 처럼 대회 키워드가 없어 분류되지 않은 후속 질문은,
+        // 직전 turn 이 대회 검색이었다면 대회 검색으로 이어받아 기간·지역만 갱신한다.
+        // venue/club 등 명확한 다른 의도(ROUTABLE)는 덮지 않는다.
+        if (
+          !ROUTABLE_INTENTS.has(intentResult.intent) &&
+          (slots.date_range || slots.region)
+        ) {
+          const priorMsgs = (prior ?? []) as { role: string; content: string }[];
+          let lastUserIntent: string | null = null;
+          for (let i = priorMsgs.length - 1; i >= 0; i--) {
+            if (priorMsgs[i].role === 'user') {
+              lastUserIntent = classifyByRule(priorMsgs[i].content)?.intent ?? null;
+              break;
+            }
+          }
+          if (lastUserIntent === 'tournament_search') {
+            intentResult = buildRuleResult(
+              { intent: 'tournament_search', rule: 'followup_carryover' },
+              slots,
+            );
+          }
+        }
+
         send('intent', {
           intent: intentResult.intent,
           confidence: intentResult.confidence,
@@ -318,12 +425,47 @@ Deno.serve(async (req) => {
           return;
         }
 
-        // ---- Day 5-6 routing: tournament_search ----
-        if (isRoutable && intentResult.intent === 'tournament_search') {
-          const regionCode = intentResult.slots.region;
-          const regionLabel = regionCode
-            ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
-            : null;
+        // ---- match_schedule: 결정적 안내 (개인 매치 데이터 미구축 — RAG로 흘리지 않는다) ----
+        if (intentResult.intent === 'match_schedule') {
+          const lines = [
+            '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
+            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인해 주세요.',
+          ];
+          if (intentResult.slots.date_range) {
+            lines.push('대신 이 기간의 대회를 찾아드릴까요? "이 기간 대회 알려줘"라고 물어보세요.');
+          }
+          const answerText = lines.join('\n');
+
+          send('context', { tournaments: [], rules: [] });
+          send('delta', { text: answerText });
+
+          await supabase.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: answerText,
+            citations: [],
+          });
+
+          send('done', {});
+          controller.close();
+          return;
+        }
+
+        // 슬롯 region(코드) → DB 저장 라벨. tournament/club 라우팅 공용.
+        const regionCode = intentResult.slots.region;
+        const regionLabel = regionCode
+          ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
+          : null;
+
+        // ---- Day 5-6 routing: tournament_search / tournament_detail ----
+        if (
+          isRoutable &&
+          (intentResult.intent === 'tournament_search' ||
+            intentResult.intent === 'tournament_detail')
+        ) {
+          // detail 은 "신청" 맥락 → 모집중(open) 대회만, 마감 대회 제외.
+          const isDetailIntent = intentResult.intent === 'tournament_detail';
           const dateRange = intentResult.slots.date_range;
 
           const { data: rows, error: routeErr } = await supabase.rpc(
@@ -334,9 +476,13 @@ Deno.serve(async (req) => {
               p_region: regionLabel,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
-              p_only_my_grade: true,
+              // 채팅 기본 검색은 필터를 걸지 않는다(내 등급 필터는 백로그, 나중에 재적용).
+              p_only_my_grade: false,
               p_match_count: 10,
-              p_recruiting: 'open',
+              // search: 일정 조회는 마감 여부와 무관하게 유효 → 필터 없음 + 마감 포함.
+              // detail: 신청 정보가 목적 → 모집중(open)만.
+              p_recruiting: isDetailIntent ? 'open' : null,
+              p_include_closed: !isDetailIntent,
             },
           );
 
@@ -352,11 +498,14 @@ Deno.serve(async (req) => {
             );
           } else if (Array.isArray(rows) && rows.length > 0) {
             const typedRows = rows as TournamentCardRow[];
-            const answerText = renderTournamentSearchText(typedRows, {
+            const textCtx = {
               sport: explicitSport ?? undefined,
               region: regionLabel,
               dateRange,
-            });
+            };
+            const answerText = isDetailIntent
+              ? renderTournamentDetailIntroText(typedRows, textCtx)
+              : renderTournamentSearchText(typedRows, textCtx);
             const citations: DbCitation[] = typedRows.slice(0, 5).map((t) => ({
               type: 'db',
               source: 'tournaments',
@@ -368,6 +517,7 @@ Deno.serve(async (req) => {
               'chat_route',
               JSON.stringify({
                 event: 'tournament_search_routed',
+                intent: intentResult.intent,
                 result_count: typedRows.length,
                 slots: intentResult.slots,
                 user_id_hash: hashedUserId,
@@ -375,7 +525,7 @@ Deno.serve(async (req) => {
               }),
             );
 
-            send('route', { intent: 'tournament_search', result_count: typedRows.length });
+            send('route', { intent: intentResult.intent, result_count: typedRows.length });
             send('context', { tournaments: [], rules: [] });
             send('delta', { text: answerText });
             send('citation', { items: citations });
@@ -410,13 +560,14 @@ Deno.serve(async (req) => {
               'chat_route',
               JSON.stringify({
                 event: 'tournament_search_empty',
+                intent: intentResult.intent,
                 slots: intentResult.slots,
                 requested_sport: requestedSport,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
             );
-            send('route', { intent: 'tournament_search', result_count: 0 });
+            send('route', { intent: intentResult.intent, result_count: 0 });
             send('context', { tournaments: [], rules: [] });
             send('delta', { text: answerText });
 
@@ -426,6 +577,92 @@ Deno.serve(async (req) => {
               role: 'assistant',
               content: answerText,
               citations: [],
+            });
+
+            send('done', {});
+            controller.close();
+            return;
+          }
+        }
+
+        // ---- Routing: club_search ----
+        // RLS(clubs_authenticated_read)가 접근을 보장하고 status='approved' 만 노출한다.
+        if (isRoutable && intentResult.intent === 'club_search') {
+          let clubQuery = supabase
+            .from('clubs')
+            .select(
+              'id, sport, name, region, description, member_count, ' +
+                'monthly_fee, meeting_days, gender_preference',
+            )
+            .eq('status', 'approved')
+            .order('name', { ascending: true })
+            .limit(10);
+          if (explicitSport) clubQuery = clubQuery.eq('sport', explicitSport);
+          // clubs.region 은 자유 텍스트("광주" vs "광주광역시")라 부분일치.
+          // (tournament_search_by_slots 의 region ILIKE 와 동일 정책)
+          if (regionLabel) clubQuery = clubQuery.ilike('region', `%${regionLabel}%`);
+
+          const { data: clubRows, error: clubErr } = await clubQuery;
+
+          if (clubErr) {
+            // 조회 실패는 라우팅 포기 → 기존 RAG/LLM 경로로 폴백.
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'club_search_query_error',
+                reason: clubErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+          } else {
+            const typedClubs = (clubRows ?? []) as unknown as ClubCardRow[];
+            const clubCtx = { sport: explicitSport ?? undefined, region: regionLabel };
+            const answerText = typedClubs.length > 0
+              ? renderClubSearchText(typedClubs, clubCtx)
+              : renderClubSearchEmptyText(clubCtx);
+            const citations: DbCitation[] = typedClubs.slice(0, 5).map((c) => ({
+              type: 'db',
+              source: 'clubs',
+              id: c.id,
+              title: c.name,
+            }));
+
+            console.log(
+              'chat_route',
+              JSON.stringify({
+                event: 'club_search_routed',
+                result_count: typedClubs.length,
+                slots: intentResult.slots,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+
+            send('route', { intent: 'club_search', result_count: typedClubs.length });
+            send('context', { tournaments: [], rules: [] });
+            send('delta', { text: answerText });
+            if (citations.length > 0) {
+              send('citation', { items: citations });
+            }
+            if (typedClubs.length > 0) {
+              send('ui', {
+                blocks: [
+                  {
+                    type: 'cards',
+                    entity: 'club',
+                    items: buildClubCards(typedClubs),
+                  },
+                ],
+              });
+            }
+
+            await supabase.from('chat_messages').insert({
+              user_id: user.id,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: answerText,
+              citations,
             });
 
             send('done', {});
@@ -585,10 +822,8 @@ Deno.serve(async (req) => {
           send('delta', { text: errorText });
           assistantText = errorText;
         } else if (tournaments.length === 0 && rules.length === 0 && venues.length === 0) {
-          const refusalText = '현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다. ' +
-            '협회 또는 공식 홈페이지에 직접 문의해 주세요.';
-          send('delta', { text: refusalText });
-          assistantText = refusalText;
+          send('delta', { text: NO_INFO_REFUSAL });
+          assistantText = NO_INFO_REFUSAL;
         } else {
           const llmResult = await streamLlmResponse(history, systemPrompt, send);
           assistantText = llmResult.assistantText;
@@ -598,12 +833,15 @@ Deno.serve(async (req) => {
         }
 
         // ---- Citations + Cards ----
-        const dbCitationItems = buildDbCitations(tournaments, rules, venues);
+        // "정보 없음" refusal(하드코딩 or LLM 생성)일 때는 카드/인용을 붙이지 않는다.
+        // RAG 가 무관한 대회/규칙을 긁어와도 "없다면서 카드가 뜨는" 모순을 막는다.
+        const refused = assistantText.includes(NO_INFO_REFUSAL_CORE);
+        const dbCitationItems = refused ? [] : buildDbCitations(tournaments, rules, venues);
         if (dbCitationItems.length > 0) {
           send('citation', { items: dbCitationItems });
         }
 
-        const cardBlocks = buildTournamentCardBlocks(tournaments);
+        const cardBlocks = refused ? null : buildTournamentCardBlocks(tournaments);
         if (cardBlocks) {
           send('ui', cardBlocks);
         }

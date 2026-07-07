@@ -1,10 +1,19 @@
 import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
+  buildClubCards,
   buildTournamentCards,
+  type ClubCardRow,
+  type ClubDetailRow,
   parseSelectedEntity,
+  renderClubDetailText,
+  renderClubSearchEmptyText,
+  renderClubSearchText,
+  renderTournamentDetailIntroText,
+  renderTournamentDetailText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
   type TournamentCardRow,
+  type TournamentDetailRow,
 } from '../_shared/chat_cards.ts';
 
 const SAMPLE_ROW: TournamentCardRow = {
@@ -128,6 +137,26 @@ Deno.test('renderTournamentSearchEmptyText is authoritative for precise empty fi
   assert(!text.includes('현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다'));
 });
 
+Deno.test('renderTournamentSearchEmptyText surfaces the my-grade filter so users can retry', () => {
+  const text = renderTournamentSearchEmptyText({
+    sport: 'tennis',
+    region: null,
+    dateRange: { from: '2026-07-06', to: '2026-07-12' },
+    onlyMyGrade: true,
+  });
+
+  assert(text.includes('내 등급 기준'));
+  assert(text.includes('내 등급에 참가 가능한 대회만'));
+
+  // onlyMyGrade가 없으면 등급 문구도 노출하지 않는다.
+  const without = renderTournamentSearchEmptyText({
+    sport: 'tennis',
+    region: null,
+    dateRange: { from: '2026-07-06', to: '2026-07-12' },
+  });
+  assert(!without.includes('내 등급'));
+});
+
 Deno.test('parseSelectedEntity accepts a valid tournament entity', () => {
   const result = parseSelectedEntity({
     type: 'tournament',
@@ -159,4 +188,161 @@ Deno.test('parseSelectedEntity rejects malformed id', () => {
 Deno.test('parseSelectedEntity returns ok=false for null/undefined', () => {
   assert(!parseSelectedEntity(undefined).ok);
   assert(!parseSelectedEntity(null).ok);
+});
+
+// ==========================================================================
+// Tournament detail
+// ==========================================================================
+
+const SAMPLE_DETAIL_ROW: TournamentDetailRow = {
+  ...SAMPLE_ROW,
+  organizer: '광주테니스협회',
+  prize: '우승 트로피',
+  regulation_fields: [{ label: '접수처', value: '협회 사무국' }],
+  regulation_body: '참가 자격은 동호인 등록 선수에 한한다.',
+  regulation_notes: ['참가비로 스포츠공제보험 가입'],
+  source_url: 'https://example.com/notice/1',
+};
+
+Deno.test('renderTournamentDetailText renders full markdown detail', () => {
+  const text = renderTournamentDetailText(SAMPLE_DETAIL_ROW);
+  assert(text.includes('## 광주 생활체육 테니스 오픈'));
+  assert(text.includes('- 일정: 2026-06-13'));
+  assert(text.includes('- 장소: 광주 진월국제테니스장'));
+  assert(text.includes('- 접수 마감: 2026-06-10'));
+  assert(text.includes('- 참가비: 30,000원'));
+  assert(text.includes('- 주최: 광주테니스협회'));
+  assert(text.includes('### 요강'));
+  assert(text.includes('접수처: 협회 사무국'));
+  assert(text.includes('참가 자격은 동호인 등록 선수에 한한다.'));
+  assert(text.includes('※ 참가비로 스포츠공제보험 가입'));
+  assert(text.includes('[공식 페이지에서 보기](https://example.com/notice/1)'));
+});
+
+Deno.test('renderTournamentDetailText omits missing optional sections', () => {
+  const text = renderTournamentDetailText({
+    ...SAMPLE_DETAIL_ROW,
+    application_deadline: null,
+    entry_fee: null,
+    organizer: null,
+    prize: null,
+    regulation_fields: undefined,
+    regulation_body: null,
+    regulation_notes: null,
+    source_url: null,
+  });
+  assert(text.includes('## 광주 생활체육 테니스 오픈'));
+  assert(!text.includes('접수 마감'));
+  assert(!text.includes('참가비'));
+  assert(!text.includes('### 요강'));
+  assert(!text.includes('※'));
+  assert(!text.includes('공식 페이지'));
+});
+
+Deno.test('renderTournamentDetailIntroText points users to cards for application info', () => {
+  const text = renderTournamentDetailIntroText([SAMPLE_ROW], {
+    sport: 'tennis',
+    region: '광주',
+  });
+  assert(text.includes('🎾 테니스 1건'));
+  assert(text.includes('아래 카드'));
+  assert(text.includes("'상세 보기'"));
+  assert(!text.includes(SAMPLE_ROW.title));
+});
+
+// ==========================================================================
+// Club cards
+// ==========================================================================
+
+const SAMPLE_CLUB_ROW: ClubCardRow = {
+  id: '22222222-2222-2222-2222-222222222222',
+  sport: 'tennis',
+  name: '광주 아침테니스',
+  region: '광주',
+  description: '평일 아침에 함께 치는 클럽입니다.',
+  member_count: 24,
+  monthly_fee: 20000,
+  meeting_days: ['화', '목'],
+  gender_preference: 'mixed',
+};
+
+Deno.test('buildClubCards maps rows to the fixed card contract', () => {
+  const cards = buildClubCards([SAMPLE_CLUB_ROW]);
+  assertEquals(cards.length, 1);
+  assertEquals(cards[0], {
+    id: SAMPLE_CLUB_ROW.id,
+    name: '광주 아침테니스',
+    sport: 'tennis',
+    region: '광주',
+    description: '평일 아침에 함께 치는 클럽입니다.',
+    member_count: 24,
+    monthly_fee: 20000,
+    meeting_days: ['화', '목'],
+    gender_preference: 'mixed',
+  });
+});
+
+Deno.test('buildClubCards caps at 10 items and tolerates empty input', () => {
+  const rows = Array.from({ length: 25 }, (_, i) => ({ ...SAMPLE_CLUB_ROW, id: `id-${i}` }));
+  assertEquals(buildClubCards(rows).length, 10);
+  assertEquals(buildClubCards([]), []);
+});
+
+Deno.test('renderClubSearchText summarizes results without duplicating card rows', () => {
+  const text = renderClubSearchText([SAMPLE_CLUB_ROW], { sport: 'tennis', region: '광주' });
+  assert(text.includes('🎾 테니스 클럽 1건'));
+  assert(text.includes('(광주)'));
+  assert(text.includes('아래 카드'));
+  assert(!text.includes(SAMPLE_CLUB_ROW.name));
+});
+
+Deno.test('renderClubSearchEmptyText names the filters and suggests retry', () => {
+  const text = renderClubSearchEmptyText({ sport: 'futsal', region: '광주' });
+  assert(text.includes('조건에 맞는 풋살 클럽이 없습니다'));
+  assert(text.includes('(광주)'));
+  assert(text.includes('클럽 탭'));
+
+  const noFilter = renderClubSearchEmptyText({ region: null });
+  assert(noFilter.includes('조건에 맞는 클럽이 없습니다.'));
+});
+
+Deno.test('renderClubDetailText renders full markdown detail', () => {
+  const club: ClubDetailRow = {
+    ...SAMPLE_CLUB_ROW,
+    address: '광주 남구 진월동 123',
+    contact: '오픈채팅 https://open.kakao.com/abc',
+  };
+  const text = renderClubDetailText(club);
+  assert(text.includes('## 광주 아침테니스'));
+  assert(text.includes('- 종목: 테니스'));
+  assert(text.includes('- 지역: 광주'));
+  assert(text.includes('- 주소: 광주 남구 진월동 123'));
+  assert(text.includes('- 정기 모임: 화, 목'));
+  assert(text.includes('- 월 회비: 20,000원'));
+  assert(text.includes('- 멤버: 24명'));
+  assert(text.includes('- 성별: 혼성'));
+  assert(text.includes('- 연락처: 오픈채팅 https://open.kakao.com/abc'));
+  assert(text.includes('평일 아침에 함께 치는 클럽입니다.'));
+});
+
+Deno.test('renderClubDetailText omits missing optional fields', () => {
+  const club: ClubDetailRow = {
+    ...SAMPLE_CLUB_ROW,
+    region: null,
+    description: null,
+    monthly_fee: null,
+    meeting_days: [],
+    gender_preference: null,
+    address: null,
+    contact: null,
+  };
+  const text = renderClubDetailText(club);
+  assert(text.includes('## 광주 아침테니스'));
+  assert(text.includes('- 멤버: 24명'));
+  assert(!text.includes('지역'));
+  assert(!text.includes('주소'));
+  assert(!text.includes('정기 모임'));
+  assert(!text.includes('월 회비'));
+  assert(!text.includes('성별'));
+  assert(!text.includes('연락처'));
 });

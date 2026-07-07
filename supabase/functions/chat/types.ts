@@ -72,7 +72,7 @@ export interface VenueRow {
 
 export interface DbCitation {
   type: 'db';
-  source: 'tournaments' | 'rules' | 'venues';
+  source: 'tournaments' | 'rules' | 'venues' | 'clubs';
   id: string;
   title: string;
 }

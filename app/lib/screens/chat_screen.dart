@@ -7,6 +7,7 @@ import '../models/chat_ui.dart';
 import '../services/api.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
 
@@ -67,7 +68,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Future<void> _sendWithEntity(String message, String entityId) async {
+  Future<void> _sendWithEntity(
+      String message, String entityType, String entityId) async {
     if (_busy) return;
     setState(() {
       _messages.add(_Msg(role: 'user', content: message));
@@ -84,7 +86,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         message: message,
         conversationId: _conversationId,
         activeSport: ref.read(activeSportProvider),
-        selectedEntity: {'type': 'tournament', 'id': entityId},
+        selectedEntity: {'type': entityType, 'id': entityId},
       ),
       assistantIdx,
     );
@@ -213,10 +215,10 @@ class _EmptyHint extends StatelessWidget {
   const _EmptyHint({required this.onSend});
 
   static const _suggestions = [
-    ('🏆', '이번 주 대회', '이번 주 내 등급에 맞는 대회 알려줘'),
-    ('📖', '규칙 질문', '테니스 서브 기본 규칙 알려줘'),
-    ('📍', '구장 찾기', '광주 풋살장 알려줘'),
-    ('🏅', '등급 안내', '광주 테니스 협회 등급 체계 알려줘'),
+    (Icons.emoji_events_outlined, '이번 달 대회', '이번 달 대회 일정 알려줘'),
+    (Icons.article_outlined, '대회 신청', '대회 신청 방법 알려줘'),
+    (Icons.groups_outlined, '클럽 찾기', '광주 테니스 클럽 알려줘'),
+    (Icons.sports_tennis_outlined, '테니스 규칙', '테니스 복식 규칙 알려줘'),
   ];
 
   @override
@@ -231,64 +233,7 @@ class _EmptyHint extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: AppSpacing.xl),
-          Container(
-            width: double.infinity,
-            height: 206,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  cs.primaryContainer,
-                  cs.secondaryContainer,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Positioned(
-                  top: AppSpacing.md,
-                  right: AppSpacing.lg,
-                  child: Icon(
-                    Icons.auto_awesome_rounded,
-                    color: cs.primary.withValues(alpha: 0.22),
-                    size: 34,
-                  ),
-                ),
-                Positioned(
-                  left: AppSpacing.lg,
-                  bottom: AppSpacing.lg,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.82),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '라운드 코치',
-                      style: tt.labelMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                Image.asset(
-                  'assets/images/coach/round-coach.png',
-                  height: 200,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xxl),
           Text(
             '무엇이든 물어보세요',
             style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -303,9 +248,9 @@ class _EmptyHint extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xl),
-          for (final (emoji, label, msg) in _suggestions) ...[
+          for (final (icon, label, msg) in _suggestions) ...[
             _SuggestionCard(
-              emoji: emoji,
+              icon: icon,
               label: label,
               onTap: () => onSend(msg),
             ),
@@ -318,10 +263,10 @@ class _EmptyHint extends StatelessWidget {
 }
 
 class _SuggestionCard extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  const _SuggestionCard({required this.emoji, required this.label, this.onTap});
+  const _SuggestionCard({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -340,7 +285,7 @@ class _SuggestionCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 22)),
+              Icon(icon, size: 20, color: cs.onSurfaceVariant),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
@@ -429,7 +374,8 @@ class _InputBar extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.msg, required this.onCardAction});
   final _Msg msg;
-  final void Function(String message, String entityId) onCardAction;
+  final void Function(String message, String entityType, String entityId)
+      onCardAction;
 
   @override
   Widget build(BuildContext context) {
@@ -504,15 +450,26 @@ class _MessageBubble extends StatelessWidget {
                     _CitationRow(citation: c),
                 ],
                 if (msg.uiBlocks.isNotEmpty)
-                  for (final block in msg.uiBlocks)
+                  for (final block in msg.uiBlocks) ...[
                     for (final item in block.tournamentItems)
                       Padding(
                         padding: const EdgeInsets.only(top: AppSpacing.sm),
                         child: ChatTournamentCard(
                           item: item,
-                          onAction: onCardAction,
+                          onAction: (message, entityId) =>
+                              onCardAction(message, 'tournament', entityId),
                         ),
                       ),
+                    for (final item in block.clubItems)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: ChatClubCard(
+                          item: item,
+                          onAction: (message, entityId) =>
+                              onCardAction(message, 'club', entityId),
+                        ),
+                      ),
+                  ],
               ],
             ),
           ),
