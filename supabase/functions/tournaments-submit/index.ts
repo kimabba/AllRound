@@ -1,5 +1,6 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
+import { serviceClient } from '../_shared/supabase.ts';
 import {
   EntryFeeUnit,
   isValidEntryFeeUnit,
@@ -146,10 +147,13 @@ Deno.serve(async (req) => {
   if (error) return errorResponse(error.message, 500);
 
   // 2. 종목별 확장 테이블 INSERT
+  // 상세 테이블 RLS 는 admin 쓰기만 허용하므로 user client 로는 위반(500 + 고아 draft).
+  // 방금 생성한 본인 draft 대회(status='draft', submitted_by=user)의 상세만 service_role 로 넣는다.
   const tournamentId = data.id;
+  const svc = serviceClient();
 
   if (body.sport === 'tennis') {
-    const { error: detailErr } = await supabase
+    const { error: detailErr } = await svc
       .from('tennis_tournament_details')
       .insert({
         tournament_id: tournamentId,
@@ -157,12 +161,19 @@ Deno.serve(async (req) => {
         division_kta_standard: body.division_kta_standard ?? null,
         is_joint_event: body.is_joint_event ?? false,
       });
-    if (detailErr) return errorResponse(detailErr.message, 500);
+    if (detailErr) {
+      // 부분 실패 방지: 상세 실패 시 방금 만든 draft 대회를 되돌린다.
+      await svc.from('tournaments').delete().eq('id', tournamentId);
+      return errorResponse(detailErr.message, 500);
+    }
   } else if (body.sport === 'futsal') {
-    const { error: detailErr } = await supabase
+    const { error: detailErr } = await svc
       .from('futsal_tournament_details')
       .insert({ tournament_id: tournamentId });
-    if (detailErr) return errorResponse(detailErr.message, 500);
+    if (detailErr) {
+      await svc.from('tournaments').delete().eq('id', tournamentId);
+      return errorResponse(detailErr.message, 500);
+    }
   }
 
   return jsonResponse({ tournament: data }, { status: 201 });
