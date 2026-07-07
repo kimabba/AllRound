@@ -89,13 +89,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.read(chatProvider);
     final completer = Completer<void>();
 
-    _streamSub = stream
-        .timeout(_firstByteTimeout, onTimeout: (sink) {
-          sink.addError(TimeoutException(
-              '응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'));
-          sink.close();
-        })
-        .listen(
+    _streamSub = stream.timeout(_firstByteTimeout, onTimeout: (sink) {
+      sink.addError(TimeoutException('응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'));
+      sink.close();
+    }).listen(
       (evt) {
         if (!mounted) {
           _streamSub?.cancel();
@@ -104,16 +101,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
         switch (evt.event) {
           case 'meta':
-            chat.setConversationId(
-                evt.data['conversation_id'] as String?);
+            chat.setConversationId(evt.data['conversation_id'] as String?);
           case 'delta':
-            chat.appendContent(
-                assistantIdx, evt.data['text'] as String? ?? '');
+            chat.appendContent(assistantIdx, evt.data['text'] as String? ?? '');
             _scrollToBottom();
           case 'citation':
             final items = (evt.data['items'] as List?) ?? const [];
-            chat.setCitations(
-                assistantIdx, items.cast<Map<String, dynamic>>());
+            chat.setCitations(assistantIdx, items.cast<Map<String, dynamic>>());
           case 'ui':
             final blocks = ChatUiBlock.listFromEvent(evt.data);
             if (blocks.isNotEmpty) {
@@ -126,8 +120,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
       },
       onError: (Object e) {
-        chat.appendContent(
-            assistantIdx, '\n\n[연결 실패] ${_formatChatError(e)}');
+        chat.appendContent(assistantIdx, '\n\n[연결 실패] ${_formatChatError(e)}');
       },
       onDone: () {
         chat.finishStreaming();
@@ -249,64 +242,7 @@ class _EmptyHint extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: AppSpacing.xl),
-          Container(
-            width: double.infinity,
-            height: 206,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  cs.primaryContainer,
-                  cs.secondaryContainer,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Positioned(
-                  top: AppSpacing.md,
-                  right: AppSpacing.lg,
-                  child: Icon(
-                    Icons.auto_awesome_rounded,
-                    color: cs.primary.withValues(alpha: 0.22),
-                    size: 34,
-                  ),
-                ),
-                Positioned(
-                  left: AppSpacing.lg,
-                  bottom: AppSpacing.lg,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.82),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '라운드 코치',
-                      style: tt.labelMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                Image.asset(
-                  'assets/images/coach/round-coach.png',
-                  height: 200,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xxl),
           Text(
             '무엇이든 물어보세요',
             style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -394,6 +330,7 @@ class _InputBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    const inputBorderRadius = AppRadius.card;
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -412,12 +349,16 @@ class _InputBar extends StatelessWidget {
                   filled: true,
                   fillColor: cs.surface,
                   border: OutlineInputBorder(
-                    borderRadius: AppRadius.pill,
+                    borderRadius: inputBorderRadius,
                     borderSide: BorderSide(color: cs.outlineVariant),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.pill,
+                    borderRadius: inputBorderRadius,
                     borderSide: BorderSide(color: cs.outlineVariant),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: inputBorderRadius,
+                    borderSide: BorderSide(color: cs.primary, width: 2),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
