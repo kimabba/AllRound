@@ -174,7 +174,10 @@ export function renderTournamentDetailText(row: TournamentDetailRow): string {
     for (const n of notes) lines.push(`※ ${n}`);
   }
 
-  if (row.source_url) lines.push('', `[공식 페이지에서 보기](${row.source_url})`);
+  // source_url 은 크롤러가 넣은 신뢰 불가 값 → http(s) 스킴만 링크로, 그 외는 무시.
+  if (row.source_url && /^https?:\/\//i.test(row.source_url.trim())) {
+    lines.push('', `[공식 페이지에서 보기](${row.source_url.trim()})`);
+  }
   return lines.join('\n');
 }
 

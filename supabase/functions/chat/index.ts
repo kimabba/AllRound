@@ -182,6 +182,9 @@ Deno.serve(async (req) => {
                 'regulation_notes, source_url',
             )
             .eq('id', selectedEntity.id)
+            // 카드 검색(status='published'/'closed')과 동일 가시성 명시.
+            // RLS 가 본인 제출 draft 도 허용하므로, 채팅 상세는 공개 대회로 한정.
+            .in('status', ['published', 'closed'])
             .maybeSingle();
 
           if (selErr) {

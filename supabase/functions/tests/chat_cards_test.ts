@@ -239,6 +239,15 @@ Deno.test('renderTournamentDetailText omits missing optional sections', () => {
   assert(!text.includes('공식 페이지'));
 });
 
+Deno.test('renderTournamentDetailText drops non-http source_url (no unsafe link)', () => {
+  const text = renderTournamentDetailText({
+    ...SAMPLE_DETAIL_ROW,
+    source_url: 'javascript:alert(1)',
+  });
+  assert(!text.includes('공식 페이지'));
+  assert(!text.includes('javascript'));
+});
+
 Deno.test('renderTournamentDetailIntroText points users to cards for application info', () => {
   const text = renderTournamentDetailIntroText([SAMPLE_ROW], {
     sport: 'tennis',
