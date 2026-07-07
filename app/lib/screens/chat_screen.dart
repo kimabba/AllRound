@@ -10,6 +10,7 @@ import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
 
@@ -63,7 +64,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Future<void> _sendWithEntity(String message, String entityId) async {
+  Future<void> _sendWithEntity(
+      String message, String entityType, String entityId) async {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
 
@@ -78,7 +80,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         message: message,
         conversationId: chat.conversationId,
         activeSport: ref.read(activeSportProvider),
-        selectedEntity: {'type': 'tournament', 'id': entityId},
+        selectedEntity: {'type': entityType, 'id': entityId},
       ),
       assistantIdx,
     );
@@ -398,7 +400,8 @@ class _InputBar extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.msg, required this.onCardAction});
   final ChatMessage msg;
-  final void Function(String message, String entityId) onCardAction;
+  final void Function(String message, String entityType, String entityId)
+      onCardAction;
 
   @override
   Widget build(BuildContext context) {
@@ -473,15 +476,26 @@ class _MessageBubble extends StatelessWidget {
                     _CitationRow(citation: c),
                 ],
                 if (msg.uiBlocks.isNotEmpty)
-                  for (final block in msg.uiBlocks)
+                  for (final block in msg.uiBlocks) ...[
                     for (final item in block.tournamentItems)
                       Padding(
                         padding: const EdgeInsets.only(top: AppSpacing.sm),
                         child: ChatTournamentCard(
                           item: item,
-                          onAction: onCardAction,
+                          onAction: (message, entityId) =>
+                              onCardAction(message, 'tournament', entityId),
                         ),
                       ),
+                    for (final item in block.clubItems)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: ChatClubCard(
+                          item: item,
+                          onAction: (message, entityId) =>
+                              onCardAction(message, 'club', entityId),
+                        ),
+                      ),
+                  ],
               ],
             ),
           ),
