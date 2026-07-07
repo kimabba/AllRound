@@ -115,6 +115,118 @@ export function renderTournamentSearchEmptyText(ctx: TournamentSearchTextContext
   ].join('\n');
 }
 
+// ==========================================================================
+// Club cards (club_search 라우팅 + selected_entity club 상세)
+// ==========================================================================
+
+export interface ClubCardRow {
+  id: string;
+  sport: 'tennis' | 'futsal';
+  name: string;
+  region: string | null;
+  description: string | null;
+  member_count: number;
+  monthly_fee: number | null;
+  meeting_days: string[];
+  gender_preference: string | null;
+}
+
+/// 프론트와 계약된 카드 스키마 — 필드 추가/변경 시 앱 클럽 카드 위젯과 동기화 필요.
+export interface ClubCardItem {
+  id: string;
+  name: string;
+  sport: 'tennis' | 'futsal';
+  region: string | null;
+  description: string | null;
+  member_count: number;
+  monthly_fee: number | null;
+  meeting_days: string[];
+  gender_preference: string | null;
+}
+
+export function buildClubCards(rows: ClubCardRow[]): ClubCardItem[] {
+  return rows.slice(0, MAX_CARDS).map((r) => ({
+    id: r.id,
+    name: r.name,
+    sport: r.sport,
+    region: r.region,
+    description: r.description,
+    member_count: r.member_count ?? 0,
+    monthly_fee: r.monthly_fee,
+    meeting_days: r.meeting_days ?? [],
+    gender_preference: r.gender_preference,
+  }));
+}
+
+export interface ClubSearchTextContext {
+  sport?: 'tennis' | 'futsal' | null;
+  region: string | null;
+}
+
+function clubSportLabel(sport: ClubSearchTextContext['sport']): string {
+  if (sport === 'tennis') return '테니스 클럽';
+  if (sport === 'futsal') return '풋살 클럽';
+  return '클럽';
+}
+
+function clubSportHeading(sport: ClubSearchTextContext['sport']): string {
+  if (sport === 'tennis') return '🎾 테니스 클럽';
+  if (sport === 'futsal') return '⚽ 풋살 클럽';
+  return '클럽';
+}
+
+function clubFilterText(ctx: ClubSearchTextContext): string {
+  return ctx.region ? ` (${ctx.region})` : '';
+}
+
+export function renderClubSearchText(rows: ClubCardRow[], ctx: ClubSearchTextContext): string {
+  return [
+    `## ${clubSportHeading(ctx.sport)} ${rows.length}건${clubFilterText(ctx)}`,
+    '',
+    '조건에 맞는 클럽을 찾았습니다. 아래 카드에서 모임 요일·회비를 확인하고 관심 있는 클럽을 선택해 주세요.',
+  ].join('\n');
+}
+
+export function renderClubSearchEmptyText(ctx: ClubSearchTextContext): string {
+  return [
+    `조건에 맞는 ${clubSportLabel(ctx.sport)}이 없습니다${clubFilterText(ctx)}.`,
+    '지역·종목을 바꿔서 다시 물어보거나 클럽 탭에서 전체 클럽을 둘러봐 주세요.',
+  ].join('\n');
+}
+
+export interface ClubDetailRow extends ClubCardRow {
+  address: string | null;
+  contact: string | null;
+}
+
+const CLUB_GENDER_LABELS: Record<string, string> = {
+  male: '남성',
+  female: '여성',
+  mixed: '혼성',
+};
+
+/// selected_entity(club) 카드 선택의 결정적(LLM 미사용) 마크다운 응답.
+export function renderClubDetailText(club: ClubDetailRow): string {
+  const lines: string[] = [`## ${club.name}`, ''];
+  lines.push(`- 종목: ${club.sport === 'tennis' ? '테니스' : '풋살'}`);
+  if (club.region) lines.push(`- 지역: ${club.region}`);
+  if (club.address) lines.push(`- 주소: ${club.address}`);
+  const days = club.meeting_days ?? [];
+  if (days.length > 0) lines.push(`- 정기 모임: ${days.join(', ')}`);
+  if (club.monthly_fee !== null && club.monthly_fee !== undefined) {
+    lines.push(`- 월 회비: ${club.monthly_fee.toLocaleString('ko-KR')}원`);
+  }
+  lines.push(`- 멤버: ${club.member_count ?? 0}명`);
+  if (club.gender_preference) {
+    lines.push(
+      `- 성별: ${CLUB_GENDER_LABELS[club.gender_preference] ?? club.gender_preference}`,
+    );
+  }
+  if (club.contact) lines.push(`- 연락처: ${club.contact}`);
+  if (club.description) lines.push('', club.description);
+  return lines.join('\n');
+}
+
 export type SelectedEntityType = 'tournament' | 'club';
 
 export interface SelectedEntity {

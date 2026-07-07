@@ -97,15 +97,62 @@ class TournamentChatCardItem {
   }
 }
 
+class ClubChatCardItem {
+  final String id;
+  final String name;
+  final String sport;
+  final String? region;
+  final String? description;
+  final int memberCount;
+  final int? monthlyFee;
+  final List<String> meetingDays;
+  final String? genderPreference;
+
+  const ClubChatCardItem({
+    required this.id,
+    required this.name,
+    required this.sport,
+    this.region,
+    this.description,
+    required this.memberCount,
+    this.monthlyFee,
+    this.meetingDays = const [],
+    this.genderPreference,
+  });
+
+  /// 필수 필드(id, name, sport)가 없으면 null 을 반환해 호출자가 건너뛴다.
+  static ClubChatCardItem? tryFromJson(Map<String, dynamic> j) {
+    final id = j['id'];
+    final name = j['name'];
+    final sport = j['sport'];
+    if (id is! String || name is! String || sport is! String) return null;
+    return ClubChatCardItem(
+      id: id,
+      name: name,
+      sport: sport,
+      region: j['region'] as String?,
+      description: j['description'] as String?,
+      memberCount: (j['member_count'] as int?) ?? 0,
+      monthlyFee: j['monthly_fee'] as int?,
+      meetingDays:
+          (j['meeting_days'] as List?)?.whereType<String>().toList() ??
+              const [],
+      genderPreference: j['gender_preference'] as String?,
+    );
+  }
+}
+
 class ChatUiBlock {
   final String type; // 'cards'
   final String entity; // 'tournament' | 'club'
   final List<TournamentChatCardItem> tournamentItems;
+  final List<ClubChatCardItem> clubItems;
 
   const ChatUiBlock({
     required this.type,
     required this.entity,
     required this.tournamentItems,
+    this.clubItems = const [],
   });
 
   /// `ui` 이벤트 data 에서 blocks 리스트를 파싱. 어떤 형식 오류든 빈 리스트로 흡수.
@@ -120,18 +167,25 @@ class ChatUiBlock {
       if (entity is! String) continue;
       final itemsRaw = block['items'];
       final tournamentItems = <TournamentChatCardItem>[];
-      if (entity == 'tournament' && itemsRaw is List) {
+      final clubItems = <ClubChatCardItem>[];
+      if (itemsRaw is List) {
         for (final it in itemsRaw) {
           if (it is! Map) continue;
-          final parsed =
-              TournamentChatCardItem.tryFromJson(it.cast<String, dynamic>());
-          if (parsed != null) tournamentItems.add(parsed);
+          final json = it.cast<String, dynamic>();
+          if (entity == 'tournament') {
+            final parsed = TournamentChatCardItem.tryFromJson(json);
+            if (parsed != null) tournamentItems.add(parsed);
+          } else if (entity == 'club') {
+            final parsed = ClubChatCardItem.tryFromJson(json);
+            if (parsed != null) clubItems.add(parsed);
+          }
         }
       }
       result.add(ChatUiBlock(
         type: (block['type'] as String?) ?? 'cards',
         entity: entity,
         tournamentItems: tournamentItems,
+        clubItems: clubItems,
       ));
     }
     return result;
