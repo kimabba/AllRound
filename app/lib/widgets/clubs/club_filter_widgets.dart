@@ -54,10 +54,12 @@ class ClubSearchFilters {
 class ClubFilterResult {
   final ClubSearchFilters filters;
   final Set<String> interests;
+  final String nameQuery;
 
   const ClubFilterResult({
     required this.filters,
     required this.interests,
+    this.nameQuery = '',
   });
 }
 
@@ -183,6 +185,7 @@ class SportInterestChip extends StatelessWidget {
 class ClubFilterSheet extends StatefulWidget {
   final ClubSearchFilters initialFilters;
   final Set<String> initialInterests;
+  final String initialNameQuery;
   final String title;
   final IconData icon;
   final Color accentColor;
@@ -192,6 +195,7 @@ class ClubFilterSheet extends StatefulWidget {
     super.key,
     required this.initialFilters,
     required this.initialInterests,
+    this.initialNameQuery = '',
     required this.title,
     required this.icon,
     required this.accentColor,
@@ -211,163 +215,217 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
   late Set<String> _selectedInterests = widget.initialInterests.isEmpty
       ? const {'tennis', 'futsal'}
       : {...widget.initialInterests};
+  late final TextEditingController _nameQueryCtrl =
+      TextEditingController(text: widget.initialNameQuery);
+
+  @override
+  void dispose() {
+    _nameQueryCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: widget.accentColor,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    widget.icon,
-                    color: widget.onAccentColor,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: tt.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: widget.accentColor,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      widget.icon,
+                      color: widget.onAccentColor,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilterSection(
-              title: '종목',
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    SportInterestChip(
-                      sport: 'tennis',
-                      selected: _selectedInterests.contains('tennis'),
-                      onTap: _selectSport,
-                    ),
-                    SportInterestChip(
-                      sport: 'futsal',
-                      selected: _selectedInterests.contains('futsal'),
-                      onTap: _selectSport,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            FilterSection(
-              title: '지역',
-              children: [
-                FilterChipWrap(
-                  values: _regions,
-                  selected: {_filters.region}.whereType<String>().toSet(),
-                  onSelected: (value) => setState(() {
-                    _filters = _filters.region == value
-                        ? _filters.copyWith(clearRegion: true)
-                        : _filters.copyWith(region: value);
-                  }),
-                ),
-              ],
-            ),
-            FilterSection(
-              title: '성별',
-              children: [
-                FilterChipWrap(
-                  values: _genders,
-                  selected: {_filters.gender}.whereType<String>().toSet(),
-                  onSelected: (value) => setState(() {
-                    _filters = _filters.gender == value
-                        ? _filters.copyWith(clearGender: true)
-                        : _filters.copyWith(gender: value);
-                  }),
-                ),
-              ],
-            ),
-            FilterSection(
-              title: '모임요일',
-              children: [
-                FilterChipWrap(
-                  values: _days,
-                  selected: _filters.days,
-                  onSelected: (value) => setState(() {
-                    final next = {..._filters.days};
-                    if (!next.add(value)) next.remove(value);
-                    _filters = _filters.copyWith(days: next);
-                  }),
-                ),
-              ],
-            ),
-            FilterSection(
-              title:
-                  '월회비 ${formatFee(_filters.feeRange.start)} ~ ${formatFee(_filters.feeRange.end)}',
-              children: [
-                RangeSlider(
-                  values: _filters.feeRange,
-                  min: 0,
-                  max: 100000,
-                  divisions: 20,
-                  labels: RangeLabels(
-                    formatFee(_filters.feeRange.start),
-                    formatFee(_filters.feeRange.end),
-                  ),
-                  onChanged: (value) => setState(() {
-                    _filters = _filters.copyWith(feeRange: value);
-                  }),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => setState(() {
-                      _filters = _filters.cleared();
-                      _selectedInterests = widget.initialInterests.isEmpty
-                          ? const {'tennis', 'futsal'}
-                          : {...widget.initialInterests};
-                    }),
-                    child: const Text('초기화'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton.icon(
-                    onPressed: () => Navigator.pop(
-                      context,
-                      ClubFilterResult(
-                        filters: _filters,
-                        interests: _selectedInterests,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('조건 적용'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _nameQueryCtrl,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: '클럽 이름·설명 검색',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          filled: true,
+                          fillColor: cs.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.sm,
+                          ),
+                        ),
+                        onSubmitted: (_) => _apply(),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      FilterSection(
+                        title: '종목',
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              SportInterestChip(
+                                sport: 'tennis',
+                                selected: _selectedInterests.contains('tennis'),
+                                onTap: _selectSport,
+                              ),
+                              SportInterestChip(
+                                sport: 'futsal',
+                                selected: _selectedInterests.contains('futsal'),
+                                onTap: _selectSport,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      FilterSection(
+                        title: '지역',
+                        children: [
+                          FilterChipWrap(
+                            values: _regions,
+                            selected:
+                                {_filters.region}.whereType<String>().toSet(),
+                            onSelected: (value) => setState(() {
+                              _filters = _filters.region == value
+                                  ? _filters.copyWith(clearRegion: true)
+                                  : _filters.copyWith(region: value);
+                            }),
+                          ),
+                        ],
+                      ),
+                      FilterSection(
+                        title: '성별',
+                        children: [
+                          FilterChipWrap(
+                            values: _genders,
+                            selected:
+                                {_filters.gender}.whereType<String>().toSet(),
+                            onSelected: (value) => setState(() {
+                              _filters = _filters.gender == value
+                                  ? _filters.copyWith(clearGender: true)
+                                  : _filters.copyWith(gender: value);
+                            }),
+                          ),
+                        ],
+                      ),
+                      FilterSection(
+                        title: '모임요일',
+                        children: [
+                          FilterChipWrap(
+                            values: _days,
+                            selected: _filters.days,
+                            onSelected: (value) => setState(() {
+                              final next = {..._filters.days};
+                              if (!next.add(value)) next.remove(value);
+                              _filters = _filters.copyWith(days: next);
+                            }),
+                          ),
+                        ],
+                      ),
+                      FilterSection(
+                        title:
+                            '월회비 ${formatFee(_filters.feeRange.start)} ~ ${formatFee(_filters.feeRange.end)}',
+                        children: [
+                          RangeSlider(
+                            values: _filters.feeRange,
+                            min: 0,
+                            max: 100000,
+                            divisions: 20,
+                            labels: RangeLabels(
+                              formatFee(_filters.feeRange.start),
+                              formatFee(_filters.feeRange.end),
+                            ),
+                            onChanged: (value) => setState(() {
+                              _filters = _filters.copyWith(feeRange: value);
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => setState(() {
+                        _filters = _filters.cleared();
+                        _nameQueryCtrl.clear();
+                        _selectedInterests = widget.initialInterests.isEmpty
+                            ? const {'tennis', 'futsal'}
+                            : {...widget.initialInterests};
+                      }),
+                      child: const Text('초기화'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: _apply,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('검색'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _apply() {
+    Navigator.pop(
+      context,
+      ClubFilterResult(
+        filters: _filters,
+        interests: _selectedInterests,
+        nameQuery: _nameQueryCtrl.text.trim(),
       ),
     );
   }

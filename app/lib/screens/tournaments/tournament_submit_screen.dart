@@ -92,9 +92,9 @@ class _TournamentSubmitScreenState
           'poster_url': _posterUrl.text.trim(),
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('제보 완료. 관리자 승인 후 노출됩니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('제보 완료. 관리자 승인 후 노출됩니다.')));
         context.pop();
       }
     } catch (e) {
@@ -131,8 +131,11 @@ class _TournamentSubmitScreenState
               variant: AppCardVariant.outlined,
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded,
-                      size: 18, color: cs.onSurfaceVariant),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -180,10 +183,7 @@ class _TournamentSubmitScreenState
                   (v == null || v.trim().isEmpty) ? '필수 항목입니다' : null,
             ),
             const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _organizer,
-              decoration: _inputDeco('주최'),
-            ),
+            TextFormField(controller: _organizer, decoration: _inputDeco('주최')),
             const SizedBox(height: AppSpacing.md),
 
             // 날짜 선택
@@ -198,14 +198,19 @@ class _TournamentSubmitScreenState
               ),
               child: Row(
                 children: [
-                  Icon(Icons.calendar_today_rounded,
-                      size: 18, color: cs.primary),
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    size: 18,
+                    color: cs.primary,
+                  ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
                     _startDate == null
                         ? '날짜를 선택하세요'
-                        : DateFormat('yyyy년 M월 d일 (E)', 'ko')
-                            .format(_startDate!),
+                        : DateFormat(
+                            'yyyy년 M월 d일 (E)',
+                            'ko',
+                          ).format(_startDate!),
                     style: tt.bodyMedium?.copyWith(
                       color: _startDate == null ? cs.onSurfaceVariant : null,
                     ),
@@ -238,7 +243,8 @@ class _TournamentSubmitScreenState
                 decoration: _inputDeco('협회 선택'),
                 items: _tennisOrgOptions
                     .map(
-                        (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                      (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)),
+                    )
                     .toList(),
                 onChanged: (v) => setState(() {
                   _tennisOrg = v!;
@@ -312,8 +318,11 @@ class _TournamentSubmitScreenState
                 variant: AppCardVariant.outlined,
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline_rounded,
-                        color: cs.error, size: 18),
+                    Icon(
+                      Icons.error_outline_rounded,
+                      color: cs.error,
+                      size: 18,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -338,13 +347,13 @@ class _TournamentSubmitScreenState
   }
 
   InputDecoration _inputDeco(String label) => InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: AppRadius.card),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
-        ),
-      );
+    labelText: label,
+    border: OutlineInputBorder(borderRadius: AppRadius.card),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.md,
+    ),
+  );
 
   String? _optionalHttpUrlValidator(String? value) {
     final trimmed = value?.trim() ?? '';

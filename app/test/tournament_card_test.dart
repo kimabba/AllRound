@@ -32,10 +32,8 @@ void main() {
   }
 
   Widget wrap(Tournament t) => MaterialApp(
-        home: Scaffold(
-          body: TournamentCard(tournament: t),
-        ),
-      );
+    home: Scaffold(body: TournamentCard(tournament: t)),
+  );
 
   testWidgets('대회일 라벨과 날짜를 렌더한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament()));
@@ -59,9 +57,7 @@ void main() {
   });
 
   testWidgets('location 이 null 이면 region 으로 폴백한다', (tester) async {
-    await tester.pumpWidget(
-      wrap(makeTournament(location: null, region: '전남')),
-    );
+    await tester.pumpWidget(wrap(makeTournament(location: null, region: '전남')));
     expect(find.text('전남'), findsOneWidget);
   });
 

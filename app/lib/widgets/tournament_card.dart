@@ -15,6 +15,7 @@ class TournamentCard extends StatelessWidget {
     this.onTap,
     this.onFavoriteToggle,
     this.compact = false,
+    this.seq,
   });
 
   final Tournament tournament;
@@ -23,6 +24,8 @@ class TournamentCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onFavoriteToggle;
   final bool compact;
+  // 목록 내 순번(1,2,3…). 캘린더 목록에서만 전달(favorites/chat엔 미표시).
+  final int? seq;
 
   static final _df = DateFormat('M/d (E)', 'ko');
 
@@ -56,6 +59,26 @@ class TournamentCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      if (seq != null) ...[
+                        Container(
+                          width: 20,
+                          height: 20,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$seq',
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
                       _StatusChip(
                         label: status.label,
                         foreground: status.foreground,
@@ -81,8 +104,9 @@ class TournamentCard extends StatelessWidget {
                                 ? Icons.bookmark_rounded
                                 : Icons.bookmark_outline_rounded,
                             size: 22,
-                            color:
-                                isFavorite ? cs.primary : cs.onSurfaceVariant,
+                            color: isFavorite
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
                           ),
                         ),
                     ],
@@ -162,8 +186,9 @@ class TournamentCard extends StatelessWidget {
     }
     // deadline이 없어도 start_date가 지났으면 마감 처리
     final today = DateTime.now();
-    final startPassed = tournament.startDate
-        .isBefore(DateTime(today.year, today.month, today.day));
+    final startPassed = tournament.startDate.isBefore(
+      DateTime(today.year, today.month, today.day),
+    );
     if (startPassed && tournament.status == 'published') {
       return _StatusBadgeData(
         label: '마감',
@@ -267,9 +292,9 @@ class _StatusChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w800,
-            ),
+          color: foreground,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

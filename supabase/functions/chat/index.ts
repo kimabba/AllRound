@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
           if (!selRow) {
             send('context', { tournaments: [], rules: [] });
             send('delta', {
-              text: '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
+              text: '현재 올라운드 DB에서 이 항목을 확인할 수 없습니다. ' +
                 '정보가 변경되었거나 접근 권한이 없을 수 있습니다.',
             });
             send('done', {});
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
           send('context', { tournaments: [], rules: [] });
           if (!clubRow) {
             send('delta', {
-              text: '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
+              text: '현재 올라운드 DB에서 이 항목을 확인할 수 없습니다. ' +
                 '정보가 변경되었거나 접근 권한이 없을 수 있습니다.',
             });
             send('done', {});
@@ -544,7 +544,9 @@ Deno.serve(async (req) => {
             .order('member_count', { ascending: false })
             .limit(10);
 
-          if (explicitSport) clubQuery = clubQuery.eq('sport', explicitSport);
+          // 종목 필터는 requestedSport(명시 종목 → 없으면 UI 활성 종목)로.
+          // 활성 종목을 반영해 테니스/풋살이 섞이지 않게 한다.
+          if (requestedSport) clubQuery = clubQuery.eq('sport', requestedSport);
           // clubs.region 은 자유 텍스트("광주" vs "광주광역시")라 부분일치.
           // (정확일치 시 "광주" 검색으로 "광주광역시" 등록 클럽이 누락됨)
           if (regionLabel) clubQuery = clubQuery.ilike('region', `%${regionLabel}%`);
@@ -564,7 +566,7 @@ Deno.serve(async (req) => {
             );
           } else {
             const typedClubs = (clubRows ?? []) as unknown as ClubCardRow[];
-            const clubCtx = { sport: explicitSport ?? undefined, region: regionLabel };
+            const clubCtx = { sport: requestedSport ?? undefined, region: regionLabel };
             const answerText = typedClubs.length > 0
               ? renderClubSearchText(typedClubs, clubCtx)
               : renderClubSearchEmptyText(clubCtx);
@@ -630,7 +632,8 @@ Deno.serve(async (req) => {
             'tournament_search_by_slots',
             {
               p_user_id: user.id,
-              p_sport: explicitSport,
+              // 명시 종목 → 없으면 UI 활성 종목. 테니스/풋살 혼합 방지.
+              p_sport: requestedSport,
               p_region: regionLabel,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
@@ -657,7 +660,7 @@ Deno.serve(async (req) => {
           } else if (Array.isArray(rows) && rows.length > 0) {
             const typedRows = rows as TournamentCardRow[];
             const answerText = renderTournamentSearchText(typedRows, {
-              sport: explicitSport ?? undefined,
+              sport: requestedSport ?? undefined,
               region: regionLabel,
               dateRange,
             });
@@ -706,7 +709,7 @@ Deno.serve(async (req) => {
             return;
           } else {
             const answerText = renderTournamentSearchEmptyText({
-              sport: explicitSport,
+              sport: requestedSport,
               region: regionLabel,
               dateRange,
             });
@@ -843,7 +846,7 @@ Deno.serve(async (req) => {
           const ragResult = await performRagSearch(
             supabase,
             vectorLiteral,
-            explicitSport ?? null,
+            requestedSport ?? null,
             user.id,
             includeTournaments,
           );

@@ -123,7 +123,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       builder: (_) => ClubFilterSheet(
         initialFilters: _clubFilters,
         initialInterests: _clubInterests,
-        title: '클럽 찾기 조건',
+        initialNameQuery: _clubNameQuery,
+        title: '상세검색',
         icon: Icons.tune_rounded,
         accentColor: cs.primaryContainer,
         onAccentColor: cs.onPrimaryContainer,
@@ -133,9 +134,60 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       setState(() {
         _clubFilters = result.filters;
         _clubInterests = result.interests;
+        _clubNameQuery = result.nameQuery;
       });
       _load();
     }
+  }
+
+  /// 대회 탭과 동일한 패턴: 상단엔 '기준 · 상세검색' 바 하나만 두고,
+  /// 검색창은 상세검색 bottom sheet 안에서 노출한다.
+  Widget _buildClubFilterControls(ColorScheme cs, bool hasClubNameQuery) {
+    final tt = Theme.of(context).textTheme;
+    final active = hasClubNameQuery || _clubFilters.hasActive;
+    final parts = <String>[
+      _selectedSportLabel(_clubInterests),
+      if (hasClubNameQuery) '검색어',
+      ..._clubFilters.labels,
+    ];
+    final filterLabel =
+        active ? '${parts.join(' · ')} 적용됨' : '${parts.join(' · ')} 전체 클럽 기준';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.tune_rounded,
+            size: 19,
+            color: active ? cs.primary : cs.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              filterLabel,
+              style: tt.labelLarge?.copyWith(
+                color: active ? cs.primary : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _openClubFilterSheet,
+            icon: const Icon(Icons.tune_rounded, size: 18),
+            label: const Text('상세검색'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openTeamRecruitingSheet(List<Club> managedClubs) async {
@@ -241,12 +293,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             ),
             sliver: SliverList.list(
               children: [
-                _ClubSearchField(
-                  value: _clubNameQuery,
-                  onChanged: (value) => setState(() {
-                    _clubNameQuery = value;
-                  }),
-                ),
+                _buildClubFilterControls(cs, hasClubNameQuery),
                 const SizedBox(height: AppSpacing.lg),
                 SimpleSectionHeader(
                   title: hasClubNameQuery ? '검색결과' : '맞춤추천',
@@ -329,17 +376,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                SimpleActionCard(
-                  icon: Icons.location_on_rounded,
-                  title: '맞춤 조건 설정',
-                  subtitle: [
-                    _selectedSportLabel(_clubInterests),
-                    ..._clubFilters.labels,
-                  ].join(' · '),
-                  action: '설정',
-                  color: const Color(0xFFEAF7F1),
-                  onTap: _openClubFilterSheet,
-                ),
                 const SizedBox(height: AppSpacing.xl),
                 if (managedClubs.isNotEmpty) ...[
                   SimpleActionCard(
@@ -474,66 +510,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return posts.where((post) => !post.isClosed).toList();
     }
     return posts;
-  }
-}
-
-class _ClubSearchField extends StatefulWidget {
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  const _ClubSearchField({
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  State<_ClubSearchField> createState() => _ClubSearchFieldState();
-}
-
-class _ClubSearchFieldState extends State<_ClubSearchField> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ClubSearchField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.value != _controller.text) {
-      _controller.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _controller,
-      onChanged: widget.onChanged,
-      textInputAction: TextInputAction.search,
-      decoration: InputDecoration(
-        hintText: '클럽 이름으로 검색',
-        prefixIcon: const Icon(Icons.search_rounded),
-        suffixIcon: widget.value.isEmpty
-            ? null
-            : IconButton(
-                tooltip: '검색어 지우기',
-                onPressed: () {
-                  _controller.clear();
-                  widget.onChanged('');
-                },
-                icon: const Icon(Icons.close_rounded),
-              ),
-      ),
-    );
   }
 }
 

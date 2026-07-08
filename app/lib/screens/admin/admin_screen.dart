@@ -49,8 +49,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tab =
-        TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
+    _tab = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: widget.initialTab,
+    );
     _tab.addListener(_onTabChanged);
     _startRefreshTimer();
     _loadLogs();
@@ -104,8 +107,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       if (mounted) setState(() => _logs = logs);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('로그 로드 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('로그 로드 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingLogs = false);
@@ -130,8 +134,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Draft 로드 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Draft 로드 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingDrafts = false);
@@ -176,9 +181,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       final api = ref.read(apiProvider);
       final affected = await api.bulkApproveTournaments(ids);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('승인 완료: $affected건')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('승인 완료: $affected건')));
         _selectedDraftIds.clear();
       }
       await _loadDrafts();
@@ -206,9 +211,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         title: Text('${ids.length}건 일괄 거부'),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(
-            hintText: '거부 사유 (필수)',
-          ),
+          decoration: const InputDecoration(hintText: '거부 사유 (필수)'),
           autofocus: true,
           maxLines: 2,
         ),
@@ -229,9 +232,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final reason = reasonController.text.trim();
     if (reason.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('거부 사유는 필수입니다')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('거부 사유는 필수입니다')));
       }
       return;
     }
@@ -240,9 +243,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       final api = ref.read(apiProvider);
       final affected = await api.bulkRejectTournaments(ids, reason);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('거부 완료: $affected건')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('거부 완료: $affected건')));
         _selectedDraftIds.clear();
       }
       await _loadDrafts();
@@ -279,8 +282,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await _loadDrafts();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('승인 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('승인 실패: $e')));
       }
     }
   }
@@ -318,8 +322,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await _loadDrafts();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('거절 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('거절 실패: $e')));
       }
     }
   }
@@ -335,8 +340,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       if (mounted) setState(() => _pendingClubs = list);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('클럽 목록 로드 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('클럽 목록 로드 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingPendingClubs = false);
@@ -358,8 +364,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('취소')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -383,8 +390,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await _loadPendingClubs();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('처리 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('처리 실패: $e')));
       }
     }
   }
@@ -401,8 +409,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       if (mounted) setState(() => _sources = list);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('소스 로드 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('소스 로드 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingSources = false);
@@ -423,8 +432,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('토글 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('토글 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _togglingIds.remove(s.id));
@@ -457,8 +467,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await _loadSources();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
       }
     }
   }
@@ -500,7 +511,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       } else {
         final first = executed.first as Map<String, dynamic>;
         final status = first['status']?.toString() ?? 'unknown';
-        summary = '${s.slug}: $status · '
+        summary =
+            '${s.slug}: $status · '
             'fetched ${first['fetched_count'] ?? 0} · '
             'inserted ${first['inserted_count'] ?? 0} · '
             'updated ${first['updated_count'] ?? 0}';
@@ -520,9 +532,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(summary), backgroundColor: bg),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(summary), backgroundColor: bg));
       }
       await _loadSources();
     } catch (e) {
@@ -580,9 +592,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       await _loadSources();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('저장 실패: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
       }
     }
   }
@@ -658,10 +670,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final selectedInView = visibleIds.intersection(_selectedDraftIds).length;
     final allSelected =
         filtered.isNotEmpty && selectedInView == filtered.length;
-    final crawlerCount =
-        _drafts.where((r) => r['submission_kind'] == 'crawler').length;
-    final userCount =
-        _drafts.where((r) => r['submission_kind'] == 'user').length;
+    final crawlerCount = _drafts
+        .where((r) => r['submission_kind'] == 'crawler')
+        .length;
+    final userCount = _drafts
+        .where((r) => r['submission_kind'] == 'user')
+        .length;
 
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -711,9 +725,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
               FilledButton.icon(
                 // 전역 테마 minimumSize: Size.fromHeight(52) = Size(∞, 52)를 오버라이드.
                 // Row 안에서 무한 너비 constraint 에러 방지.
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
                 onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
                     ? null
                     : _bulkApprove,
@@ -728,17 +740,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                 onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
                     ? null
                     : _bulkReject,
                 icon: const Icon(Icons.close, color: Colors.red),
-                label: const Text(
-                  '일괄 거부',
-                  style: TextStyle(color: Colors.red),
-                ),
+                label: const Text('일괄 거부', style: TextStyle(color: Colors.red)),
               ),
             ],
           ),
@@ -773,8 +780,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final title = t['title'] as String? ?? '(제목 없음)';
           final sport = t['sport'] as String? ?? '';
           final startDate = t['start_date']?.toString() ?? '';
-          final date =
-              startDate.length >= 10 ? startDate.substring(0, 10) : startDate;
+          final date = startDate.length >= 10
+              ? startDate.substring(0, 10)
+              : startDate;
           final region = t['region'] as String? ?? '';
           final sourceUrl = t['source_url'] as String? ?? '';
           final posterUrl = t['poster_url'] as String? ?? '';
@@ -783,11 +791,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final submitterEmail = t['submitted_by_email'] as String?;
           final sourceLabel = kind == 'user'
               ? (submitterEmail != null
-                  ? submitterEmail.split('@').first
-                  : 'user')
+                    ? submitterEmail.split('@').first
+                    : 'user')
               : source.isEmpty
-                  ? 'crawler'
-                  : source;
+              ? 'crawler'
+              : source;
           final selected = _selectedDraftIds.contains(id);
 
           return Padding(
@@ -821,9 +829,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                               Expanded(
                                 child: Text(
                                   sourceLabel,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(color: Colors.grey),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -831,11 +837,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                             ],
                           ),
                           const SizedBox(height: 4),
-                          Text(title,
-                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
                           const SizedBox(height: 4),
-                          Text('$sport · $date · $region',
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            '$sport · $date · $region',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                           if (sourceUrl.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
@@ -930,29 +940,35 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                   ],
                   if (c.contact != null) ...[
                     const SizedBox(height: 2),
-                    Text('연락처: ${c.contact!}',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      '연락처: ${c.contact!}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                   if (c.description != null) ...[
                     const SizedBox(height: 6),
-                    Text(c.description!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      c.description!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       FilledButton(
                         style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 36)),
+                          minimumSize: const Size(0, 36),
+                        ),
                         onPressed: () => _approveClub(c.id, approve: true),
                         child: const Text('승인'),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 36)),
+                          minimumSize: const Size(0, 36),
+                        ),
                         onPressed: () => _approveClub(c.id, approve: false),
                         child: const Text('거절'),
                       ),

@@ -190,7 +190,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Expanded(
             child: messages.isEmpty
-                ? _EmptyHint(onSend: sendText)
+                ? _EmptyHint(
+                    onSend: sendText,
+                    sport: ref.watch(activeSportProvider),
+                  )
                 : ListView.builder(
                     controller: _scroll,
                     padding: const EdgeInsets.symmetric(
@@ -223,14 +226,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 class _EmptyHint extends StatelessWidget {
   final Future<void> Function(String) onSend;
-  const _EmptyHint({required this.onSend});
+  // 활성 종목(풋살/테니스)에 맞춰 예시 질문을 바꾼다.
+  final String? sport;
+  const _EmptyHint({required this.onSend, this.sport});
 
-  static const _suggestions = [
-    (Icons.emoji_events_outlined, '이번 달 대회', '이번 달 대회 일정 알려줘'),
-    (Icons.article_outlined, '대회 신청', '대회 신청 방법 알려줘'),
-    (Icons.groups_outlined, '클럽 찾기', '광주 테니스 클럽 알려줘'),
-    (Icons.sports_tennis_outlined, '테니스 규칙', '테니스 복식 규칙 알려줘'),
-  ];
+  List<(IconData, String, String)> get _suggestions {
+    final isFutsal = sport == 'futsal';
+    final label = isFutsal ? '풋살' : '테니스';
+    final ruleIcon =
+        isFutsal ? Icons.sports_soccer_outlined : Icons.sports_tennis_outlined;
+    final ruleMsg = isFutsal ? '풋살 경기 규칙 알려줘' : '테니스 복식 규칙 알려줘';
+    return [
+      (Icons.emoji_events_outlined, '이번 달 대회', '이번 달 대회 일정 알려줘'),
+      (Icons.article_outlined, '대회 신청', '대회 신청 방법 알려줘'),
+      (Icons.groups_outlined, '클럽 찾기', '$label 클럽 추천해줘'),
+      (ruleIcon, '$label 규칙', ruleMsg),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {

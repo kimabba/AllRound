@@ -46,10 +46,7 @@ class RecruitingPostPreview {
     this.closedAt,
   });
 
-  RecruitingPostPreview copyWith({
-    bool? isClosed,
-    DateTime? closedAt,
-  }) {
+  RecruitingPostPreview copyWith({bool? isClosed, DateTime? closedAt}) {
     return RecruitingPostPreview(
       id: id,
       sport: sport,
@@ -119,9 +116,7 @@ class TeamRecruitingBoard extends StatelessWidget {
         children: [
           Text(
             '팀원모집 글',
-            style: tt.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 2),
           Text(
@@ -335,11 +330,7 @@ class MiniInfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const MiniInfoChip({
-    super.key,
-    required this.icon,
-    required this.label,
-  });
+  const MiniInfoChip({super.key, required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -373,11 +364,7 @@ class TeamRecruitingDetailScreen extends StatelessWidget {
   final RecruitingPostPreview post;
   final Club? club;
 
-  const TeamRecruitingDetailScreen({
-    super.key,
-    required this.post,
-    this.club,
-  });
+  const TeamRecruitingDetailScreen({super.key, required this.post, this.club});
 
   @override
   Widget build(BuildContext context) {
@@ -577,10 +564,7 @@ class _RecruitingDetailSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const _RecruitingDetailSection({
-    required this.title,
-    required this.children,
-  });
+  const _RecruitingDetailSection({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -983,9 +967,7 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                     child: FilledButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('팀원모집 글쓰기 UI 미리보기입니다.'),
-                          ),
+                          const SnackBar(content: Text('팀원모집 글쓰기 UI 미리보기입니다.')),
                         );
                       },
                       icon: const Icon(Icons.edit_note_rounded),
@@ -1155,11 +1137,7 @@ class StepperButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const StepperButton({
-    super.key,
-    required this.icon,
-    required this.onTap,
-  });
+  const StepperButton({super.key, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1232,9 +1210,9 @@ class OptionalPhotoPicker extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('사진 선택 UI 미리보기입니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('사진 선택 UI 미리보기입니다.')));
       },
       borderRadius: BorderRadius.circular(20),
       child: Container(
@@ -1266,9 +1244,7 @@ class OptionalPhotoPicker extends StatelessWidget {
                 children: [
                   Text(
                     '사진 추가',
-                    style: tt.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                   ),
                   Text(
                     '선택 사항 · 경기장 사진이나 팀 이미지를 넣을 수 있어요.',
