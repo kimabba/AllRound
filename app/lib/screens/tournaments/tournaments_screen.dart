@@ -37,6 +37,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   bool _loading = false;
   bool _usingPreviewData = false;
   String? _error;
+
   /// null = 전체 목록 모드. 날짜를 선택하면 그 날짜의 대회만 필터.
   DateTime? _selectedDate;
   late DateTime _focusedMonth;
@@ -158,7 +159,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final myGradeIds = ref
+    final myGradeIds =
+        ref
             .watch(homeTournamentsProvider)
             .valueOrNull
             ?.map((t) => t.id)
@@ -195,56 +197,53 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)
                 : _results == null
-                    ? const SizedBox.shrink()
-                    : _results!.isEmpty
-                        ? const AppEmptyState(
-                            icon: Icons.search_off_rounded,
-                            title: '검색 결과 없음',
-                            description: '다른 검색어나 필터로 시도해 보세요.',
-                          )
-                        : _TournamentCalendarListView(
-                            tournaments: _results!,
-                            favoriteIds:
-                                favorites.valueOrNull ?? const <String>{},
-                            myGradeIds: myGradeIds,
-                            focusedMonth: _focusedMonth,
-                            selectedDate: _selectedDate,
-                            onMonthChanged: (month) => setState(() {
-                              _focusedMonth = month;
-                              // 다른 달로 넘기면 이전 날짜 필터 해제 —
-                              // 캘린더(새 달)와 목록(옛 날짜) 불일치 방지.
-                              if (_selectedDate != null &&
-                                  (_selectedDate!.year != month.year ||
-                                      _selectedDate!.month != month.month)) {
-                                _selectedDate = null;
-                              }
-                            }),
-                            // 같은 날짜 재탭 → 필터 해제(전체로).
-                            onDateSelected: (date) => setState(() {
-                              _selectedDate = (_selectedDate != null &&
-                                      _isSameDay(_selectedDate!, date))
-                                  ? null
-                                  : date;
-                            }),
-                            onClearDate: () =>
-                                setState(() => _selectedDate = null),
-                            onSelectNextTournamentDate: (date) =>
-                                setState(() {
-                              _selectedDate = date;
-                              _focusedMonth = DateTime(date.year, date.month);
-                            }),
-                            onTap: (tournament) => context
-                                .push('/tournaments/${tournament.id}'),
-                            onFavoriteToggle: (tournament, isFavorite) async {
-                              await ref.read(apiProvider).toggleFavorite(
-                                    tournament.id,
-                                    !isFavorite,
-                                  );
-                              ref.invalidate(favoriteIdsProvider);
-                              ref.invalidate(myFavoriteTournamentsProvider);
-                              ref.invalidate(myTournamentRecordsProvider);
-                            },
-                          ),
+                ? const SizedBox.shrink()
+                : _results!.isEmpty
+                ? const AppEmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: '검색 결과 없음',
+                    description: '다른 검색어나 필터로 시도해 보세요.',
+                  )
+                : _TournamentCalendarListView(
+                    tournaments: _results!,
+                    favoriteIds: favorites.valueOrNull ?? const <String>{},
+                    myGradeIds: myGradeIds,
+                    focusedMonth: _focusedMonth,
+                    selectedDate: _selectedDate,
+                    onMonthChanged: (month) => setState(() {
+                      _focusedMonth = month;
+                      // 다른 달로 넘기면 이전 날짜 필터 해제 —
+                      // 캘린더(새 달)와 목록(옛 날짜) 불일치 방지.
+                      if (_selectedDate != null &&
+                          (_selectedDate!.year != month.year ||
+                              _selectedDate!.month != month.month)) {
+                        _selectedDate = null;
+                      }
+                    }),
+                    // 같은 날짜 재탭 → 필터 해제(전체로).
+                    onDateSelected: (date) => setState(() {
+                      _selectedDate =
+                          (_selectedDate != null &&
+                              _isSameDay(_selectedDate!, date))
+                          ? null
+                          : date;
+                    }),
+                    onClearDate: () => setState(() => _selectedDate = null),
+                    onSelectNextTournamentDate: (date) => setState(() {
+                      _selectedDate = date;
+                      _focusedMonth = DateTime(date.year, date.month);
+                    }),
+                    onTap: (tournament) =>
+                        context.push('/tournaments/${tournament.id}'),
+                    onFavoriteToggle: (tournament, isFavorite) async {
+                      await ref
+                          .read(apiProvider)
+                          .toggleFavorite(tournament.id, !isFavorite);
+                      ref.invalidate(favoriteIdsProvider);
+                      ref.invalidate(myFavoriteTournamentsProvider);
+                      ref.invalidate(myTournamentRecordsProvider);
+                    },
+                  ),
           ),
         ],
       ),
@@ -252,17 +251,17 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   }
 
   List<ActiveFilterChipData> get _activeFilterChips => activeFilterChips(
-        sport: ref.read(activeSportProvider),
-        query: _q,
-        regionCode: _regionCode,
-        dateFrom: _dateFrom,
-        dateTo: _dateTo,
-        hostOrg: _hostOrg,
-        divisionLabels: _divisionLabels,
-        recruiting: _recruitingStatus,
-        onlyMyGrade: _onlyMyGrade,
-        now: DateTime.now(),
-      );
+    sport: ref.read(activeSportProvider),
+    query: _q,
+    regionCode: _regionCode,
+    dateFrom: _dateFrom,
+    dateTo: _dateTo,
+    hostOrg: _hostOrg,
+    divisionLabels: _divisionLabels,
+    recruiting: _recruitingStatus,
+    onlyMyGrade: _onlyMyGrade,
+    now: DateTime.now(),
+  );
 
   /// 요약 칩의 X → 그 필터만 해제하고 즉시 재검색.
   /// 부서 칩 제거는 라벨 단위(테니스 라벨 / 풋살 grade). 협회 칩 제거는
@@ -379,8 +378,9 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       if (_recruitingStatus != RecruitingStatus.all)
         recruitingStatusLabel(_recruitingStatus),
     ];
-    final filterLabel =
-        activeFilters.isEmpty ? '전체 대회 기준' : '${activeFilters.join(' · ')} 적용됨';
+    final filterLabel = activeFilters.isEmpty
+        ? '전체 대회 기준'
+        : '${activeFilters.join(' · ')} 적용됨';
 
     return Column(
       children: [
@@ -463,8 +463,9 @@ class _TournamentCalendarListView extends StatelessWidget {
     final visible = selected == null
         ? ([...tournaments]..sort((a, b) => a.startDate.compareTo(b.startDate)))
         : _tournamentsOnDate(tournaments, selected);
-    final nextDate =
-        selected == null ? null : _nextTournamentDate(tournaments, selected);
+    final nextDate = selected == null
+        ? null
+        : _nextTournamentDate(tournaments, selected);
 
     // 전체 대회 일정순 고정 순번(1,2,3…) — 캘린더 배지와 동일 번호.
     // 날짜 선택/필터로 목록이 줄어도 같은 대회는 같은 번호를 유지한다.
@@ -591,8 +592,11 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final firstDay = DateTime(focusedMonth.year, focusedMonth.month);
-    final daysInMonth =
-        DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
+    final daysInMonth = DateTime(
+      focusedMonth.year,
+      focusedMonth.month + 1,
+      0,
+    ).day;
     final leadingEmptyCells = firstDay.weekday % 7;
     final totalCells = leadingEmptyCells + daysInMonth;
     final rowCount = (totalCells / 7).ceil();
@@ -655,8 +659,8 @@ class _TournamentMonthCalendar extends StatelessWidget {
                         color: day == '일'
                             ? cs.error
                             : day == '토'
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -701,10 +705,7 @@ class _CalendarMonthButton extends StatelessWidget {
   final VoidCallback onPressed;
   final Widget icon;
 
-  const _CalendarMonthButton({
-    required this.onPressed,
-    required this.icon,
-  });
+  const _CalendarMonthButton({required this.onPressed, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -978,7 +979,7 @@ List<Tournament> _previewTournaments(String? sport) {
           'beginner',
           'intermediate',
           'advanced',
-          'elite'
+          'elite',
         ],
         prize: null,
         format: '서울시민리그 풋살 리그전',
@@ -1081,8 +1082,11 @@ class _PreviewDataBanner extends StatelessWidget {
       color: cs.tertiaryContainer.withValues(alpha: 0.7),
       child: Row(
         children: [
-          Icon(Icons.visibility_rounded,
-              size: 18, color: cs.onTertiaryContainer),
+          Icon(
+            Icons.visibility_rounded,
+            size: 18,
+            color: cs.onTertiaryContainer,
+          ),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
@@ -1172,10 +1176,7 @@ class _SearchFilterSheet extends StatefulWidget {
   final String? sport;
   final _SearchFilterResult initial;
 
-  const _SearchFilterSheet({
-    required this.sport,
-    required this.initial,
-  });
+  const _SearchFilterSheet({required this.sport, required this.initial});
 
   @override
   State<_SearchFilterSheet> createState() => _SearchFilterSheetState();
@@ -1207,15 +1208,19 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     _hostOrg = initial.hostOrg;
     _recruitingStatus = initial.recruiting;
     // 기존 범위 → 프리셋 역추론(표준 프리셋이면 강조, 아니면 custom).
-    _datePreset =
-        presetForRange(initial.dateFrom, initial.dateTo, DateTime.now());
+    _datePreset = presetForRange(
+      initial.dateFrom,
+      initial.dateTo,
+      DateTime.now(),
+    );
 
     // 부서 선택은 이미 라벨 source of truth → 그대로 받는다.
     // 테니스: 현재 협회 스코프에 존재하는 라벨만 유지(스코프 밖 라벨 제거).
     if (_isTennis) {
       final allowed = _divisionLabelsForScope(_hostOrg).toSet();
-      _selectedDivisionLabels =
-          initial.divisionLabels.where(allowed.contains).toSet();
+      _selectedDivisionLabels = initial.divisionLabels
+          .where(allowed.contains)
+          .toSet();
       _selectedFutsalGrades = const {};
     } else {
       _selectedFutsalGrades = {
@@ -1247,8 +1252,9 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     setState(() {
       _hostOrg = org;
       final allowed = _divisionLabelsForScope(org).toSet();
-      _selectedDivisionLabels =
-          _selectedDivisionLabels.where(allowed.contains).toSet();
+      _selectedDivisionLabels = _selectedDivisionLabels
+          .where(allowed.contains)
+          .toSet();
     });
   }
 
@@ -1313,8 +1319,11 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     );
     if (picked != null) {
       setState(() {
-        _dateFrom =
-            DateTime(picked.start.year, picked.start.month, picked.start.day);
+        _dateFrom = DateTime(
+          picked.start.year,
+          picked.start.month,
+          picked.start.day,
+        );
         _dateTo = DateTime(picked.end.year, picked.end.month, picked.end.day);
         // 직접 고른 범위가 표준 프리셋과 일치할 수도 있으므로 역추론.
         _datePreset = presetForRange(_dateFrom, _dateTo, now);
@@ -1392,8 +1401,9 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       SwitchListTile(
                         title: Text(
                           '내 등급만 보기',
-                          style: tt.bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                          style: tt.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         subtitle: const Text('내 등급 이하 대회만 표시'),
                         value: _onlyMyGrade,
@@ -1458,9 +1468,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               _filterChip(
                 label: regionLabel(code),
                 selected: _regionCode == code,
-                onSelected: (selected) => setState(
-                  () => _regionCode = selected ? code : null,
-                ),
+                onSelected: (selected) =>
+                    setState(() => _regionCode = selected ? code : null),
               ),
           ],
         ),
@@ -1653,9 +1662,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
       showCheckmark: false,
       selectedColor: cs.primaryContainer,
       backgroundColor: cs.surface,
-      side: BorderSide(
-        color: selected ? cs.primary : cs.outlineVariant,
-      ),
+      side: BorderSide(color: selected ? cs.primary : cs.outlineVariant),
       labelStyle: TextStyle(
         color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
         fontWeight: FontWeight.w700,

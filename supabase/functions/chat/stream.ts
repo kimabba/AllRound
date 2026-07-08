@@ -4,10 +4,7 @@
 
 import type { ChatTurn, GeminiUsage } from '../_shared/gemini.ts';
 import { streamChat } from '../_shared/gemini.ts';
-import {
-  buildTournamentCards,
-  type TournamentCardRow,
-} from '../_shared/chat_cards.ts';
+import { buildTournamentCards, type TournamentCardRow } from '../_shared/chat_cards.ts';
 import type { DbCitation, SemanticRule, SemanticTournament, VenueRow } from './types.ts';
 
 /** Build DB citations from RAG results. */

@@ -1,4 +1,4 @@
--- 082: Gemini API 사용량 기록 테이블.
+-- 083: Gemini API 사용량 기록 테이블.
 -- Edge Function 이 service_role 로 insert (RLS 우회), 조회는 admin 만.
 
 create table public.gemini_usage (
