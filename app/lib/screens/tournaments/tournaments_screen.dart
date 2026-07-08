@@ -466,12 +466,25 @@ class _TournamentCalendarListView extends StatelessWidget {
     final nextDate =
         selected == null ? null : _nextTournamentDate(tournaments, selected);
 
+    // 같은 대회일 내 순번(1,2,3…) — 캘린더 날짜 배지와 대응.
+    // visible 은 날짜순 정렬돼 있어 같은 날짜가 연속한다.
+    final daySeqById = <String, int>{};
+    final dayCounter = <String, int>{};
+    for (final t in visible) {
+      final key =
+          '${t.startDate.year}-${t.startDate.month}-${t.startDate.day}';
+      final n = (dayCounter[key] ?? 0) + 1;
+      dayCounter[key] = n;
+      daySeqById[t.id] = n;
+    }
+
     Widget card(Tournament tournament) {
       final isFavorite = favoriteIds.contains(tournament.id);
       return TournamentCard(
         tournament: tournament,
         isFavorite: isFavorite,
         isMyGrade: myGradeIds.contains(tournament.id),
+        daySeq: daySeqById[tournament.id],
         onTap: () => onTap(tournament),
         onFavoriteToggle: () => onFavoriteToggle(tournament, isFavorite),
       );
