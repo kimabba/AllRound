@@ -754,7 +754,7 @@ class _CalendarDayCell extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final currentDate = date;
     if (currentDate == null) {
-      return const SizedBox(height: 48);
+      return const SizedBox(height: 46);
     }
 
     final isSelected =
@@ -765,43 +765,51 @@ class _CalendarDayCell extends StatelessWidget {
       onTap: () => onTap(currentDate),
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
-        height: 48,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: isSelected ? 32 : 30,
-              height: isSelected ? 32 : 30,
-              decoration: BoxDecoration(
-                color: isSelected ? cs.primary : Colors.transparent,
-                shape: BoxShape.circle,
-                border: isToday && !isSelected
-                    ? Border.all(color: cs.primary, width: 1.3)
-                    : null,
-              ),
+        height: 46,
+        child: Center(
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              clipBehavior: Clip.none,
               alignment: Alignment.center,
-              child: Text(
-                '${currentDate.day}',
-                style: tt.labelLarge?.copyWith(
-                  color: isSelected ? cs.onPrimary : cs.onSurface,
-                  fontWeight:
-                      isSelected || isToday ? FontWeight.w900 : FontWeight.w700,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: isSelected ? 36 : 32,
+                  height: isSelected ? 36 : 32,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: cs.primary, width: 1.3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${currentDate.day}',
+                    style: tt.labelLarge?.copyWith(
+                      color: isSelected ? cs.onPrimary : cs.onSurface,
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 3),
-            // 대회 수 배지 — 날짜 아래에 두어 숫자와 겹치지 않게 (1개=1, 3개=3).
-            SizedBox(
-              height: 13,
-              child: count > 0
-                  ? Container(
-                      constraints: const BoxConstraints(minWidth: 14),
+                // 대회 수 배지 — 날짜 우상단 코너에(겹치지 않게). 1개=1, 3개=3.
+                if (count > 0)
+                  Positioned(
+                    top: -3,
+                    right: -3,
+                    child: Container(
+                      height: 15,
+                      constraints: const BoxConstraints(minWidth: 15),
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: cs.primary,
-                        borderRadius: BorderRadius.circular(999),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: cs.surface, width: 1.5),
                       ),
                       child: Text(
                         '$count',
@@ -809,13 +817,14 @@ class _CalendarDayCell extends StatelessWidget {
                           color: cs.onPrimary,
                           fontWeight: FontWeight.w900,
                           height: 1,
-                          fontSize: 10,
+                          fontSize: 9.5,
                         ),
                       ),
-                    )
-                  : null,
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
