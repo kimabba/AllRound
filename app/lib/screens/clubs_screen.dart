@@ -246,6 +246,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   onChanged: (value) => setState(() {
                     _clubNameQuery = value;
                   }),
+                  onFilterTap: _openClubFilterSheet,
+                  filterActive: _clubFilters.labels.isNotEmpty,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 SimpleSectionHeader(
@@ -329,17 +331,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                SimpleActionCard(
-                  icon: Icons.location_on_rounded,
-                  title: '맞춤 조건 설정',
-                  subtitle: [
-                    _selectedSportLabel(_clubInterests),
-                    ..._clubFilters.labels,
-                  ].join(' · '),
-                  action: '설정',
-                  color: const Color(0xFFEAF7F1),
-                  onTap: _openClubFilterSheet,
-                ),
                 const SizedBox(height: AppSpacing.xl),
                 if (managedClubs.isNotEmpty) ...[
                   SimpleActionCard(
@@ -480,10 +471,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 class _ClubSearchField extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
+  // 검색창에 맞춤 조건(지역·요일·회비) 진입을 합쳐 하나로 통일한다.
+  final VoidCallback? onFilterTap;
+  final bool filterActive;
 
   const _ClubSearchField({
     required this.value,
     required this.onChanged,
+    this.onFilterTap,
+    this.filterActive = false,
   });
 
   @override
@@ -522,9 +518,11 @@ class _ClubSearchFieldState extends State<_ClubSearchField> {
       decoration: InputDecoration(
         hintText: '클럽 이름으로 검색',
         prefixIcon: const Icon(Icons.search_rounded),
-        suffixIcon: widget.value.isEmpty
-            ? null
-            : IconButton(
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.value.isNotEmpty)
+              IconButton(
                 tooltip: '검색어 지우기',
                 onPressed: () {
                   _controller.clear();
@@ -532,6 +530,19 @@ class _ClubSearchFieldState extends State<_ClubSearchField> {
                 },
                 icon: const Icon(Icons.close_rounded),
               ),
+            if (widget.onFilterTap != null)
+              IconButton(
+                tooltip: '맞춤 조건',
+                onPressed: widget.onFilterTap,
+                icon: Icon(
+                  Icons.tune_rounded,
+                  color: widget.filterActive
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
