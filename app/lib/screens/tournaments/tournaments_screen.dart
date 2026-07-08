@@ -209,8 +209,16 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                             myGradeIds: myGradeIds,
                             focusedMonth: _focusedMonth,
                             selectedDate: _selectedDate,
-                            onMonthChanged: (month) =>
-                                setState(() => _focusedMonth = month),
+                            onMonthChanged: (month) => setState(() {
+                              _focusedMonth = month;
+                              // 다른 달로 넘기면 이전 날짜 필터 해제 —
+                              // 캘린더(새 달)와 목록(옛 날짜) 불일치 방지.
+                              if (_selectedDate != null &&
+                                  (_selectedDate!.year != month.year ||
+                                      _selectedDate!.month != month.month)) {
+                                _selectedDate = null;
+                              }
+                            }),
                             // 같은 날짜 재탭 → 필터 해제(전체로).
                             onDateSelected: (date) => setState(() {
                               _selectedDate = (_selectedDate != null &&
