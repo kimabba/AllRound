@@ -9,6 +9,7 @@ import '../../state/providers.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
+import 'gemini_usage_tab.dart';
 import 'knowledge_base_tab.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -50,7 +51,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   void initState() {
     super.initState();
     _tab = TabController(
-      length: 5,
+      length: 6,
       vsync: this,
       initialIndex: widget.initialTab,
     );
@@ -614,6 +615,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             Tab(text: '크롤 소스'),
             Tab(text: '클럽 승인'),
             Tab(text: '지식베이스'),
+            Tab(text: 'Gemini 사용량'),
           ],
         ),
       ),
@@ -625,6 +627,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           _buildSourcesTab(),
           _buildPendingClubsTab(),
           const KnowledgeBaseTab(),
+          const GeminiUsageTab(),
         ],
       ),
       floatingActionButton: _tab.index == 2

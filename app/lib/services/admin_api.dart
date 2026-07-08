@@ -207,4 +207,16 @@ mixin AdminApi on ApiBase {
     check(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  // ── Gemini 사용량 ─────────────────────────────────────────────
+
+  /// [since] 이후 gemini_usage 를 kind·model 별로 집계 (요청수 + 토큰 합).
+  /// 서버 RPC(gemini_usage_stats)가 admin 게이트 후 group-by 로 반환.
+  Future<List<Map<String, dynamic>>> geminiUsageStats(DateTime since) async {
+    final res = await supabase.rpc(
+      'gemini_usage_stats',
+      params: {'p_since': since.toUtc().toIso8601String()},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
 }
