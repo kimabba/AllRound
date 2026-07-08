@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
 
   if (
     clubErr &&
-    logoUrl === null &&
     clubErr.message.includes("'logo_url' column")
   ) {
     const { logo_url: _logoUrl, ...payloadWithoutLogo } = insertPayload;
