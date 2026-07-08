@@ -15,7 +15,7 @@ mixin AdminApi on ApiBase {
         .select(
           'id, sport, title, organizer, description, start_date, end_date, '
           'application_deadline, region, location, eligible_grades, entry_fee, '
-          'format, source, source_url, submitted_by, created_at',
+          'format, source, source_url, poster_url, submitted_by, created_at',
         )
         .eq('status', 'draft')
         .order('created_at', ascending: false);
@@ -33,8 +33,10 @@ mixin AdminApi on ApiBase {
 
   Future<int> bulkApproveTournaments(List<String> ids) async {
     if (ids.isEmpty) return 0;
-    final res =
-        await supabase.rpc('tournaments_bulk_approve', params: {'p_ids': ids});
+    final res = await supabase.rpc(
+      'tournaments_bulk_approve',
+      params: {'p_ids': ids},
+    );
     return (res as num).toInt();
   }
 
@@ -62,8 +64,11 @@ mixin AdminApi on ApiBase {
     return List<Map<String, dynamic>>.from(rows).map(Club.fromJson).toList();
   }
 
-  Future<void> approveClub(String clubId,
-      {required bool approve, String? reason}) async {
+  Future<void> approveClub(
+    String clubId, {
+    required bool approve,
+    String? reason,
+  }) async {
     final res = await httpPost(
       uri('clubs-approve'),
       headers: await authHeaders(),
@@ -92,9 +97,9 @@ mixin AdminApi on ApiBase {
         .from('crawl_sources')
         .select()
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows)
-        .map(CrawlSource.fromJson)
-        .toList();
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(CrawlSource.fromJson).toList();
   }
 
   Future<CrawlSource> createCrawlSource({
@@ -166,8 +171,11 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row =
-          await supabase.from('crawl_sources').select().eq('id', id).single();
+      final row = await supabase
+          .from('crawl_sources')
+          .select()
+          .eq('id', id)
+          .single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase
