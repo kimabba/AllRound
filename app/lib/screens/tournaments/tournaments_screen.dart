@@ -159,8 +159,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final myGradeIds =
-        ref
+    final myGradeIds = ref
             .watch(homeTournamentsProvider)
             .valueOrNull
             ?.map((t) => t.id)
@@ -197,53 +196,54 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)
                 : _results == null
-                ? const SizedBox.shrink()
-                : _results!.isEmpty
-                ? const AppEmptyState(
-                    icon: Icons.search_off_rounded,
-                    title: '검색 결과 없음',
-                    description: '다른 검색어나 필터로 시도해 보세요.',
-                  )
-                : _TournamentCalendarListView(
-                    tournaments: _results!,
-                    favoriteIds: favorites.valueOrNull ?? const <String>{},
-                    myGradeIds: myGradeIds,
-                    focusedMonth: _focusedMonth,
-                    selectedDate: _selectedDate,
-                    onMonthChanged: (month) => setState(() {
-                      _focusedMonth = month;
-                      // 다른 달로 넘기면 이전 날짜 필터 해제 —
-                      // 캘린더(새 달)와 목록(옛 날짜) 불일치 방지.
-                      if (_selectedDate != null &&
-                          (_selectedDate!.year != month.year ||
-                              _selectedDate!.month != month.month)) {
-                        _selectedDate = null;
-                      }
-                    }),
-                    // 같은 날짜 재탭 → 필터 해제(전체로).
-                    onDateSelected: (date) => setState(() {
-                      _selectedDate =
-                          (_selectedDate != null &&
-                              _isSameDay(_selectedDate!, date))
-                          ? null
-                          : date;
-                    }),
-                    onClearDate: () => setState(() => _selectedDate = null),
-                    onSelectNextTournamentDate: (date) => setState(() {
-                      _selectedDate = date;
-                      _focusedMonth = DateTime(date.year, date.month);
-                    }),
-                    onTap: (tournament) =>
-                        context.push('/tournaments/${tournament.id}'),
-                    onFavoriteToggle: (tournament, isFavorite) async {
-                      await ref
-                          .read(apiProvider)
-                          .toggleFavorite(tournament.id, !isFavorite);
-                      ref.invalidate(favoriteIdsProvider);
-                      ref.invalidate(myFavoriteTournamentsProvider);
-                      ref.invalidate(myTournamentRecordsProvider);
-                    },
-                  ),
+                    ? const SizedBox.shrink()
+                    : _results!.isEmpty
+                        ? const AppEmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: '검색 결과 없음',
+                            description: '다른 검색어나 필터로 시도해 보세요.',
+                          )
+                        : _TournamentCalendarListView(
+                            tournaments: _results!,
+                            favoriteIds:
+                                favorites.valueOrNull ?? const <String>{},
+                            myGradeIds: myGradeIds,
+                            focusedMonth: _focusedMonth,
+                            selectedDate: _selectedDate,
+                            onMonthChanged: (month) => setState(() {
+                              _focusedMonth = month;
+                              // 다른 달로 넘기면 이전 날짜 필터 해제 —
+                              // 캘린더(새 달)와 목록(옛 날짜) 불일치 방지.
+                              if (_selectedDate != null &&
+                                  (_selectedDate!.year != month.year ||
+                                      _selectedDate!.month != month.month)) {
+                                _selectedDate = null;
+                              }
+                            }),
+                            // 같은 날짜 재탭 → 필터 해제(전체로).
+                            onDateSelected: (date) => setState(() {
+                              _selectedDate = (_selectedDate != null &&
+                                      _isSameDay(_selectedDate!, date))
+                                  ? null
+                                  : date;
+                            }),
+                            onClearDate: () =>
+                                setState(() => _selectedDate = null),
+                            onSelectNextTournamentDate: (date) => setState(() {
+                              _selectedDate = date;
+                              _focusedMonth = DateTime(date.year, date.month);
+                            }),
+                            onTap: (tournament) =>
+                                context.push('/tournaments/${tournament.id}'),
+                            onFavoriteToggle: (tournament, isFavorite) async {
+                              await ref
+                                  .read(apiProvider)
+                                  .toggleFavorite(tournament.id, !isFavorite);
+                              ref.invalidate(favoriteIdsProvider);
+                              ref.invalidate(myFavoriteTournamentsProvider);
+                              ref.invalidate(myTournamentRecordsProvider);
+                            },
+                          ),
           ),
         ],
       ),
@@ -251,17 +251,17 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   }
 
   List<ActiveFilterChipData> get _activeFilterChips => activeFilterChips(
-    sport: ref.read(activeSportProvider),
-    query: _q,
-    regionCode: _regionCode,
-    dateFrom: _dateFrom,
-    dateTo: _dateTo,
-    hostOrg: _hostOrg,
-    divisionLabels: _divisionLabels,
-    recruiting: _recruitingStatus,
-    onlyMyGrade: _onlyMyGrade,
-    now: DateTime.now(),
-  );
+        sport: ref.read(activeSportProvider),
+        query: _q,
+        regionCode: _regionCode,
+        dateFrom: _dateFrom,
+        dateTo: _dateTo,
+        hostOrg: _hostOrg,
+        divisionLabels: _divisionLabels,
+        recruiting: _recruitingStatus,
+        onlyMyGrade: _onlyMyGrade,
+        now: DateTime.now(),
+      );
 
   /// 요약 칩의 X → 그 필터만 해제하고 즉시 재검색.
   /// 부서 칩 제거는 라벨 단위(테니스 라벨 / 풋살 grade). 협회 칩 제거는
@@ -378,9 +378,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       if (_recruitingStatus != RecruitingStatus.all)
         recruitingStatusLabel(_recruitingStatus),
     ];
-    final filterLabel = activeFilters.isEmpty
-        ? '전체 대회 기준'
-        : '${activeFilters.join(' · ')} 적용됨';
+    final filterLabel =
+        activeFilters.isEmpty ? '전체 대회 기준' : '${activeFilters.join(' · ')} 적용됨';
 
     return Column(
       children: [
@@ -428,7 +427,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
 
 /// 캘린더 + 목록 통합 뷰.
 /// - 첫 아이템 = 월 캘린더(스크롤에 포함) + 선택 날짜 요약, 이하 = 대회 카드.
-/// - selectedDate == null → 전체 목록(날짜순), 아니면 그 날짜 대회만 필터.
+/// - selectedDate == null → 현재 월 목록(날짜순), 아니면 그 날짜 대회만 필터.
 /// ListView.builder로 카드를 lazy 렌더한다.
 class _TournamentCalendarListView extends StatelessWidget {
   final List<Tournament> tournaments;
@@ -460,24 +459,20 @@ class _TournamentCalendarListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = selectedDate;
+    final monthTournaments = _tournamentsInMonth(tournaments, focusedMonth);
     final visible = selected == null
-        ? ([...tournaments]..sort((a, b) => a.startDate.compareTo(b.startDate)))
+        ? monthTournaments
         : _tournamentsOnDate(tournaments, selected);
-    final nextDate = selected == null
-        ? null
-        : _nextTournamentDate(tournaments, selected);
+    final nextDate =
+        selected == null ? null : _nextTournamentDate(tournaments, selected);
 
-    // 전체 대회 일정순 고정 순번(1,2,3…) — 캘린더 배지와 동일 번호.
-    // 날짜 선택/필터로 목록이 줄어도 같은 대회는 같은 번호를 유지한다.
-    final seqById = _tournamentSeqById(tournaments);
-
-    Widget card(Tournament tournament) {
+    Widget card(Tournament tournament, int seq) {
       final isFavorite = favoriteIds.contains(tournament.id);
       return TournamentCard(
         tournament: tournament,
         isFavorite: isFavorite,
         isMyGrade: myGradeIds.contains(tournament.id),
-        seq: seqById[tournament.id],
+        seq: seq,
         onTap: () => onTap(tournament),
         onFavoriteToggle: () => onFavoriteToggle(tournament, isFavorite),
       );
@@ -502,8 +497,9 @@ class _TournamentCalendarListView extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               _ListHeader(
+                focusedMonth: focusedMonth,
                 selectedDate: selectedDate,
-                totalCount: tournaments.length,
+                monthCount: monthTournaments.length,
                 filteredCount: visible.length,
                 onClearDate: onClearDate,
               ),
@@ -519,23 +515,25 @@ class _TournamentCalendarListView extends StatelessWidget {
             ],
           );
         }
-        return card(visible[i - 1]);
+        return card(visible[i - 1], i);
       },
     );
   }
 }
 
-/// 목록 상단 헤더. 전체 모드면 "전체 대회 N개", 날짜 필터 중이면
-/// "M월 D일 (요일) · 대회 N개 · [전체]" 로 필터 해제 버튼을 노출.
+/// 목록 상단 헤더. 월 모드면 "M월 대회 N개", 날짜 필터 중이면
+/// "M월 D일 (요일) · 대회 N개 · [M월 전체]" 로 필터 해제 버튼을 노출.
 class _ListHeader extends StatelessWidget {
+  final DateTime focusedMonth;
   final DateTime? selectedDate;
-  final int totalCount;
+  final int monthCount;
   final int filteredCount;
   final VoidCallback onClearDate;
 
   const _ListHeader({
+    required this.focusedMonth,
     required this.selectedDate,
-    required this.totalCount,
+    required this.monthCount,
     required this.filteredCount,
     required this.onClearDate,
   });
@@ -546,7 +544,7 @@ class _ListHeader extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final date = selectedDate;
     final title = date == null
-        ? '전체 대회 $totalCount개'
+        ? '${focusedMonth.month}월 대회 $monthCount개'
         : '${date.month}월 ${date.day}일 (${_weekdayLabel(date)}) · 대회 $filteredCount개';
 
     return Row(
@@ -561,7 +559,7 @@ class _ListHeader extends StatelessWidget {
           TextButton.icon(
             onPressed: onClearDate,
             icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text('전체'),
+            label: Text('${focusedMonth.month}월 전체'),
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
               foregroundColor: cs.primary,
@@ -601,8 +599,6 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final totalCells = leadingEmptyCells + daysInMonth;
     final rowCount = (totalCells / 7).ceil();
     final today = _dateOnly(DateTime.now());
-    // 리스트 카드와 동일한 고정 순번(일정순).
-    final seqById = _tournamentSeqById(tournaments);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -659,8 +655,8 @@ class _TournamentMonthCalendar extends StatelessWidget {
                         color: day == '일'
                             ? cs.error
                             : day == '토'
-                            ? cs.primary
-                            : cs.onSurfaceVariant,
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -682,7 +678,7 @@ class _TournamentMonthCalendar extends StatelessWidget {
                     date: cellDate,
                     today: today,
                     selectedDate: selectedDate,
-                    seq: _cellSeq(cellDate, tournaments, seqById),
+                    count: _tournamentCountOnDate(cellDate, tournaments),
                     onTap: onDateSelected,
                   ),
                 );
@@ -731,15 +727,15 @@ class _CalendarDayCell extends StatelessWidget {
   final DateTime? date;
   final DateTime today;
   final DateTime? selectedDate;
-  // 그 날 대회의 순번(리스트 카드와 동일 번호). 대회 없으면 null.
-  final int? seq;
+  // 그 날짜에 걸친 대회 수. 0이면 표시하지 않는다.
+  final int count;
   final ValueChanged<DateTime> onTap;
 
   const _CalendarDayCell({
     required this.date,
     required this.today,
     required this.selectedDate,
-    required this.seq,
+    required this.count,
     required this.onTap,
   });
 
@@ -758,68 +754,59 @@ class _CalendarDayCell extends StatelessWidget {
 
     return InkWell(
       onTap: () => onTap(currentDate),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        height: 46,
-        child: Center(
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Stack(
-              clipBehavior: Clip.none,
+        height: 54,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: isSelected ? 34 : 30,
+              height: isSelected ? 34 : 30,
+              decoration: BoxDecoration(
+                color: isSelected ? cs.primary : Colors.transparent,
+                shape: BoxShape.circle,
+                border: isToday && !isSelected
+                    ? Border.all(color: cs.primary, width: 1.3)
+                    : null,
+              ),
               alignment: Alignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: isSelected ? 36 : 32,
-                  height: isSelected ? 36 : 32,
-                  decoration: BoxDecoration(
-                    color: isSelected ? cs.primary : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: isToday && !isSelected
-                        ? Border.all(color: cs.primary, width: 1.3)
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${currentDate.day}',
-                    style: tt.labelLarge?.copyWith(
-                      color: isSelected ? cs.onPrimary : cs.onSurface,
-                      fontWeight: isSelected || isToday
-                          ? FontWeight.w900
-                          : FontWeight.w700,
-                    ),
-                  ),
+              child: Text(
+                '${currentDate.day}',
+                style: tt.labelLarge?.copyWith(
+                  color: isSelected ? cs.onPrimary : cs.onSurface,
+                  fontWeight:
+                      isSelected || isToday ? FontWeight.w900 : FontWeight.w700,
                 ),
-                // 대회 순번 배지 — 날짜 우상단 코너에(겹치지 않게). 리스트 카드와 동일 번호.
-                if (seq != null)
-                  Positioned(
-                    top: -3,
-                    right: -3,
-                    child: Container(
-                      height: 15,
-                      constraints: const BoxConstraints(minWidth: 15),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+            ),
+            const SizedBox(height: 2),
+            SizedBox(
+              height: 14,
+              child: count > 0
+                  ? Container(
+                      height: 14,
+                      constraints: const BoxConstraints(minWidth: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: cs.surface, width: 1.5),
+                        color: isSelected ? cs.onPrimary : cs.primary,
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: Text(
-                        '$seq',
+                        '$count',
                         style: tt.labelSmall?.copyWith(
-                          color: cs.onPrimary,
+                          color: isSelected ? cs.primary : cs.onPrimary,
                           fontWeight: FontWeight.w900,
                           height: 1,
-                          fontSize: 9.5,
+                          fontSize: 9,
                         ),
                       ),
-                    ),
-                  ),
-              ],
+                    )
+                  : null,
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -903,28 +890,29 @@ bool _isDateInTournament(DateTime date, Tournament tournament) {
   return !target.isBefore(start) && !target.isAfter(end);
 }
 
-/// 전체 대회를 일정(시작일)순으로 고정 순번(1,2,3…) 부여. 캘린더·리스트 공용.
-/// 같은 대회는 캘린더 배지와 리스트 카드에서 같은 번호로 나타난다.
-Map<String, int> _tournamentSeqById(List<Tournament> tournaments) {
-  final sorted = [...tournaments]
-    ..sort((a, b) => a.startDate.compareTo(b.startDate));
-  final map = <String, int>{};
-  for (var i = 0; i < sorted.length; i++) {
-    map[sorted[i].id] = i + 1;
-  }
-  return map;
+bool _isTournamentInMonth(Tournament tournament, DateTime month) {
+  final monthStart = DateTime(month.year, month.month);
+  final monthEnd = DateTime(month.year, month.month + 1, 0);
+  final start = _dateOnly(tournament.startDate);
+  final end = _dateOnly(tournament.endDate ?? tournament.startDate);
+  return !end.isBefore(monthStart) && !start.isAfter(monthEnd);
 }
 
-/// 해당 날짜에 열리는 대회 중 가장 빠른 순번(캘린더 배지용). 없으면 null.
-int? _cellSeq(
-  DateTime? date,
+List<Tournament> _tournamentsInMonth(
   List<Tournament> tournaments,
-  Map<String, int> seqById,
+  DateTime month,
 ) {
-  if (date == null) return null;
-  final onDate = _tournamentsOnDate(tournaments, date);
-  if (onDate.isEmpty) return null;
-  return onDate.map((t) => seqById[t.id] ?? 0).reduce((a, b) => a < b ? a : b);
+  return tournaments
+      .where((tournament) => _isTournamentInMonth(tournament, month))
+      .toList()
+    ..sort((a, b) => a.startDate.compareTo(b.startDate));
+}
+
+int _tournamentCountOnDate(DateTime? date, List<Tournament> tournaments) {
+  if (date == null) return 0;
+  return tournaments
+      .where((tournament) => _isDateInTournament(date, tournament))
+      .length;
 }
 
 List<Tournament> _tournamentsOnDate(
@@ -1218,9 +1206,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     // 테니스: 현재 협회 스코프에 존재하는 라벨만 유지(스코프 밖 라벨 제거).
     if (_isTennis) {
       final allowed = _divisionLabelsForScope(_hostOrg).toSet();
-      _selectedDivisionLabels = initial.divisionLabels
-          .where(allowed.contains)
-          .toSet();
+      _selectedDivisionLabels =
+          initial.divisionLabels.where(allowed.contains).toSet();
       _selectedFutsalGrades = const {};
     } else {
       _selectedFutsalGrades = {
@@ -1252,9 +1239,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     setState(() {
       _hostOrg = org;
       final allowed = _divisionLabelsForScope(org).toSet();
-      _selectedDivisionLabels = _selectedDivisionLabels
-          .where(allowed.contains)
-          .toSet();
+      _selectedDivisionLabels =
+          _selectedDivisionLabels.where(allowed.contains).toSet();
     });
   }
 
