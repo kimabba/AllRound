@@ -905,7 +905,10 @@ Deno.serve(async (req) => {
         }
 
         // ---- Citations + Cards ----
-        const dbCitationItems = buildDbCitations(tournaments, rules, venues);
+        // 규칙 질문은 답변 본문에 출처가 이미 인라인으로 들어가므로 하단 출처 리스트를 생략.
+        const dbCitationItems = intentResult.intent === 'rule_lookup'
+          ? []
+          : buildDbCitations(tournaments, rules, venues);
         if (dbCitationItems.length > 0) {
           send('citation', { items: dbCitationItems });
         }
