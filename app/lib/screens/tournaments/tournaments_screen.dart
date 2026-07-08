@@ -756,45 +756,50 @@ class _CalendarDayCell extends StatelessWidget {
       onTap: () => onTap(currentDate),
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        height: 54,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: isSelected ? 34 : 30,
-              height: isSelected ? 34 : 30,
-              decoration: BoxDecoration(
-                color: isSelected ? cs.primary : Colors.transparent,
-                shape: BoxShape.circle,
-                border: isToday && !isSelected
-                    ? Border.all(color: cs.primary, width: 1.3)
-                    : null,
-              ),
+        height: 46,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 40,
+            child: Stack(
               alignment: Alignment.center,
-              child: Text(
-                '${currentDate.day}',
-                style: tt.labelLarge?.copyWith(
-                  color: isSelected ? cs.onPrimary : cs.onSurface,
-                  fontWeight:
-                      isSelected || isToday ? FontWeight.w900 : FontWeight.w700,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: isSelected ? 34 : 30,
+                  height: isSelected ? 34 : 30,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: cs.primary, width: 1.3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${currentDate.day}',
+                    style: tt.labelLarge?.copyWith(
+                      color: isSelected ? cs.onPrimary : cs.onSurface,
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            SizedBox(
-              height: 16,
-              child: count > 0
-                  ? Container(
+                if (count > 0)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
                       width: 16,
                       height: 16,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: isSelected ? cs.onPrimary : cs.primary,
                         shape: BoxShape.circle,
+                        border: Border.all(color: cs.surface, width: 1.5),
                       ),
                       child: Text(
-                        '$count',
+                        count > 9 ? '9+' : '$count',
                         style: tt.labelSmall?.copyWith(
                           color: isSelected ? cs.primary : cs.onPrimary,
                           fontWeight: FontWeight.w900,
@@ -802,10 +807,11 @@ class _CalendarDayCell extends StatelessWidget {
                           fontSize: 9,
                         ),
                       ),
-                    )
-                  : null,
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
