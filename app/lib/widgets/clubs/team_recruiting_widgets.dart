@@ -674,6 +674,23 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
 
   List<String> get _gradeOptions => _isFutsal ? _futsalGrades : _tennisGrades;
 
+  Future<void> _showClubPicker() async {
+    final selected = await showModalBottomSheet<Club>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (_) => _ManagedClubPickerSheet(
+        clubs: widget.managedClubs,
+        selectedClubId: _selectedClubId,
+      ),
+    );
+    if (selected == null) return;
+    setState(() {
+      _selectedClubId = selected.id;
+      _grade = _gradeOptions.first;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -729,29 +746,10 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedClubId,
-                decoration: const InputDecoration(
-                  labelText: '모집할 클럽',
-                  prefixIcon: Icon(Icons.groups_rounded),
-                ),
-                items: [
-                  for (final club in widget.managedClubs)
-                    DropdownMenuItem(
-                      value: club.id,
-                      child: Text(club.name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _selectedClubId = value;
-                    _grade = _gradeOptions.first;
-                  });
-                },
+              _ManagedClubSelectorField(
+                club: _selectedClub,
+                onTap: _showClubPicker,
               ),
-              const SizedBox(height: AppSpacing.md),
-              RecruitingPreviewClub(club: _selectedClub),
               const SizedBox(height: AppSpacing.lg),
               RecruitingSection(
                 title: '모집 조건',
@@ -984,45 +982,202 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
   }
 }
 
-class RecruitingPreviewClub extends StatelessWidget {
-  final Club club;
+class _ManagedClubSelectorField extends StatelessWidget {
+  const _ManagedClubSelectorField({
+    required this.club,
+    required this.onTap,
+  });
 
-  const RecruitingPreviewClub({super.key, required this.club});
+  final Club club;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
-      ),
-      child: Row(
-        children: [
-          SimpleClubAvatar(club: club, size: 54),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.sm),
+          child: Text(
+            '모집할 클럽',
+            style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            child: Row(
               children: [
-                Text(
-                  club.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                SimpleClubAvatar(club: club, size: 46),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        club.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · 운영진',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · 운영진',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
+                Icon(Icons.keyboard_arrow_down_rounded,
+                    color: cs.onSurfaceVariant),
               ],
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ManagedClubPickerSheet extends StatelessWidget {
+  const _ManagedClubPickerSheet({
+    required this.clubs,
+    required this.selectedClubId,
+  });
+
+  final List<Club> clubs;
+  final String selectedClubId;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.54,
+      minChildSize: 0.36,
+      maxChildSize: 0.82,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: AppRadius.pill,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              '모집할 클럽 선택',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '운영 중인 클럽 중 모집글을 올릴 클럽을 선택하세요.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            for (final club in clubs) ...[
+              _ManagedClubOptionTile(
+                club: club,
+                selected: club.id == selectedClubId,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ManagedClubOptionTile extends StatelessWidget {
+  const _ManagedClubOptionTile({
+    required this.club,
+    required this.selected,
+  });
+
+  final Club club;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: () => Navigator.pop(context, club),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: selected
+              ? cs.primaryContainer.withValues(alpha: 0.34)
+              : cs.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant,
+          ),
+        ),
+        child: Row(
+          children: [
+            SimpleClubAvatar(club: club, size: 48),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    club.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · 운영진',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_rounded, color: cs.primary)
+            else
+              Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }

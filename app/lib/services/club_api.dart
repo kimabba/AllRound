@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/club_event.dart';
 import '../models/club_post.dart';
 import '../models/tournament.dart';
+import '../models/venue.dart';
 import 'api_base.dart';
 
 /// 클럽 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
@@ -39,6 +40,28 @@ mixin ClubApi on ApiBase {
     return (body['clubs'] as List)
         .map((e) => Club.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<Venue>> searchVenues({
+    String? sport,
+    String? region,
+    String? query,
+    int limit = 30,
+  }) async {
+    final res = await supabase.rpc(
+      'venues_search',
+      params: {
+        'p_sport': sport,
+        'p_region': region,
+        'p_query': query == null || query.trim().isEmpty ? null : query.trim(),
+        'p_limit': limit,
+      },
+    );
+    if (res is! List) return const [];
+    return res
+        .whereType<Map>()
+        .map((row) => Venue.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
   }
 
   Future<Club> createClub({
