@@ -28,29 +28,46 @@ Deno.serve(async (req) => {
   if (!name) return errorResponse('name is required', 400);
 
   const supa = serviceClient();
+  const logoUrl = (body.logo_url as string | undefined)?.trim() || null;
+  const insertPayload: Record<string, unknown> = {
+    sport,
+    name,
+    region: (body.region as string | undefined)?.trim() || null,
+    address: (body.address as string | undefined)?.trim() || null,
+    logo_url: logoUrl,
+    contact: (body.contact as string | undefined)?.trim() || null,
+    website: (body.website as string | undefined)?.trim() || null,
+    description: (body.description as string | undefined)?.trim() || null,
+    meeting_days: Array.isArray(body.meeting_days) ? body.meeting_days : [],
+    monthly_fee: typeof body.monthly_fee === 'number' ? body.monthly_fee : null,
+    gender_preference: typeof body.gender_preference === 'string'
+      ? body.gender_preference.trim() || null
+      : null,
+    status: 'pending',
+    created_by: auth.user.id,
+  };
 
   // 클럽 생성 (status='pending')
-  const { data: club, error: clubErr } = await supa
+  let { data: club, error: clubErr } = await supa
     .from('clubs')
-    .insert({
-      sport,
-      name,
-      region: (body.region as string | undefined)?.trim() || null,
-      address: (body.address as string | undefined)?.trim() || null,
-      logo_url: (body.logo_url as string | undefined)?.trim() || null,
-      contact: (body.contact as string | undefined)?.trim() || null,
-      website: (body.website as string | undefined)?.trim() || null,
-      description: (body.description as string | undefined)?.trim() || null,
-      meeting_days: Array.isArray(body.meeting_days) ? body.meeting_days : [],
-      monthly_fee: typeof body.monthly_fee === 'number' ? body.monthly_fee : null,
-      gender_preference: typeof body.gender_preference === 'string'
-        ? body.gender_preference.trim() || null
-        : null,
-      status: 'pending',
-      created_by: auth.user.id,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
+  if (
+    clubErr &&
+    clubErr.message.includes("'logo_url' column")
+  ) {
+    const { logo_url: _logoUrl, ...payloadWithoutLogo } = insertPayload;
+    void _logoUrl;
+    const fallback = await supa
+      .from('clubs')
+      .insert(payloadWithoutLogo)
+      .select()
+      .single();
+    club = fallback.data;
+    clubErr = fallback.error;
+  }
 
   if (clubErr) return errorResponse(clubErr.message, 500);
 
