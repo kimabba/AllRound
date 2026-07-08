@@ -2,7 +2,7 @@
  * chat/stream.ts — LLM streaming response handling, card rendering, citation management.
  */
 
-import type { ChatTurn } from '../_shared/gemini.ts';
+import type { ChatTurn, GeminiUsage } from '../_shared/gemini.ts';
 import { streamChat } from '../_shared/gemini.ts';
 import {
   buildTournamentCards,
@@ -68,6 +68,7 @@ export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): un
 export interface StreamLlmResult {
   assistantText: string;
   errored: boolean;
+  usage?: GeminiUsage;
 }
 
 /**
@@ -81,6 +82,7 @@ export async function streamLlmResponse(
 ): Promise<StreamLlmResult> {
   let assistantText = '';
   let llmErrored = false;
+  let usage: GeminiUsage | undefined;
 
   for await (
     const evt of streamChat(history, {
@@ -93,8 +95,10 @@ export async function streamLlmResponse(
     } else if (evt.type === 'error') {
       llmErrored = true;
       send('error', { message: evt.error });
+    } else if (evt.type === 'done' && evt.usage) {
+      usage = evt.usage;
     }
   }
 
-  return { assistantText, errored: llmErrored };
+  return { assistantText, errored: llmErrored, usage };
 }
