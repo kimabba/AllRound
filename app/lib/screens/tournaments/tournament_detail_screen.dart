@@ -48,7 +48,8 @@ class _TournamentDetailScreenState
       final row = await supa
           .from('tournaments')
           .select(
-              '*, tennis_tournament_details(*), futsal_tournament_details(*)')
+            '*, tennis_tournament_details(*), futsal_tournament_details(*)',
+          )
           .eq('id', widget.tournamentId)
           .maybeSingle();
       if (row == null) {
@@ -76,9 +77,11 @@ class _TournamentDetailScreenState
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final isFav =
-        (favorites.valueOrNull ?? const {}).contains(widget.tournamentId);
-    final isPreview = AppConfig.userDesignPreview &&
+    final isFav = (favorites.valueOrNull ?? const {}).contains(
+      widget.tournamentId,
+    );
+    final isPreview =
+        AppConfig.userDesignPreview &&
         widget.tournamentId.startsWith('preview-');
 
     return Scaffold(
@@ -105,17 +108,14 @@ class _TournamentDetailScreenState
       ),
       bottomNavigationBar: _t == null
           ? null
-          : _TournamentApplyBar(
-              tournament: _t!,
-              isPreview: isPreview,
-            ),
+          : _TournamentApplyBar(tournament: _t!, isPreview: isPreview),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _TournamentDetailError(message: _error!, onRetry: _load)
-              : _t == null
-                  ? const Center(child: Text('대회 정보 없음'))
-                  : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+          ? _TournamentDetailError(message: _error!, onRetry: _load)
+          : _t == null
+          ? const Center(child: Text('대회 정보 없음'))
+          : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
     );
   }
 }
@@ -184,6 +184,10 @@ class _DetailBody extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
+              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
+                _TournamentPosterCard(url: t.posterUrl!.trim()),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               // ── 핵심 정보 (행 레이아웃) ──
               _DetailInfoRow(
@@ -368,8 +372,11 @@ class _DetailBody extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [
-            Icon(Icons.info_outline_rounded,
-                size: 18, color: cs.onSurfaceVariant),
+            Icon(
+              Icons.info_outline_rounded,
+              size: 18,
+              color: cs.onSurfaceVariant,
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
@@ -411,9 +418,64 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w900,
-            ),
+          color: color,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentPosterCard extends StatelessWidget {
+  const _TournamentPosterCard({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return ClipRRect(
+      borderRadius: AppRadius.card,
+      child: AspectRatio(
+        aspectRatio: 4 / 5,
+        child: Image.network(
+          url,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              color: cs.surfaceContainerLow,
+              child: const Center(child: CircularProgressIndicator()),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: cs.surfaceContainerLow,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.broken_image_outlined,
+                    size: 36,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '포스터 이미지를 불러오지 못했습니다.',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -481,19 +543,15 @@ class _DetailPreviewBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.visibility_outlined,
-            size: 18,
-            color: cs.onSurfaceVariant,
-          ),
+          Icon(Icons.visibility_outlined, size: 18, color: cs.onSurfaceVariant),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -514,7 +572,8 @@ class _TournamentApplyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isClosed = tournament.status == 'closed' ||
+    final isClosed =
+        tournament.status == 'closed' ||
         tournament.status == 'cancelled' ||
         (tournament.applicationDeadline != null &&
             tournament.applicationDeadline!.isBefore(DateTime.now()));
@@ -559,10 +618,7 @@ class _TournamentApplyBar extends StatelessWidget {
 }
 
 class _TournamentDetailError extends StatelessWidget {
-  const _TournamentDetailError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _TournamentDetailError({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -852,8 +908,10 @@ class _RegulationBody extends StatelessWidget {
 
       case RegulationLineKind.numbered:
         return Padding(
-          padding:
-              const EdgeInsets.only(top: AppSpacing.xs, left: AppSpacing.sm),
+          padding: const EdgeInsets.only(
+            top: AppSpacing.xs,
+            left: AppSpacing.sm,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -861,10 +919,7 @@ class _RegulationBody extends StatelessWidget {
                 width: 22,
                 child: Text(
                   line.label ?? '',
-                  style: base.copyWith(
-                    color: cs.onSurfaceVariant,
-                    height: 1.5,
-                  ),
+                  style: base.copyWith(color: cs.onSurfaceVariant, height: 1.5),
                 ),
               ),
               Expanded(
@@ -883,9 +938,10 @@ class _RegulationBody extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('– ',
-                  style:
-                      base.copyWith(color: cs.onSurfaceVariant, height: 1.5)),
+              Text(
+                '– ',
+                style: base.copyWith(color: cs.onSurfaceVariant, height: 1.5),
+              ),
               Expanded(
                 child: Text(
                   line.text,
@@ -960,10 +1016,7 @@ class _RegulationBody extends StatelessWidget {
           padding: const EdgeInsets.only(top: AppSpacing.xs),
           child: Text(
             line.text,
-            style: base.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.5,
-            ),
+            style: base.copyWith(color: cs.onSurfaceVariant, height: 1.5),
           ),
         );
 
@@ -1045,7 +1098,7 @@ Tournament? _previewTournamentById(String id) {
         'beginner',
         'intermediate',
         'advanced',
-        'elite'
+        'elite',
       ],
       prize: null,
       format: '서울시민리그 풋살 리그전',

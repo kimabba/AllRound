@@ -32,7 +32,8 @@ import {
  *    entry_fee?: number,
  *    prize?: string,
  *    format?: string,
- *    source_url?: string
+ *    source_url?: string,
+ *    poster_url?: string
  *  }
  */
 interface SubmitBody {
@@ -51,6 +52,7 @@ interface SubmitBody {
   prize?: string;
   format?: string;
   source_url?: string;
+  poster_url?: string;
   // Phase 2 신규
   region_code?: RegionCode;
   host_associations?: string[];
@@ -58,6 +60,154 @@ interface SubmitBody {
   division_label_local?: string;
   division_kta_standard?: string;
   is_joint_event?: boolean;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+type ParseResult<T> = { value: T } | { error: string };
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function optionalString(record: JsonRecord, key: string): ParseResult<string | undefined> {
+  const value = record[key];
+  if (value === undefined || value === null) return { value: undefined };
+  if (typeof value !== 'string') return { error: `${key} must be a string` };
+  return { value };
+}
+
+function optionalBoolean(record: JsonRecord, key: string): ParseResult<boolean | undefined> {
+  const value = record[key];
+  if (value === undefined || value === null) return { value: undefined };
+  if (typeof value !== 'boolean') return { error: `${key} must be boolean` };
+  return { value };
+}
+
+function optionalNumber(record: JsonRecord, key: string): ParseResult<number | undefined> {
+  const value = record[key];
+  if (value === undefined || value === null) return { value: undefined };
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return { error: `${key} must be a finite number` };
+  }
+  return { value };
+}
+
+function stringArray(record: JsonRecord, key: string): ParseResult<string[]> {
+  const value = record[key];
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    return { error: `${key} must be an array of strings` };
+  }
+  return { value };
+}
+
+function optionalStringArray(record: JsonRecord, key: string): ParseResult<string[] | undefined> {
+  const value = record[key];
+  if (value === undefined || value === null) return { value: undefined };
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    return { error: `${key} must be an array of strings` };
+  }
+  return { value };
+}
+
+function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
+  if (!isRecord(raw)) return { error: 'Invalid JSON body' };
+
+  const sport = raw.sport;
+  if (sport !== 'tennis' && sport !== 'futsal') {
+    return { error: 'sport must be tennis or futsal' };
+  }
+
+  const title = optionalString(raw, 'title');
+  if ('error' in title) return title;
+  const startDate = optionalString(raw, 'start_date');
+  if ('error' in startDate) return startDate;
+  const eligibleGrades = stringArray(raw, 'eligible_grades');
+  if ('error' in eligibleGrades) return eligibleGrades;
+
+  const organizer = optionalString(raw, 'organizer');
+  if ('error' in organizer) return organizer;
+  const description = optionalString(raw, 'description');
+  if ('error' in description) return description;
+  const endDate = optionalString(raw, 'end_date');
+  if ('error' in endDate) return endDate;
+  const applicationDeadline = optionalString(raw, 'application_deadline');
+  if ('error' in applicationDeadline) return applicationDeadline;
+  const region = optionalString(raw, 'region');
+  if ('error' in region) return region;
+  const location = optionalString(raw, 'location');
+  if ('error' in location) return location;
+  const entryFee = optionalNumber(raw, 'entry_fee');
+  if ('error' in entryFee) return entryFee;
+  const entryFeeUnit = optionalString(raw, 'entry_fee_unit');
+  if ('error' in entryFeeUnit) return entryFeeUnit;
+  const prize = optionalString(raw, 'prize');
+  if ('error' in prize) return prize;
+  const format = optionalString(raw, 'format');
+  if ('error' in format) return format;
+  const sourceUrl = optionalString(raw, 'source_url');
+  if ('error' in sourceUrl) return sourceUrl;
+  const posterUrl = optionalString(raw, 'poster_url');
+  if ('error' in posterUrl) return posterUrl;
+  const regionCode = optionalString(raw, 'region_code');
+  if ('error' in regionCode) return regionCode;
+  const hostAssociations = optionalStringArray(raw, 'host_associations');
+  if ('error' in hostAssociations) return hostAssociations;
+  const hostOrgs = optionalStringArray(raw, 'host_orgs');
+  if ('error' in hostOrgs) return hostOrgs;
+  const divisionLabelLocal = optionalString(raw, 'division_label_local');
+  if ('error' in divisionLabelLocal) return divisionLabelLocal;
+  const divisionKtaStandard = optionalString(raw, 'division_kta_standard');
+  if ('error' in divisionKtaStandard) return divisionKtaStandard;
+  const isJointEvent = optionalBoolean(raw, 'is_joint_event');
+  if ('error' in isJointEvent) return isJointEvent;
+
+  return {
+    value: {
+      sport,
+      title: title.value ?? '',
+      organizer: organizer.value,
+      description: description.value,
+      start_date: startDate.value ?? '',
+      end_date: endDate.value,
+      application_deadline: applicationDeadline.value,
+      region: region.value,
+      location: location.value,
+      eligible_grades: eligibleGrades.value,
+      entry_fee: entryFee.value,
+      entry_fee_unit: entryFeeUnit.value as EntryFeeUnit | undefined,
+      prize: prize.value,
+      format: format.value,
+      source_url: sourceUrl.value,
+      poster_url: posterUrl.value,
+      region_code: regionCode.value as RegionCode | undefined,
+      host_associations: hostAssociations.value,
+      host_orgs: hostOrgs.value as TennisOrg[] | undefined,
+      division_label_local: divisionLabelLocal.value,
+      division_kta_standard: divisionKtaStandard.value,
+      is_joint_event: isJointEvent.value,
+    },
+  };
+}
+
+function normalizeOptionalUrl(
+  value: string | undefined,
+  fieldName: string,
+): ParseResult<string | null> {
+  if (value === undefined || value.trim().length === 0) {
+    return { value: null };
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > 1000) return { error: `${fieldName} must be 1000 characters or fewer` };
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return { error: `${fieldName} must start with http:// or https://` };
+    }
+  } catch {
+    return { error: `${fieldName} must be a valid URL` };
+  }
+  return { value: trimmed };
 }
 
 Deno.serve(async (req) => {
@@ -71,14 +221,13 @@ Deno.serve(async (req) => {
 
   let body: SubmitBody;
   try {
-    body = await req.json();
+    const parsed = parseSubmitBody(await req.json());
+    if ('error' in parsed) return errorResponse(parsed.error);
+    body = parsed.value;
   } catch {
     return errorResponse('Invalid JSON body');
   }
 
-  if (!body.sport || (body.sport !== 'tennis' && body.sport !== 'futsal')) {
-    return errorResponse('sport must be tennis or futsal');
-  }
   if (!body.title?.trim()) return errorResponse('title required');
   if (body.title.trim().length > 200) return errorResponse('title must be 200 characters or fewer');
   if (body.description && body.description.length > 2000) {
@@ -114,6 +263,10 @@ Deno.serve(async (req) => {
   if (body.entry_fee_unit && !isValidEntryFeeUnit(body.entry_fee_unit)) {
     return errorResponse(`Invalid entry_fee_unit: ${body.entry_fee_unit}`);
   }
+  const posterUrl = normalizeOptionalUrl(body.poster_url, 'poster_url');
+  if ('error' in posterUrl) return errorResponse(posterUrl.error);
+  const sourceUrl = normalizeOptionalUrl(body.source_url, 'source_url');
+  if ('error' in sourceUrl) return errorResponse(sourceUrl.error);
 
   // 1. tournaments 공통 테이블 INSERT
   const { data, error } = await supabase
@@ -133,7 +286,8 @@ Deno.serve(async (req) => {
       entry_fee_unit: body.entry_fee_unit ?? 'per_team',
       prize: body.prize ?? null,
       format: body.format ?? null,
-      source_url: body.source_url ?? null,
+      source_url: sourceUrl.value,
+      poster_url: posterUrl.value,
       region_code: body.region_code ?? null,
       host_associations: body.host_associations ?? [],
       division_label_local: body.division_label_local ?? null,
