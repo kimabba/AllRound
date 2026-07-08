@@ -838,11 +838,14 @@ Deno.serve(async (req) => {
         } else if (!vectorLiteral) {
           ragErrored = true;
         } else {
+          // 규칙 질문은 대회를 긁지 않는다(무관한 대회 카드·출처가 딸려 나오는 것 방지).
+          const includeTournaments = intentResult.intent !== 'rule_lookup';
           const ragResult = await performRagSearch(
             supabase,
             vectorLiteral,
             explicitSport ?? null,
             user.id,
+            includeTournaments,
           );
           tournaments = ragResult.tournaments;
           rules = ragResult.rules;

@@ -44,18 +44,23 @@ export async function performRagSearch(
   vectorLiteral: string,
   explicitSport: string | null,
   userId: string,
+  // 규칙 질문(rule_lookup) 등 대회가 불필요한 의도에서는 대회 검색을 끈다.
+  // 켜두면 임베딩 유사도로 무관한 대회가 카드·출처로 딸려 나온다.
+  includeTournaments = true,
 ): Promise<RagResult> {
   const result: RagResult = { tournaments: [], rules: [], venues: [], errored: false };
 
   try {
     const [tRes, rRes] = await Promise.all([
-      supabase.rpc('tournaments_semantic_search', {
-        p_user_id: userId,
-        p_query_embedding: vectorLiteral,
-        p_only_my_grade: false,
-        p_match_count: 5,
-        p_sport: explicitSport ?? null,
-      }),
+      includeTournaments
+        ? supabase.rpc('tournaments_semantic_search', {
+          p_user_id: userId,
+          p_query_embedding: vectorLiteral,
+          p_only_my_grade: false,
+          p_match_count: 5,
+          p_sport: explicitSport ?? null,
+        })
+        : Promise.resolve({ data: [], error: null }),
       supabase.rpc('rules_semantic_search', {
         p_query_embedding: vectorLiteral,
         p_sport: explicitSport ?? null,
