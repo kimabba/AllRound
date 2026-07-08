@@ -17,6 +17,7 @@ class TournamentCard extends StatelessWidget {
     this.onTap,
     this.onFavoriteToggle,
     this.compact = false,
+    this.daySeq,
   });
 
   final Tournament tournament;
@@ -25,6 +26,8 @@ class TournamentCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onFavoriteToggle;
   final bool compact;
+  // 같은 대회일 내 순번(1,2,3…). 캘린더 목록에서만 전달. 캘린더 날짜 배지와 대응.
+  final int? daySeq;
 
   static final _df = DateFormat('M/d (E)', 'ko');
 
@@ -62,6 +65,26 @@ class TournamentCard extends StatelessWidget {
             // 아래 정보 블록에서 라벨과 함께 명시한다.
             Row(
               children: [
+                if (daySeq != null) ...[
+                  Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$daySeq',
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.onPrimary,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
                 _StatusChip(
                   label: status.label,
                   foreground: status.foreground,
