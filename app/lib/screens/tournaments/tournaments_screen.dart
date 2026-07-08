@@ -797,35 +797,27 @@ class _CalendarDayCell extends StatelessWidget {
                 ),
                 if (count > 0)
                   Positioned(
-                    right: count > 1 ? 0 : 6,
-                    bottom: count > 1 ? 0 : 4,
-                    child: count == 1
-                        ? Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: isSelected ? cs.onPrimary : cs.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          )
-                        : Container(
-                            height: 16,
-                            constraints: const BoxConstraints(minWidth: 16),
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isSelected ? cs.onPrimary : cs.primary,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '$count',
-                              style: tt.labelSmall?.copyWith(
-                                color: isSelected ? cs.primary : cs.onPrimary,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
-                          ),
+                    right: 0,
+                    bottom: 0,
+                    // 대회 수를 항상 숫자로 표기 (1개=1, 3개=3).
+                    child: Container(
+                      height: 16,
+                      constraints: const BoxConstraints(minWidth: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected ? cs.onPrimary : cs.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: tt.labelSmall?.copyWith(
+                          color: isSelected ? cs.primary : cs.onPrimary,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
