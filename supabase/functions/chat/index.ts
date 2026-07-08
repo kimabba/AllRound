@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
           if (!selRow) {
             send('context', { tournaments: [], rules: [] });
             send('delta', {
-              text: '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
+              text: '현재 올라운드 DB에서 이 항목을 확인할 수 없습니다. ' +
                 '정보가 변경되었거나 접근 권한이 없을 수 있습니다.',
             });
             send('done', {});
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
           send('context', { tournaments: [], rules: [] });
           if (!clubRow) {
             send('delta', {
-              text: '현재 매치업 DB에서 이 항목을 확인할 수 없습니다. ' +
+              text: '현재 올라운드 DB에서 이 항목을 확인할 수 없습니다. ' +
                 '정보가 변경되었거나 접근 권한이 없을 수 있습니다.',
             });
             send('done', {});
