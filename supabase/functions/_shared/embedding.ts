@@ -8,11 +8,18 @@
  */
 
 const MODEL = Deno.env.get('GEMINI_EMBEDDING_MODEL') ?? 'gemini-embedding-2';
+export const EMBEDDING_MODEL = MODEL;
 export const EMBEDDING_DIM = 768;
+
+export interface EmbedUsage {
+  promptTokenCount?: number;
+  totalTokenCount?: number;
+}
 
 interface EmbedResponse {
   embedding?: { values: number[] };
   embeddings?: { values: number[] }[];
+  usageMetadata?: EmbedUsage;
   error?: { message: string };
 }
 
@@ -23,9 +30,12 @@ function apiKey(): string {
 }
 
 /**
- * 단일 텍스트 임베딩.
+ * 단일 텍스트 임베딩 + usageMetadata(있으면).
  */
-export async function embedText(text: string, taskType = 'RETRIEVAL_DOCUMENT'): Promise<number[]> {
+export async function embedTextWithUsage(
+  text: string,
+  taskType = 'RETRIEVAL_DOCUMENT',
+): Promise<{ values: number[]; usage?: EmbedUsage }> {
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:embedContent?key=${apiKey()}`;
   const res = await fetch(url, {
@@ -42,7 +52,14 @@ export async function embedText(text: string, taskType = 'RETRIEVAL_DOCUMENT'): 
   if (!res.ok || !data.embedding?.values) {
     throw new Error(`embedText failed: ${data.error?.message ?? res.status}`);
   }
-  return data.embedding.values;
+  return { values: data.embedding.values, usage: data.usageMetadata };
+}
+
+/**
+ * 단일 텍스트 임베딩.
+ */
+export async function embedText(text: string, taskType = 'RETRIEVAL_DOCUMENT'): Promise<number[]> {
+  return (await embedTextWithUsage(text, taskType)).values;
 }
 
 /**

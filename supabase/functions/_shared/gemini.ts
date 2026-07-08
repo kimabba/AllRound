@@ -11,6 +11,7 @@
  */
 
 const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.1-flash-lite';
+export const GEMINI_MODEL = MODEL;
 
 function apiKey(): string {
   const k = Deno.env.get('GEMINI_API_KEY');
@@ -33,10 +34,18 @@ export interface GenerateOptions {
   maxOutputTokens?: number;
 }
 
+export interface GeminiUsage {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  totalTokenCount?: number;
+}
+
 export interface StreamEvent {
   type: 'text' | 'done' | 'error';
   text?: string;
   error?: string;
+  /** 'done' 이벤트에만 실림. SSE 마지막 청크의 usageMetadata. */
+  usage?: GeminiUsage;
 }
 
 /**
@@ -80,6 +89,7 @@ export async function* streamChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let capturedUsage: GeminiUsage | undefined;
 
   // SSE 청크 처리를 한 곳에 (마지막 buffer 잔여 처리에도 재사용)
   function* parseLine(line: string): Generator<StreamEvent> {
@@ -89,6 +99,7 @@ export async function* streamChat(
     if (!json) return;
     try {
       const parsed = JSON.parse(json);
+      if (parsed.usageMetadata) capturedUsage = parsed.usageMetadata as GeminiUsage;
       const candidate = parsed.candidates?.[0];
       const text = candidate?.content?.parts
         ?.filter((p: Record<string, unknown>) => !p.thought)
@@ -119,5 +130,5 @@ export async function* streamChat(
       for (const ev of parseLine(evt)) yield ev;
     }
   }
-  yield { type: 'done' };
+  yield { type: 'done', usage: capturedUsage };
 }

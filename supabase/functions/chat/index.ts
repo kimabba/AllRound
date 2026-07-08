@@ -16,8 +16,9 @@
 
 import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
-import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
-import type { ChatTurn } from '../_shared/gemini.ts';
+import { EMBEDDING_MODEL, embedTextWithUsage, toVectorLiteral } from '../_shared/embedding.ts';
+import { type ChatTurn, GEMINI_MODEL } from '../_shared/gemini.ts';
+import { recordGeminiUsage } from '../_shared/usage.ts';
 import {
   GRADE_LABELS,
   REGION_LABELS,
@@ -258,12 +259,21 @@ Deno.serve(async (req) => {
         let vectorLiteral: string | null = null;
         let userContextHash: string | null = null;
         try {
-          const queryEmbedding = await embedText(userMessage, 'RETRIEVAL_QUERY');
-          vectorLiteral = toVectorLiteral(queryEmbedding);
+          const embedResult = await embedTextWithUsage(userMessage, 'RETRIEVAL_QUERY');
+          vectorLiteral = toVectorLiteral(embedResult.values);
           userContextHash = await computeUserContextHash(
             (userSports ?? []) as UserSport[],
             (userOrgs ?? []) as UserTennisOrgRow[],
           );
+          // 사용량 기록 — usageMetadata 없으면 tokens null(호출 횟수만). 실패해도 채팅 무영향.
+          await recordGeminiUsage(serviceClient(), {
+            kind: 'embedding',
+            model: EMBEDDING_MODEL,
+            inputTokens: embedResult.usage?.promptTokenCount ?? null,
+            totalTokens: embedResult.usage?.totalTokenCount ?? null,
+            userId: user.id,
+            context: 'chat',
+          });
         } catch (e) {
           console.error('Embedding failed:', (e as Error).message);
         }
@@ -510,6 +520,18 @@ Deno.serve(async (req) => {
 
           const profileSystemPrompt = buildSystemPrompt(sports, orgs);
           const llmResult = await streamLlmResponse(profileHistory, profileSystemPrompt, send);
+
+          if (llmResult.usage) {
+            await recordGeminiUsage(adminSupabase, {
+              kind: 'llm',
+              model: GEMINI_MODEL,
+              inputTokens: llmResult.usage.promptTokenCount ?? null,
+              outputTokens: llmResult.usage.candidatesTokenCount ?? null,
+              totalTokens: llmResult.usage.totalTokenCount ?? null,
+              userId: user.id,
+              context: 'chat',
+            });
+          }
 
           if (llmResult.assistantText.trim()) {
             await supabase.from('chat_messages').insert({
@@ -904,6 +926,17 @@ Deno.serve(async (req) => {
           assistantText = llmResult.assistantText;
           if (!llmResult.errored && assistantText.trim().length > 0) {
             cacheable = true;
+          }
+          if (llmResult.usage) {
+            await recordGeminiUsage(adminSupabase, {
+              kind: 'llm',
+              model: GEMINI_MODEL,
+              inputTokens: llmResult.usage.promptTokenCount ?? null,
+              outputTokens: llmResult.usage.candidatesTokenCount ?? null,
+              totalTokens: llmResult.usage.totalTokenCount ?? null,
+              userId: user.id,
+              context: 'chat',
+            });
           }
         }
 
