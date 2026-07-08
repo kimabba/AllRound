@@ -466,11 +466,9 @@ class _TournamentCalendarListView extends StatelessWidget {
     final nextDate =
         selected == null ? null : _nextTournamentDate(tournaments, selected);
 
-    // 목록에 보이는 순서대로 순번(1,2,3…). 날짜순 정렬 기준.
-    final seqById = <String, int>{};
-    for (var i = 0; i < visible.length; i++) {
-      seqById[visible[i].id] = i + 1;
-    }
+    // 전체 대회 일정순 고정 순번(1,2,3…) — 캘린더 배지와 동일 번호.
+    // 날짜 선택/필터로 목록이 줄어도 같은 대회는 같은 번호를 유지한다.
+    final seqById = _tournamentSeqById(tournaments);
 
     Widget card(Tournament tournament) {
       final isFavorite = favoriteIds.contains(tournament.id);
@@ -599,6 +597,8 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final totalCells = leadingEmptyCells + daysInMonth;
     final rowCount = (totalCells / 7).ceil();
     final today = _dateOnly(DateTime.now());
+    // 리스트 카드와 동일한 고정 순번(일정순).
+    final seqById = _tournamentSeqById(tournaments);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -667,36 +667,22 @@ class _TournamentMonthCalendar extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           for (var row = 0; row < rowCount; row++)
             Row(
-              children: [
-                for (var col = 0; col < 7; col++)
-                  Expanded(
-                    child: _CalendarDayCell(
-                      date: _dateForCell(
-                        focusedMonth,
-                        leadingEmptyCells,
-                        row * 7 + col,
-                      ),
-                      today: today,
-                      selectedDate: selectedDate,
-                      count: _dateForCell(
-                                focusedMonth,
-                                leadingEmptyCells,
-                                row * 7 + col,
-                              ) ==
-                              null
-                          ? 0
-                          : _tournamentsOnDate(
-                              tournaments,
-                              _dateForCell(
-                                focusedMonth,
-                                leadingEmptyCells,
-                                row * 7 + col,
-                              )!,
-                            ).length,
-                      onTap: onDateSelected,
-                    ),
+              children: List.generate(7, (col) {
+                final cellDate = _dateForCell(
+                  focusedMonth,
+                  leadingEmptyCells,
+                  row * 7 + col,
+                );
+                return Expanded(
+                  child: _CalendarDayCell(
+                    date: cellDate,
+                    today: today,
+                    selectedDate: selectedDate,
+                    seq: _cellSeq(cellDate, tournaments, seqById),
+                    onTap: onDateSelected,
                   ),
-              ],
+                );
+              }),
             ),
         ],
       ),
@@ -744,14 +730,15 @@ class _CalendarDayCell extends StatelessWidget {
   final DateTime? date;
   final DateTime today;
   final DateTime? selectedDate;
-  final int count;
+  // 그 날 대회의 순번(리스트 카드와 동일 번호). 대회 없으면 null.
+  final int? seq;
   final ValueChanged<DateTime> onTap;
 
   const _CalendarDayCell({
     required this.date,
     required this.today,
     required this.selectedDate,
-    required this.count,
+    required this.seq,
     required this.onTap,
   });
 
@@ -803,8 +790,8 @@ class _CalendarDayCell extends StatelessWidget {
                     ),
                   ),
                 ),
-                // 대회 수 배지 — 날짜 우상단 코너에(겹치지 않게). 1개=1, 3개=3.
-                if (count > 0)
+                // 대회 순번 배지 — 날짜 우상단 코너에(겹치지 않게). 리스트 카드와 동일 번호.
+                if (seq != null)
                   Positioned(
                     top: -3,
                     right: -3,
@@ -819,7 +806,7 @@ class _CalendarDayCell extends StatelessWidget {
                         border: Border.all(color: cs.surface, width: 1.5),
                       ),
                       child: Text(
-                        '$count',
+                        '$seq',
                         style: tt.labelSmall?.copyWith(
                           color: cs.onPrimary,
                           fontWeight: FontWeight.w900,
@@ -913,6 +900,30 @@ bool _isDateInTournament(DateTime date, Tournament tournament) {
   final start = _dateOnly(tournament.startDate);
   final end = _dateOnly(tournament.endDate ?? tournament.startDate);
   return !target.isBefore(start) && !target.isAfter(end);
+}
+
+/// 전체 대회를 일정(시작일)순으로 고정 순번(1,2,3…) 부여. 캘린더·리스트 공용.
+/// 같은 대회는 캘린더 배지와 리스트 카드에서 같은 번호로 나타난다.
+Map<String, int> _tournamentSeqById(List<Tournament> tournaments) {
+  final sorted = [...tournaments]
+    ..sort((a, b) => a.startDate.compareTo(b.startDate));
+  final map = <String, int>{};
+  for (var i = 0; i < sorted.length; i++) {
+    map[sorted[i].id] = i + 1;
+  }
+  return map;
+}
+
+/// 해당 날짜에 열리는 대회 중 가장 빠른 순번(캘린더 배지용). 없으면 null.
+int? _cellSeq(
+  DateTime? date,
+  List<Tournament> tournaments,
+  Map<String, int> seqById,
+) {
+  if (date == null) return null;
+  final onDate = _tournamentsOnDate(tournaments, date);
+  if (onDate.isEmpty) return null;
+  return onDate.map((t) => seqById[t.id] ?? 0).reduce((a, b) => a < b ? a : b);
 }
 
 List<Tournament> _tournamentsOnDate(
