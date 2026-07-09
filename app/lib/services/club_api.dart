@@ -73,6 +73,7 @@ mixin ClubApi on ApiBase {
     String? contact,
     String? website,
     String? description,
+    List<String> introImageUrls = const [],
     List<String>? meetingDays,
     int? monthlyFee,
     String? genderPreference,
@@ -90,6 +91,7 @@ mixin ClubApi on ApiBase {
         if (website != null && website.isNotEmpty) 'website': website,
         if (description != null && description.isNotEmpty)
           'description': description,
+        if (introImageUrls.isNotEmpty) 'intro_image_urls': introImageUrls,
         if (meetingDays != null && meetingDays.isNotEmpty)
           'meeting_days': meetingDays,
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
@@ -125,11 +127,34 @@ mixin ClubApi on ApiBase {
     return supabase.storage.from('club-logos').getPublicUrl(path);
   }
 
+  Future<String> uploadClubIntroImage({
+    required Uint8List bytes,
+    required String extension,
+    required String contentType,
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+
+    final safeExt = extension.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final ext = safeExt.isEmpty ? 'jpg' : safeExt.toLowerCase();
+    final path = '$userId/${DateTime.now().microsecondsSinceEpoch}.$ext';
+
+    await supabase.storage.from('club-intro-images').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            upsert: true,
+          ),
+        );
+    return supabase.storage.from('club-intro-images').getPublicUrl(path);
+  }
+
   /// 단일 클럽 상세 조회 (딥링크 등 ID만 있을 때 사용).
   Future<Club> getClub(String clubId) async {
     final uid = supabase.auth.currentUser?.id;
     var query = supabase.from('clubs').select(
-          '*, club_members!left(role, status)',
+          '*, club_members!left(role, status, can_post_notice)',
         );
     if (uid != null) {
       query = query.eq('club_members.user_id', uid);
@@ -210,6 +235,24 @@ mixin ClubApi on ApiBase {
         'club_id': clubId,
         'action': 'update_monthly_fee',
         'monthly_fee': monthlyFee,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> updateClubIntro({
+    required String clubId,
+    required String? description,
+    required List<String> introImageUrls,
+  }) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'update_intro',
+        'description': description,
+        'intro_image_urls': introImageUrls,
       }),
     );
     check(res);

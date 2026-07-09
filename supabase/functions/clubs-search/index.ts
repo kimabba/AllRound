@@ -22,7 +22,10 @@ Deno.serve(async (req) => {
   const rawQ = url.searchParams.get('q');
   // PostgREST .or() 표현식 메타문자 제거 (SEC-M-01 방어)
   const q = rawQ?.replace(/[(),:%_]/g, ' ').trim().slice(0, 100);
-  const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 200);
+  const limit = Math.min(
+    Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1),
+    200,
+  );
 
   // mine=true 이면 본인이 생성했거나 멤버인 클럽 (pending 포함)
   const mine = url.searchParams.get('mine') === 'true';
@@ -32,20 +35,34 @@ Deno.serve(async (req) => {
     // 1) 본인이 active 멤버인 클럽+역할 조회
     const { data: memberRows } = await supa
       .from('club_members')
-      .select('club_id, role, status')
+      .select('club_id, role, status, can_post_notice')
       .eq('user_id', auth.user.id)
       .eq('status', 'active');
     const memberMap = new Map(
       (memberRows ?? []).map((
-        r: { club_id: string; role: string; status: string },
-      ) => [r.club_id, { role: r.role, status: r.status }]),
+        r: {
+          club_id: string;
+          role: string;
+          status: string;
+          can_post_notice: boolean;
+        },
+      ) => [
+        r.club_id,
+        {
+          role: r.role,
+          status: r.status,
+          can_post_notice: r.can_post_notice,
+        },
+      ]),
     );
     const memberClubIds = [...memberMap.keys()];
 
     // 2) 멤버이거나 생성자인 클럽 조회
     let clubQuery = supa.from('clubs').select('*');
     if (memberClubIds.length > 0) {
-      clubQuery = clubQuery.or(`created_by.eq.${auth.user.id},id.in.(${memberClubIds.join(',')})`);
+      clubQuery = clubQuery.or(
+        `created_by.eq.${auth.user.id},id.in.(${memberClubIds.join(',')})`,
+      );
     } else {
       clubQuery = clubQuery.eq('created_by', auth.user.id);
     }
@@ -66,7 +83,9 @@ Deno.serve(async (req) => {
   // 일반 검색: approved 클럽만
   let query = auth.supabase
     .from('clubs')
-    .select('*, meeting_days, monthly_fee, gender_preference, club_members(role, status)')
+    .select(
+      '*, meeting_days, monthly_fee, gender_preference, club_members(role, status, can_post_notice)',
+    )
     .eq('status', 'approved')
     .limit(limit);
 

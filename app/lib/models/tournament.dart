@@ -90,12 +90,10 @@ class Tournament {
     final ext = tennis ?? futsal;
 
     final grades = (j['eligible_grades'] as List?)?.cast<String>() ?? const [];
-    final hostAssoc =
-        (ext?['host_associations'] as List?)?.cast<String>() ??
+    final hostAssoc = (ext?['host_associations'] as List?)?.cast<String>() ??
         (j['host_associations'] as List?)?.cast<String>() ??
         const [];
-    final hostOrgs =
-        (ext?['host_orgs'] as List?)?.cast<String>() ??
+    final hostOrgs = (ext?['host_orgs'] as List?)?.cast<String>() ??
         (j['host_orgs'] as List?)?.cast<String>() ??
         const [];
 
@@ -103,26 +101,25 @@ class Tournament {
     final rawFields = j['regulation_fields'];
     final regulationFields = rawFields is List
         ? rawFields
-              .map(RegulationField.tryFromJson)
-              .whereType<RegulationField>()
-              .toList(growable: false)
+            .map(RegulationField.tryFromJson)
+            .whereType<RegulationField>()
+            .toList(growable: false)
         : const <RegulationField>[];
 
     // regulation_notes: List<dynamic> → List<String> (빈/비문자열 제거)
     final rawNotes = j['regulation_notes'];
     final regulationNotes = rawNotes is List
         ? rawNotes
-              .whereType<String>()
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toList(growable: false)
+            .whereType<String>()
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList(growable: false)
         : const <String>[];
 
     // regulation_body: 여러 줄 문자열. 비문자열/빈 문자열이면 null.
     final rawBody = j['regulation_body'];
-    final regulationBody = rawBody is String && rawBody.trim().isNotEmpty
-        ? rawBody
-        : null;
+    final regulationBody =
+        rawBody is String && rawBody.trim().isNotEmpty ? rawBody : null;
 
     return Tournament(
       id: j['id'] as String,
@@ -150,18 +147,14 @@ class Tournament {
       regionCode: j['region_code'] as String?,
       hostAssociations: hostAssoc,
       hostOrgs: hostOrgs,
-      divisionLabelLocal:
-          ext?['division_label_local'] as String? ??
+      divisionLabelLocal: ext?['division_label_local'] as String? ??
           j['division_label_local'] as String?,
-      divisionKtaStandard:
-          ext?['division_kta_standard'] as String? ??
+      divisionKtaStandard: ext?['division_kta_standard'] as String? ??
           j['division_kta_standard'] as String?,
-      isJointEvent:
-          ext?['is_joint_event'] as bool? ??
+      isJointEvent: ext?['is_joint_event'] as bool? ??
           j['is_joint_event'] as bool? ??
           false,
-      futsalEventCategory:
-          ext?['event_category'] as String? ??
+      futsalEventCategory: ext?['event_category'] as String? ??
           j['futsal_event_category'] as String? ??
           j['event_category'] as String?,
       regulationFields: regulationFields,
@@ -189,14 +182,14 @@ class Region {
   });
 
   factory Region.fromJson(Map<String, dynamic> j) => Region(
-    code: j['code'] as String,
-    displayNameKo: j['display_name_ko'] as String,
-    governingAssociations:
-        (j['governing_associations'] as List?)?.cast<String>() ?? const [],
-    usesKato: (j['uses_kato'] as bool?) ?? false,
-    usesKata: (j['uses_kata'] as bool?) ?? false,
-    notes: j['notes'] as String?,
-  );
+        code: j['code'] as String,
+        displayNameKo: j['display_name_ko'] as String,
+        governingAssociations:
+            (j['governing_associations'] as List?)?.cast<String>() ?? const [],
+        usesKato: (j['uses_kato'] as bool?) ?? false,
+        usesKata: (j['uses_kata'] as bool?) ?? false,
+        notes: j['notes'] as String?,
+      );
 }
 
 class UserTennisOrg {
@@ -223,8 +216,8 @@ class UserTennisOrg {
     final double? score = scoreVal == null
         ? null
         : (scoreVal is num
-              ? scoreVal.toDouble()
-              : double.tryParse('$scoreVal'));
+            ? scoreVal.toDouble()
+            : double.tryParse('$scoreVal'));
     return UserTennisOrg(
       org: j['org'] as String,
       division: j['division'] as String,
@@ -237,15 +230,15 @@ class UserTennisOrg {
   }
 
   Map<String, dynamic> toUpsert(String userId) => {
-    'user_id': userId,
-    'org': org,
-    'division': division,
-    'score': score,
-    'is_primary': isPrimary,
-    'region_code': regionCode,
-    'ranking_points': rankingPoints,
-    'player_origin': playerOrigin,
-  };
+        'user_id': userId,
+        'org': org,
+        'division': division,
+        'score': score,
+        'is_primary': isPrimary,
+        'region_code': regionCode,
+        'ranking_points': rankingPoints,
+        'player_origin': playerOrigin,
+      };
 }
 
 class Club {
@@ -258,6 +251,7 @@ class Club {
   final String? contact;
   final String? website;
   final String? description;
+  final List<String> introImageUrls;
   final String status; // 'pending' | 'approved' | 'rejected'
   final String? statusReason;
   final int memberCount;
@@ -268,6 +262,7 @@ class Club {
   final DateTime? createdAt;
   // 현재 사용자의 멤버십 정보 (조회 시 join)
   final String? myRole; // 'owner'|'manager'|'member'|null
+  final bool myCanPostNotice;
 
   Club({
     required this.id,
@@ -279,6 +274,7 @@ class Club {
     this.contact,
     this.website,
     this.description,
+    this.introImageUrls = const [],
     this.status = 'approved',
     this.statusReason,
     this.memberCount = 0,
@@ -288,6 +284,7 @@ class Club {
     this.genderPreference,
     this.createdAt,
     this.myRole,
+    this.myCanPostNotice = false,
   });
 
   bool get isPending => status == 'pending';
@@ -296,6 +293,7 @@ class Club {
   bool get isMember => myRole != null;
   bool get isOwner => myRole == 'owner';
   bool get isManager => myRole == 'manager' || myRole == 'owner';
+  bool get canPostNotice => isManager || myCanPostNotice;
 
   factory Club.fromJson(Map<String, dynamic> j) {
     // club_members join 결과에서 현재 사용자 role 추출
@@ -304,6 +302,9 @@ class Club {
     final myRole = myMember != null && myMember['status'] == 'active'
         ? myMember['role'] as String?
         : null;
+    final myCanPostNotice = myMember != null && myMember['status'] == 'active'
+        ? (myMember['can_post_notice'] as bool?) ?? false
+        : false;
 
     return Club(
       id: j['id'] as String,
@@ -315,6 +316,8 @@ class Club {
       contact: j['contact'] as String?,
       website: j['website'] as String?,
       description: j['description'] as String?,
+      introImageUrls:
+          (j['intro_image_urls'] as List?)?.cast<String>() ?? const [],
       status: (j['status'] as String?) ?? 'approved',
       statusReason: j['status_reason'] as String?,
       memberCount: (j['member_count'] as int?) ?? 0,
@@ -326,6 +329,7 @@ class Club {
           ? DateTime.parse(j['created_at'] as String)
           : null,
       myRole: myRole,
+      myCanPostNotice: myCanPostNotice,
     );
   }
 }
@@ -357,20 +361,20 @@ class RuleArticle {
   bool get embeddingPending => embeddingUpdatedAt == null;
 
   factory RuleArticle.fromJson(Map<String, dynamic> j) => RuleArticle(
-    id: j['id'] as String,
-    sport: j['sport'] as String,
-    category: j['category'] as String,
-    title: j['title'] as String,
-    body: j['body'] as String,
-    orderIdx: (j['order_idx'] as int?) ?? 0,
-    published: (j['published'] as bool?) ?? true,
-    embeddingUpdatedAt: j['embedding_updated_at'] != null
-        ? DateTime.parse(j['embedding_updated_at'] as String)
-        : null,
-    updatedAt: j['updated_at'] != null
-        ? DateTime.parse(j['updated_at'] as String)
-        : null,
-  );
+        id: j['id'] as String,
+        sport: j['sport'] as String,
+        category: j['category'] as String,
+        title: j['title'] as String,
+        body: j['body'] as String,
+        orderIdx: (j['order_idx'] as int?) ?? 0,
+        published: (j['published'] as bool?) ?? true,
+        embeddingUpdatedAt: j['embedding_updated_at'] != null
+            ? DateTime.parse(j['embedding_updated_at'] as String)
+            : null,
+        updatedAt: j['updated_at'] != null
+            ? DateTime.parse(j['updated_at'] as String)
+            : null,
+      );
 }
 
 class UserSport {
@@ -381,17 +385,17 @@ class UserSport {
   UserSport({required this.sport, required this.grade, this.isPrimary = false});
 
   factory UserSport.fromJson(Map<String, dynamic> j) => UserSport(
-    sport: j['sport'] as String,
-    grade: j['grade'] as String,
-    isPrimary: j['is_primary'] as bool? ?? false,
-  );
+        sport: j['sport'] as String,
+        grade: j['grade'] as String,
+        isPrimary: j['is_primary'] as bool? ?? false,
+      );
 
   Map<String, dynamic> toInsert(String userId) => {
-    'user_id': userId,
-    'sport': sport,
-    'grade': grade,
-    'is_primary': isPrimary,
-  };
+        'user_id': userId,
+        'sport': sport,
+        'grade': grade,
+        'is_primary': isPrimary,
+      };
 }
 
 class ChatMessage {
@@ -410,10 +414,10 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
-    id: j['id'] as String,
-    role: j['role'] as String,
-    content: j['content'] as String,
-    citations: (j['citations'] as List?) ?? const [],
-    createdAt: DateTime.parse(j['created_at'] as String),
-  );
+        id: j['id'] as String,
+        role: j['role'] as String,
+        content: j['content'] as String,
+        citations: (j['citations'] as List?) ?? const [],
+        createdAt: DateTime.parse(j['created_at'] as String),
+      );
 }

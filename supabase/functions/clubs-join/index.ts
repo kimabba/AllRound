@@ -1,7 +1,7 @@
 // clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
-//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'delete_club'|'list_members',
+//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'update_intro'|'delete_club'|'list_members',
 //   message?,
 //   target_user_id?,
 //   role?,
@@ -18,6 +18,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function optionalText(value: unknown, maxLength: number): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') {
+    throw new Error('description must be a string or null');
+  }
+  const text = value.trim();
+  if (text.length > maxLength) {
+    throw new Error(`description must be ${maxLength} characters or less`);
+  }
+  return text.length === 0 ? null : text;
+}
+
+function optionalUrlArray(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error('intro_image_urls must be an array');
+  }
+  if (value.length > 5) {
+    throw new Error('intro_image_urls can include up to 5 images');
+  }
+  return value.map((item) => {
+    if (typeof item !== 'string') {
+      throw new Error('intro_image_urls must contain only strings');
+    }
+    const url = item.trim();
+    if (!url) throw new Error('intro_image_urls cannot contain empty values');
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error();
+      }
+    } catch {
+      throw new Error('intro_image_urls must contain valid http(s) URLs');
+    }
+    return url;
+  });
 }
 
 Deno.serve(async (req) => {
@@ -263,6 +301,34 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, action: 'monthly_fee_updated' });
   }
 
+  if (action === 'update_intro') {
+    const member = await activeMember('role');
+    if (member?.role !== 'owner' && member?.role !== 'manager') {
+      return errorResponse('Only owner or manager can update club intro', 403);
+    }
+
+    let description: string | null;
+    let introImageUrls: string[];
+    try {
+      description = optionalText(body.description, 2000);
+      introImageUrls = optionalUrlArray(body.intro_image_urls);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Invalid intro payload';
+      return errorResponse(message, 400);
+    }
+
+    const { error } = await supa
+      .from('clubs')
+      .update({
+        description,
+        intro_image_urls: introImageUrls,
+      })
+      .eq('id', clubId)
+      .eq('status', 'approved');
+    if (error) return errorResponse(error.message, 500);
+    return jsonResponse({ ok: true, action: 'intro_updated' });
+  }
+
   if (action === 'delete_club') {
     const ownerError = await requireOwner();
     if (ownerError) return ownerError;
@@ -289,7 +355,7 @@ Deno.serve(async (req) => {
   }
 
   return errorResponse(
-    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|delete_club|list_members',
+    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|update_intro|delete_club|list_members',
     400,
   );
 });
