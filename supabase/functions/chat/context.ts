@@ -39,7 +39,7 @@ export async function computeUserContextHash(
   const normalizedOrgs = [...orgs]
     .map((o) => ({
       org: o.org,
-      division_local: o.division_local,
+      division: o.division,
       score: o.score,
       region_code: o.region_code,
     }))
@@ -65,7 +65,7 @@ export function buildSystemPrompt(sports: UserSport[], orgs: UserTennisOrgRow[])
     ? ''
     : '\n\n[등록 협회 (테니스, 다중 등록 가능)]\n' + orgs.map((o) => {
       const orgName = TENNIS_ORG_LABELS[o.org as keyof typeof TENNIS_ORG_LABELS] ?? o.org;
-      const division = o.division_local ?? '미입력';
+      const division = o.division ?? '미입력';
       const score = o.score !== null ? ` (점수 ${o.score})` : '';
       const primary = o.is_primary ? ' ★주' : '';
       const region = o.region_code

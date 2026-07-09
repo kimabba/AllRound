@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
 
   const { data: userOrgs } = await supabase
     .from('user_tennis_orgs')
-    .select('org, division_local, score, is_primary, region_code')
+    .select('org, division, score, is_primary, region_code')
     .eq('user_id', user.id);
 
   // Prior conversation (last 10 turns = 20 messages)
@@ -488,7 +488,7 @@ Deno.serve(async (req) => {
             profileLines.push('[등록 협회]');
             for (const o of orgs) {
               const orgName = TENNIS_ORG_LABELS[o.org as keyof typeof TENNIS_ORG_LABELS] ?? o.org;
-              const division = o.division_local ?? '미입력';
+              const division = o.division ?? '미입력';
               const score = o.score !== null ? ` (점수 ${o.score})` : '';
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }
@@ -756,7 +756,8 @@ Deno.serve(async (req) => {
               p_user_id: user.id,
               // 명시 종목 → 없으면 UI 활성 종목. 테니스/풋살 혼합 방지.
               p_sport: requestedSport,
-              p_region: regionLabel,
+              // region_code(정규 코드) 직접 전달. 한글 라벨은 t.region 표기와 불일치(JY-104).
+              p_region_code: regionCode,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
               // 채팅 기본 검색은 필터를 걸지 않는다(내 등급 필터는 백로그 JY-101).
