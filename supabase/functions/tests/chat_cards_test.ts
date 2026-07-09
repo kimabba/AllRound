@@ -4,10 +4,12 @@ import {
   buildTournamentCards,
   type ClubCardRow,
   type ClubDetailRow,
+  isTournamentCardRow,
   parseSelectedEntity,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
   type TournamentCardRow,
@@ -132,6 +134,36 @@ Deno.test('renderTournamentSearchEmptyText is authoritative for precise empty fi
   assert(text.includes('조건에 맞는 테니스 대회가 없습니다'));
   assert(text.includes('2026-06-15 ~ 2026-06-21'));
   assert(!text.includes('현재 매치업 DB에 해당 정보가 등록되어 있지 않습니다'));
+});
+
+Deno.test('renderTournamentApplicationGuideText points users to cards without fake list rows', () => {
+  const text = renderTournamentApplicationGuideText([SAMPLE_ROW], {
+    sport: 'futsal',
+    region: null,
+  });
+
+  assert(text.includes('현재 신청 가능한 풋살 대회 1건'));
+  assert(text.includes('아래 카드'));
+  assert(text.includes('원본 링크'));
+  assert(!text.includes('추천 대회 목록'));
+  assert(!text.includes(SAMPLE_ROW.title));
+});
+
+Deno.test('renderTournamentApplicationGuideText gives an empty-state application guide', () => {
+  const text = renderTournamentApplicationGuideText([], {
+    sport: 'futsal',
+    region: '광주',
+  });
+
+  assert(text.includes('현재 신청 가능한 풋살 대회가 없습니다'));
+  assert(text.includes('광주'));
+  assert(text.includes('협회 공식 홈페이지'));
+});
+
+Deno.test('isTournamentCardRow validates RPC card rows before rendering cards', () => {
+  assert(isTournamentCardRow(SAMPLE_ROW));
+  assert(!isTournamentCardRow({ ...SAMPLE_ROW, sport: 'basketball' }));
+  assert(!isTournamentCardRow({ ...SAMPLE_ROW, eligible_grades: [1, 2, 3] }));
 });
 
 Deno.test('parseSelectedEntity accepts a valid tournament entity', () => {
