@@ -317,15 +317,18 @@ Deno.serve(async (req) => {
       return errorResponse(message, 400);
     }
 
-    const { error } = await supa
+    const { data, error } = await supa
       .from('clubs')
       .update({
         description,
         intro_image_urls: introImageUrls,
       })
       .eq('id', clubId)
-      .eq('status', 'approved');
+      .in('status', ['pending', 'approved'])
+      .select('id')
+      .maybeSingle();
     if (error) return errorResponse(error.message, 500);
+    if (!data) return errorResponse('Club not found or not editable', 404);
     return jsonResponse({ ok: true, action: 'intro_updated' });
   }
 
