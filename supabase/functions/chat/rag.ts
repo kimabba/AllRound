@@ -3,7 +3,6 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { REGION_LABELS, type RegionCode } from '../_shared/enums.ts';
 import { normalizeRegulationFields } from '../_shared/regulation.ts';
 import type {
   RawSemanticTournament,
@@ -91,12 +90,10 @@ export async function performVenueSearch(
   regionSlot: string | undefined,
 ): Promise<{ venues: VenueRow[]; errored: boolean }> {
   try {
-    const regionDisplay = regionSlot
-      ? (REGION_LABELS[regionSlot as RegionCode] ?? null)
-      : null;
+    // venues_search 는 region_code 도 매칭(migration 048). 한글 라벨 대신 코드 전달(JY-104).
     const { data: vData, error: vErr } = await supabase.rpc('venues_search', {
       p_sport: requestedSport ?? null,
-      p_region: regionDisplay ?? regionSlot ?? null,
+      p_region: regionSlot ?? null,
       p_limit: 15,
     });
     if (vErr) {
