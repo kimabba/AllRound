@@ -90,7 +90,8 @@ Deno.serve(async (req) => {
     .limit(limit);
 
   if (sport) query = query.eq('sport', sport);
-  if (region) query = query.eq('region', region);
+  // clubs.region 표기 혼재("광주"/"광주광역시")·region_code 컬럼 없음 → 부분일치(JY-104).
+  if (region) query = query.ilike('region', `%${region}%`);
   if (q) query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
 
   const { data, error } = await query.order('name', { ascending: true });
