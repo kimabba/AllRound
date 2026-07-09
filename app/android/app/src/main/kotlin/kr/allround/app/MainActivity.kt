@@ -1,4 +1,4 @@
-package kr.matchpoint.app
+package kr.allround.app
 
 import io.flutter.embedding.android.FlutterActivity
 
