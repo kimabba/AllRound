@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/club_event.dart';
 import '../models/club_post.dart';
 import '../models/tournament.dart';
+import '../models/venue.dart';
 import 'api_base.dart';
 
 /// 클럽 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
@@ -39,6 +40,28 @@ mixin ClubApi on ApiBase {
     return (body['clubs'] as List)
         .map((e) => Club.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<Venue>> searchVenues({
+    String? sport,
+    String? region,
+    String? query,
+    int limit = 30,
+  }) async {
+    final res = await supabase.rpc(
+      'venues_search',
+      params: {
+        'p_sport': sport,
+        'p_region': region,
+        'p_query': query == null || query.trim().isEmpty ? null : query.trim(),
+        'p_limit': limit,
+      },
+    );
+    if (res is! List) return const [];
+    return res
+        .whereType<Map>()
+        .map((row) => Venue.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
   }
 
   Future<Club> createClub({
@@ -231,16 +254,21 @@ mixin ClubApi on ApiBase {
   // ── 멤버 / 이벤트 ────────────────────────────────────────────
 
   Future<List<ClubMember>> clubMembers(String clubId) async {
-    final rows = await supabase
-        .from('club_members')
-        .select(
-          'user_id, role, can_create_event, can_post_notice, joined_at, users(name)',
-        )
-        .eq('club_id', clubId)
-        .eq('status', 'active')
-        .order('joined_at');
-    final members =
-        List<Map<String, dynamic>>.from(rows).map(ClubMember.fromJson).toList();
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'list_members',
+      }),
+    );
+    check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final rows = (body['members'] as List? ?? const []);
+    final members = rows
+        .whereType<Map>()
+        .map((row) => ClubMember.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
     const rank = {'owner': 0, 'manager': 1, 'member': 2};
     members.sort((a, b) => (rank[a.role] ?? 3).compareTo(rank[b.role] ?? 3));
     return members;
@@ -352,7 +380,12 @@ mixin ClubApi on ApiBase {
         .eq('club_id', clubId);
     if (tag != null) query = query.eq('tag', tag);
     final rows = await query.order('created_at', ascending: false).limit(50);
-    return rows.map((r) => ClubPost.fromJson(r)).toList();
+    final posts = rows.map((r) => ClubPost.fromJson(r)).toList();
+    posts.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return posts;
   }
 
   Future<ClubPost> createPost({
@@ -360,19 +393,22 @@ mixin ClubApi on ApiBase {
     required String tag,
     required String title,
     required String body,
+    bool isPinned = false,
     List<String> imageUrls = const [],
   }) async {
     final userId = supabase.auth.currentUser!.id;
+    final payload = <String, Object>{
+      'club_id': clubId,
+      'author_id': userId,
+      'tag': tag,
+      'title': title,
+      'body': body,
+      'image_urls': imageUrls,
+    };
+    if (isPinned) payload['is_pinned'] = true;
     final row = await supabase
         .from('club_posts')
-        .insert({
-          'club_id': clubId,
-          'author_id': userId,
-          'tag': tag,
-          'title': title,
-          'body': body,
-          'image_urls': imageUrls,
-        })
+        .insert(payload)
         .select('*, users!author_id(name)')
         .single();
     return ClubPost.fromJson(row);

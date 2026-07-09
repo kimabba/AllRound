@@ -27,7 +27,12 @@ class ClubMember {
       };
 
   factory ClubMember.fromJson(Map<String, dynamic> j) {
-    final user = j['users'] as Map<String, dynamic>?;
+    final rawUser = j['users'];
+    final user = rawUser is Map
+        ? Map<String, dynamic>.from(rawUser)
+        : rawUser is List && rawUser.isNotEmpty && rawUser.first is Map
+            ? Map<String, dynamic>.from(rawUser.first as Map)
+            : null;
     return ClubMember(
       userId: j['user_id'] as String,
       role: (j['role'] as String?) ?? 'member',
@@ -50,7 +55,9 @@ class ClubEvent {
   final String? locationText;
   final DateTime startsAt;
   final int goingCount;
+  final int notGoingCount;
   final String? myStatus; // 'going' | 'not_going' | null
+  final List<ClubEventAttendance> attendees;
 
   ClubEvent({
     required this.id,
@@ -61,23 +68,35 @@ class ClubEvent {
     this.locationText,
     required this.startsAt,
     this.goingCount = 0,
+    this.notGoingCount = 0,
     this.myStatus,
+    this.attendees = const [],
   });
 
   bool get iAmGoing => myStatus == 'going';
+  bool get iAmNotGoing => myStatus == 'not_going';
+  int get responseCount => goingCount + notGoingCount;
 
   factory ClubEvent.fromJson(
     Map<String, dynamic> j, {
     required String? currentUserId,
   }) {
-    final attendees = (j['club_event_attendees'] as List?) ?? const [];
+    final attendeeRows = (j['club_event_attendees'] as List?) ?? const [];
+    final parsedAttendees = <ClubEventAttendance>[];
     var going = 0;
+    var notGoing = 0;
     String? myStatus;
-    for (final a in attendees) {
+    for (final a in attendeeRows) {
       final m = a as Map<String, dynamic>;
-      if (m['status'] == 'going') going++;
+      final attendee = ClubEventAttendance.fromJson(m);
+      parsedAttendees.add(attendee);
+      if (attendee.status == 'going') {
+        going++;
+      } else if (attendee.status == 'not_going') {
+        notGoing++;
+      }
       if (currentUserId != null && m['user_id'] == currentUserId) {
-        myStatus = m['status'] as String?;
+        myStatus = attendee.status;
       }
     }
     return ClubEvent(
@@ -89,7 +108,29 @@ class ClubEvent {
       locationText: j['location_text'] as String?,
       startsAt: DateTime.parse(j['starts_at'] as String),
       goingCount: going,
+      notGoingCount: notGoing,
       myStatus: myStatus,
+      attendees: parsedAttendees,
+    );
+  }
+}
+
+class ClubEventAttendance {
+  final String userId;
+  final String status; // 'going' | 'not_going'
+
+  const ClubEventAttendance({
+    required this.userId,
+    required this.status,
+  });
+
+  bool get isGoing => status == 'going';
+  bool get isNotGoing => status == 'not_going';
+
+  factory ClubEventAttendance.fromJson(Map<String, dynamic> j) {
+    return ClubEventAttendance(
+      userId: j['user_id'] as String,
+      status: (j['status'] as String?) ?? 'not_going',
     );
   }
 }

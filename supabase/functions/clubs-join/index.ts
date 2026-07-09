@@ -1,7 +1,7 @@
 // clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
-//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'delete_club',
+//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'delete_club'|'list_members',
 //   message?,
 //   target_user_id?,
 //   role?,
@@ -62,6 +62,35 @@ Deno.serve(async (req) => {
       return errorResponse('Only owner can manage this club', 403);
     }
     return null;
+  }
+
+  async function isAdmin() {
+    const { data } = await supa
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+    return data?.role === 'admin';
+  }
+
+  if (action === 'list_members') {
+    const member = await activeMember('role');
+    const admin = member ? false : await isAdmin();
+    if (!member && !admin) {
+      return errorResponse('Only active club members can view members', 403);
+    }
+
+    const { data, error } = await supa
+      .from('club_members')
+      .select(
+        'user_id, role, can_create_event, can_post_notice, joined_at, users(name)',
+      )
+      .eq('club_id', clubId)
+      .eq('status', 'active')
+      .order('joined_at');
+    if (error) return errorResponse(error.message, 500);
+
+    return jsonResponse({ members: data ?? [] });
   }
 
   if (action === 'request') {
@@ -260,7 +289,7 @@ Deno.serve(async (req) => {
   }
 
   return errorResponse(
-    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|delete_club',
+    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|delete_club|list_members',
     400,
   );
 });
