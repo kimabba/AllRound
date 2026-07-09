@@ -656,7 +656,8 @@ Deno.serve(async (req) => {
               p_user_id: user.id,
               // 명시 종목 → 없으면 UI 활성 종목. 테니스/풋살 혼합 방지.
               p_sport: requestedSport,
-              p_region: regionLabel,
+              // region_code(정규 코드) 직접 전달. 한글 라벨은 t.region 표기와 불일치(JY-104).
+              p_region_code: regionCode,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
               // 채팅 기본 검색은 필터를 걸지 않는다(내 등급 필터는 백로그 JY-101).
