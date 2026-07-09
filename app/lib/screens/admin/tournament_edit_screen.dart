@@ -105,7 +105,8 @@ class _TournamentEditScreenState extends ConsumerState<TournamentEditScreen> {
       }
     } on AuthException {
       if (mounted) {
-        await Supabase.instance.client.auth.signOut();
+        await Supabase.instance.client.auth
+            .signOut(scope: SignOutScope.global);
       }
     } catch (e) {
       if (mounted) {

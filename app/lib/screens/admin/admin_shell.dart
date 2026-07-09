@@ -148,7 +148,8 @@ class _AdminSidebar extends ConsumerWidget {
                     icon: const Icon(Icons.logout, size: 16),
                     label: const Text('로그아웃'),
                     onPressed: () async {
-                      await Supabase.instance.client.auth.signOut();
+                      await Supabase.instance.client.auth
+                          .signOut(scope: SignOutScope.global);
                     },
                   ),
                 ],
