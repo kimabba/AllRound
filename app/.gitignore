@@ -47,3 +47,11 @@ app.*.map.json
 
 # 로컬 환경변수 (크리덴셜 포함 — 커밋 금지)
 .env.local
+
+# Android 릴리스 서명 키 (절대 커밋 금지 — 유출 시 앱 업데이트 영구 불가)
+**/key.properties
+**/*.jks
+**/*.keystore
+# iOS/Apple 서명
+**/*.p12
+**/*.mobileprovision

@@ -39,6 +39,30 @@ export interface TournamentCardItem {
   regulation_fields: RegulationField[];
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+export function isTournamentCardRow(value: unknown): value is TournamentCardRow {
+  if (!isRecord(value)) return false;
+
+  return typeof value.id === 'string' &&
+    (value.sport === 'tennis' || value.sport === 'futsal') &&
+    typeof value.title === 'string' &&
+    typeof value.start_date === 'string' &&
+    (typeof value.end_date === 'string' || value.end_date === null) &&
+    (typeof value.application_deadline === 'string' || value.application_deadline === null) &&
+    (typeof value.region === 'string' || value.region === null) &&
+    (typeof value.location === 'string' || value.location === null) &&
+    isStringArray(value.eligible_grades) &&
+    (typeof value.entry_fee === 'number' || value.entry_fee === null) &&
+    (typeof value.format === 'string' || value.format === null);
+}
+
 export interface DateRange {
   from: string;
   to: string;
@@ -112,6 +136,25 @@ export function renderTournamentSearchEmptyText(ctx: TournamentSearchTextContext
   return [
     `조건에 맞는 ${label}가 없습니다${filterText(ctx)}.`,
     '기간, 종목, 등급 조건을 바꾸거나 협회 공식 홈페이지를 확인해 주세요.',
+  ].join('\n');
+}
+
+export function renderTournamentApplicationGuideText(
+  rows: TournamentCardRow[],
+  ctx: TournamentSearchTextContext,
+): string {
+  const label = tournamentSportLabel(ctx.sport);
+  if (rows.length === 0) {
+    return [
+      `현재 신청 가능한 ${label}가 없습니다${filterText(ctx)}.`,
+      '대회 탭에서 기간·지역·등급 조건을 바꾸어 다시 확인하거나, 협회 공식 홈페이지의 접수 공지를 확인해 주세요.',
+    ].join('\n');
+  }
+
+  return [
+    `현재 신청 가능한 ${label} ${rows.length}건을 찾았습니다${filterText(ctx)}.`,
+    '',
+    '아래 카드에서 대회를 선택한 뒤 상세 요강과 원본 링크를 확인해 주세요. 접수는 대회마다 협회 홈페이지, 네이버 폼, 현장 접수 등 방식이 다를 수 있습니다.',
   ].join('\n');
 }
 
