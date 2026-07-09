@@ -1,9 +1,35 @@
 // clubs-create: 클럽 생성 요청 (status='pending' → 어드민 승인 대기)
-// POST { sport, name, region?, address?, logo_url?, contact?, website?, description? }
+// POST { sport, name, region?, address?, logo_url?, intro_image_urls?, contact?, website?, description? }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+
+function optionalText(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim() || null : null;
+}
+
+function optionalUrl(value: unknown): string | null {
+  const text = optionalText(value);
+  if (text === null) return null;
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+function optionalUrlArray(value: unknown, maxItems: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const urls: string[] = [];
+  for (const item of value) {
+    const url = optionalUrl(item);
+    if (url !== null) urls.push(url);
+    if (urls.length >= maxItems) break;
+  }
+  return urls;
+}
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -28,16 +54,18 @@ Deno.serve(async (req) => {
   if (!name) return errorResponse('name is required', 400);
 
   const supa = serviceClient();
-  const logoUrl = (body.logo_url as string | undefined)?.trim() || null;
+  const logoUrl = optionalUrl(body.logo_url);
+  const introImageUrls = optionalUrlArray(body.intro_image_urls, 5);
   const insertPayload: Record<string, unknown> = {
     sport,
     name,
-    region: (body.region as string | undefined)?.trim() || null,
-    address: (body.address as string | undefined)?.trim() || null,
+    region: optionalText(body.region),
+    address: optionalText(body.address),
     logo_url: logoUrl,
-    contact: (body.contact as string | undefined)?.trim() || null,
-    website: (body.website as string | undefined)?.trim() || null,
-    description: (body.description as string | undefined)?.trim() || null,
+    intro_image_urls: introImageUrls,
+    contact: optionalText(body.contact),
+    website: optionalUrl(body.website) ?? optionalText(body.website),
+    description: optionalText(body.description),
     meeting_days: Array.isArray(body.meeting_days) ? body.meeting_days : [],
     monthly_fee: typeof body.monthly_fee === 'number' ? body.monthly_fee : null,
     gender_preference: typeof body.gender_preference === 'string'
@@ -56,13 +84,19 @@ Deno.serve(async (req) => {
 
   if (
     clubErr &&
-    clubErr.message.includes("'logo_url' column")
+    (clubErr.message.includes("'logo_url' column") ||
+      clubErr.message.includes("'intro_image_urls' column"))
   ) {
-    const { logo_url: _logoUrl, ...payloadWithoutLogo } = insertPayload;
+    const {
+      logo_url: _logoUrl,
+      intro_image_urls: _introImageUrls,
+      ...fallbackPayload
+    } = insertPayload;
     void _logoUrl;
+    void _introImageUrls;
     const fallback = await supa
       .from('clubs')
-      .insert(payloadWithoutLogo)
+      .insert(fallbackPayload)
       .select()
       .single();
     club = fallback.data;

@@ -30,6 +30,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   Uint8List? _logoBytes;
   String _logoExtension = 'jpg';
   String _logoContentType = 'image/jpeg';
+  final List<_PendingIntroImage> _introImages = [];
   final Set<String> _meetingDays = {};
   String? _genderPreference;
   bool _submitting = false;
@@ -58,6 +59,16 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
               contentType: _logoContentType,
             );
       }
+      final introImageUrls = <String>[];
+      for (final image in _introImages) {
+        introImageUrls.add(
+          await ref.read(apiProvider).uploadClubIntroImage(
+                bytes: image.bytes,
+                extension: image.extension,
+                contentType: image.contentType,
+              ),
+        );
+      }
       final fee = int.tryParse(_monthlyFee.text.trim());
       await ref.read(apiProvider).createClub(
             sport: _sport,
@@ -68,6 +79,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             contact: _contact.text.trim(),
             website: _website.text.trim(),
             description: _description.text.trim(),
+            introImageUrls: introImageUrls,
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
             genderPreference: _genderPreference,
@@ -162,6 +174,43 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         );
       },
     );
+  }
+
+  Future<void> _pickIntroImages() async {
+    final remaining = 5 - _introImages.length;
+    if (remaining <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('소개 사진은 최대 5장까지 추가할 수 있습니다.')),
+      );
+      return;
+    }
+
+    final picked = await ImagePicker().pickMultiImage(
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 86,
+    );
+    if (picked.isEmpty) return;
+
+    final nextImages = <_PendingIntroImage>[];
+    for (final image in picked.take(remaining)) {
+      final extension = _extensionFromName(image.name);
+      nextImages.add(
+        _PendingIntroImage(
+          bytes: await image.readAsBytes(),
+          extension: extension,
+          contentType: _contentTypeForExtension(extension),
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    setState(() => _introImages.addAll(nextImages));
+    if (picked.length > remaining) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('소개 사진은 최대 5장까지만 추가했습니다.')),
+      );
+    }
   }
 
   Future<void> _showAddressPicker() async {
@@ -445,6 +494,14 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
               maxLines: 4,
               textInputAction: TextInputAction.done,
             ),
+            const SizedBox(height: AppSpacing.md),
+            _IntroPhotoPicker(
+              images: _introImages,
+              onAdd: _pickIntroImages,
+              onRemove: (index) => setState(() {
+                _introImages.removeAt(index);
+              }),
+            ),
             const SizedBox(height: AppSpacing.xl),
 
             // 안내 문구
@@ -508,6 +565,145 @@ String _contentTypeForExtension(String extension) {
     'webp' => 'image/webp',
     _ => 'image/jpeg',
   };
+}
+
+class _PendingIntroImage {
+  const _PendingIntroImage({
+    required this.bytes,
+    required this.extension,
+    required this.contentType,
+  });
+
+  final Uint8List bytes;
+  final String extension;
+  final String contentType;
+}
+
+class _IntroPhotoPicker extends StatelessWidget {
+  const _IntroPhotoPicker({
+    required this.images,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<_PendingIntroImage> images;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '소개 사진',
+                      style:
+                          tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '클럽 분위기를 보여주는 사진을 최대 5장 추가하세요.',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton.filledTonal(
+                onPressed: images.length >= 5 ? null : onAdd,
+                icon: const Icon(Icons.add_photo_alternate_rounded),
+                tooltip: '소개 사진 추가',
+              ),
+            ],
+          ),
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: 96,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: images.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, index) => _IntroPhotoThumb(
+                  image: images[index],
+                  onRemove: () => onRemove(index),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroPhotoThumb extends StatelessWidget {
+  const _IntroPhotoThumb({
+    required this.image,
+    required this.onRemove,
+  });
+
+  final _PendingIntroImage image;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Image.memory(image.bytes, fit: BoxFit.cover),
+        ),
+        Positioned(
+          top: 6,
+          right: 6,
+          child: Material(
+            color: cs.scrim.withValues(alpha: 0.62),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onRemove,
+              customBorder: const CircleBorder(),
+              child: const SizedBox(
+                width: 28,
+                height: 28,
+                child: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _LogoPickerCard extends StatelessWidget {
