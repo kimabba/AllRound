@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "kr.matchpoint.app"
+    namespace = "kr.allround.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "kr.matchpoint.app"
+        applicationId = "kr.allround.app"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode
