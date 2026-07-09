@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
 
   const { data: userOrgs } = await supabase
     .from('user_tennis_orgs')
-    .select('org, division_local, score, is_primary, region_code')
+    .select('org, division, score, is_primary, region_code')
     .eq('user_id', user.id);
 
   // Prior conversation (last 10 turns = 20 messages)
@@ -488,7 +488,7 @@ Deno.serve(async (req) => {
             profileLines.push('[등록 협회]');
             for (const o of orgs) {
               const orgName = TENNIS_ORG_LABELS[o.org as keyof typeof TENNIS_ORG_LABELS] ?? o.org;
-              const division = o.division_local ?? '미입력';
+              const division = o.division ?? '미입력';
               const score = o.score !== null ? ` (점수 ${o.score})` : '';
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }

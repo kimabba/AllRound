@@ -19,7 +19,7 @@ export interface UserSport {
 
 export interface UserTennisOrgRow {
   org: string;
-  division_local: string | null;
+  division: string | null;
   score: number | null;
   is_primary: boolean;
   region_code: string | null;
