@@ -81,4 +81,12 @@ mixin UserApi on ApiBase {
         .eq('org', org)
         .eq('division', division);
   }
+
+  /// 회원 탈퇴. 개인 데이터는 삭제, 작성 콘텐츠는 익명화(delete-account Edge Function).
+  /// 성공 후 호출 측에서 signOut 해야 한다.
+  Future<void> deleteAccount() async {
+    final headers = await authHeaders();
+    final res = await httpPost(uri('delete-account'), headers: headers);
+    check(res);
+  }
 }

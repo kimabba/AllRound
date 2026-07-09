@@ -122,10 +122,60 @@ class AccountSection extends StatelessWidget {
                   await ref.read(supabaseProvider).auth.signOut();
                 },
               ),
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+              ),
+              ActionRow(
+                icon: Icons.person_remove_outlined,
+                label: '회원 탈퇴',
+                accentColor: cs.error,
+                onTap: () => _confirmDeleteAccount(context, ref),
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 회원 탈퇴 확인 → delete-account 호출 → 로그아웃(→ 로그인 화면 라우팅).
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      final cs = Theme.of(ctx).colorScheme;
+      return AlertDialog(
+        title: const Text('회원 탈퇴'),
+        content: const Text(
+          '탈퇴하면 계정과 개인정보가 삭제되며 되돌릴 수 없습니다.\n'
+          '작성한 글·댓글은 "탈퇴한 사용자"로 익명 처리되어 남을 수 있습니다.\n\n'
+          '정말 탈퇴하시겠어요?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('탈퇴', style: TextStyle(color: cs.error)),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true) return;
+
+  try {
+    await ref.read(apiProvider).deleteAccount();
+    await ref.read(supabaseProvider).auth.signOut();
+    // signOut 이 authState 변경 → 앱이 로그인 화면으로 라우팅.
+  } catch (_) {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('탈퇴에 실패했습니다. 잠시 후 다시 시도해주세요.')),
     );
   }
 }
