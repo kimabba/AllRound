@@ -7,6 +7,7 @@ class ClubPost {
   final String title;
   final String body;
   final List<String> imageUrls;
+  final bool isPinned;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int commentCount;
@@ -20,6 +21,7 @@ class ClubPost {
     required this.title,
     required this.body,
     this.imageUrls = const [],
+    this.isPinned = false,
     required this.createdAt,
     required this.updatedAt,
     this.commentCount = 0,
@@ -37,6 +39,7 @@ class ClubPost {
       title: j['title'] as String,
       body: j['body'] as String,
       imageUrls: (j['image_urls'] as List?)?.cast<String>() ?? const [],
+      isPinned: (j['is_pinned'] as bool?) ?? false,
       createdAt: DateTime.parse(j['created_at'] as String),
       updatedAt: DateTime.parse(j['updated_at'] as String),
       commentCount: comments?.length ?? 0,
@@ -44,12 +47,12 @@ class ClubPost {
   }
 
   String get tagLabel => switch (tag) {
-    'notice' => '공지',
-    'free' => '자유',
-    'recruit' => '모집',
-    'photo' => '사진',
-    _ => tag,
-  };
+        'notice' => '공지',
+        'free' => '자유',
+        'recruit' => '모집',
+        'photo' => '사진',
+        _ => tag,
+      };
 }
 
 class ClubPostComment {

@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
@@ -46,6 +49,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     if (widget.club != null) {
       _club = widget.club;
       _initTab();
+      _refreshClub();
     } else {
       _fetchClub();
     }
@@ -60,8 +64,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   Future<void> _fetchClub() async {
     setState(() => _loading = true);
     try {
-      final fetched =
-          await ref.read(apiProvider).getClub(widget.clubId!);
+      final fetched = await ref.read(apiProvider).getClub(widget.clubId!);
       if (!mounted) return;
       setState(() {
         _club = fetched;
@@ -74,6 +77,30 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
         _error = '$e';
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _refreshClub() async {
+    final clubId = _club?.id ?? widget.clubId;
+    if (clubId == null) return;
+    try {
+      final fetched = await ref.read(apiProvider).getClub(clubId);
+      if (!mounted) return;
+      final nextTabLength = (fetched.isOwner || fetched.isManager) ? 5 : 4;
+      setState(() {
+        _club = fetched;
+        _monthlyFee = fetched.monthlyFee;
+        if (_tab == null || _tab!.length != nextTabLength) {
+          final nextIndex =
+              ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
+          _tab?.dispose();
+          _tab = TabController(length: nextTabLength, vsync: this);
+          _tab!.index = nextIndex;
+        }
+      });
+      if (fetched.isMember) _reload();
+    } catch (_) {
+      // 기존 화면 데이터가 있으면 그대로 사용한다.
     }
   }
 
@@ -252,6 +279,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                     ? _EventsTab(
                         club: club,
                         future: eventsFuture,
+                        membersFuture: membersFuture,
                         canCreateEvent: _canManageClub,
                         onChanged: _reload,
                       )
@@ -827,8 +855,8 @@ class _MembersTab extends ConsumerWidget {
         if (members.isEmpty) {
           return const _EmptyState(
             icon: Icons.group_outlined,
-            title: '아직 멤버가 없습니다',
-            message: '첫 멤버가 들어오면 여기에 표시됩니다.',
+            title: '가입된 멤버가 없습니다',
+            message: '가입 승인이 완료된 멤버가 여기에 표시됩니다.',
           );
         }
         return ListView.builder(
@@ -838,7 +866,8 @@ class _MembersTab extends ConsumerWidget {
             final m = members[i];
             final cs = Theme.of(context).colorScheme;
             final tt = Theme.of(context).textTheme;
-            final initial = (m.displayName ?? '?').characters.first;
+            final displayName = _clubMemberDisplayName(m);
+            final initial = displayName.characters.first;
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: AppCard(
@@ -862,7 +891,7 @@ class _MembersTab extends ConsumerWidget {
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text(
-                        m.displayName ?? '익명',
+                        displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: tt.bodyLarge?.copyWith(
@@ -901,7 +930,7 @@ class _MembersTab extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('멤버 강퇴'),
-        content: Text('${m.displayName ?? '이 멤버'}를 강퇴할까요?'),
+        content: Text('${_clubMemberDisplayName(m)}를 강퇴할까요?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -921,7 +950,7 @@ class _MembersTab extends ConsumerWidget {
       onChanged();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${m.displayName ?? '멤버'}를 강퇴했습니다')),
+          SnackBar(content: Text('${_clubMemberDisplayName(m)}를 강퇴했습니다')),
         );
       }
     } catch (e) {
@@ -932,6 +961,16 @@ class _MembersTab extends ConsumerWidget {
       }
     }
   }
+}
+
+String _clubMemberDisplayName(ClubMember member) {
+  final name = member.displayName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+  return '멤버 ${_shortUserId(member.userId)}';
+}
+
+String _shortUserId(String userId) {
+  return userId.length > 8 ? userId.substring(0, 8) : userId;
 }
 
 // ─── 관리 탭 ──────────────────────────────────────────────────────
@@ -1222,7 +1261,7 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('멤버 강퇴'),
-        content: Text('${widget.member.displayName ?? '이 멤버'}를 강퇴할까요?'),
+        content: Text('${_clubMemberDisplayName(widget.member)}를 강퇴할까요?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1248,7 +1287,8 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('${widget.member.displayName ?? '멤버'}를 강퇴했습니다')),
+              content:
+                  Text('${_clubMemberDisplayName(widget.member)}를 강퇴했습니다')),
         );
       }
     } catch (e) {
@@ -1266,7 +1306,8 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final member = widget.member;
-    final initial = (member.displayName ?? '?').characters.first;
+    final displayName = _clubMemberDisplayName(member);
+    final initial = displayName.characters.first;
     final permissionLabels = [
       if (member.canCreateEvent) '일정 등록',
       if (member.canPostNotice) '공지 등록',
@@ -1292,7 +1333,7 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  member.displayName ?? '익명',
+                  displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -1420,11 +1461,13 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
 class _EventsTab extends ConsumerWidget {
   final Club club;
   final Future<List<ClubEvent>> future;
+  final Future<List<ClubMember>> membersFuture;
   final bool canCreateEvent;
   final VoidCallback onChanged;
   const _EventsTab({
     required this.club,
     required this.future,
+    required this.membersFuture,
     required this.canCreateEvent,
     required this.onChanged,
   });
@@ -1464,18 +1507,25 @@ class _EventsTab extends ConsumerWidget {
                 ),
               );
             }
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                88,
-              ),
-              itemCount: events.length,
-              itemBuilder: (context, i) => _EventCard(
-                event: events[i],
-                onChanged: onChanged,
-              ),
+            return FutureBuilder<List<ClubMember>>(
+              future: membersFuture,
+              builder: (context, membersSnap) {
+                final members = membersSnap.data ?? const <ClubMember>[];
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    88,
+                  ),
+                  itemCount: events.length,
+                  itemBuilder: (context, i) => _EventCard(
+                    event: events[i],
+                    members: members,
+                    onChanged: onChanged,
+                  ),
+                );
+              },
             );
           },
         ),
@@ -1506,8 +1556,13 @@ class _EventsTab extends ConsumerWidget {
 
 class _EventCard extends ConsumerStatefulWidget {
   final ClubEvent event;
+  final List<ClubMember> members;
   final VoidCallback onChanged;
-  const _EventCard({required this.event, required this.onChanged});
+  const _EventCard({
+    required this.event,
+    required this.members,
+    required this.onChanged,
+  });
 
   @override
   ConsumerState<_EventCard> createState() => _EventCardState();
@@ -1531,6 +1586,18 @@ class _EventCardState extends ConsumerState<_EventCard> {
     }
   }
 
+  void _showResponses() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (_) => _EventResponsesSheet(
+        event: widget.event,
+        members: widget.members,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1544,9 +1611,26 @@ class _EventCardState extends ConsumerState<_EventCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _InfoChip(
-              icon: Icons.event_available_rounded,
-              label: '${e.goingCount}명 참석',
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _InfoChip(
+                  icon: Icons.event_available_rounded,
+                  label: '${e.goingCount}명 참석',
+                ),
+                _InfoChip(
+                  icon: Icons.event_busy_rounded,
+                  label: '${e.notGoingCount}명 불참',
+                ),
+                if (e.responseCount > 0)
+                  TextButton.icon(
+                    onPressed: _showResponses,
+                    icon: const Icon(Icons.people_alt_outlined, size: 18),
+                    label: const Text('응답자 보기'),
+                  ),
+              ],
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(e.title,
@@ -1598,8 +1682,8 @@ class _EventCardState extends ConsumerState<_EventCard> {
                   child: OutlinedButton(
                     onPressed: _busy ? null : () => _respond(false),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor:
-                          e.myStatus == 'not_going' ? cs.error : null,
+                      foregroundColor: e.iAmNotGoing ? cs.error : null,
+                      side: e.iAmNotGoing ? BorderSide(color: cs.error) : null,
                     ),
                     child: const Text('불참'),
                   ),
@@ -1609,6 +1693,175 @@ class _EventCardState extends ConsumerState<_EventCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EventResponsesSheet extends StatelessWidget {
+  final ClubEvent event;
+  final List<ClubMember> members;
+
+  const _EventResponsesSheet({
+    required this.event,
+    required this.members,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final namesByUserId = {
+      for (final member in members)
+        member.userId: _clubMemberDisplayName(member),
+    };
+    final going = event.attendees.where((attendee) => attendee.isGoing);
+    final notGoing = event.attendees.where((attendee) => attendee.isNotGoing);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.48,
+      minChildSize: 0.34,
+      maxChildSize: 0.82,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: AppRadius.pill,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              '일정 응답자',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              event.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _ResponseGroup(
+              icon: Icons.event_available_rounded,
+              title: '참석',
+              count: event.goingCount,
+              attendees: going,
+              namesByUserId: namesByUserId,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _ResponseGroup(
+              icon: Icons.event_busy_rounded,
+              title: '불참',
+              count: event.notGoingCount,
+              attendees: notGoing,
+              namesByUserId: namesByUserId,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ResponseGroup extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final int count;
+  final Iterable<ClubEventAttendance> attendees;
+  final Map<String, String?> namesByUserId;
+
+  const _ResponseGroup({
+    required this.icon,
+    required this.title,
+    required this.count,
+    required this.attendees,
+    required this.namesByUserId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final attendeeList = attendees.toList();
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '$title $count명',
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (attendeeList.isEmpty)
+            Text(
+              '아직 $title 응답이 없습니다.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            )
+          else
+            for (final attendee in attendeeList) ...[
+              _ResponseMemberRow(
+                name: namesByUserId[attendee.userId] ??
+                    '멤버 ${_shortUserId(attendee.userId)}',
+              ),
+              if (attendee != attendeeList.last)
+                Divider(height: AppSpacing.md, color: cs.outlineVariant),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ResponseMemberRow extends StatelessWidget {
+  final String name;
+
+  const _ResponseMemberRow({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: cs.primaryContainer.withValues(alpha: 0.48),
+          child: Icon(Icons.person_rounded, size: 18, color: cs.primary),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1761,6 +2014,7 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   List<ClubPost>? _posts;
   bool _loading = true;
   String? _activeTag;
+  bool get _canManagePosts => widget.club.isOwner || widget.club.isManager;
 
   @override
   void initState() {
@@ -1843,6 +2097,18 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
           ),
         ),
         if (_loading) const LinearProgressIndicator(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: _PostWriteEntry(
+            canManagePosts: _canManagePosts,
+            onTap: _openCreatePost,
+          ),
+        ),
         Expanded(
           child: _posts == null || _posts!.isEmpty
               ? const _EmptyState(
@@ -1853,7 +2119,12 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
               : RefreshIndicator(
                   onRefresh: () async => _load(),
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                    ),
                     itemCount: _posts!.length,
                     itemBuilder: (_, i) => Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1863,6 +2134,497 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
                 ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openCreatePost() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder: (_) => _PostCreateSheet(
+        club: widget.club,
+        canManagePosts: _canManagePosts,
+      ),
+    );
+    if (created == true) _load();
+  }
+}
+
+class _PostWriteEntry extends StatelessWidget {
+  final bool canManagePosts;
+  final VoidCallback onTap;
+
+  const _PostWriteEntry({
+    required this.canManagePosts,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.edit_note_rounded, color: cs.primary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '게시글 작성',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  canManagePosts
+                      ? '중요 공지와 상단 고정을 사용할 수 있어요.'
+                      : '클럽 멤버는 누구나 글을 쓸 수 있어요.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostCreateSheet extends ConsumerStatefulWidget {
+  final Club club;
+  final bool canManagePosts;
+
+  const _PostCreateSheet({
+    required this.club,
+    required this.canManagePosts,
+  });
+
+  @override
+  ConsumerState<_PostCreateSheet> createState() => _PostCreateSheetState();
+}
+
+class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  final List<_PendingPostImage> _images = [];
+  String _tag = 'free';
+  bool _isPinned = false;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final title = _title.text.trim();
+    final body = _body.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('제목과 내용을 입력해주세요.')),
+      );
+      return;
+    }
+    if (_tag == 'photo' && _images.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진 게시글에는 사진을 1장 이상 추가해주세요.')),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final imageUrls = <String>[];
+      for (final image in _images) {
+        final url = await ref.read(apiProvider).uploadPostImage(
+              clubId: widget.club.id,
+              bytes: image.bytes,
+              extension: image.extension,
+              contentType: image.contentType,
+            );
+        imageUrls.add(url);
+      }
+      await ref.read(apiProvider).createPost(
+            clubId: widget.club.id,
+            tag: _tag,
+            title: title,
+            body: body,
+            isPinned: widget.canManagePosts && _isPinned,
+            imageUrls: imageUrls,
+          );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('게시글 작성 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pickImages() async {
+    if (_images.length >= 5) return;
+    final picked = await ImagePicker().pickMultiImage(
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 86,
+    );
+    if (picked.isEmpty) return;
+
+    final next = <_PendingPostImage>[];
+    for (final file in picked.take(5 - _images.length)) {
+      final extension = _postImageExtension(file.name);
+      next.add(
+        _PendingPostImage(
+          bytes: await file.readAsBytes(),
+          extension: extension,
+          contentType: _postImageContentType(extension),
+        ),
+      );
+    }
+    if (!mounted) return;
+    setState(() => _images.addAll(next));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.78,
+        minChildSize: 0.48,
+        maxChildSize: 0.92,
+        builder: (context, scrollController) {
+          return ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                '게시글 작성',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                widget.canManagePosts
+                    ? '운영진은 중요 공지와 상단 고정을 사용할 수 있어요.'
+                    : '클럽 멤버는 자유롭게 게시글을 작성할 수 있어요.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  _PostTagChoice(
+                    label: '자유',
+                    selected: _tag == 'free',
+                    onTap: () => setState(() {
+                      _tag = 'free';
+                      _isPinned = false;
+                      _images.clear();
+                    }),
+                  ),
+                  _PostTagChoice(
+                    label: '모집',
+                    selected: _tag == 'recruit',
+                    onTap: () => setState(() {
+                      _tag = 'recruit';
+                      _isPinned = false;
+                      _images.clear();
+                    }),
+                  ),
+                  _PostTagChoice(
+                    label: '사진',
+                    selected: _tag == 'photo',
+                    onTap: () => setState(() {
+                      _tag = 'photo';
+                      _isPinned = false;
+                    }),
+                  ),
+                  if (widget.canManagePosts)
+                    _PostTagChoice(
+                      label: '중요 공지',
+                      selected: _tag == 'notice',
+                      onTap: () => setState(() {
+                        _tag = 'notice';
+                        _images.clear();
+                      }),
+                    ),
+                ],
+              ),
+              if (widget.canManagePosts) ...[
+                const SizedBox(height: AppSpacing.md),
+                SwitchListTile.adaptive(
+                  value: _isPinned,
+                  onChanged: (value) => setState(() => _isPinned = value),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('상단 고정'),
+                  subtitle: Text(
+                    '중요한 글을 게시판 맨 위에 고정합니다.',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              if (_tag == 'photo') ...[
+                _PostPhotoPicker(
+                  images: _images,
+                  busy: _busy,
+                  onAdd: _pickImages,
+                  onRemove: (index) => setState(() => _images.removeAt(index)),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              TextField(
+                controller: _title,
+                enabled: !_busy,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: '제목',
+                  prefixIcon: Icon(Icons.title_rounded),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _body,
+                enabled: !_busy,
+                minLines: 6,
+                maxLines: 10,
+                decoration: const InputDecoration(
+                  labelText: '내용',
+                  alignLabelWithHint: true,
+                  prefixIcon: Icon(Icons.notes_rounded),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              FilledButton.icon(
+                onPressed: _busy ? null : _submit,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: Text(_busy ? '등록 중' : '등록하기'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PendingPostImage {
+  final Uint8List bytes;
+  final String extension;
+  final String contentType;
+
+  const _PendingPostImage({
+    required this.bytes,
+    required this.extension,
+    required this.contentType,
+  });
+}
+
+class _PostPhotoPicker extends StatelessWidget {
+  final List<_PendingPostImage> images;
+  final bool busy;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemove;
+
+  const _PostPhotoPicker({
+    required this.images,
+    required this.busy,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final canAdd = !busy && images.length < 5;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.photo_library_rounded, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  '사진 추가',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                '${images.length}/5',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '사진과 글을 함께 올릴 수 있어요.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (images.isEmpty)
+            OutlinedButton.icon(
+              onPressed: canAdd ? onAdd : null,
+              icon: const Icon(Icons.add_photo_alternate_rounded),
+              label: const Text('사진 선택하기'),
+            )
+          else
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (var i = 0; i < images.length; i++)
+                  _PostPhotoThumb(
+                    image: images[i],
+                    onRemove: busy ? null : () => onRemove(i),
+                  ),
+                if (canAdd)
+                  InkWell(
+                    onTap: onAdd,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      width: 86,
+                      height: 86,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: cs.outlineVariant),
+                      ),
+                      child: Icon(
+                        Icons.add_photo_alternate_rounded,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostPhotoThumb extends StatelessWidget {
+  final _PendingPostImage image;
+  final VoidCallback? onRemove;
+
+  const _PostPhotoThumb({
+    required this.image,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.memory(
+            image.bytes,
+            width: 86,
+            height: 86,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          right: 4,
+          top: 4,
+          child: InkWell(
+            onTap: onRemove,
+            borderRadius: AppRadius.pill,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.92),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PostTagChoice extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PostTagChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
     );
   }
 }
@@ -1895,63 +2657,111 @@ class _PostRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    final isNotice = post.tag == 'notice';
+    final background = isNotice
+        ? cs.errorContainer.withValues(alpha: 0.28)
+        : post.isPinned
+            ? cs.primaryContainer.withValues(alpha: 0.24)
+            : cs.surface;
+    final borderColor = isNotice
+        ? cs.error.withValues(alpha: 0.34)
+        : post.isPinned
+            ? cs.primary.withValues(alpha: 0.38)
+            : cs.outlineVariant;
+
+    return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: borderColor),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppShadows.card
+            : null,
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (isNotice) ...[
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: cs.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.campaign_rounded,
+                  size: 20, color: cs.onErrorContainer),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 2,
+                    if (post.isPinned)
+                      _PostMetaChip(
+                        icon: Icons.push_pin_rounded,
+                        label: '상단 고정',
+                        color: cs.primary,
+                        background: cs.primaryContainer,
                       ),
-                      decoration: BoxDecoration(
-                        color: post.tag == 'notice'
-                            ? cs.errorContainer
-                            : cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(AppRadius.xs),
-                      ),
-                      child: Text(
-                        post.tagLabel,
-                        style: tt.labelSmall?.copyWith(
-                          color: post.tag == 'notice'
-                              ? cs.onErrorContainer
-                              : cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        post.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                    _PostMetaChip(
+                      icon: isNotice
+                          ? Icons.campaign_rounded
+                          : Icons.article_outlined,
+                      label: isNotice ? '중요 공지' : post.tagLabel,
+                      color: isNotice ? cs.error : cs.onSurfaceVariant,
+                      background: isNotice
+                          ? cs.errorContainer
+                          : cs.surfaceContainerHighest,
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
+                  post.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: isNotice ? cs.onErrorContainer : cs.onSurface,
+                  ),
+                ),
+                if (post.imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _PostImagePreview(urls: post.imageUrls),
+                ],
+                if (isNotice || post.tag == 'photo') ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    post.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(
+                      color: isNotice
+                          ? cs.onErrorContainer.withValues(alpha: 0.76)
+                          : cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xs),
+                Text(
                   '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  style: tt.bodySmall?.copyWith(
+                    color: isNotice
+                        ? cs.onErrorContainer.withValues(alpha: 0.76)
+                        : cs.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
-          if (post.imageUrls.isNotEmpty) ...[
-            const SizedBox(width: AppSpacing.sm),
-            Icon(Icons.image_rounded, size: 18, color: cs.onSurfaceVariant),
-          ],
         ],
       ),
     );
@@ -1965,6 +2775,119 @@ class _PostRow extends StatelessWidget {
     if (diff.inDays < 7) return '${diff.inDays}일 전';
     return '${dt.month}/${dt.day}';
   }
+}
+
+class _PostImagePreview extends StatelessWidget {
+  final List<String> urls;
+
+  const _PostImagePreview({required this.urls});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final firstUrl = urls.first;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Stack(
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.network(
+              firstUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: cs.surfaceContainerHighest,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          if (urls.length > 1)
+            Positioned(
+              right: AppSpacing.xs,
+              bottom: AppSpacing.xs,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.62),
+                  borderRadius: AppRadius.pill,
+                ),
+                child: Text(
+                  '+${urls.length - 1}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostMetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color background;
+
+  const _PostMetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _postImageExtension(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return 'png';
+  if (lower.endsWith('.webp')) return 'webp';
+  return 'jpg';
+}
+
+String _postImageContentType(String extension) {
+  return switch (extension) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    _ => 'image/jpeg',
+  };
 }
 
 String _fmtDateTime(DateTime dt) {
