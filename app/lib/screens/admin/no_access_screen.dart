@@ -29,7 +29,8 @@ class NoAccessScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             OutlinedButton.icon(
-              onPressed: () => Supabase.instance.client.auth.signOut(),
+              onPressed: () => Supabase.instance.client.auth
+                  .signOut(scope: SignOutScope.global),
               icon: const Icon(Icons.logout),
               label: const Text('로그아웃'),
             ),

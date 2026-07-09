@@ -126,7 +126,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       await supa.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.matchup.app://login-callback/',
+        redirectTo: 'kr.allround.app://login-callback/',
+        // 로그아웃 후 재로그인 시 직전 구글 계정으로 자동 재인증되지 않도록
+        // 계정 선택 화면을 항상 노출한다 (JY-113).
+        queryParams: const {'prompt': 'select_account'},
       );
     } catch (_) {
       _authSubscription?.cancel();

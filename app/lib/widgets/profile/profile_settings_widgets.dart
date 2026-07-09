@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../state/providers.dart';
 import '../../state/theme_provider.dart';
@@ -119,7 +120,11 @@ class AccountSection extends StatelessWidget {
                 label: '로그아웃',
                 accentColor: cs.error,
                 onTap: () async {
-                  await ref.read(supabaseProvider).auth.signOut();
+                  // 서버 세션·리프레시 토큰까지 폐기 (JY-113 세션 잔존 버그).
+                  await ref
+                      .read(supabaseProvider)
+                      .auth
+                      .signOut(scope: SignOutScope.global);
                 },
               ),
               Divider(
