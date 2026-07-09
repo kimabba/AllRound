@@ -217,39 +217,43 @@ class _MainShell extends ConsumerWidget {
     final loc = GoRouterState.of(context).matchedLocation;
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
       body: ColoredBox(
         color: cs.surfaceContainerLowest,
         child: child,
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border: Border(top: BorderSide(color: cs.outlineVariant)),
-          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-            child: NavigationBar(
-              selectedIndex: idx,
-              onDestinationSelected: (i) => context.go(_tabs[i].$1),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              height: 66,
-              destinations: [
-                for (final t in _tabs)
-                  NavigationDestination(
-                    icon: Icon(t.$2),
-                    selectedIcon: Icon(_selectedIcon(t.$2)),
-                    label: t.$3,
+      bottomNavigationBar: keyboardVisible
+          ? null
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
+                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                  child: NavigationBar(
+                    selectedIndex: idx,
+                    onDestinationSelected: (i) => context.go(_tabs[i].$1),
+                    labelBehavior:
+                        NavigationDestinationLabelBehavior.alwaysShow,
+                    height: 66,
+                    destinations: [
+                      for (final t in _tabs)
+                        NavigationDestination(
+                          icon: Icon(t.$2),
+                          selectedIcon: Icon(_selectedIcon(t.$2)),
+                          label: t.$3,
+                        ),
+                    ],
                   ),
-              ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 

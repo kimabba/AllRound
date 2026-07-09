@@ -175,6 +175,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final busy = chat.busy;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '라운드 코치'),
         actions: [
@@ -189,23 +190,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: messages.isEmpty
-                ? _EmptyHint(
-                    onSend: sendText,
-                    sport: ref.watch(activeSportProvider),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: messages.isEmpty
+                  ? _EmptyHint(
+                      onSend: sendText,
+                      sport: ref.watch(activeSportProvider),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                      itemCount: messages.length,
+                      itemBuilder: (_, i) => _MessageBubble(
+                        msg: messages[i],
+                        onCardAction: _sendWithEntity,
+                      ),
                     ),
-                    itemCount: messages.length,
-                    itemBuilder: (_, i) => _MessageBubble(
-                      msg: messages[i],
-                      onCardAction: _sendWithEntity,
-                    ),
-                  ),
+            ),
           ),
           if (busy)
             LinearProgressIndicator(
@@ -249,6 +256,7 @@ class _EmptyHint extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xl,
         vertical: AppSpacing.lg,
@@ -347,7 +355,10 @@ class _InputBar extends StatelessWidget {
     const inputBorderRadius = AppRadius.card;
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
@@ -380,7 +391,9 @@ class _InputBar extends StatelessWidget {
                   ),
                 ),
                 textInputAction: TextInputAction.send,
-                maxLines: 4,
+                minLines: 1,
+                maxLines: 3,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 onSubmitted: (_) => onSend(),
               ),
             ),
