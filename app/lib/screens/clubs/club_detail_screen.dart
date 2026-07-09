@@ -579,6 +579,10 @@ class _IntroTab extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
+              if (club.introImageUrls.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                _ClubIntroPhotoStrip(imageUrls: club.introImageUrls),
+              ],
             ],
           ),
         ),
@@ -711,6 +715,50 @@ class _IntroTab extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ClubIntroPhotoStrip extends StatelessWidget {
+  const _ClubIntroPhotoStrip({required this.imageUrls});
+
+  final List<String> imageUrls;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final urls = imageUrls
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+    if (urls.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 132,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: urls.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemBuilder: (context, index) {
+          return Container(
+            width: 168,
+            height: 132,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Image.network(
+              urls[index],
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.image_not_supported_outlined,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1008,8 +1056,8 @@ class _ClubManagementTab extends ConsumerWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 club.isOwner
-                    ? '클럽장은 멤버 관리, 부운영자 지정, 회비 관리, 클럽 삭제를 할 수 있습니다.'
-                    : '부운영자는 일정 등록과 회비 관리를 할 수 있습니다.',
+                    ? '클럽장은 소개글, 소개 사진, 회비, 멤버 권한, 클럽 삭제를 관리할 수 있습니다.'
+                    : '부운영자는 소개글, 소개 사진, 일정, 회비를 관리할 수 있습니다.',
                 style: tt.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                   height: 1.45,
@@ -1017,6 +1065,11 @@ class _ClubManagementTab extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ClubIntroManageCard(
+          club: club,
+          onChanged: onChanged,
         ),
         const SizedBox(height: AppSpacing.md),
         _MonthlyFeeManageCard(
@@ -1037,6 +1090,312 @@ class _ClubManagementTab extends ConsumerWidget {
       ],
     );
   }
+}
+
+class _ClubIntroManageCard extends ConsumerStatefulWidget {
+  final Club club;
+  final VoidCallback onChanged;
+
+  const _ClubIntroManageCard({
+    required this.club,
+    required this.onChanged,
+  });
+
+  @override
+  ConsumerState<_ClubIntroManageCard> createState() =>
+      _ClubIntroManageCardState();
+}
+
+class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
+  late final TextEditingController _descriptionController;
+  late List<String> _keptImageUrls;
+  final List<_PendingPostImage> _newImages = [];
+  bool _busy = false;
+
+  int get _imageCount => _keptImageUrls.length + _newImages.length;
+  bool get _canAddImage => !_busy && _imageCount < 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController = TextEditingController(
+      text: widget.club.description ?? '',
+    );
+    _keptImageUrls = _cleanIntroImageUrls(widget.club.introImageUrls);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ClubIntroManageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_busy) return;
+    if (oldWidget.club.id != widget.club.id ||
+        oldWidget.club.description != widget.club.description) {
+      _descriptionController.text = widget.club.description ?? '';
+    }
+    if (oldWidget.club.introImageUrls != widget.club.introImageUrls) {
+      _keptImageUrls = _cleanIntroImageUrls(widget.club.introImageUrls);
+      _newImages.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    if (!_canAddImage) return;
+    final remaining = 5 - _imageCount;
+    final picked = await ImagePicker().pickMultiImage(
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 86,
+    );
+    if (picked.isEmpty) return;
+
+    final next = <_PendingPostImage>[];
+    for (final file in picked.take(remaining)) {
+      final extension = _postImageExtension(file.name);
+      next.add(
+        _PendingPostImage(
+          bytes: await file.readAsBytes(),
+          extension: extension,
+          contentType: _postImageContentType(extension),
+        ),
+      );
+    }
+    if (!mounted) return;
+    setState(() => _newImages.addAll(next));
+  }
+
+  Future<void> _save() async {
+    final description = _descriptionController.text.trim();
+    if (description.length > 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('소개글은 2000자 이하로 입력해주세요')),
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final uploadedUrls = <String>[];
+      for (final image in _newImages) {
+        final url = await ref.read(apiProvider).uploadClubIntroImage(
+              bytes: image.bytes,
+              extension: image.extension,
+              contentType: image.contentType,
+            );
+        uploadedUrls.add(url);
+      }
+      final imageUrls = [..._keptImageUrls, ...uploadedUrls];
+      await ref.read(apiProvider).updateClubIntro(
+            clubId: widget.club.id,
+            description: description.isEmpty ? null : description,
+            introImageUrls: imageUrls,
+          );
+      if (!mounted) return;
+      setState(() {
+        _keptImageUrls = imageUrls;
+        _newImages.clear();
+      });
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('클럽 소개를 저장했습니다')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('소개 저장 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.article_rounded, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  '소개 관리',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                '$_imageCount/5',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '클럽 소개와 소개 사진은 소개 탭에 바로 노출됩니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _descriptionController,
+            minLines: 4,
+            maxLines: 7,
+            maxLength: 2000,
+            enabled: !_busy,
+            decoration: const InputDecoration(
+              labelText: '클럽 소개',
+              hintText: '클럽 분위기, 활동 방식, 모집 안내를 적어주세요',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (_imageCount == 0)
+            OutlinedButton.icon(
+              onPressed: _canAddImage ? _pickImages : null,
+              icon: const Icon(Icons.add_photo_alternate_rounded),
+              label: const Text('소개 사진 추가'),
+            )
+          else
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (var i = 0; i < _keptImageUrls.length; i++)
+                  _ClubIntroManageThumb(
+                    imageUrl: _keptImageUrls[i],
+                    onRemove: _busy
+                        ? null
+                        : () => setState(() => _keptImageUrls.removeAt(i)),
+                  ),
+                for (var i = 0; i < _newImages.length; i++)
+                  _ClubIntroManageThumb(
+                    image: _newImages[i],
+                    onRemove: _busy
+                        ? null
+                        : () => setState(() => _newImages.removeAt(i)),
+                  ),
+                if (_canAddImage)
+                  InkWell(
+                    onTap: _pickImages,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: cs.outlineVariant),
+                      ),
+                      child: Icon(
+                        Icons.add_photo_alternate_rounded,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton.icon(
+            onPressed: _busy ? null : _save,
+            icon: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_rounded),
+            label: const Text('소개 저장'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClubIntroManageThumb extends StatelessWidget {
+  final String? imageUrl;
+  final _PendingPostImage? image;
+  final VoidCallback? onRemove;
+
+  const _ClubIntroManageThumb({
+    this.imageUrl,
+    this.image,
+    required this.onRemove,
+  }) : assert(imageUrl != null || image != null);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final child = image != null
+        ? Image.memory(
+            image!.bytes,
+            width: 92,
+            height: 92,
+            fit: BoxFit.cover,
+          )
+        : Image.network(
+            imageUrl!,
+            width: 92,
+            height: 92,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 92,
+              height: 92,
+              color: cs.surfaceContainerHighest,
+              child: Icon(
+                Icons.image_not_supported_outlined,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          );
+
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: child,
+        ),
+        Positioned(
+          right: 4,
+          top: 4,
+          child: InkWell(
+            onTap: onRemove,
+            borderRadius: AppRadius.pill,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: cs.surface.withValues(alpha: 0.92),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+List<String> _cleanIntroImageUrls(List<String> urls) {
+  return urls
+      .map((url) => url.trim())
+      .where((url) => url.isNotEmpty)
+      .take(5)
+      .toList(growable: true);
 }
 
 class _MonthlyFeeManageCard extends ConsumerStatefulWidget {
@@ -2014,7 +2373,8 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   List<ClubPost>? _posts;
   bool _loading = true;
   String? _activeTag;
-  bool get _canManagePosts => widget.club.isOwner || widget.club.isManager;
+  bool get _canPinPosts => widget.club.isOwner || widget.club.isManager;
+  bool get _canPostNotice => widget.club.canPostNotice;
 
   @override
   void initState() {
@@ -2105,7 +2465,8 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
             AppSpacing.sm,
           ),
           child: _PostWriteEntry(
-            canManagePosts: _canManagePosts,
+            canPostNotice: _canPostNotice,
+            canPinPosts: _canPinPosts,
             onTap: _openCreatePost,
           ),
         ),
@@ -2144,7 +2505,8 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder: (_) => _PostCreateSheet(
         club: widget.club,
-        canManagePosts: _canManagePosts,
+        canPostNotice: _canPostNotice,
+        canPinPosts: _canPinPosts,
       ),
     );
     if (created == true) _load();
@@ -2152,11 +2514,13 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
 }
 
 class _PostWriteEntry extends StatelessWidget {
-  final bool canManagePosts;
+  final bool canPostNotice;
+  final bool canPinPosts;
   final VoidCallback onTap;
 
   const _PostWriteEntry({
-    required this.canManagePosts,
+    required this.canPostNotice,
+    required this.canPinPosts,
     required this.onTap,
   });
 
@@ -2191,9 +2555,11 @@ class _PostWriteEntry extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  canManagePosts
+                  canPinPosts
                       ? '중요 공지와 상단 고정을 사용할 수 있어요.'
-                      : '클럽 멤버는 누구나 글을 쓸 수 있어요.',
+                      : canPostNotice
+                          ? '공지 글을 작성할 수 있어요.'
+                          : '클럽 멤버는 누구나 글을 쓸 수 있어요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -2211,11 +2577,13 @@ class _PostWriteEntry extends StatelessWidget {
 
 class _PostCreateSheet extends ConsumerStatefulWidget {
   final Club club;
-  final bool canManagePosts;
+  final bool canPostNotice;
+  final bool canPinPosts;
 
   const _PostCreateSheet({
     required this.club,
-    required this.canManagePosts,
+    required this.canPostNotice,
+    required this.canPinPosts,
   });
 
   @override
@@ -2269,7 +2637,7 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
             tag: _tag,
             title: title,
             body: body,
-            isPinned: widget.canManagePosts && _isPinned,
+            isPinned: widget.canPinPosts && _isPinned,
             imageUrls: imageUrls,
           );
       if (mounted) Navigator.pop(context, true);
@@ -2347,9 +2715,11 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                widget.canManagePosts
+                widget.canPinPosts
                     ? '운영진은 중요 공지와 상단 고정을 사용할 수 있어요.'
-                    : '클럽 멤버는 자유롭게 게시글을 작성할 수 있어요.',
+                    : widget.canPostNotice
+                        ? '공지 권한이 있어 중요 공지를 작성할 수 있어요.'
+                        : '클럽 멤버는 자유롭게 게시글을 작성할 수 있어요.',
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -2383,7 +2753,7 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                       _isPinned = false;
                     }),
                   ),
-                  if (widget.canManagePosts)
+                  if (widget.canPostNotice)
                     _PostTagChoice(
                       label: '중요 공지',
                       selected: _tag == 'notice',
@@ -2394,7 +2764,7 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                     ),
                 ],
               ),
-              if (widget.canManagePosts) ...[
+              if (widget.canPinPosts) ...[
                 const SizedBox(height: AppSpacing.md),
                 SwitchListTile.adaptive(
                   value: _isPinned,
