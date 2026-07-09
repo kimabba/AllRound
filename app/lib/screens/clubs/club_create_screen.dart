@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../models/venue.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
@@ -240,27 +238,6 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     }
   }
 
-  Future<void> _showAddressPicker() async {
-    final selected = await showModalBottomSheet<_ClubAddressOption>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-      builder: (_) => _AddressPickerSheet(
-        sport: _sport,
-        region: _region.text.trim().isEmpty ? null : _region.text.trim(),
-      ),
-    );
-    if (selected == null) return;
-    if (selected.custom) {
-      await _showCustomAddressDialog();
-      return;
-    }
-    setState(() {
-      _region.text = selected.region;
-      _address.text = selected.address;
-    });
-  }
-
   Future<void> _showRegionPicker() async {
     final selected = await showModalBottomSheet<_RegionOption>(
       context: context,
@@ -274,64 +251,6 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         _address.clear();
       }
       _region.text = selected.label;
-    });
-  }
-
-  Future<void> _showCustomAddressDialog() async {
-    final region = TextEditingController(text: _region.text);
-    final address = TextEditingController(text: _address.text);
-    final result = await showDialog<_ClubAddressOption>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('주소 직접 입력'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: region,
-              decoration: const InputDecoration(
-                labelText: '지역',
-                hintText: '예: 서울',
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: address,
-              decoration: const InputDecoration(
-                labelText: '활동 장소 주소',
-                hintText: '예: 송파구 올림픽로 ...',
-              ),
-              minLines: 1,
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              _ClubAddressOption(
-                region: region.text.trim(),
-                address: address.text.trim(),
-                label: '직접 입력',
-              ),
-            ),
-            child: const Text('적용'),
-          ),
-        ],
-      ),
-    );
-    region.dispose();
-    address.dispose();
-    if (result == null) return;
-    setState(() {
-      _region.text = result.region;
-      _address.text = result.address;
     });
   }
 
@@ -383,7 +302,6 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                         onSportChanged: (sport) =>
                             setState(() => _sport = sport),
                         onRegionTap: _showRegionPicker,
-                        onAddressTap: _showAddressPicker,
                       )
                     else if (_step == 1)
                       _OperationClubStep(
@@ -556,7 +474,6 @@ class _BasicClubStep extends StatelessWidget {
     required this.onLogoTap,
     required this.onSportChanged,
     required this.onRegionTap,
-    required this.onAddressTap,
   });
 
   final String sport;
@@ -568,7 +485,6 @@ class _BasicClubStep extends StatelessWidget {
   final VoidCallback onLogoTap;
   final ValueChanged<String> onSportChanged;
   final VoidCallback onRegionTap;
-  final VoidCallback onAddressTap;
 
   @override
   Widget build(BuildContext context) {
@@ -642,14 +558,12 @@ class _BasicClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: address,
-          readOnly: true,
-          onTap: onAddressTap,
           decoration: const InputDecoration(
-            labelText: '주소',
-            hintText: '주요 활동 장소 선택',
+            labelText: '활동 장소',
+            hintText: '예: 서울 송파구 올림픽로 25 잠실 풋살파크',
             prefixIcon: Icon(Icons.place_outlined),
-            suffixIcon: Icon(Icons.search_rounded),
           ),
+          textInputAction: TextInputAction.next,
         ),
       ],
     );
@@ -1065,28 +979,10 @@ class _SheetActionRow extends StatelessWidget {
   }
 }
 
-class _ClubAddressOption {
-  const _ClubAddressOption({
-    required this.region,
-    required this.address,
-    required this.label,
-    this.custom = false,
-  });
-
-  final String region;
-  final String address;
-  final String label;
-  final bool custom;
-}
-
 class _RegionOption {
-  const _RegionOption({
-    required this.label,
-    required this.searchRegion,
-  });
+  const _RegionOption(this.label);
 
   final String label;
-  final String searchRegion;
 }
 
 class _RegionPickerSheet extends StatelessWidget {
@@ -1163,338 +1059,20 @@ class _RegionPickerSheet extends StatelessWidget {
   }
 }
 
-class _AddressPickerSheet extends ConsumerStatefulWidget {
-  const _AddressPickerSheet({
-    required this.sport,
-    required this.region,
-  });
-
-  final String sport;
-  final String? region;
-
-  @override
-  ConsumerState<_AddressPickerSheet> createState() =>
-      _AddressPickerSheetState();
-}
-
-class _AddressPickerSheetState extends ConsumerState<_AddressPickerSheet> {
-  final _query = TextEditingController();
-  Timer? _debounce;
-  bool _loading = true;
-  String? _error;
-  List<Venue> _venues = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadVenues());
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _query.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadVenues() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final api = ref.read(apiProvider);
-      final region = _searchRegionForLabel(widget.region);
-      final query = _query.text.trim();
-      var venues = await api.searchVenues(
-        sport: widget.sport,
-        region: region,
-        query: query,
-        limit: 40,
-      );
-      if (query.isNotEmpty && venues.isEmpty) {
-        final regionalVenues = await api.searchVenues(
-          sport: widget.sport,
-          region: region,
-          limit: 120,
-        );
-        venues = _rankSimilarVenues(regionalVenues, query);
-      }
-      if (!mounted) return;
-      setState(() {
-        _venues = venues;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _venues = const [];
-        _loading = false;
-        _error = '구장 정보를 불러오지 못했습니다. 직접 입력으로 계속 진행할 수 있습니다.';
-      });
-    }
-  }
-
-  void _scheduleSearch(String _) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      if (mounted) unawaited(_loadVenues());
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final selectedRegion = widget.region;
-
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.72,
-      minChildSize: 0.42,
-      maxChildSize: 0.92,
-      builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.xl,
-          ),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.outlineVariant,
-                  borderRadius: AppRadius.pill,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              '활동 장소 선택',
-              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              selectedRegion == null
-                  ? '구장명 또는 주소로 검색하세요. 지역을 먼저 고르면 더 정확합니다.'
-                  : '$selectedRegion 지역의 구장명 또는 주소로 검색하세요.',
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _query,
-              onChanged: _scheduleSearch,
-              decoration: const InputDecoration(
-                hintText: '예: 잠실, 송파, 풋살파크',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _loadVenues(),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            if (_loading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: Text(
-                  _error!,
-                  style: tt.bodySmall?.copyWith(color: cs.error),
-                ),
-              )
-            else if (_venues.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: Text(
-                  '검색 결과가 없습니다. 장소명을 직접 입력해 주세요.',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              )
-            else
-              for (final venue in _venues) ...[
-                _AddressOptionTile(option: _optionFromVenue(venue)),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-            if (!_loading && _venues.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '전국 구장 데이터 기준으로 표시됩니다.',
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.pop(
-                context,
-                const _ClubAddressOption(
-                  region: '',
-                  address: '',
-                  label: '직접 입력',
-                  custom: true,
-                ),
-              ),
-              icon: const Icon(Icons.edit_location_alt_outlined),
-              label: const Text('직접 입력하기'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  _ClubAddressOption _optionFromVenue(Venue venue) {
-    final addressParts = [
-      venue.region,
-      if (venue.address != null && venue.address!.trim().isNotEmpty)
-        venue.address!.trim(),
-    ];
-    return _ClubAddressOption(
-      region: _labelForVenueRegion(venue.region),
-      address: addressParts.join(' '),
-      label: venue.name,
-    );
-  }
-}
-
-class _AddressOptionTile extends StatelessWidget {
-  const _AddressOptionTile({required this.option});
-
-  final _ClubAddressOption option;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return ListTile(
-      onTap: () => Navigator.pop(context, option),
-      leading: CircleAvatar(
-        backgroundColor: cs.primaryContainer,
-        foregroundColor: cs.onPrimaryContainer,
-        child: const Icon(Icons.place_outlined, size: 19),
-      ),
-      title: Text(
-        option.label,
-        style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-      ),
-      subtitle: Text('${option.region} · ${option.address}'),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      tileColor: cs.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
-  }
-}
-
 const _regionOptions = [
-  _RegionOption(label: '서울', searchRegion: '서울시'),
-  _RegionOption(label: '경기', searchRegion: '경기도'),
-  _RegionOption(label: '인천', searchRegion: '인천시'),
-  _RegionOption(label: '부산', searchRegion: '부산시'),
-  _RegionOption(label: '울산', searchRegion: '울산시'),
-  _RegionOption(label: '경남', searchRegion: '경상남도'),
-  _RegionOption(label: '대구', searchRegion: '대구시'),
-  _RegionOption(label: '경북', searchRegion: '경상북도'),
-  _RegionOption(label: '충북', searchRegion: '충청북도'),
-  _RegionOption(label: '충남', searchRegion: '충청남도'),
-  _RegionOption(label: '전북', searchRegion: '전라북도'),
-  _RegionOption(label: '광주', searchRegion: '광주시'),
-  _RegionOption(label: '전남', searchRegion: '전라남도'),
-  _RegionOption(label: '강원', searchRegion: '강원도'),
-  _RegionOption(label: '제주', searchRegion: '제주도'),
+  _RegionOption('서울'),
+  _RegionOption('경기'),
+  _RegionOption('인천'),
+  _RegionOption('부산'),
+  _RegionOption('울산'),
+  _RegionOption('경남'),
+  _RegionOption('대구'),
+  _RegionOption('경북'),
+  _RegionOption('충북'),
+  _RegionOption('충남'),
+  _RegionOption('전북'),
+  _RegionOption('광주'),
+  _RegionOption('전남'),
+  _RegionOption('강원'),
+  _RegionOption('제주'),
 ];
-
-String? _searchRegionForLabel(String? label) {
-  if (label == null || label.isEmpty) return null;
-  for (final option in _regionOptions) {
-    if (option.label == label) return option.searchRegion;
-  }
-  return label;
-}
-
-String _labelForVenueRegion(String region) {
-  for (final option in _regionOptions) {
-    if (option.searchRegion == region) return option.label;
-  }
-  return switch (region) {
-    '서울시' => '서울',
-    '경기도' => '경기',
-    '인천시' => '인천',
-    '부산시' => '부산',
-    '울산시' => '울산',
-    '경상남도' => '경남',
-    '대구시' => '대구',
-    '경상북도' => '경북',
-    '충청북도' => '충북',
-    '충청남도' => '충남',
-    '전라북도' => '전북',
-    '광주시' => '광주',
-    '전라남도' => '전남',
-    '강원도' => '강원',
-    '제주도' => '제주',
-    _ => region,
-  };
-}
-
-List<Venue> _rankSimilarVenues(List<Venue> venues, String query) {
-  final normalizedQuery = _normalizeVenueText(query);
-  if (normalizedQuery.isEmpty) return const [];
-  final queryParts = _venueSearchParts(normalizedQuery);
-  final scored = <({Venue venue, int score})>[];
-
-  for (final venue in venues) {
-    final haystack = _normalizeVenueText([
-      venue.name,
-      venue.region,
-      venue.address ?? '',
-    ].join(' '));
-    var score = 0;
-    if (haystack.contains(normalizedQuery)) score += 20;
-    for (final part in queryParts) {
-      if (haystack.contains(part)) {
-        score += part.length >= 3 ? 4 : 2;
-      }
-    }
-    if (score > 0) scored.add((venue: venue, score: score));
-  }
-
-  scored.sort((a, b) {
-    final scoreCompare = b.score.compareTo(a.score);
-    if (scoreCompare != 0) return scoreCompare;
-    return a.venue.name.compareTo(b.venue.name);
-  });
-  return scored.map((item) => item.venue).take(20).toList(growable: false);
-}
-
-String _normalizeVenueText(String value) {
-  return value.toLowerCase().replaceAll(RegExp(r'[^0-9a-z가-힣]'), '').trim();
-}
-
-Set<String> _venueSearchParts(String normalizedQuery) {
-  final parts = <String>{};
-  final compact = normalizedQuery
-      .replaceAll('풋살장', '')
-      .replaceAll('풋살파크', '')
-      .replaceAll('풋살구장', '')
-      .replaceAll('체육공원', '공원')
-      .replaceAll('근린공원', '공원');
-  if (compact.length >= 2) parts.add(compact);
-  for (final token in [normalizedQuery, compact]) {
-    for (var size = 2; size <= 4; size++) {
-      if (token.length < size) continue;
-      for (var i = 0; i <= token.length - size; i++) {
-        parts.add(token.substring(i, i + size));
-      }
-    }
-  }
-  return parts.where((part) => part.length >= 2).toSet();
-}
