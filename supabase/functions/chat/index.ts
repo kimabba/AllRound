@@ -45,13 +45,14 @@ import {
   buildTournamentCards,
   type ClubCardRow,
   type ClubDetailRow,
+  isTournamentCardRow,
   parseSelectedEntity,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
-  type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
 
 import type {
@@ -642,6 +643,105 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ---- tournament_detail without selected card: application guide + eligible cards ----
+        // "대회 신청 방법 알려줘"는 특정 대회 상세가 아니라 신청 가능한 대회 목록을
+        // 먼저 보여줘야 한다. LLM/RAG로 흘리면 빈 마크다운 목록을 만들 수 있어
+        // 검색 RPC + 카드 UI로 결정적으로 응답한다.
+        if (
+          intentResult.intent === 'tournament_detail' &&
+          intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD &&
+          intentResult.rule_matched === 'tournament_with_detail' &&
+          !selectedEntity
+        ) {
+          const regionCode = intentResult.slots.region;
+          const regionLabel = regionCode
+            ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
+            : null;
+          const dateRange = intentResult.slots.date_range;
+
+          const { data: rows, error: detailSearchErr } = await supabase.rpc(
+            'tournament_search_by_slots',
+            {
+              p_user_id: user.id,
+              p_sport: requestedSport,
+              p_region: regionLabel,
+              p_date_from: dateRange?.from ?? null,
+              p_date_to: dateRange?.to ?? null,
+              p_only_my_grade: true,
+              p_match_count: 10,
+              p_recruiting: 'open',
+              p_include_closed: false,
+            },
+          );
+
+          if (!detailSearchErr) {
+            const typedRows = Array.isArray(rows) ? rows.filter(isTournamentCardRow) : [];
+            const answerText = renderTournamentApplicationGuideText(typedRows, {
+              sport: requestedSport ?? undefined,
+              region: regionLabel,
+              dateRange,
+            });
+            const citations: DbCitation[] = typedRows.slice(0, 5).map((t) => ({
+              type: 'db',
+              source: 'tournaments',
+              id: t.id,
+              title: t.title,
+            }));
+
+            console.log(
+              'chat_route',
+              JSON.stringify({
+                event: 'tournament_application_guide_routed',
+                result_count: typedRows.length,
+                slots: intentResult.slots,
+                requested_sport: requestedSport ?? null,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+
+            send('route', { intent: 'tournament_detail', result_count: typedRows.length });
+            send('context', { tournaments: [], rules: [] });
+            send('delta', { text: answerText });
+            if (citations.length > 0) {
+              send('citation', { items: citations });
+            }
+            if (typedRows.length > 0) {
+              send('ui', {
+                blocks: [
+                  {
+                    type: 'cards',
+                    entity: 'tournament',
+                    items: buildTournamentCards(typedRows),
+                  },
+                ],
+              });
+            }
+
+            await supabase.from('chat_messages').insert({
+              user_id: user.id,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: answerText,
+              citations,
+            });
+
+            send('done', {});
+            controller.close();
+            return;
+          }
+
+          console.error(
+            'chat_route',
+            JSON.stringify({
+              event: 'tournament_application_guide_rpc_error',
+              reason: detailSearchErr.message,
+              user_id_hash: hashedUserId,
+              conversation_id: conversationId,
+            }),
+          );
+        }
+
         // ---- Day 5-6 routing: tournament_search ----
         if (isRoutable && intentResult.intent === 'tournament_search') {
           const regionCode = intentResult.slots.region;
@@ -679,8 +779,38 @@ Deno.serve(async (req) => {
                 conversation_id: conversationId,
               }),
             );
-          } else if (Array.isArray(rows) && rows.length > 0) {
-            const typedRows = rows as TournamentCardRow[];
+          } else if (Array.isArray(rows)) {
+            const typedRows = rows.filter(isTournamentCardRow);
+            if (typedRows.length === 0) {
+              const answerText = renderTournamentSearchEmptyText({
+                sport: requestedSport,
+                region: regionLabel,
+                dateRange,
+              });
+              console.log(
+                'chat_route',
+                JSON.stringify({
+                  event: 'tournament_search_empty',
+                  slots: intentResult.slots,
+                  requested_sport: requestedSport,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              send('route', { intent: 'tournament_search', result_count: 0 });
+              send('context', { tournaments: [], rules: [] });
+              send('delta', { text: answerText });
+              await supabase.from('chat_messages').insert({
+                user_id: user.id,
+                conversation_id: conversationId,
+                role: 'assistant',
+                content: answerText,
+                citations: [],
+              });
+              send('done', {});
+              controller.close();
+              return;
+            }
             const answerText = renderTournamentSearchText(typedRows, {
               sport: requestedSport ?? undefined,
               region: regionLabel,
