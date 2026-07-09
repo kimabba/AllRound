@@ -14,6 +14,13 @@
 - [ ] Speed Gun/video — `docs/rules/SPEED_GUN_RULES.md`
 - [ ] CI/harness/rules — `docs/rules/HARNESS.md`
 
+## 운영 배포 / 버전 관리
+
+- [ ] 이 PR은 운영 배포 정책에 영향을 주지 않음
+- [ ] 운영 배포 정책에 영향을 주는 경우 `docs/deploy.md`와 관련 이슈를 함께 업데이트함
+- [ ] GitHub 태그 생성만으로 운영 배포가 실행되지 않음을 확인함
+- [ ] DB migration은 자동 배포 대상이 아니며, 필요한 경우 별도 수동 적용 담당자를 지정함
+
 ## 마이그레이션 배포 (DB 변경 시 필수)
 
 > ⚠️ **머지 ≠ 프로덕션 적용.** 마이그레이션은 머지 후 자동 적용되지 않으므로, 누군가 수동으로 적용해야 한다. 절차: `docs/rules/DATABASE_RULES.md` → "마이그레이션 배포".

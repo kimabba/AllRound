@@ -7,6 +7,25 @@
 - Xcode (iOS), Android Studio (Android)
 - Google Cloud Console 프로젝트 (OAuth + Gemini API)
 
+## 1.1 운영 배포/태그 관리 원칙
+
+GitHub 태그는 버전 표시용이며, 태그 생성만으로 운영 배포가 실행되어서는 안 된다.
+운영 배포는 별도 수동 실행과 승인 절차를 거친 뒤 진행한다.
+
+- `main` 브랜치는 직접 push하지 않고 PR 기반으로 반영한다.
+- 릴리즈 태그는 `v1.0.0` 같은 `v*` 형식만 사용한다.
+- 릴리즈 태그 생성 권한은 지정된 담당자로 제한한다.
+- 태그 삭제/재생성은 원칙적으로 금지한다.
+- 운영 배포는 GitHub Environment `production` 승인 후 진행한다.
+- 배포 실행자와 승인자는 분리한다. 실행자가 본인이면 백과장 승인, 백과장이 실행하면 본인 승인을 받는다.
+- DB migration은 자동 배포하지 않는다. `supabase db push`는 변경 내용을 확인한 뒤 수동으로 적용한다.
+
+권장 GitHub 설정:
+
+- Ruleset: `main` 직접 push 제한, PR 필수, CI 통과 필수
+- Ruleset: `v*` 태그 생성 권한 제한, 태그 삭제/수정 제한
+- Environment: `production` required reviewers 설정, self-review 방지
+
 ## 2. Supabase 프로젝트
 
 ### 2.1 프로젝트 생성
