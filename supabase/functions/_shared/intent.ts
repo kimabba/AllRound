@@ -84,7 +84,10 @@ export interface RuleClassification {
 const REGION_ALIASES: ReadonlyArray<{ pattern: RegExp; code: RegionCode }> = [
   { pattern: /(광주광역시|광주시|광주)/, code: 'gwangju' },
   { pattern: /(전라남도|전남)/, code: 'jeonnam' },
-  { pattern: /(수도권|서울|경기도|경기\s*지역|인천)/, code: 'seoul_metro' },
+  { pattern: /(서울특별시|서울시|서울)/, code: 'seoul' },
+  { pattern: /(경기도|경기\s*지역)/, code: 'gyeonggi' },
+  { pattern: /(인천광역시|인천시|인천)/, code: 'incheon' },
+  { pattern: /(수도권)/, code: 'seoul_metro' },
   { pattern: /(부산|울산|경남|경상남도)/, code: 'busan_ulsan_gn' },
   { pattern: /(대구|경북|경상북도)/, code: 'daegu_gb' },
   { pattern: /(충청|충북|충남|대전|세종)/, code: 'chungcheong' },

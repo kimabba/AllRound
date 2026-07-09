@@ -20,9 +20,9 @@ import '../../widgets/allround_logo.dart';
 
 const _profileAvatarPrefsKey = 'profile.avatar.base64';
 const _onboardingRegionChoices = <_RegionChoice>[
-  _RegionChoice(code: 'seoul_metro', label: '서울'),
-  _RegionChoice(code: 'seoul_metro', label: '경기'),
-  _RegionChoice(code: 'seoul_metro', label: '인천'),
+  _RegionChoice(code: 'seoul', label: '서울'),
+  _RegionChoice(code: 'gyeonggi', label: '경기'),
+  _RegionChoice(code: 'incheon', label: '인천'),
   _RegionChoice(code: 'busan_ulsan_gn', label: '부산·울산·경남'),
   _RegionChoice(code: 'daegu_gb', label: '대구·경북'),
   _RegionChoice(code: 'chungcheong', label: '충청'),
@@ -245,8 +245,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _existingRegionReady) return;
       // 사용자가 이미 지역을 직접 선택했다면 덮어쓰지 않는다.
-      final restoredRegionCode =
-          _regionCode ?? _restoreRegionCode(tennisOrgs);
+      final restoredRegionCode = _regionCode ?? _restoreRegionCode(tennisOrgs);
       final restoredRegionLabel =
           _regionDisplayLabel ?? _restoreRegionDisplayLabel(restoredRegionCode);
       setState(() {
@@ -260,7 +259,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _restoreRegionCode(List<UserTennisOrg> tennisOrgs) {
     for (final org in tennisOrgs) {
       final code = org.regionCode;
-      if (code != null && code.isNotEmpty) return code;
+      if (code != null &&
+          _onboardingRegionChoices.any((choice) => choice.code == code)) {
+        return code;
+      }
     }
     return null;
   }

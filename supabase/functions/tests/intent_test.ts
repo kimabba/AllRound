@@ -37,7 +37,7 @@ const CASES: RuleCase[] = [
   {
     msg: '서울 테니스 대회 알려줘',
     intent: 'tournament_search',
-    slots: { region: 'seoul_metro', sport: 'tennis' },
+    slots: { region: 'seoul', sport: 'tennis' },
   },
   // tournament_search — 종목 + 기간 슬롯
   {
@@ -165,7 +165,7 @@ Deno.test("'경기' 동음이의 false-positive 회피 (게임 vs 경기도)", (
   // '경기' 단독(시합 의미)은 region 으로 잡히면 안 됨
   assertEquals(extractSlots('경기 보러 갈래', FIXED_NOW).region, undefined);
   // '경기도'는 region 으로 매칭
-  assertEquals(extractSlots('경기도 테니스 대회', FIXED_NOW).region, 'seoul_metro');
+  assertEquals(extractSlots('경기도 테니스 대회', FIXED_NOW).region, 'gyeonggi');
 });
 
 Deno.test('날짜 범위: 다음 주 > 이번 주말 > 이번 주 우선순위', () => {

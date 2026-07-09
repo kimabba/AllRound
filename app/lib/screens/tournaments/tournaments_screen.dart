@@ -1455,7 +1455,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               selected: _regionCode == null,
               onSelected: (_) => setState(() => _regionCode = null),
             ),
-            for (final code in regionCodes)
+            for (final code in regionFilterCodes)
               _filterChip(
                 label: regionLabel(code),
                 selected: _regionCode == code,

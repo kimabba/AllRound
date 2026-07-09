@@ -48,6 +48,9 @@ export function isValidTennisOrg(value: string): value is TennisOrg {
 export const REGION_CODES = [
   'gwangju',
   'jeonnam',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'seoul_metro',
   'busan_ulsan_gn',
   'daegu_gb',
@@ -61,6 +64,9 @@ export type RegionCode = typeof REGION_CODES[number];
 export const REGION_LABELS: Record<RegionCode, string> = {
   gwangju: '광주',
   jeonnam: '전남',
+  seoul: '서울',
+  gyeonggi: '경기',
+  incheon: '인천',
   seoul_metro: '수도권',
   busan_ulsan_gn: '부산·울산·경남',
   daegu_gb: '대구·경북',

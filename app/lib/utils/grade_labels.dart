@@ -322,7 +322,23 @@ String tennisOrgShortLabel(String org) => tennisOrgShortLabels[org] ?? org;
 const regionCodes = <String>[
   'gwangju',
   'jeonnam',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'seoul_metro',
+  'busan_ulsan_gn',
+  'daegu_gb',
+  'chungcheong',
+  'gangwon',
+  'jeju',
+];
+
+const regionFilterCodes = <String>[
+  'gwangju',
+  'jeonnam',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'busan_ulsan_gn',
   'daegu_gb',
   'chungcheong',
@@ -333,6 +349,9 @@ const regionCodes = <String>[
 const regionLabels = <String, String>{
   'gwangju': '광주',
   'jeonnam': '전남',
+  'seoul': '서울',
+  'gyeonggi': '경기',
+  'incheon': '인천',
   'seoul_metro': '수도권',
   'busan_ulsan_gn': '부산·울산·경남',
   'daegu_gb': '대구·경북',
