@@ -146,10 +146,15 @@ Linear backlog에 보관. 시연/제출 이후.
 
 ---
 
-## 7. 상태 스냅샷 (2026-07-09 EOD)
+## 7. 상태 스냅샷 (2026-07-10 EOD)
 
-### 오늘 머지됨 (드론 레인, main 반영)
-- **JY-103** chat 삭제 컬럼 수정(#179) · **JY-104/105** 검색 taxonomy·오버로드(#180)
+### 7/10 머지됨 (main 반영)
+- **JY-113** 구글 로그아웃 세션 잔존 + 딥링크 스킴 등록(#192) — 제출 크리티컬 해소
+- **릴리스 빌드** JVM 타깃 검증 완화(tflite 호환)(#193)
+- 진행중: **macOS OAuth 스킴 정리** `io.matchup`→`kr.allround`(#194, CI 대기)
+
+### 7/09 머지됨 (참고, 이미 main)
+- **JY-103** chat 삭제 컬럼(#179) · **JY-104/105** 검색 taxonomy·오버로드(#180)
 - **JY-68** 식별자 `kr.allround.app` 통일 + 서명키 gitignore(#182)
 - **JY-112** 회원 탈퇴 — 백엔드(#189) + UI(#190) **코드 완료** (배포 대기)
 - 공유문서·PR규율(#181) · 스토어 리스팅(#184) · 개인정보·데이터안전(#188)
@@ -166,15 +171,19 @@ Linear backlog에 보관. 시연/제출 이후.
 - **JY-62** 게시판 CRUD 마무리 · **JY-63** 클럽 알림 8종 · **JY-80** 디자인 반영
 
 ### kimabba 후속
-- 안드로이드: `key.properties` 작성 → Android Studio/SDK → `.aab` 빌드 → Play 내부트랙
-- **배포**: JY-112 마이그레이션 + `delete-account` 함수 (승인 후) → E2E
+- ✅ 안드로이드 `.aab` 빌드 완료 (키스토어 alias `allround-upload`, 재현정보 메모리화)
+- ✅ Supabase Redirect URL `kr.allround.app://login-callback/` 등록 (JY-113 콜백)
+- ⏳ Supabase Redirect URL에서 **옛 스킴 `io.matchup.app://login-callback/` 삭제** (잔재, 안전)
+- ⏳ Play Console 내부 테스트 트랙에 `.aab` **최초 업로드** (Play 앱 서명 설정)
+- ⏳ 실기기 검증: JY-113 재로그인 계정선택 노출 / JY-112 탈퇴 E2E
 - JY-114 컴플라이언스: 개인정보 URL 호스팅, 지원 이메일 확정, 데이터안전/등급 폼
 
 ### 결정 (확정)
 - 애플 로그인 생략 · 카카오 출시후(JY-7 백로그) · 스토어 등록: 🍎 애플=백과장 / 🤖 Play=kimabba
 
 ### 남은 제출 크리티컬
-- 드론: **JY-113** 구글 세션 버그(deep-link 스킴 등록 포함)
+- ~~드론: JY-113 구글 세션 버그~~ ✅ 머지(#192)
+- 드론: **JY-107** chat intent 분류 복구
 - 시리야: JY-106 · JY-115
 - 공통: JY-114 컴플라이언스, JY-1 스토어 에셋(백과장)
 
