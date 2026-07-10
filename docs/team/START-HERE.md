@@ -194,3 +194,4 @@ Linear backlog에 보관. 시연/제출 이후.
 - 규칙 라우터: [`AGENTS.md`](../../AGENTS.md) · 로드온디맨드 `docs/rules/`
 - 현재 상태 KB: `docs/kb/`
 - 로드맵 요약: [`docs/plans/MVP-roadmap.md`](../plans/MVP-roadmap.md)
+- 🚀 스토어 제출 체크리스트: [`docs/team/store-submission-checklist.md`](./store-submission-checklist.md) — Apple·Play 필수요건, 제출 직전 필독
