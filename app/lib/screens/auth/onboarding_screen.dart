@@ -40,10 +40,11 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  final TextEditingController _realName = TextEditingController();
   final TextEditingController _nickname = TextEditingController();
+  DateTime? _birthDate;
   Uint8List? _avatarBytes;
   int _step = 0;
-  bool _nicknameReady = false;
 
   // 종목·등급
   final Map<Sport, String?> _selectedGrade = {
@@ -64,6 +65,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _error;
   bool _existingSportsReady = false;
   bool _existingRegionReady = false;
+  bool _existingProfileReady = false;
   bool _profilePhotoReady = false;
   bool _sportsTouched = false;
 
@@ -84,20 +86,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
   bool get _canAdvance => switch (_step) {
-        0 => _nickname.text.trim().length >= 2,
+        0 => _realName.text.trim().length >= 2 && _birthDate != null,
         1 => _regionCode != null,
         _ => _canSubmit,
       };
 
-  void _prepareNickname() {
-    if (_nicknameReady) return;
-    final user = ref.read(currentUserProvider);
-    final metadataName = user?.userMetadata?['display_name'];
-    _nickname.text = metadataName is String && metadataName.trim().isNotEmpty
-        ? metadataName.trim()
-        : (user?.email?.split('@').first ?? '');
-    _nicknameReady = true;
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _birthDate ?? DateTime(now.year - 20, now.month, now.day),
+      firstDate: DateTime(1920),
+      lastDate: now,
+      helpText: '생년월일 선택',
+    );
+    if (picked != null) {
+      setState(() => _birthDate = picked);
+    }
   }
+
+  String _formatBirthDate(DateTime d) =>
+      '${d.year}년 ${d.month.toString().padLeft(2, '0')}월 '
+      '${d.day.toString().padLeft(2, '0')}일';
 
   Future<void> _prepareProfilePhoto() async {
     if (_profilePhotoReady) return;
@@ -232,6 +242,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ? (fallbackSport ?? primarySport)
             : primarySport;
         _existingSportsReady = true;
+      });
+    });
+  }
+
+  void _prepareExistingProfile(UserProfile? profile) {
+    // profile == null 은 프로바이더가 아직 로딩 중이거나, 신규 유저라 row가
+    // 없다는 뜻이다. 신규 유저는 채울 값이 없으므로 대기만 하면 되고,
+    // 아래 가드가 두 경우를 함께 처리한다. 재진입(종목 추가·맞춤 설정) 시
+    // 기존 실명/닉네임/생년월일을 복원해 재입력 강요·닉네임 유실을 막는다.
+    if (_existingProfileReady || profile == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _existingProfileReady) return;
+      setState(() {
+        // 사용자가 이미 직접 입력한 값은 덮어쓰지 않는다.
+        if (_realName.text.trim().isEmpty &&
+            (profile.name?.isNotEmpty ?? false)) {
+          _realName.text = profile.name!;
+        }
+        if (_nickname.text.trim().isEmpty &&
+            (profile.nickname?.isNotEmpty ?? false)) {
+          _nickname.text = profile.nickname!;
+        }
+        _birthDate ??= profile.birthDate;
+        _existingProfileReady = true;
       });
     });
   }
@@ -382,7 +417,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     try {
       final api = ref.read(apiProvider);
 
-      await api.saveDisplayName(_nickname.text.trim());
+      await api.saveProfile(
+        name: _realName.text.trim(),
+        nickname: _nickname.text.trim(),
+        birthDate: _birthDate!,
+      );
 
       // 1) user_sports
       final sports = <UserSport>[];
@@ -416,6 +455,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         await api.saveTennisOrgs(orgRows);
       }
 
+      ref.invalidate(myProfileProvider);
       ref.invalidate(userSportsProvider);
       ref.invalidate(userTennisOrgsProvider);
       if (mounted) context.go('/');
@@ -440,6 +480,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   void dispose() {
+    _realName.dispose();
     _nickname.dispose();
     for (final o in _orgs) {
       o.divisionLocal.dispose();
@@ -453,8 +494,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // ───────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    _prepareNickname();
     _prepareProfilePhoto();
+    _prepareExistingProfile(ref.watch(myProfileProvider).valueOrNull);
     _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
     _prepareExistingRegion(ref.watch(userTennisOrgsProvider).valueOrNull);
     final cs = Theme.of(context).colorScheme;
@@ -574,7 +615,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '사진과 닉네임은 클럽, 대회 신청 화면에서 보여집니다.',
+                '실명은 대회·클럽 신청에, 닉네임은 앱 활동에 사용돼요.',
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -642,14 +683,45 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               TextField(
+                controller: _realName,
+                maxLength: 20,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '이름 (실명)',
+                  hintText: '대회·클럽 신청에 사용돼요',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
                 controller: _nickname,
                 maxLength: 10,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
-                  labelText: '닉네임',
-                  hintText: '닉네임을 입력하세요',
+                  labelText: '닉네임 (선택)',
+                  hintText: '앱 활동에 표시돼요',
                   prefixIcon: Icon(Icons.badge_outlined),
                   counterText: '',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              InkWell(
+                onTap: _pickBirthDate,
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: '생년월일',
+                    prefixIcon: Icon(Icons.cake_outlined),
+                  ),
+                  child: Text(
+                    _birthDate == null
+                        ? '생년월일을 선택하세요'
+                        : _formatBirthDate(_birthDate!),
+                    style: _birthDate == null
+                        ? tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)
+                        : tt.bodyLarge,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

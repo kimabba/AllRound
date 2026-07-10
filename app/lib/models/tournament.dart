@@ -398,6 +398,43 @@ class UserSport {
       };
 }
 
+/// 본인 프로필. name=실명(대회·클럽), nickname=앱 활동명, birthDate=비공개 매칭용.
+class UserProfile {
+  final String? name;
+  final String? nickname;
+  final DateTime? birthDate;
+
+  const UserProfile({this.name, this.nickname, this.birthDate});
+
+  factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
+        name: j['name'] as String?,
+        nickname: j['nickname'] as String?,
+        birthDate: j['birth_date'] == null
+            ? null
+            : DateTime.tryParse(j['birth_date'] as String),
+      );
+
+  /// 앱 활동 표시명: 닉네임 우선, 없으면 실명. 둘 다 없으면 null.
+  String? get displayName {
+    final n = nickname?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    final r = name?.trim();
+    if (r != null && r.isNotEmpty) return r;
+    return null;
+  }
+
+  /// 만 나이 (기준일 now). 생년월일 없으면 null.
+  int? ageOn(DateTime now) {
+    final b = birthDate;
+    if (b == null) return null;
+    var age = now.year - b.year;
+    if (now.month < b.month || (now.month == b.month && now.day < b.day)) {
+      age--;
+    }
+    return age;
+  }
+}
+
 class ChatMessage {
   final String id;
   final String role; // 'user' | 'assistant'

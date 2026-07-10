@@ -1,9 +1,9 @@
 SUPABASE ?= supabase
 # 원격 Supabase 프로젝트 ref (make backend 에서 사용)
 PROJECT_REF ?= bsjdgwmveokanclqwtvx
-# iOS Simulator: ffmpeg_kit arm64 미지원으로 현재 macOS 로 실행
-# 추후 iOS 빌드 준비되면: DEVICE_ID = 35686810-DADA-43C3-B3BF-E420C50AFF8B
-DEVICE_ID := macos
+# iOS Simulator: ffmpeg_kit arm64 미지원으로 기본은 macOS 로 실행.
+# 실기기/다른 기기에서 돌리려면: make app DEVICE_ID=<flutter devices 의 id>
+DEVICE_ID ?= macos
 
 .PHONY: setup backend app admin web check deps reset
 

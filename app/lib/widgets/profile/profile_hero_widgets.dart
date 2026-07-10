@@ -14,7 +14,9 @@ import '../../widgets/app_card.dart';
 
 class ProfileHeroSliver extends StatelessWidget {
   final String initial;
-  final String email;
+  final String title; // 앱 활동 표시명(닉네임 우선)
+  final String subtitle; // 이메일
+  final String? infoLine; // 실명·나이 (본인만)
   final AsyncValue<List<UserSport>> sports;
   final AsyncValue<List<UserTennisOrg>> tennisOrgs;
   final Uint8List? avatarBytes;
@@ -23,7 +25,9 @@ class ProfileHeroSliver extends StatelessWidget {
   const ProfileHeroSliver({
     super.key,
     required this.initial,
-    required this.email,
+    required this.title,
+    required this.subtitle,
+    required this.infoLine,
     required this.sports,
     required this.tennisOrgs,
     required this.avatarBytes,
@@ -68,7 +72,9 @@ class ProfileHeroSliver extends StatelessWidget {
               ),
               child: ProfileHeaderContent(
                 initial: initial,
-                email: email,
+                title: title,
+                subtitle: subtitle,
+                infoLine: infoLine,
                 sports: sports,
                 avatarBytes: avatarBytes,
                 onAvatarTap: onAvatarTap,
@@ -91,14 +97,18 @@ class ProfileHeaderContent extends StatelessWidget {
   const ProfileHeaderContent({
     super.key,
     required this.initial,
-    required this.email,
+    required this.title,
+    required this.subtitle,
+    required this.infoLine,
     required this.sports,
     required this.avatarBytes,
     required this.onAvatarTap,
   });
 
   final String initial;
-  final String email;
+  final String title;
+  final String subtitle;
+  final String? infoLine;
   final AsyncValue<List<UserSport>> sports;
   final Uint8List? avatarBytes;
   final VoidCallback onAvatarTap;
@@ -163,7 +173,7 @@ class ProfileHeaderContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                email.isEmpty ? '사용자' : email,
+                title.isEmpty ? '사용자' : title,
                 style: tt.titleLarge?.copyWith(
                   color: cs.onPrimary,
                   fontWeight: FontWeight.w900,
@@ -171,6 +181,29 @@ class ProfileHeaderContent extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onPrimary.withValues(alpha: 0.82),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              if (infoLine != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  infoLine!,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onPrimary.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: AppSpacing.xs,

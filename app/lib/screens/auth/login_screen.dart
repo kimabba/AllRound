@@ -39,32 +39,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _emailAuth() async {
+  // onChanged: 바텀시트의 setSheetState. 부모 setState 만으로는 시트가
+  // 리빌드되지 않아 에러/로딩이 시트에 반영되지 않으므로 함께 갱신한다.
+  Future<void> _emailAuth({VoidCallback? onChanged}) async {
+    void set(VoidCallback fn) {
+      setState(fn);
+      onChanged?.call();
+    }
+
     final email = _email.text.trim();
     final password = _password.text;
     final passwordConfirm = _passwordConfirm.text;
     if (email.isEmpty) {
-      setState(() => _error = '이메일을 입력해 주세요.');
+      set(() => _error = '이메일을 입력해 주세요.');
       return;
     }
     if (!email.contains('@') || !email.contains('.')) {
-      setState(() => _error = '이메일 형식으로 입력해 주세요.');
+      set(() => _error = '이메일 형식으로 입력해 주세요.');
       return;
     }
     if (password.isEmpty) {
-      setState(() => _error = '비밀번호를 입력해 주세요.');
+      set(() => _error = '비밀번호를 입력해 주세요.');
       return;
     }
     if (_signUp && password.length < 6) {
-      setState(() => _error = '비밀번호는 6자 이상으로 입력해 주세요.');
+      set(() => _error = '비밀번호는 6자 이상으로 입력해 주세요.');
       return;
     }
     if (_signUp && password != passwordConfirm) {
-      setState(() => _error = '비밀번호가 서로 일치하지 않습니다.');
+      set(() => _error = '비밀번호가 서로 일치하지 않습니다.');
       return;
     }
 
-    setState(() {
+    set(() {
       _busy = true;
       _error = null;
     });
@@ -84,11 +91,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await supa.auth.signInWithPassword(email: email, password: password);
       }
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      set(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      set(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) set(() => _busy = false);
     }
   }
 
@@ -198,7 +205,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       obscureText: true,
                       textInputAction:
                           _signUp ? TextInputAction.next : TextInputAction.done,
-                      onSubmitted: (_) => _busy ? null : _emailAuth(),
+                      onSubmitted: (_) => _busy
+                          ? null
+                          : _emailAuth(
+                              onChanged: () => setSheetState(() {}),
+                            ),
                     ),
                     if (_signUp) ...[
                       const SizedBox(height: AppSpacing.md),
@@ -209,7 +220,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         hintText: '비밀번호를 한 번 더 입력',
                         obscureText: true,
                         textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _busy ? null : _emailAuth(),
+                        onSubmitted: (_) => _busy
+                            ? null
+                            : _emailAuth(
+                                onChanged: () => setSheetState(() {}),
+                              ),
                       ),
                     ],
                     if (_error != null) ...[
@@ -224,7 +239,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     FilledButton(
-                      onPressed: _busy ? null : _emailAuth,
+                      onPressed: _busy
+                          ? null
+                          : () => _emailAuth(
+                                onChanged: () => setSheetState(() {}),
+                              ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(

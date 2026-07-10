@@ -26,6 +26,13 @@ final currentUserProvider = Provider<User?>((ref) {
   return ref.watch(supabaseProvider).auth.currentUser;
 });
 
+/// 본인 프로필(실명·닉네임·생년월일)
+final myProfileProvider = FutureProvider<UserProfile?>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myProfile();
+});
+
 /// 사용자 종목·등급 목록
 final userSportsProvider = FutureProvider<List<UserSport>>((ref) async {
   // auth state 변경에 따라 invalidate
@@ -112,7 +119,16 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
   final sport = ref.watch(activeSportProvider);
-  return api.searchTournaments(sport: sport, onlyMyGrade: true, limit: 50);
+  final sports = ref.watch(userSportsProvider).valueOrNull ?? const [];
+  final tennisOrgs = ref.watch(userTennisOrgsProvider).valueOrNull ?? const [];
+  // 등급·협회 등록이 하나도 없으면 자격 매칭이 전부 실패해 목록이 빈다.
+  // 그 경우엔 전체 published 를 보여준다(등록이 있으면 내 등급 필터 유지).
+  final hasGradeBasis = sports.isNotEmpty || tennisOrgs.isNotEmpty;
+  return api.searchTournaments(
+    sport: sport,
+    onlyMyGrade: hasGradeBasis,
+    limit: 50,
+  );
 });
 
 /// public.users.role 을 읽어 어드민 여부 반환.
