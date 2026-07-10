@@ -3,14 +3,38 @@ import 'api_base.dart';
 
 /// 유저 프로필·종목·협회·지역 API.
 mixin UserApi on ApiBase {
-  Future<void> saveDisplayName(String displayName) async {
+  /// 프로필 저장. 실명(name)은 대회·클럽용, 닉네임(nickname)은 앱 활동용,
+  /// 생년월일(birth_date)은 연령·합산나이 대회 자격 매칭 내부용.
+  Future<void> saveProfile({
+    required String name,
+    String? nickname,
+    required DateTime birthDate,
+  }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
 
+    final trimmedNickname = nickname?.trim();
     await supabase.rpc('ensure_profile');
-    await supabase
+    await supabase.from('users').update({
+      'name': name,
+      'nickname':
+          trimmedNickname == null || trimmedNickname.isEmpty ? null : trimmedNickname,
+      // date 컬럼: 'YYYY-MM-DD' 형식 (시간대 영향 없음).
+      'birth_date':
+          birthDate.toIso8601String().split('T').first,
+    }).eq('id', userId);
+  }
+
+  /// 본인 프로필(실명·닉네임·생년월일). row 없으면 null.
+  Future<UserProfile?> myProfile() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+    final row = await supabase
         .from('users')
-        .update({'name': displayName}).eq('id', userId);
+        .select('name, nickname, birth_date')
+        .eq('id', userId)
+        .maybeSingle();
+    return row == null ? null : UserProfile.fromJson(row);
   }
 
   Future<List<UserSport>> myUserSports() async {

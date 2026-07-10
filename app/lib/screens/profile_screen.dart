@@ -226,16 +226,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.watch(currentUserProvider);
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
+    final profile = ref.watch(myProfileProvider).valueOrNull;
 
     final email = user?.email ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
+    final emailPrefix = email.contains('@') ? email.split('@').first : email;
+    // 앱 활동 표시명: 닉네임 → 실명 → 이메일 앞부분 → '사용자'
+    final displayName = profile?.displayName ??
+        (emailPrefix.isEmpty ? '사용자' : emailPrefix);
+    // 본인만 보는 정보 줄: 실명(표시명과 다를 때만) · 만 나이
+    final realName = profile?.name?.trim();
+    final age = profile?.ageOn(DateTime.now());
+    final infoParts = <String>[
+      if (realName != null && realName.isNotEmpty && realName != displayName)
+        realName,
+      if (age != null) '만 $age세',
+    ];
+    final infoLine = infoParts.isEmpty ? null : infoParts.join(' · ');
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
           ProfileHeroSliver(
             initial: initial,
-            email: email,
+            title: displayName,
+            subtitle: email,
+            infoLine: infoLine,
             sports: sports,
             tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
