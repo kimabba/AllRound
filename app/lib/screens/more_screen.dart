@@ -59,7 +59,7 @@ class MoreScreen extends ConsumerWidget {
         color: cs.onSurfaceVariant,
         onTap: () => launchUrl(
           Uri.parse(
-            'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/terms-of-service.html',
+            'https://kimabba.github.io/AllRound/legal/terms-of-service.html',
           ),
           mode: LaunchMode.externalApplication,
         ),
@@ -71,7 +71,7 @@ class MoreScreen extends ConsumerWidget {
         color: cs.onSurfaceVariant,
         onTap: () => launchUrl(
           Uri.parse(
-            'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/legal/privacy-policy.html',
+            'https://kimabba.github.io/AllRound/legal/privacy-policy.html',
           ),
           mode: LaunchMode.externalApplication,
         ),
