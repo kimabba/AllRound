@@ -97,13 +97,8 @@ class SimpleActionCard extends StatelessWidget {
           color: cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: cs.outlineVariant),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.035),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          // 다크모드에서는 그림자 대신 surface 단계로 깊이 표현.
+          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
         child: Row(
           children: [

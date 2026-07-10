@@ -366,13 +366,8 @@ class SimpleClubTile extends StatelessWidget {
           color: cs.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
-            ),
-          ],
+          // 다크모드에서는 그림자 대신 surface 단계로 깊이 표현.
+          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
         child: Row(
           children: [

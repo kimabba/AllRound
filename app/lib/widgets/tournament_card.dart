@@ -34,8 +34,8 @@ class TournamentCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final radius = BorderRadius.circular(14);
+    final brightness = Theme.of(context).brightness;
+    const radius = AppRadius.card;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -44,10 +44,10 @@ class TournamentCard extends StatelessWidget {
         borderRadius: radius,
         child: Ink(
           decoration: BoxDecoration(
-            color: isLight ? Colors.white : cs.surfaceContainerLow,
+            color: cs.surfaceContainerLow,
             borderRadius: radius,
             border: Border.all(color: cs.outlineVariant),
-            boxShadow: isLight ? AppShadows.card : null,
+            boxShadow: AppShadows.cardFor(brightness),
           ),
           child: InkWell(
             onTap: onTap,
@@ -94,19 +94,26 @@ class TournamentCard extends StatelessWidget {
                       ],
                       const Spacer(),
                       if (onFavoriteToggle != null)
-                        GestureDetector(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            onFavoriteToggle!();
-                          },
-                          child: Icon(
-                            isFavorite
-                                ? Icons.bookmark_rounded
-                                : Icons.bookmark_outline_rounded,
-                            size: 22,
-                            color: isFavorite
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
+                        // 36px 히트영역 확보 — 아이콘만 노출하던 22px 탭타깃 개선.
+                        SizedBox.square(
+                          dimension: 36,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            iconSize: 22,
+                            visualDensity: VisualDensity.compact,
+                            tooltip: isFavorite ? '관심 해제' : '관심 대회 저장',
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              onFavoriteToggle!();
+                            },
+                            icon: Icon(
+                              isFavorite
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_outline_rounded,
+                              color: isFavorite
+                                  ? cs.primary
+                                  : cs.onSurfaceVariant,
+                            ),
                           ),
                         ),
                     ],
@@ -127,25 +134,14 @@ class TournamentCard extends StatelessWidget {
                     label: '대회',
                     value: _dateText(),
                   ),
-                  const SizedBox(height: 4),
-                  if (_locationText().isNotEmpty)
-                    Row(
-                      children: [
-                        Icon(Icons.place_rounded, size: 16, color: cs.primary),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            _locationText(),
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                  if (_locationText().isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    _InfoLine(
+                      icon: Icons.place_rounded,
+                      label: '장소',
+                      value: _locationText(),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -177,10 +173,10 @@ class TournamentCard extends StatelessWidget {
         );
       }
       if (daysLeft <= 3) {
-        return const _StatusBadgeData(
+        return _StatusBadgeData(
           label: '마감임박',
-          foreground: Color(0xFFDC2626),
-          background: Color(0xFFFEE2E2),
+          foreground: cs.error,
+          background: cs.errorContainer,
         );
       }
     }
@@ -238,13 +234,16 @@ class _InfoLine extends StatelessWidget {
     return Row(
       children: [
         Icon(icon, size: 14, color: cs.onSurfaceVariant),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpacing.xs),
         // 라벨: 작은 캡슐로 "무엇에 대한 날짜인지" 즉시 인지시킨다.
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 1,
+          ),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(AppRadius.xs),
           ),
           child: Text(
             label,
@@ -254,12 +253,12 @@ class _InfoLine extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
             value,
-            style: tt.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
+            style: tt.bodySmall?.copyWith(
+              color: cs.onSurface,
               fontWeight: FontWeight.w600,
             ),
             maxLines: 1,
@@ -284,10 +283,13 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         label,
