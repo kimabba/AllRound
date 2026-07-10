@@ -65,6 +65,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _error;
   bool _existingSportsReady = false;
   bool _existingRegionReady = false;
+  bool _existingProfileReady = false;
   bool _profilePhotoReady = false;
   bool _sportsTouched = false;
 
@@ -241,6 +242,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ? (fallbackSport ?? primarySport)
             : primarySport;
         _existingSportsReady = true;
+      });
+    });
+  }
+
+  void _prepareExistingProfile(UserProfile? profile) {
+    // profile == null 은 프로바이더가 아직 로딩 중이거나, 신규 유저라 row가
+    // 없다는 뜻이다. 신규 유저는 채울 값이 없으므로 대기만 하면 되고,
+    // 아래 가드가 두 경우를 함께 처리한다. 재진입(종목 추가·맞춤 설정) 시
+    // 기존 실명/닉네임/생년월일을 복원해 재입력 강요·닉네임 유실을 막는다.
+    if (_existingProfileReady || profile == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _existingProfileReady) return;
+      setState(() {
+        // 사용자가 이미 직접 입력한 값은 덮어쓰지 않는다.
+        if (_realName.text.trim().isEmpty &&
+            (profile.name?.isNotEmpty ?? false)) {
+          _realName.text = profile.name!;
+        }
+        if (_nickname.text.trim().isEmpty &&
+            (profile.nickname?.isNotEmpty ?? false)) {
+          _nickname.text = profile.nickname!;
+        }
+        _birthDate ??= profile.birthDate;
+        _existingProfileReady = true;
       });
     });
   }
@@ -469,6 +495,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     _prepareProfilePhoto();
+    _prepareExistingProfile(ref.watch(myProfileProvider).valueOrNull);
     _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
     _prepareExistingRegion(ref.watch(userTennisOrgsProvider).valueOrNull);
     final cs = Theme.of(context).colorScheme;
