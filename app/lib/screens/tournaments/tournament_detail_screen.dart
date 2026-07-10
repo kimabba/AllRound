@@ -714,8 +714,10 @@ class _RegulationFieldRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
+      // 카드 패딩(lg)에 맞춰 본문 폭 확보 — 56px 들여쓰기는 좁은 화면에서
+      // 요강 텍스트를 과도하게 압축한다(가독성).
       padding: const EdgeInsets.symmetric(
-        horizontal: 56,
+        horizontal: AppSpacing.lg,
         vertical: AppSpacing.sm,
       ),
       child: Row(
@@ -758,7 +760,7 @@ class _RegulationNotes extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 56),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -823,7 +825,7 @@ class _RegulationBody extends StatelessWidget {
     final lines = parseRegulationBody(body);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 56),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

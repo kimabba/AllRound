@@ -156,7 +156,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             child: const Text('탈퇴'),
           ),
         ],
@@ -199,12 +202,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
             children: [
               Icon(Icons.error_outline_rounded,
                   size: 48, color: cs.onSurfaceVariant),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 '클럽을 불러올 수 없습니다',
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               FilledButton.tonal(
                 onPressed: _fetchClub,
                 child: const Text('다시 시도'),
@@ -676,7 +679,7 @@ class _IntroTab extends StatelessWidget {
             icon: const Icon(Icons.exit_to_app_rounded),
             label: const Text('탈퇴'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
+              foregroundColor: cs.error,
               minimumSize: const Size.fromHeight(50),
             ),
           ),
@@ -986,7 +989,10 @@ class _MembersTab extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             child: const Text('강퇴'),
           ),
         ],
@@ -1628,7 +1634,10 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             child: const Text('강퇴'),
           ),
         ],
@@ -1757,7 +1766,10 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             child: const Text('삭제'),
           ),
         ],

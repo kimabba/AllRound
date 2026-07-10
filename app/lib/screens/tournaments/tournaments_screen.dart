@@ -390,7 +390,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           ),
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppRadius.card,
             border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
           ),
           child: Row(
@@ -601,18 +601,18 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final today = _dateOnly(DateTime.now());
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        // 다크모드에서도 카드 표면이 유지되도록 surface 토큰 사용 (Colors.white 금지).
+        color: cs.surfaceContainerLow,
+        borderRadius: AppRadius.hero,
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
       ),
       child: Column(
         children: [
@@ -796,7 +796,11 @@ class _CalendarDayCell extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isSelected ? cs.onPrimary : cs.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: cs.surface, width: 1.5),
+                        // 캘린더 카드 배경(surfaceContainerLow)과 동일한 테두리로 배지 분리.
+                        border: Border.all(
+                          color: cs.surfaceContainerLow,
+                          width: 1.5,
+                        ),
                       ),
                       child: Text(
                         count > 9 ? '9+' : '$count',
@@ -836,7 +840,7 @@ class _EmptySelectedDateCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.hero,
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
       ),
       child: Row(

@@ -21,14 +21,14 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.person_rounded,
         label: 'MY',
         subtitle: '프로필, 종목 설정, 내 클럽, 대회 기록',
-        color: const Color(0xFF2563EB),
+        color: cs.primary,
         onTap: () => context.go('/profile'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
         label: '관심',
         subtitle: '관심 대회와 클럽 모아보기',
-        color: const Color(0xFFF59E0B),
+        color: cs.tertiary,
         onTap: () => context.go('/favorites'),
       ),
     ];
@@ -46,7 +46,7 @@ class MoreScreen extends ConsumerWidget {
           icon: Icons.admin_panel_settings_rounded,
           label: '어드민',
           subtitle: '관리자 메뉴',
-          color: const Color(0xFF64748B),
+          color: cs.onSurfaceVariant,
           onTap: () => context.go('/admin'),
         ),
     ];
@@ -139,7 +139,7 @@ class _MenuSection extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: AppRadius.hero,
             border: Border.all(
               color: cs.outlineVariant.withValues(alpha: 0.5),
             ),
@@ -178,7 +178,7 @@ class _MenuRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppRadius.hero,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -191,7 +191,7 @@ class _MenuRow extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(
                   color: item.color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppRadius.card,
                 ),
                 child: Icon(item.icon, color: item.color, size: 24),
               ),
@@ -243,7 +243,7 @@ class _LegalSection extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.hero,
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.45),
         ),

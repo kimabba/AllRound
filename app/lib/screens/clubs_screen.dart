@@ -312,7 +312,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     _searchError!,
-                    style: TextStyle(color: cs.error),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: cs.error),
                   ),
                 ],
                 if (displayedRecommendationClubs.isEmpty)
@@ -334,9 +337,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         onFavoriteToggle: _toggleClubFavorite,
                       ),
                     ),
-                const SizedBox(height: AppSpacing.lg),
                 // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
                 if (_nearbyNewClubsEnabled) ...[
+                  const SizedBox(height: AppSpacing.lg),
                   SimplePanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,7 +385,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     icon: Icons.person_add_alt_1_rounded,
                     title: '팀원모집',
                     subtitle: '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
-                    color: const Color(0xFFEAF7F1),
+                    color: cs.secondaryContainer,
                     onTap: () => _openTeamRecruitingSheet(managedClubs),
                   ),
                   const SizedBox(height: AppSpacing.xl),
@@ -400,18 +403,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   onOpenPost: _openRecruitingDetail,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '가입한 클럽',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
+                const SimpleSectionHeader(title: '가입한 클럽'),
                 const SizedBox(height: AppSpacing.sm),
                 SimpleClubTile(
                   club: joinedClubs.isEmpty ? null : joinedClubs.first,
