@@ -7,17 +7,17 @@
  *   - 참가비(entry_fee) 파싱은 현재 크롤러 미구현 (정적 파싱 불가)
  *   - 빈 HTML 테이블
  *   - 요강 추출 비정상 형식
- *   - extractGJDivisions 엣지 케이스
+ *   - extractSidoStdDivisions 엣지 케이스
  */
 import { assertEquals } from 'std/assert/mod.ts';
 import { DOMParser } from 'deno-dom';
 import {
   extractApplicationDeadline,
   extractDate,
-  extractGJDivisions,
   extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
+  extractSidoStdDivisions,
   extractVenue,
 } from '../_shared/crawler.ts';
 
@@ -128,40 +128,50 @@ Deno.test('extractRegulationNotes: 빈 문서 → 빈 배열', () => {
   assertEquals(extractRegulationNotes(dom), []);
 });
 
-// ---- extractGJDivisions 엣지 케이스 ----
+// ---- extractSidoStdDivisions 엣지 케이스 ----
 
-Deno.test('extractGJDivisions: 아무 부서도 매칭 안 되면 기본값 (오픈부 + 일반부)', () => {
-  const result = extractGJDivisions('제5회 영암 대회', 'gj');
+Deno.test('extractSidoStdDivisions: 아무 부서도 매칭 안 되면 기본값 (오픈부 + 일반부)', () => {
+  const result = extractSidoStdDivisions('제5회 영암 대회', 'gj');
   assertEquals(result.codes, ['gj_m_open', 'gj_m_general']);
   assertEquals(result.label, '오픈부 · 일반부');
 });
 
-Deno.test('extractGJDivisions: "골드부" 단일 매칭', () => {
-  const result = extractGJDivisions('골드부 경기일정', 'gj');
+Deno.test('extractSidoStdDivisions: "골드부" 단일 매칭', () => {
+  const result = extractSidoStdDivisions('골드부 경기일정', 'gj');
   assertEquals(result.codes, ['gj_m_gold']);
   assertEquals(result.label, '골드부');
 });
 
-Deno.test('extractGJDivisions: 복수 부서 매칭 (골드부 + 일반부 + 여자오픈부)', () => {
-  // "여자오픈부" 에 "오픈" 이 포함돼 m_open 도 매칭됨 (keyword 순서상 먼저)
-  const result = extractGJDivisions('골드부 일반부 여자오픈부 대회', 'jn');
+Deno.test('extractSidoStdDivisions: 복수 부서 매칭 (골드부 + 일반부 + 여자오픈부)', () => {
+  const result = extractSidoStdDivisions('골드부 일반부 여자오픈부 대회', 'jn');
   assertEquals(result.codes, ['jn_m_open', 'jn_m_gold', 'jn_m_general', 'jn_w_open']);
   assertEquals(result.label, '오픈부 · 골드부 · 일반부 · 여자오픈부');
 });
 
-Deno.test('extractGJDivisions: "부부부" 매칭', () => {
-  const result = extractGJDivisions('부부부 대회', 'gj');
+Deno.test('extractSidoStdDivisions: "부부부" 매칭', () => {
+  const result = extractSidoStdDivisions('부부부 대회', 'gj');
   assertEquals(result.codes, ['gj_couple']);
   assertEquals(result.label, '부부부');
 });
 
-Deno.test('extractGJDivisions: "크로스" 매칭', () => {
-  const result = extractGJDivisions('크로스 대회', 'jn');
+Deno.test('extractSidoStdDivisions: "크로스" 매칭', () => {
+  const result = extractSidoStdDivisions('크로스 대회', 'jn');
   assertEquals(result.codes, ['jn_cross']);
   assertEquals(result.label, '크로스대회');
 });
 
-Deno.test('extractGJDivisions: org "jn" → 전남 prefix', () => {
-  const result = extractGJDivisions('신인부 대회', 'jn');
+Deno.test('extractSidoStdDivisions: org "jn" → 전남 prefix', () => {
+  const result = extractSidoStdDivisions('신인부 대회', 'jn');
   assertEquals(result.codes, ['jn_m_rookie']);
+});
+
+// 일반화: 임의 org prefix 동작 (비-gj/jn)
+Deno.test('extractSidoStdDivisions: 임의 org "kta" prefix', () => {
+  const result = extractSidoStdDivisions('골드부 대회', 'kta');
+  assertEquals(result.codes, ['kta_m_gold']);
+});
+
+Deno.test('extractSidoStdDivisions: 임의 org "seoul" prefix', () => {
+  const result = extractSidoStdDivisions('신인부 대회', 'seoul');
+  assertEquals(result.codes, ['seoul_m_rookie']);
 });

@@ -24,10 +24,10 @@ import {
   type CrawlerTournament,
   extractApplicationDeadline,
   extractDate,
-  extractGJDivisions,
   extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
+  extractSidoStdDivisions,
   extractVenue,
   saveRawDocument,
   upsertTournament,
@@ -151,7 +151,7 @@ async function fetchDetail(
   detailUrl: string,
   region: string,
   titleHint: string,
-  org: 'gj' | 'jn',
+  org: string,
 ): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
   if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
@@ -241,7 +241,7 @@ async function fetchDetail(
   const startDate = tableStartDate ?? extractDate(bodyText) ?? extractDate(title);
   if (!startDate) return { rawHtml: html, tournament: null };
 
-  const { codes: gradeCodes, label: divisionLabel } = extractGJDivisions(
+  const { codes: gradeCodes, label: divisionLabel } = extractSidoStdDivisions(
     `${title} ${bodyText}`,
     org,
   );
