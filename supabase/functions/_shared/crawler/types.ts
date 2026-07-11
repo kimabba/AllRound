@@ -16,6 +16,7 @@ export interface CrawlSource {
   slug: string;
   url: string;
   region: string | null;
+  org_code: string | null;
 }
 
 /**

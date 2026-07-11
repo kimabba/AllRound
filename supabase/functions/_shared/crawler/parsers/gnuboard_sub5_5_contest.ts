@@ -24,10 +24,10 @@ import {
   type CrawlerTournament,
   extractApplicationDeadline,
   extractDate,
-  extractGJDivisions,
   extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
+  extractSidoStdDivisions,
   extractVenue,
   saveRawDocument,
   upsertTournament,
@@ -151,7 +151,7 @@ async function fetchDetail(
   detailUrl: string,
   region: string,
   titleHint: string,
-  org: 'gj' | 'jn',
+  org: string,
 ): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
   if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
@@ -241,7 +241,7 @@ async function fetchDetail(
   const startDate = tableStartDate ?? extractDate(bodyText) ?? extractDate(title);
   if (!startDate) return { rawHtml: html, tournament: null };
 
-  const { codes: gradeCodes, label: divisionLabel } = extractGJDivisions(
+  const { codes: gradeCodes, label: divisionLabel } = extractSidoStdDivisions(
     `${title} ${bodyText}`,
     org,
   );
@@ -416,8 +416,17 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
     };
   }
 
-  // 4) 상세 페이지 처리
-  const org: 'gj' | 'jn' = source.slug.includes('gwangju') ? 'gj' : 'jn';
+  // 4) 상세 페이지 처리 — 협회는 crawl_sources.org_code 로 결정(추론 금지).
+  const org = source.org_code;
+  if (!org) {
+    return {
+      fetched_count: 0,
+      inserted_count: 0,
+      updated_count: 0,
+      status: 'error',
+      error: 'crawl_sources.org_code 미설정 — 파서가 org를 추론하지 않는다',
+    };
+  }
   const errors: string[] = [];
   let parseFailures = 0;
   for (const item of items.slice(0, 30)) {

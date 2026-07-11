@@ -700,16 +700,16 @@ export function extractRegulationNotes(doc: QueryableNode): string[] {
 }
 
 /**
- * 광주/전남 생활체육 협회 공고 텍스트에서 부서 코드 추출.
- * org: 'gj' | 'jn' — prefix로 사용됨 (예: 'gj_m_gold')
+ * sido_std 부서체계(오픈/골드/일반/신인…)를 쓰는 협회 공고 텍스트에서 부서 코드 추출.
+ * org: 협회 코드 prefix(예: 'gj','jn','kta') — prefix로 사용됨 (예: 'gj_m_gold')
  *
  * 반환값:
  *   codes:  eligible_grades 에 저장할 {org}_{suffix} 코드 배열
  *   label:  division_label_local 에 저장할 한국어 표시 문자열 (예: "골드부 · 일반부")
  */
-export function extractGJDivisions(
+export function extractSidoStdDivisions(
   text: string,
-  org: 'gj' | 'jn',
+  org: string,
 ): { codes: string[]; label: string } {
   const KEYWORD_MAP: Array<{ keywords: string[]; suffix: string; label: string }> = [
     { keywords: ['오픈부', '남자오픈', '오픈'], suffix: 'm_open', label: '오픈부' },
@@ -752,7 +752,7 @@ export function extractGJDivisions(
 }
 
 /**
- * @deprecated extractGJDivisions 사용 권장.
+ * @deprecated extractSidoStdDivisions 사용 권장.
  * 구 파서 호환용으로만 유지.
  */
 export function extractTennisGradesFromText(_text: string): string[] {

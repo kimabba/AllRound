@@ -32,10 +32,10 @@ DB-driven 크롤러 소스 관리. 어드민 UI에서 CRUD 가능.
 ## 파서 모듈 (`_shared/crawler/parsers/`)
 - `gnuboard_sub5_5_contest.ts` — 그누보드 게시판 파서 (광주/전남 테니스 사용)
 - 파서별 `fetchListing()` + `fetchDetail()` 구현
-- `fetchDetail()`에서 `extractGJDivisions()` 호출하여 부서코드 추출
+- `fetchDetail()`에서 `extractSidoStdDivisions()` 호출하여 부서코드 추출
 
 ## 부서코드 추출 흐름
-1. 상세 페이지 텍스트에서 `extractGJDivisions(text, org)` 호출
+1. 상세 페이지 텍스트에서 `extractSidoStdDivisions(text, org)` 호출
 2. `GJ_KEYWORD_TO_SUFFIX` 매핑으로 키워드 → 코드 변환
 3. 결과: `eligible_grades` (코드 배열) + `division_label_local` (원본 텍스트)
 

@@ -46,7 +46,7 @@ kata_s, kata_a, kata_b, kata_c, kata_d
 
 ## 크롤러 부서 추출
 
-`extractGJDivisions(text, org)` — 대회 요강 텍스트에서 부서명 매칭:
+`extractSidoStdDivisions(text, org)` — 대회 요강 텍스트에서 부서명 매칭:
 - `GJ_KEYWORD_TO_SUFFIX` 키워드 매핑 사용
 - 예: "골드부 · 일반부" → `['gj_m_gold', 'gj_m_general']`
 - 매칭 없으면 기본값: `m_open + m_general`

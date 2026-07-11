@@ -38,6 +38,7 @@ interface SourceRow {
   slug: string;
   url: string;
   region: string | null;
+  org_code: string | null;
   parser_module: string;
   enabled: boolean;
   last_crawled_at: string | null;
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
   let query = supabase
     .from('crawl_sources')
     .select(
-      'id, slug, url, region, parser_module, enabled, last_crawled_at, last_etag, last_modified',
+      'id, slug, url, region, org_code, parser_module, enabled, last_crawled_at, last_etag, last_modified',
     )
     .eq('enabled', true);
   if (body.slug) query = query.eq('slug', body.slug);
@@ -164,6 +165,7 @@ Deno.serve(async (req) => {
       slug: row.slug,
       url: row.url,
       region: row.region,
+      org_code: row.org_code,
     };
 
     // B6 (Codex 검토): 동시 실행 방지 — DB 컬럼 advisory lock 패턴.
