@@ -7,7 +7,7 @@
  *   - 참가비(entry_fee) 파싱은 현재 크롤러 미구현 (정적 파싱 불가)
  *   - 빈 HTML 테이블
  *   - 요강 추출 비정상 형식
- *   - extractSidoStdDivisions 엣지 케이스
+ *   - mapDivisionsByDict 엣지 케이스
  */
 import { assertEquals } from 'std/assert/mod.ts';
 import { DOMParser } from 'deno-dom';
@@ -17,9 +17,9 @@ import {
   extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
-  extractSidoStdDivisions,
   extractVenue,
 } from '../_shared/crawler.ts';
+import { mapDivisionsByDict, type DivisionDictRow } from '../_shared/crawler/divisions.ts';
 
 function parseFixture(html: string) {
   const dom = new DOMParser().parseFromString(html, 'text/html');
@@ -128,50 +128,56 @@ Deno.test('extractRegulationNotes: 빈 문서 → 빈 배열', () => {
   assertEquals(extractRegulationNotes(dom), []);
 });
 
-// ---- extractSidoStdDivisions 엣지 케이스 ----
+// ---- mapDivisionsByDict 엣지 케이스 ----
 
-Deno.test('extractSidoStdDivisions: 아무 부서도 매칭 안 되면 기본값 (오픈부 + 일반부)', () => {
-  const result = extractSidoStdDivisions('제5회 영암 대회', 'gj');
-  assertEquals(result.codes, ['gj_m_open', 'gj_m_general']);
-  assertEquals(result.label, '오픈부 · 일반부');
+// gj 부서 사전 fixture (P1 tennis_divisions 시드 미러, code 기준 정렬)
+const GJ_DICT: DivisionDictRow[] = [
+  { code: 'gj_m_open', synonyms: ['오픈부', '남자오픈', '오픈'], label_ko: '오픈부' },
+  { code: 'gj_m_gold', synonyms: ['골드부', '골드'], label_ko: '골드부' },
+  { code: 'gj_m_general', synonyms: ['남자일반부', '일반부', '남자일반'], label_ko: '일반부' },
+  { code: 'gj_m_instructor', synonyms: ['지도자부', '지도자'], label_ko: '지도자부' },
+  { code: 'gj_m_masters', synonyms: ['마스터즈부', '마스터즈'], label_ko: '마스터즈부' },
+  { code: 'gj_m_rookie', synonyms: ['남자신인부', '신인부', '신인'], label_ko: '신인부' },
+  { code: 'gj_m_veteran', synonyms: ['베테랑부', '베테랑'], label_ko: '베테랑부' },
+  { code: 'gj_m_beginner', synonyms: ['초급자부', '비입상자부', '초급자'], label_ko: '초급자부' },
+  { code: 'gj_w_open', synonyms: ['여자오픈부', '여자오픈'], label_ko: '여자오픈부' },
+  { code: 'gj_w_winner', synonyms: ['우승자부', '여자우승자', '국화', '금배'], label_ko: '여자우승자부' },
+  { code: 'gj_w_rookie', synonyms: ['여자신인부', '여자신인', '개나리'], label_ko: '여자신인부' },
+  { code: 'gj_couple', synonyms: ['부부부', '부부'], label_ko: '부부부' },
+  { code: 'gj_cross', synonyms: ['크로스'], label_ko: '크로스대회' },
+];
+const sorted = (a: string[]) => [...a].sort();
+
+Deno.test('mapDivisionsByDict: 미매칭 → 비움 + unmapped=true (기본값 폴백 없음)', () => {
+  const r = mapDivisionsByDict('제5회 영암 대회', GJ_DICT);
+  assertEquals(r.codes, []);
+  assertEquals(r.unmapped, true);
 });
 
-Deno.test('extractSidoStdDivisions: "골드부" 단일 매칭', () => {
-  const result = extractSidoStdDivisions('골드부 경기일정', 'gj');
-  assertEquals(result.codes, ['gj_m_gold']);
-  assertEquals(result.label, '골드부');
+Deno.test('mapDivisionsByDict: "골드부" 단일 매칭', () => {
+  const r = mapDivisionsByDict('골드부 경기일정', GJ_DICT);
+  assertEquals(r.codes, ['gj_m_gold']);
+  assertEquals(r.label, '골드부');
+  assertEquals(r.unmapped, false);
 });
 
-Deno.test('extractSidoStdDivisions: 복수 부서 매칭 (골드부 + 일반부 + 여자오픈부)', () => {
-  const result = extractSidoStdDivisions('골드부 일반부 여자오픈부 대회', 'jn');
-  assertEquals(result.codes, ['jn_m_open', 'jn_m_gold', 'jn_m_general', 'jn_w_open']);
-  assertEquals(result.label, '오픈부 · 골드부 · 일반부 · 여자오픈부');
+Deno.test('mapDivisionsByDict: 복수 매칭 — "오픈" substring이 여자오픈부에도 걸림 (집합 동치)', () => {
+  const r = mapDivisionsByDict('골드부 일반부 여자오픈부 대회', GJ_DICT);
+  assertEquals(sorted(r.codes), sorted(['gj_m_open', 'gj_m_gold', 'gj_m_general', 'gj_w_open']));
 });
 
-Deno.test('extractSidoStdDivisions: "부부부" 매칭', () => {
-  const result = extractSidoStdDivisions('부부부 대회', 'gj');
-  assertEquals(result.codes, ['gj_couple']);
-  assertEquals(result.label, '부부부');
+Deno.test('mapDivisionsByDict: "부부부" 매칭', () => {
+  const r = mapDivisionsByDict('부부부 대회', GJ_DICT);
+  assertEquals(r.codes, ['gj_couple']);
 });
 
-Deno.test('extractSidoStdDivisions: "크로스" 매칭', () => {
-  const result = extractSidoStdDivisions('크로스 대회', 'jn');
-  assertEquals(result.codes, ['jn_cross']);
-  assertEquals(result.label, '크로스대회');
+Deno.test('mapDivisionsByDict: "개나리"(synonym) → 여자신인부', () => {
+  const r = mapDivisionsByDict('개나리부 대회', GJ_DICT);
+  assertEquals(r.codes, ['gj_w_rookie']);
 });
 
-Deno.test('extractSidoStdDivisions: org "jn" → 전남 prefix', () => {
-  const result = extractSidoStdDivisions('신인부 대회', 'jn');
-  assertEquals(result.codes, ['jn_m_rookie']);
-});
-
-// 일반화: 임의 org prefix 동작 (비-gj/jn)
-Deno.test('extractSidoStdDivisions: 임의 org "kta" prefix', () => {
-  const result = extractSidoStdDivisions('골드부 대회', 'kta');
-  assertEquals(result.codes, ['kta_m_gold']);
-});
-
-Deno.test('extractSidoStdDivisions: 임의 org "seoul" prefix', () => {
-  const result = extractSidoStdDivisions('신인부 대회', 'seoul');
-  assertEquals(result.codes, ['seoul_m_rookie']);
+Deno.test('mapDivisionsByDict: 빈 사전 → unmapped', () => {
+  const r = mapDivisionsByDict('골드부', []);
+  assertEquals(r.codes, []);
+  assertEquals(r.unmapped, true);
 });
