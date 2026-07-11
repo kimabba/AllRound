@@ -700,60 +700,7 @@ export function extractRegulationNotes(doc: QueryableNode): string[] {
 }
 
 /**
- * sido_std 부서체계(오픈/골드/일반/신인…)를 쓰는 협회 공고 텍스트에서 부서 코드 추출.
- * org: 협회 코드 prefix(예: 'gj','jn','kta') — prefix로 사용됨 (예: 'gj_m_gold')
- *
- * 반환값:
- *   codes:  eligible_grades 에 저장할 {org}_{suffix} 코드 배열
- *   label:  division_label_local 에 저장할 한국어 표시 문자열 (예: "골드부 · 일반부")
- */
-export function extractSidoStdDivisions(
-  text: string,
-  org: string,
-): { codes: string[]; label: string } {
-  const KEYWORD_MAP: Array<{ keywords: string[]; suffix: string; label: string }> = [
-    { keywords: ['오픈부', '남자오픈', '오픈'], suffix: 'm_open', label: '오픈부' },
-    { keywords: ['골드부', '골드'], suffix: 'm_gold', label: '골드부' },
-    { keywords: ['남자일반부', '일반부', '남자일반'], suffix: 'm_general', label: '일반부' },
-    { keywords: ['지도자부', '지도자'], suffix: 'm_instructor', label: '지도자부' },
-    { keywords: ['마스터즈부', '마스터즈'], suffix: 'm_masters', label: '마스터즈부' },
-    { keywords: ['남자신인부', '신인부', '신인'], suffix: 'm_rookie', label: '신인부' },
-    { keywords: ['베테랑부', '베테랑'], suffix: 'm_veteran', label: '베테랑부' },
-    { keywords: ['초급자부', '비입상자부', '초급자'], suffix: 'm_beginner', label: '초급자부' },
-    { keywords: ['여자오픈부', '여자오픈'], suffix: 'w_open', label: '여자오픈부' },
-    {
-      keywords: ['우승자부', '여자우승자', '국화', '금배'],
-      suffix: 'w_winner',
-      label: '여자우승자부',
-    },
-    { keywords: ['여자신인부', '여자신인'], suffix: 'w_rookie', label: '여자신인부' },
-    { keywords: ['부부부', '부부'], suffix: 'couple', label: '부부부' },
-    { keywords: ['크로스'], suffix: 'cross', label: '크로스대회' },
-  ];
-
-  const foundCodes: string[] = [];
-  const foundLabels: string[] = [];
-
-  for (const entry of KEYWORD_MAP) {
-    const matched = entry.keywords.some((kw) => text.includes(kw));
-    if (matched) {
-      foundCodes.push(`${org}_${entry.suffix}`);
-      foundLabels.push(entry.label);
-    }
-  }
-
-  // 아무것도 매칭 안 되면 오픈부+일반부를 기본으로
-  if (foundCodes.length === 0) {
-    foundCodes.push(`${org}_m_open`, `${org}_m_general`);
-    foundLabels.push('오픈부', '일반부');
-  }
-
-  return { codes: foundCodes, label: foundLabels.join(' · ') };
-}
-
-/**
- * @deprecated extractSidoStdDivisions 사용 권장.
- * 구 파서 호환용으로만 유지.
+ * @deprecated 구 파서 호환용으로만 유지.
  */
 export function extractTennisGradesFromText(_text: string): string[] {
   return [];

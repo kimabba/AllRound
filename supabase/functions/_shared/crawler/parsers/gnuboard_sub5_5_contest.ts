@@ -27,11 +27,11 @@ import {
   extractRegulationBody,
   extractRegulationFields,
   extractRegulationNotes,
-  extractSidoStdDivisions,
   extractVenue,
   saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
+import { loadDivisionDict, mapDivisionsByDict, type DivisionDictRow } from '../divisions.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
@@ -151,7 +151,7 @@ async function fetchDetail(
   detailUrl: string,
   region: string,
   titleHint: string,
-  org: string,
+  dict: DivisionDictRow[],
 ): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
   if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
@@ -241,9 +241,9 @@ async function fetchDetail(
   const startDate = tableStartDate ?? extractDate(bodyText) ?? extractDate(title);
   if (!startDate) return { rawHtml: html, tournament: null };
 
-  const { codes: gradeCodes, label: divisionLabel } = extractSidoStdDivisions(
+  const { codes: gradeCodes, label: divisionLabel } = mapDivisionsByDict(
     `${title} ${bodyText}`,
-    org,
+    dict,
   );
 
   const deadline = tableDeadline ?? extractApplicationDeadline(bodyText) ?? undefined;
@@ -427,11 +427,13 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
       error: 'crawl_sources.org_code 미설정 — 파서가 org를 추론하지 않는다',
     };
   }
+  // org 사전을 crawl당 1회 로드(detail마다 재조회 금지)
+  const dict = await loadDivisionDict(ctx.audit.supabase, org);
   const errors: string[] = [];
   let parseFailures = 0;
   for (const item of items.slice(0, 30)) {
     try {
-      const result = await fetchDetail(item.url, region, item.title, org);
+      const result = await fetchDetail(item.url, region, item.title, dict);
       if (!result) continue; // fetch 실패 — 보관할 원본 자체가 없음
       if (result.tournament) {
         // 파싱 성공: tournaments upsert + 원본을 parsed 로 보관·연결
