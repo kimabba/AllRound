@@ -85,5 +85,5 @@ GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID
 | `auth.ts` | 인증 레이어 (위 참조) |
 | `supabase.ts` | userClient(JWT), serviceClient() |
 | `enums.ts` | TENNIS_DIVISIONS, GJ_KEYWORD_TO_SUFFIX 등 부서코드 정의 |
-| `crawler.ts` | extractGJDivisions, upsertTournament, 크롤러 유틸 |
+| `crawler.ts` | extractSidoStdDivisions, upsertTournament, 크롤러 유틸 |
 | `crawler/parsers/` | 사이트별 파서 모듈 |
