@@ -108,6 +108,35 @@ Deno.test('UPDATE sets regulation_* when extraction succeeds', async () => {
   assertEquals(p.regulation_body, '일시: 2026년 7월 4일');
 });
 
+Deno.test('UPDATE preserves eligible_grades when division unmapped (codes=[])', async () => {
+  // 부서 미매칭(사전 synonym 하나도 안 맞음) → eligible_grades=[] 로 들어옴.
+  // 이미 published 된 대회의 기존 등급을 조용히 비우지 않도록 보존해야 한다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  const result = await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    eligible_grades: [],
+    division_label_local: undefined,
+  });
+  assertEquals(result, 'updated');
+  const p = captured[0].payload;
+  assert(!('eligible_grades' in p), 'eligible_grades must be omitted when unmapped ([])');
+  assert(!('division_label_local' in p), 'division_label_local must be omitted when unmapped');
+});
+
+Deno.test('UPDATE sets eligible_grades when division mapped (codes non-empty)', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    eligible_grades: ['jn_m_general'],
+    division_label_local: '남자일반부',
+  });
+  const p = captured[0].payload;
+  assertEquals(p.eligible_grades, ['jn_m_general']);
+  assertEquals(p.division_label_local, '남자일반부');
+});
+
 Deno.test('UPDATE clears regulation_* with defined empty array / empty string', async () => {
   // 의도적 클리어 케이스: 추출이 "정의된 빈 결과"면 set 해 갱신.
   // (파서는 빈 결과를 undefined 로 주지만, 정의된 빈 값이 오면 그대로 반영)
