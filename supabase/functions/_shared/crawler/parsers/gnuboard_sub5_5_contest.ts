@@ -31,7 +31,7 @@ import {
   saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
-import { loadDivisionDict, mapDivisionsByDict, type DivisionDictRow } from '../divisions.ts';
+import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';

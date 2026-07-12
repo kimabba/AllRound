@@ -19,7 +19,7 @@ import {
   extractRegulationNotes,
   extractVenue,
 } from '../_shared/crawler.ts';
-import { mapDivisionsByDict, type DivisionDictRow } from '../_shared/crawler/divisions.ts';
+import { type DivisionDictRow, mapDivisionsByDict } from '../_shared/crawler/divisions.ts';
 
 function parseFixture(html: string) {
   const dom = new DOMParser().parseFromString(html, 'text/html');
@@ -141,7 +141,11 @@ const GJ_DICT: DivisionDictRow[] = [
   { code: 'gj_m_veteran', synonyms: ['베테랑부', '베테랑'], label_ko: '베테랑부' },
   { code: 'gj_m_beginner', synonyms: ['초급자부', '비입상자부', '초급자'], label_ko: '초급자부' },
   { code: 'gj_w_open', synonyms: ['여자오픈부', '여자오픈'], label_ko: '여자오픈부' },
-  { code: 'gj_w_winner', synonyms: ['우승자부', '여자우승자', '국화', '금배'], label_ko: '여자우승자부' },
+  {
+    code: 'gj_w_winner',
+    synonyms: ['우승자부', '여자우승자', '국화', '금배'],
+    label_ko: '여자우승자부',
+  },
   { code: 'gj_w_rookie', synonyms: ['여자신인부', '여자신인', '개나리'], label_ko: '여자신인부' },
   { code: 'gj_couple', synonyms: ['부부부', '부부'], label_ko: '부부부' },
   { code: 'gj_cross', synonyms: ['크로스'], label_ko: '크로스대회' },
