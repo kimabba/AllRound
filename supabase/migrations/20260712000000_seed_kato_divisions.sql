@@ -35,3 +35,26 @@ on conflict (code) do update set
   champion_only = excluded.champion_only,
   event_type = excluded.event_type,
   equiv_group = excluded.equiv_group;
+
+-- KATO 크롤 소스 등록 (parser_module = registry 키 'kato-openlist').
+-- enabled=false 초기값 — 배포·라이브 검증(force 크롤로 draft 수집 확인) 후 수동 활성화.
+-- org_code='kato'(부서사전 로드 키), region_code=null(전국), sport='tennis'.
+insert into public.crawl_sources
+  (name, slug, url, sport, region, source_type, parser_module, org_code, region_code, enabled, notes) values
+  (
+    'KATO 대회일정',
+    'tennis-kato',
+    'https://kato.kr/openList',
+    'tennis',
+    null,
+    'board',
+    'kato-openlist',
+    'kato',
+    null,
+    false,
+    'P5 신규 협회. 라이브 검증 후 enabled=true.'
+  )
+on conflict (slug) do update set
+  url = excluded.url,
+  parser_module = excluded.parser_module,
+  org_code = excluded.org_code;

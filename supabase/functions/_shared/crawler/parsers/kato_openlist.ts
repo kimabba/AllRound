@@ -178,7 +178,13 @@ export function parseKatoDetail(html: string, titleHint: string): KatoDetailFiel
 // listing 컨텐츠 해시 (서버 ETag 없을 때 변경 감지용)
 // =============================================================================
 async function listingContentHash(items: KatoListItem[]): Promise<string> {
-  const stable = items.map((it) => `${it.seq}|${it.title}|${it.status}`).sort().join('\n');
+  // 날짜범위·부서목록도 해시에 포함 — 이 값이 바뀌면(seq/title/status 동일해도)
+  // start_date/end_date/eligible_grades 가 stale 해지므로 no_change 로 넘기면 안 된다.
+  const stable = items
+    .map((it) =>
+      `${it.seq}|${it.title}|${it.status}|${it.startDate}|${it.endDate ?? ''}|${it.partsText}`
+    )
+    .sort().join('\n');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(stable));
   const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join(
     '',
