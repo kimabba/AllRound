@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KATO 등급·부서 안내 — Match-up</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 18px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.65; color: #1a1a1a; background: #fff;
+      max-width: 760px; margin-inline: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e6e6e6; background: #141414; }
+      a { color: #7db4ff; }
+      table { border-color: #333; }
+      th, td { border-color: #333; }
+      thead th { background: #1f1f1f; }
+      .muted { color: #999; }
+      .note { background: #1c1c1c; border-color: #333; }
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2 { font-size: 1.15rem; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 1px solid currentColor; }
+    .sub { margin: 0 0 20px; }
+    .muted { color: #666; font-size: 0.9rem; }
+    ul { padding-left: 20px; }
+    li { margin: 3px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+    th, td { border: 1px solid #ddd; padding: 7px 9px; text-align: left; vertical-align: top; }
+    thead th { background: #f5f5f5; font-weight: 600; }
+    td.center, th.center { text-align: center; }
+    .scroll { overflow-x: auto; }
+    .note {
+      margin-top: 12px; padding: 10px 14px; font-size: 0.85rem;
+      background: #f7f7f7; border: 1px solid #e2e2e2; border-radius: 8px;
+    }
+    code { font-size: 0.85em; background: rgba(127,127,127,.15); padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>KATO 등급·부서 안내</h1>
+  <p class="sub muted">(사)한국테니스발전협의회 · Korea Amateur Tennis Organization ·
+    <a href="https://www.kato.kr/" target="_blank" rel="noopener">kato.kr</a></p>
+
+  <h2>개요</h2>
+  <p>KATO는 전국 단위 동호인 테니스 단체 중 하나로, 대회 등급을 <strong>그룹(대회의 권위)</strong>과
+    <strong>부서(참가 자격)</strong>의 2축으로 관리합니다. 같은 부서라도 어느 그룹 대회냐에 따라
+    난이도와 랭킹 가중치가 달라집니다.</p>
+
+  <h2>그룹 체계 (6단계)</h2>
+  <p>대회의 권위를 나타내는 축입니다. 위로 갈수록 상위 대회입니다.</p>
+  <ul>
+    <li><strong>마스터즈(MA)</strong> — 최상위</li>
+    <li><strong>A그룹</strong></li>
+    <li><strong>1그룹 / 2그룹 / 3그룹</strong></li>
+    <li><strong>4그룹</strong> — 지역대회</li>
+  </ul>
+
+  <h2>부서별 자격</h2>
+  <p>참가 자격을 나타내는 축입니다. 아래 표는 Match-up이 수집·매칭에 사용하는 부서 목록으로,
+    <a href="./kato.divisions.json" target="_blank" rel="noopener"><code>kato.divisions.json</code></a>
+    정본에서 자동 생성됩니다.</p>
+  <div class="scroll">
+    <table id="div-table">
+      <thead>
+        <tr>
+          <th>부서</th>
+          <th>대상</th>
+          <th class="center">연령</th>
+          <th class="center">경기</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody><tr><td colspan="5" class="muted">부서표 불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="muted" style="margin-top:14px">주요 자격 요건(연구 자료 기준):
+    마스터즈부 = 만 55세 이상 우승자 · 챌린저부 = 마스터즈/베테랑 1회 우승자 ·
+    베테랑부 = 만 55세 이상 · 지도자부 = 만 40세 이상 + 지도자 자격 ·
+    국화부 = 만 40세 이상(혼합) · 개나리부 = 비우승자(우승 시 진급).</p>
+
+  <h2>승급 규칙</h2>
+  <ul>
+    <li>그룹 요건 충족 후 <strong>KATO 정기총회 최종심의</strong>를 통과해야 승급됩니다.</li>
+    <li>한 번에 <strong>두 단계 이상</strong> 승격할 수 없습니다.</li>
+    <li>랭킹은 ATP/WTA처럼 <strong>1년 단위</strong>로 갱신됩니다.</li>
+  </ul>
+
+  <div class="note">
+    본 안내는 이용자 편의를 위한 요약이며, 공식 규정은
+    <a href="https://www.kato.kr/katoRules" target="_blank" rel="noopener">KATO 규정 페이지</a>를
+    따릅니다. 부서·자격은 시즌에 따라 바뀔 수 있습니다.
+  </div>
+
+  <script>
+    // 부서표는 kato.divisions.json 정본에서 렌더한다(HTML 에 데이터 중복 없음 → 드리프트원 제거).
+    const GENDER = { male: '남자', female: '여자', mixed: '혼성', all: '남녀' };
+    const EVENT = { doubles: '복식', singles: '단식', mixed: '혼합복식', couple: '부부복식', team: '단체' };
+    const TIER = { rookie: '입문', intermediate: '중급', advanced: '상급', open: '오픈' };
+
+    (async () => {
+      const tbody = document.querySelector('#div-table tbody');
+      try {
+        const res = await fetch('./kato.divisions.json', { cache: 'no-cache' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const kb = await res.json();
+        const rows = kb.divisions.map((d) => {
+          const target = [GENDER[d.gender] || d.gender, TIER[d.skill_tier] || '']
+            .filter(Boolean).join(' · ');
+          const age = d.age_min ? `만 ${d.age_min}세+` : '—';
+          const flags = [d.champion_only ? '우승자부' : ''].filter(Boolean).join(', ') || '—';
+          return `<tr>
+            <td><strong>${d.label_ko}</strong></td>
+            <td>${target}</td>
+            <td class="center">${age}</td>
+            <td class="center">${EVENT[d.event_type] || d.event_type}</td>
+            <td>${flags}</td>
+          </tr>`;
+        }).join('');
+        tbody.innerHTML = rows;
+      } catch (e) {
+        tbody.innerHTML =
+          `<tr><td colspan="5" class="muted">부서표를 불러오지 못했습니다 (${e.message}).</td></tr>`;
+      }
+    })();
+  </script>
+</body>
+</html>

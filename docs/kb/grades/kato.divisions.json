@@ -1,0 +1,129 @@
+{
+  "org_code": "kato",
+  "org_name_ko": "한국테니스발전협의회",
+  "org_label": "KATO",
+  "source_url": "https://kato.kr/openList",
+  "note": "기계 판독 정본. tennis_divisions seed(20260712000000_seed_kato_divisions.sql)·kato.html 뷰가 이 파일과 일치하도록 grade_kb_verify_test.ts 가 CI 에서 강제한다. 협회가 체계를 바꾸면 여기를 먼저 수정.",
+  "divisions": [
+    {
+      "code": "kato_gaenari",
+      "org_code": "kato",
+      "label_ko": "개나리부",
+      "synonyms": ["개나리부", "개나리"],
+      "skill_tier": "rookie",
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_gukhwa",
+      "org_code": "kato",
+      "label_ko": "국화부",
+      "synonyms": ["국화부", "국화"],
+      "skill_tier": "intermediate",
+      "gender": "mixed",
+      "age_min": 40,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_challenger",
+      "org_code": "kato",
+      "label_ko": "챌린저부",
+      "synonyms": ["챌린저부", "챌린저", "챌린져부", "챌린져"],
+      "skill_tier": "advanced",
+      "gender": "all",
+      "age_min": null,
+      "champion_only": true,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_masters",
+      "org_code": "kato",
+      "label_ko": "마스터스부",
+      "synonyms": ["마스터스부", "마스터스", "마스터즈부", "마스터즈"],
+      "skill_tier": "open",
+      "gender": "all",
+      "age_min": 55,
+      "champion_only": true,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_veteran",
+      "org_code": "kato",
+      "label_ko": "베테랑부",
+      "synonyms": ["베테랑부", "베테랑"],
+      "skill_tier": "intermediate",
+      "gender": "all",
+      "age_min": 55,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_instructor",
+      "org_code": "kato",
+      "label_ko": "지도자부",
+      "synonyms": ["지도자부", "지도자"],
+      "skill_tier": "advanced",
+      "gender": "all",
+      "age_min": 40,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_mixed",
+      "org_code": "kato",
+      "label_ko": "혼합복식부",
+      "synonyms": ["혼합복식부", "혼합복식"],
+      "skill_tier": null,
+      "gender": "mixed",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "mixed",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_couple",
+      "org_code": "kato",
+      "label_ko": "부부혼합부",
+      "synonyms": ["부부혼합부", "부부혼합"],
+      "skill_tier": null,
+      "gender": "mixed",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "couple",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_futures_m",
+      "org_code": "kato",
+      "label_ko": "남자퓨처스부",
+      "synonyms": ["남자퓨처스부", "남자퓨처스"],
+      "skill_tier": "rookie",
+      "gender": "male",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "kato_futures_w",
+      "org_code": "kato",
+      "label_ko": "여자퓨처스부",
+      "synonyms": ["여자퓨처스부", "여자퓨처스"],
+      "skill_tier": "rookie",
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    }
+  ]
+}
