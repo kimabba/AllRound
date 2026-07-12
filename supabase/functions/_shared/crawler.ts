@@ -163,6 +163,15 @@ export async function upsertTournament(
     if (t.regulation_body !== undefined) {
       updatePayload.regulation_body = t.regulation_body;
     }
+    // 부서 미매칭(사전에 synonym 하나도 안 맞음 → codes=[])일 때는
+    //   기존 eligible_grades 를 덮어쓰지 않고 보존한다. (regulation_* 가드와 동일 취지)
+    //   사이트 레이아웃 변형 등 일시적 미매칭이 이미 published 된 대회를
+    //   등급검색/매칭에서 조용히 제외시키는 것을 막는다. 신규 미매칭은
+    //   insert 가 status='draft' 로 들어가 검수에서 보정(결정 A).
+    if (t.eligible_grades.length > 0) {
+      updatePayload.eligible_grades = t.eligible_grades;
+      updatePayload.division_label_local = t.division_label_local ?? null;
+    }
     const { error } = await audit.supabase
       .from('tournaments')
       .update({
@@ -173,8 +182,6 @@ export async function upsertTournament(
         region: t.region ?? null,
         region_code: regionCode,
         location: t.location ?? null,
-        eligible_grades: t.eligible_grades,
-        division_label_local: t.division_label_local ?? null,
         entry_fee: t.entry_fee ?? null,
         prize: t.prize ?? null,
         format: t.format ?? null,
