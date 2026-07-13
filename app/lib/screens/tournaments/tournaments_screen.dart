@@ -11,7 +11,6 @@ import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
-import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
@@ -1765,31 +1764,29 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   }
 }
 
-/// 최초 로드용 스켈레톤. 더미 카드를 shimmer 로 표시해 레이아웃 점프를 줄인다.
+/// 최초 로드용 플레이스홀더. 카드 크기의 회색 박스로 레이아웃 점프를 줄인다.
+/// (skeletonizer 패키지는 최신 Flutter Canvas API와 비호환이라 의존하지 않는다.)
 class _TournamentSkeletonList extends StatelessWidget {
   const _TournamentSkeletonList();
 
   @override
   Widget build(BuildContext context) {
-    final dummy = Tournament(
-      id: 'skeleton',
-      sport: 'tennis',
-      title: '대회 이름을 불러오는 중입니다',
-      startDate: DateTime.now().add(const Duration(days: 7)),
-      applicationDeadline: DateTime.now().add(const Duration(days: 3)),
-      location: '장소를 불러오는 중',
-      eligibleGrades: const [],
-      status: 'published',
-    );
-    return AppSkeletonCard(
-      loading: true,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          for (var i = 0; i < 4; i++) TournamentCard(tournament: dummy),
-        ],
-      ),
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        for (var i = 0; i < 4; i++)
+          Container(
+            height: 92,
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: AppRadius.card,
+              border: Border.all(color: cs.outlineVariant),
+            ),
+          ),
+      ],
     );
   }
 }
