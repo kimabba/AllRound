@@ -11,6 +11,8 @@ import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_skeleton_card.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
 
@@ -159,12 +161,19 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final myGradeIds = ref
-            .watch(homeTournamentsProvider)
-            .valueOrNull
-            ?.map((t) => t.id)
-            .toSet() ??
-        const <String>{};
+    // 등급·협회 등록이 없으면 홈 목록 = 전체 대회이므로 "내 등급" 배지가 거짓이 된다.
+    // 등급 근거가 있을 때만 배지를 노출한다.
+    final hasGradeBasis =
+        (ref.watch(userSportsProvider).valueOrNull?.isNotEmpty ?? false) ||
+        (ref.watch(userTennisOrgsProvider).valueOrNull?.isNotEmpty ?? false);
+    final myGradeIds = hasGradeBasis
+        ? (ref
+                  .watch(homeTournamentsProvider)
+                  .valueOrNull
+                  ?.map((t) => t.id)
+                  .toSet() ??
+              const <String>{})
+        : const <String>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -190,13 +199,17 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             child: _buildCalendarFilterControls(cs),
           ),
           _buildActiveFilterChipsRow(cs),
-          if (_loading) LinearProgressIndicator(color: cs.primary),
+          // 재검색(기존 결과 유지) 중에만 상단 바. 최초 로드는 아래 스켈레톤이 담당.
+          if (_loading && _results != null)
+            LinearProgressIndicator(color: cs.primary),
           if (_usingPreviewData) const _PreviewDataBanner(),
           Expanded(
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)
                 : _results == null
-                    ? const SizedBox.shrink()
+                    ? (_loading
+                        ? const _TournamentSkeletonList()
+                        : const SizedBox.shrink())
                     : _results!.isEmpty
                         ? const AppEmptyState(
                             icon: Icons.search_off_rounded,
@@ -236,12 +249,25 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                             onTap: (tournament) =>
                                 context.push('/tournaments/${tournament.id}'),
                             onFavoriteToggle: (tournament, isFavorite) async {
-                              await ref
-                                  .read(apiProvider)
-                                  .toggleFavorite(tournament.id, !isFavorite);
-                              ref.invalidate(favoriteIdsProvider);
-                              ref.invalidate(myFavoriteTournamentsProvider);
-                              ref.invalidate(myTournamentRecordsProvider);
+                              try {
+                                await ref
+                                    .read(apiProvider)
+                                    .toggleFavorite(
+                                      tournament.id,
+                                      !isFavorite,
+                                    );
+                                ref.invalidate(favoriteIdsProvider);
+                                ref.invalidate(myFavoriteTournamentsProvider);
+                                ref.invalidate(myTournamentRecordsProvider);
+                              } catch (_) {
+                                if (context.mounted) {
+                                  AppToast.show(
+                                    context,
+                                    '관심 저장에 실패했어요. 잠시 후 다시 시도해 주세요.',
+                                    kind: AppToastKind.error,
+                                  );
+                                }
+                              }
                             },
                           ),
           ),
@@ -1734,6 +1760,35 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
       labelStyle: TextStyle(
         color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
         fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+/// 최초 로드용 스켈레톤. 더미 카드를 shimmer 로 표시해 레이아웃 점프를 줄인다.
+class _TournamentSkeletonList extends StatelessWidget {
+  const _TournamentSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    final dummy = Tournament(
+      id: 'skeleton',
+      sport: 'tennis',
+      title: '대회 이름을 불러오는 중입니다',
+      startDate: DateTime.now().add(const Duration(days: 7)),
+      applicationDeadline: DateTime.now().add(const Duration(days: 3)),
+      location: '장소를 불러오는 중',
+      eligibleGrades: const [],
+      status: 'published',
+    );
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          for (var i = 0; i < 4; i++) TournamentCard(tournament: dummy),
+        ],
       ),
     );
   }

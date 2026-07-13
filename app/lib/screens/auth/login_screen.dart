@@ -91,12 +91,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await supa.auth.signInWithPassword(email: email, password: password);
       }
     } on AuthException catch (e) {
-      set(() => _error = e.message);
+      set(() => _error = _authErrorMessage(e));
     } catch (_) {
       set(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (mounted) set(() => _busy = false);
     }
+  }
+
+  /// Supabase AuthException 영어 원문을 사용자용 한국어로 매핑한다.
+  String _authErrorMessage(AuthException e) {
+    final m = e.message.toLowerCase();
+    if (m.contains('invalid login') || m.contains('invalid credentials')) {
+      return '이메일 또는 비밀번호가 올바르지 않습니다.';
+    }
+    if (m.contains('already registered') || m.contains('already exists')) {
+      return '이미 가입된 이메일입니다. 로그인해 주세요.';
+    }
+    if (m.contains('email not confirmed')) {
+      return '이메일 인증이 필요합니다. 메일함을 확인해 주세요.';
+    }
+    if (m.contains('rate limit') || m.contains('too many')) {
+      return '요청이 많습니다. 잠시 후 다시 시도해 주세요.';
+    }
+    return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   void _setMode({required bool signUp}) {
@@ -313,7 +331,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       SizedBox(height: constraints.maxHeight * 0.20),
                       const _IntroSportBalls(),
                       SizedBox(height: constraints.maxHeight * 0.23),
-                      const _IntroDots(),
                       const SizedBox(height: AppSpacing.xxl),
                       Text(
                         adminMode ? '관리자 로그인' : '주말마다\n같이 뛸 사람을 찾고 있나요?',
@@ -492,47 +509,6 @@ class _TennisBallPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _IntroDots extends StatelessWidget {
-  const _IntroDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _IntroDot(active: true),
-        SizedBox(width: AppSpacing.sm),
-        _IntroDot(active: false),
-        SizedBox(width: AppSpacing.sm),
-        _IntroDot(active: false),
-        SizedBox(width: AppSpacing.sm),
-        _IntroDot(active: false),
-        SizedBox(width: AppSpacing.sm),
-        _IntroDot(active: false),
-      ],
-    );
-  }
-}
-
-class _IntroDot extends StatelessWidget {
-  const _IntroDot({required this.active});
-
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: active ? 28 : 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: active ? Colors.white : Colors.white.withValues(alpha: 0.30),
-        borderRadius: AppRadius.pill,
-      ),
-    );
-  }
 }
 
 class _MarketingConsentRow extends StatelessWidget {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
@@ -10,6 +11,7 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_toast.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
   const TournamentDetailScreen({super.key, required this.tournamentId});
@@ -96,12 +98,22 @@ class _TournamentDetailScreenState
               ),
               onPressed: () async {
                 HapticFeedback.lightImpact();
-                await ref
-                    .read(apiProvider)
-                    .toggleFavorite(widget.tournamentId, !isFav);
-                ref.invalidate(favoriteIdsProvider);
-                ref.invalidate(myFavoriteTournamentsProvider);
-                ref.invalidate(myTournamentRecordsProvider);
+                try {
+                  await ref
+                      .read(apiProvider)
+                      .toggleFavorite(widget.tournamentId, !isFav);
+                  ref.invalidate(favoriteIdsProvider);
+                  ref.invalidate(myFavoriteTournamentsProvider);
+                  ref.invalidate(myTournamentRecordsProvider);
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      '관심 저장에 실패했어요. 잠시 후 다시 시도해 주세요.',
+                      kind: AppToastKind.error,
+                    );
+                  }
+                }
               },
             ),
         ],
@@ -164,7 +176,7 @@ class _DetailBody extends StatelessWidget {
               ],
 
               // ── 통합 헤더 ──
-              _StatusPill(status: t.status),
+              _StatusPill(closed: t.isRegistrationClosed),
               const SizedBox(height: AppSpacing.md),
               Text(
                 t.title,
@@ -395,16 +407,15 @@ class _DetailBody extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  const _StatusPill({required this.closed});
 
-  final String status;
+  final bool closed;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isClosed = status == 'closed' || status == 'cancelled';
-    final label = isClosed ? '마감' : '모집중';
-    final color = isClosed ? cs.outline : cs.primary;
+    final label = closed ? '마감' : '모집중';
+    final color = closed ? cs.outline : cs.primary;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -572,11 +583,34 @@ class _TournamentApplyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isClosed =
-        tournament.status == 'closed' ||
-        tournament.status == 'cancelled' ||
-        (tournament.applicationDeadline != null &&
-            tournament.applicationDeadline!.isBefore(DateTime.now()));
+    final isClosed = tournament.isRegistrationClosed;
+    final sourceUrl = tournament.sourceUrl?.trim();
+    final hasSourceUrl =
+        !isPreview && sourceUrl != null && sourceUrl.isNotEmpty;
+
+    // 앱 내 신청은 아직 준비 중. 원본 공고 URL이 있으면 실제 접수 경로로 연결하고,
+    // 없으면 준비 중임을 명확히 안내한다.
+    final (IconData icon, String label, VoidCallback? onPressed) = isClosed
+        ? (Icons.how_to_reg_rounded, '신청 마감', null)
+        : hasSourceUrl
+            ? (
+                Icons.open_in_new_rounded,
+                '원본 공고 보기',
+                () => launchUrl(
+                      Uri.parse(sourceUrl),
+                      mode: LaunchMode.externalApplication,
+                    ),
+              )
+            : (
+                Icons.how_to_reg_rounded,
+                '대회 신청 (준비 중)',
+                () => AppToast.show(
+                      context,
+                      isPreview
+                          ? '프리뷰에서는 신청 화면 연결 전입니다.'
+                          : '앱 내 신청 기능은 준비 중이에요. 대회 요강의 접수처로 신청해 주세요.',
+                    ),
+              );
 
     return SafeArea(
       top: false,
@@ -592,21 +626,9 @@ class _TournamentApplyBar extends StatelessWidget {
           border: Border(top: BorderSide(color: cs.outlineVariant)),
         ),
         child: FilledButton.icon(
-          onPressed: isClosed
-              ? null
-              : () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isPreview
-                            ? '프리뷰에서는 신청 화면 연결 전입니다.'
-                            : '대회 신청 기능은 준비 중입니다.',
-                      ),
-                    ),
-                  );
-                },
-          icon: const Icon(Icons.how_to_reg_rounded),
-          label: Text(isClosed ? '신청 마감' : '대회 신청하기'),
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(label),
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(54),
             shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
