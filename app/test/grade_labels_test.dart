@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
 
@@ -207,6 +209,31 @@ void main() {
       DivisionCatalog.instance.reset();
       expect(DivisionCatalog.instance.isLoaded, isFalse);
       expect(divisionLabel('kato_gaenari'), 'kato_gaenari');
+    });
+
+    // JY-121: 스플래시 게이트가 이 Future 를 기다려 stale fallback 을 예방한다.
+    test('whenReady 는 준비 전 미완료, ingest 후 완료된다', () async {
+      var ready = false;
+      unawaited(DivisionCatalog.instance.whenReady.then((_) => ready = true));
+      await pumpEventQueue();
+      expect(ready, isFalse);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+      ]);
+      await pumpEventQueue();
+      expect(ready, isTrue);
+    });
+
+    test('reset 후 whenReady 는 미완료로 재무장된다', () async {
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+      ]);
+      await pumpEventQueue();
+      DivisionCatalog.instance.reset();
+      var ready = false;
+      unawaited(DivisionCatalog.instance.whenReady.then((_) => ready = true));
+      await pumpEventQueue();
+      expect(ready, isFalse);
     });
   });
 }

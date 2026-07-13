@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -191,6 +193,14 @@ class DivisionCatalog {
   List<TennisDivision>? _ordered;
   Map<String, TennisDivision>? _byCode;
 
+  // JY-121: 로드 시도(성공/실패 무관) 완료 신호. 스플래시 게이트가 이걸 기다려
+  // 첫 화면 빌드 전 카탈로그를 준비, stale fallback(kato 원문 노출)을 예방한다.
+  Completer<void> _ready = Completer<void>();
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
   bool get isLoaded => _ordered != null;
 
   /// 로드됐으면 DB 결과, 아니면 const fallback.
@@ -211,6 +221,8 @@ class DivisionCatalog {
       ingestRows((rows as List).cast<Map<String, dynamic>>());
     } catch (_) {
       // fallback 유지 — 앱 진입 차단 금지.
+    } finally {
+      _markReady();
     }
   }
 
@@ -228,12 +240,14 @@ class DivisionCatalog {
     final ordered = _sortByOrgPriority(divisions);
     _ordered = ordered;
     _byCode = {for (final d in ordered) d.code: d};
+    _markReady();
   }
 
   @visibleForTesting
   void reset() {
     _ordered = null;
     _byCode = null;
+    _ready = Completer<void>();
   }
 
   /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
