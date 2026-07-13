@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 enum Sport { tennis, futsal }
 
 const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
@@ -41,7 +44,7 @@ class TennisDivision {
   });
 }
 
-const tennisDivisions = <TennisDivision>[
+const _kFallbackDivisions = <TennisDivision>[
   // 광주광역시 (gj) — 남자 랭킹 배점
   TennisDivision(
       code: 'gj_m_open',
@@ -178,13 +181,93 @@ const tennisDivisions = <TennisDivision>[
       code: 'local_w', org: 'local', label: '자체 여자부', gender: 'female'),
 ];
 
-final _divisionLabelMap = <String, String>{
-  for (final d in tennisDivisions) d.code: d.label,
+/// 부서 카탈로그: 미로드 시 const fallback, load 성공 시 DB 결과로 완전 교체.
+/// 신규 협회 부서 추가가 DB INSERT 만으로 앱에 반영되게 하는 단일 진실 소스.
+class DivisionCatalog {
+  DivisionCatalog._();
+  static final DivisionCatalog instance = DivisionCatalog._();
+
+  // null = 미로드 → const fallback 사용.
+  List<TennisDivision>? _ordered;
+  Map<String, TennisDivision>? _byCode;
+
+  bool get isLoaded => _ordered != null;
+
+  /// 로드됐으면 DB 결과, 아니면 const fallback.
+  List<TennisDivision> get all => _ordered ?? _kFallbackDivisions;
+
+  TennisDivision? byCode(String code) =>
+      (_byCode ?? _kFallbackByCode)[code];
+
+  /// tennis_divisions 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 기존 상태를 유지한다.
+  Future<void> load(SupabaseClient client) async {
+    try {
+      final rows = await client
+          .from('tennis_divisions')
+          .select('code, org_code, label_ko, gender')
+          .eq('is_active', true)
+          .order('code');
+      ingestRows((rows as List).cast<Map<String, dynamic>>());
+    } catch (_) {
+      // fallback 유지 — 앱 진입 차단 금지.
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그. org 우선순위로 그룹핑해 교체.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    final divisions = rows
+        .map((r) => TennisDivision(
+              code: r['code'] as String,
+              org: r['org_code'] as String,
+              label: r['label_ko'] as String,
+              gender: (r['gender'] as String?) ?? 'all',
+            ))
+        .toList();
+    final ordered = _sortByOrgPriority(divisions);
+    _ordered = ordered;
+    _byCode = {for (final d in ordered) d.code: d};
+  }
+
+  @visibleForTesting
+  void reset() {
+    _ordered = null;
+    _byCode = null;
+  }
+
+  /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
+  /// DB 는 order('code') 로 오지만 협회 그룹핑이 흐트러지므로 재그룹핑한다.
+  static List<TennisDivision> _sortByOrgPriority(List<TennisDivision> input) {
+    final buckets = <String, List<TennisDivision>>{};
+    final unknown = <TennisDivision>[];
+    for (final d in input) {
+      if (tennisOrgs.contains(d.org)) {
+        (buckets[d.org] ??= <TennisDivision>[]).add(d);
+      } else {
+        unknown.add(d);
+      }
+    }
+    final result = <TennisDivision>[];
+    for (final org in tennisOrgs) {
+      final bucket = buckets[org];
+      if (bucket != null) result.addAll(bucket);
+    }
+    result.addAll(unknown);
+    return result;
+  }
+}
+
+final _kFallbackByCode = <String, TennisDivision>{
+  for (final d in _kFallbackDivisions) d.code: d,
 };
+
+/// 부서 목록: 카탈로그 위임(로드됐으면 DB, 아니면 const fallback).
+List<TennisDivision> get tennisDivisions => DivisionCatalog.instance.all;
 
 /// division 코드 → 표시명 (미등록 코드는 코드 그대로 반환)
 String divisionLabel(String code) =>
-    _divisionLabelMap[code] ?? gradeLabels[code] ?? code;
+    DivisionCatalog.instance.byCode(code)?.label ?? gradeLabels[code] ?? code;
 
 /// 특정 org의 division 목록 반환
 List<TennisDivision> divisionsForOrg(String org) =>

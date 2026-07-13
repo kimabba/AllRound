@@ -14,6 +14,7 @@ import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
 import 'state/theme_provider.dart';
 import 'theme/app_theme.dart';
+import 'utils/grade_labels.dart';
 import 'widgets/allround_logo.dart';
 
 Future<void> main() async {
@@ -27,10 +28,15 @@ Future<void> main() async {
     anonKey: AppConfig.supabaseAnonKey,
   );
 
-  // 인증 후 FCM 등록 (실패해도 앱 진입 허용)
+  // 인증 후 FCM 등록 + 부서 카탈로그 DB 로드 (실패해도 앱 진입 허용)
   Supabase.instance.client.auth.onAuthStateChange.listen((event) {
     if (event.event == AuthChangeEvent.signedIn) {
       initNotifications(ApiService(Supabase.instance.client));
+    }
+    // signedIn(신규 로그인) + initialSession(복원 세션) 모두에서 로드.
+    // RLS(tennis_divisions_read = authenticated) 이므로 세션 존재 시에만.
+    if (event.session != null) {
+      DivisionCatalog.instance.load(Supabase.instance.client);
     }
   });
 

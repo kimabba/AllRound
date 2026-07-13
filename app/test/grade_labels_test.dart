@@ -139,4 +139,74 @@ void main() {
       expect(gjGold.length, lessThan(allGold.length));
     });
   });
+
+  group('DivisionCatalog DB load', () {
+    setUp(() => DivisionCatalog.instance.reset());
+    tearDown(() => DivisionCatalog.instance.reset());
+
+    test('미로드 시 all()은 const fallback 반환', () {
+      expect(DivisionCatalog.instance.isLoaded, isFalse);
+      // fallback 에는 kato 부서가 없다
+      expect(
+        DivisionCatalog.instance.all.where((d) => d.org == 'kato'),
+        isEmpty,
+      );
+    });
+
+    test('미로드 시 divisionLabel(kato_*)은 코드 원문 반환', () {
+      expect(divisionLabel('kato_gaenari'), 'kato_gaenari');
+    });
+
+    test('ingestRows 후 kato 라벨 해석', () {
+      DivisionCatalog.instance.ingestRows([
+        {
+          'code': 'kato_gaenari',
+          'org_code': 'kato',
+          'label_ko': '개나리부',
+          'gender': 'female',
+        },
+        {
+          'code': 'kato_masters',
+          'org_code': 'kato',
+          'label_ko': '마스터스부',
+          'gender': 'all',
+        },
+      ]);
+      expect(DivisionCatalog.instance.isLoaded, isTrue);
+      expect(divisionLabel('kato_gaenari'), '개나리부');
+      expect(divisionLabel('kato_masters'), '마스터스부');
+      // 로드 성공 시 완전 교체: fallback gj 부서는 더 이상 없음
+      expect(DivisionCatalog.instance.all.where((d) => d.org == 'gj'), isEmpty);
+      expect(tennisDivisionLabelsForOrg('kato'), ['개나리부', '마스터스부']);
+    });
+
+    test('ingestRows 는 org 우선순위(tennisOrgs 순서)로 그룹핑, 그룹 내 입력순 보존', () {
+      // 입력을 뒤섞어 넣어도 kta < gj < kato 순서(tennisOrgs)로 그룹핑돼야 함
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'gj_b', 'org_code': 'gj', 'label_ko': 'GJ-B', 'gender': 'all'},
+        {'code': 'kato_a', 'org_code': 'kato', 'label_ko': 'KATO-A', 'gender': 'all'},
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {'code': 'gj_a', 'org_code': 'gj', 'label_ko': 'GJ-A', 'gender': 'all'},
+      ]);
+      final orgs = DivisionCatalog.instance.all.map((d) => d.org).toList();
+      // tennisOrgs: kta 가 kato 보다, kato 가 gj 보다 앞
+      expect(orgs, ['kta', 'kato', 'gj', 'gj']);
+      // gj 그룹 내부는 입력 순서(gj_b, gj_a) 보존
+      final gjCodes = DivisionCatalog.instance.all
+          .where((d) => d.org == 'gj')
+          .map((d) => d.code)
+          .toList();
+      expect(gjCodes, ['gj_b', 'gj_a']);
+    });
+
+    test('reset 후 다시 fallback 으로 복귀', () {
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+      ]);
+      expect(DivisionCatalog.instance.isLoaded, isTrue);
+      DivisionCatalog.instance.reset();
+      expect(DivisionCatalog.instance.isLoaded, isFalse);
+      expect(divisionLabel('kato_gaenari'), 'kato_gaenari');
+    });
+  });
 }
