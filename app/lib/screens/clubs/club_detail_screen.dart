@@ -296,7 +296,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                     onMonthlyFeeChanged: (value) {
                       setState(() => _monthlyFee = value);
                     },
-                    onChanged: _reload,
+                    onChanged: () {
+                      _reload();
+                      _refreshClub();
+                    },
                     onDeleted: () => Navigator.pop(context, true),
                   ),
               ],
@@ -1027,6 +1030,67 @@ String _shortUserId(String userId) {
   return userId.length > 8 ? userId.substring(0, 8) : userId;
 }
 
+String _formatJoinRequestDate(DateTime? date) {
+  if (date == null) return '';
+  final local = date.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}/${local.day} $hour:$minute';
+}
+
+String? _stringValue(Object? value) => value is String ? value : null;
+
+Map<String, Object?>? _joinRequestUserFrom(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) {
+    return value.map<String, Object?>(
+      (key, entryValue) => MapEntry(key.toString(), entryValue),
+    );
+  }
+  if (value is List && value.isNotEmpty) {
+    return _joinRequestUserFrom(value.first);
+  }
+  return null;
+}
+
+class _ClubJoinRequest {
+  final String id;
+  final String userId;
+  final String? message;
+  final DateTime? createdAt;
+  final String? displayName;
+  final String? email;
+
+  const _ClubJoinRequest({
+    required this.id,
+    required this.userId,
+    required this.message,
+    required this.createdAt,
+    required this.displayName,
+    required this.email,
+  });
+
+  factory _ClubJoinRequest.fromJson(Map<String, dynamic> json) {
+    final user = _joinRequestUserFrom(json['users']);
+    return _ClubJoinRequest(
+      id: _stringValue(json['id']) ?? '',
+      userId: _stringValue(json['user_id']) ?? '',
+      message: _stringValue(json['message']),
+      createdAt: DateTime.tryParse(_stringValue(json['created_at']) ?? ''),
+      displayName: _stringValue(user?['name']),
+      email: _stringValue(user?['email']),
+    );
+  }
+
+  String get label {
+    final name = displayName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final userEmail = email?.trim();
+    if (userEmail != null && userEmail.isNotEmpty) return userEmail;
+    return '신청자 ${_shortUserId(userId)}';
+  }
+}
+
 // ─── 관리 탭 ──────────────────────────────────────────────────────
 class _ClubManagementTab extends ConsumerWidget {
   final Club club;
@@ -1083,6 +1147,11 @@ class _ClubManagementTab extends ConsumerWidget {
           monthlyFee: monthlyFee,
           onChanged: onMonthlyFeeChanged,
         ),
+        const SizedBox(height: AppSpacing.md),
+        _JoinRequestManageCard(
+          club: club,
+          onChanged: onChanged,
+        ),
         if (club.isOwner) ...[
           const SizedBox(height: AppSpacing.md),
           _MemberRoleManageCard(
@@ -1093,6 +1162,296 @@ class _ClubManagementTab extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           _DangerClubManageCard(club: club, onDeleted: onDeleted),
         ],
+      ],
+    );
+  }
+}
+
+class _JoinRequestManageCard extends ConsumerStatefulWidget {
+  final Club club;
+  final VoidCallback onChanged;
+
+  const _JoinRequestManageCard({
+    required this.club,
+    required this.onChanged,
+  });
+
+  @override
+  ConsumerState<_JoinRequestManageCard> createState() =>
+      _JoinRequestManageCardState();
+}
+
+class _JoinRequestManageCardState
+    extends ConsumerState<_JoinRequestManageCard> {
+  late Future<List<_ClubJoinRequest>> _future;
+  final Set<String> _busyRequestIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JoinRequestManageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.club.id != widget.club.id) {
+      _future = _load();
+    }
+  }
+
+  Future<List<_ClubJoinRequest>> _load() async {
+    final rows = await ref.read(apiProvider).pendingJoinRequests(
+          widget.club.id,
+        );
+    return rows
+        .map(_ClubJoinRequest.fromJson)
+        .where((request) => request.id.isNotEmpty && request.userId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  void _refresh() {
+    setState(() => _future = _load());
+  }
+
+  Future<bool> _confirmReject(_ClubJoinRequest request) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('가입 신청 거절'),
+        content: Text('${request.label}님의 가입 신청을 거절할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('거절'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _review(
+    _ClubJoinRequest request, {
+    required bool approve,
+  }) async {
+    if (!approve && !await _confirmReject(request)) return;
+    if (!mounted) return;
+    setState(() => _busyRequestIds.add(request.id));
+    try {
+      await ref.read(apiProvider).reviewJoinRequest(
+            request.id,
+            approve: approve,
+          );
+      if (!mounted) return;
+      widget.onChanged();
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(approve ? '가입 신청을 승인했습니다' : '가입 신청을 거절했습니다')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(approve ? '승인 실패: $e' : '거절 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyRequestIds.remove(request.id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.how_to_reg_rounded, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  '가입 신청 관리',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: '새로고침',
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '대기 중인 신청자를 확인하고 승인 또는 거절할 수 있습니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FutureBuilder<List<_ClubJoinRequest>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: LinearProgressIndicator(),
+                );
+              }
+              if (snap.hasError) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '가입 신청을 불러오지 못했습니다.',
+                      style: tt.bodyMedium?.copyWith(color: cs.error),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('다시 시도'),
+                    ),
+                  ],
+                );
+              }
+              final requests = snap.data ?? const <_ClubJoinRequest>[];
+              if (requests.isEmpty) {
+                return Text(
+                  '대기 중인 가입 신청이 없습니다.',
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                );
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < requests.length; i++) ...[
+                    if (i > 0) const Divider(height: AppSpacing.xl),
+                    _JoinRequestManageRow(
+                      request: requests[i],
+                      busy: _busyRequestIds.contains(requests[i].id),
+                      onApprove: () => _review(requests[i], approve: true),
+                      onReject: () => _review(requests[i], approve: false),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinRequestManageRow extends StatelessWidget {
+  final _ClubJoinRequest request;
+  final bool busy;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  const _JoinRequestManageRow({
+    required this.request,
+    required this.busy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final label = request.label;
+    final initial = label.characters.isEmpty ? '?' : label.characters.first;
+    final message = request.message?.trim();
+    final requestedAt = _formatJoinRequestDate(request.createdAt);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: cs.primaryContainer,
+              child: Text(
+                initial,
+                style: TextStyle(
+                  color: cs.onPrimaryContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    requestedAt.isEmpty ? '가입 신청 대기 중' : '신청일 $requestedAt',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  if (message != null && message.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: busy ? null : onApprove,
+                icon: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_rounded),
+                label: const Text('승인'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onReject,
+                icon: const Icon(Icons.close_rounded),
+                label: const Text('거절'),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
