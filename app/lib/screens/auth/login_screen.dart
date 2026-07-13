@@ -114,7 +114,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (m.contains('rate limit') || m.contains('too many')) {
       return '요청이 많습니다. 잠시 후 다시 시도해 주세요.';
     }
-    return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+    if (m.contains('weak password') || m.contains('password should')) {
+      return '비밀번호가 너무 약합니다. 더 복잡하게 설정해 주세요.';
+    }
+    if (m.contains('signups not allowed') || m.contains('disabled')) {
+      return '현재 회원가입이 제한되어 있습니다.';
+    }
+    return _signUp
+        ? '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+        : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   void _setMode({required bool signUp}) {

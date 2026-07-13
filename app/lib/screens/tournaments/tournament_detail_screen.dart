@@ -596,10 +596,24 @@ class _TournamentApplyBar extends StatelessWidget {
             ? (
                 Icons.open_in_new_rounded,
                 '원본 공고 보기',
-                () => launchUrl(
+                () async {
+                  var ok = false;
+                  try {
+                    ok = await launchUrl(
                       Uri.parse(sourceUrl),
                       mode: LaunchMode.externalApplication,
-                    ),
+                    );
+                  } catch (_) {
+                    ok = false;
+                  }
+                  if (!ok && context.mounted) {
+                    AppToast.show(
+                      context,
+                      '공고 페이지를 열 수 없어요. 대회 요강의 접수처를 확인해 주세요.',
+                      kind: AppToastKind.error,
+                    );
+                  }
+                },
               )
             : (
                 Icons.how_to_reg_rounded,

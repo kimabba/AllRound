@@ -167,10 +167,14 @@ class TournamentCard extends StatelessWidget {
   String? _deadlineText() {
     final d = tournament.applicationDeadline;
     if (d == null) return null;
+    final date = _df.format(d);
+    // 종료 상태면 마감일이 미래여도 D-day 대신 마감으로 표시.
+    if (tournament.status == 'closed' || tournament.status == 'cancelled') {
+      return '$date · 마감';
+    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final daysLeft = d.difference(today).inDays;
-    final date = _df.format(d);
     if (daysLeft < 0) return '$date · 마감';
     if (daysLeft == 0) return '$date · D-day';
     return '$date · D-$daysLeft';
@@ -181,6 +185,14 @@ class TournamentCard extends StatelessWidget {
 
   _StatusBadgeData _status(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // closed/cancelled는 마감일과 무관하게 종료 상태 — 상세·신청바와 기준 통일.
+    if (tournament.status == 'closed' || tournament.status == 'cancelled') {
+      return _StatusBadgeData(
+        label: _statusLabel(tournament.status),
+        foreground: cs.onSurfaceVariant,
+        background: cs.surfaceContainerHighest,
+      );
+    }
     final deadline = tournament.applicationDeadline;
     if (deadline != null) {
       final today = DateTime.now();
