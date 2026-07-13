@@ -6,7 +6,7 @@
 //   - 어드민 UI "수동 실행" → POST { slug, force: true } → 1건 즉시 실행
 //   - 외부 / thin wrapper Edge Function → POST { slug } → schedule 평가
 //
-// 권한: requireServiceRoleOrAdmin (service_role JWT 또는 admin user JWT)
+// 권한: requireServiceRoleOrAdmin (INTERNAL_CRON_JWT, sb_secret_ API key, 또는 admin user JWT)
 //
 // 흐름:
 //   1) crawl_sources SELECT (enabled = true, slug 일치 또는 전체)

@@ -368,7 +368,7 @@ deno_version = 2
 # 사용자 호출(인증 필수) — 기본값 verify_jwt = true 그대로 둠.
 
 # pg_cron / 외부 트리거가 호출하는 백그라운드 함수: JWT 검증 우회.
-# (호출 측에서 SERVICE_ROLE_KEY 또는 별도 secret 헤더로 보호)
+# (호출 측에서 INTERNAL_CRON_JWT, sb_secret_ API key, 또는 admin JWT로 보호)
 [functions.embed-pending]
 verify_jwt = false
 
@@ -379,6 +379,10 @@ verify_jwt = false
 # cron 은 020 마이그레이션에서 crawl-dispatch 로 일원화. crawl-dispatch 는
 # requireServiceRoleOrAdmin 으로 자체 인증.
 [functions.crawl-dispatch]
+verify_jwt = false
+
+# 운영자 수동 시드 함수. 새 sb_secret_ API key 또는 admin JWT를 함수 내부에서 검증한다.
+[functions.seed-intent-examples]
 verify_jwt = false
 
 # health 는 익명 헬스체크 허용

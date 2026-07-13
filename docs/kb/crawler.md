@@ -45,9 +45,10 @@ DB-driven 크롤러 소스 관리. 어드민 UI에서 CRUD 가능.
 - `embedding = null` 설정하여 embed-pending 워커가 재임베딩
 
 ## 인증
-- pg_cron 호출: `INTERNAL_CRON_JWT` (service_role JWT)
+- pg_cron 호출: `INTERNAL_CRON_JWT` (Vault/Edge Function env에 저장한 랜덤 secret)
 - 어드민 수동 실행: 사용자 JWT → requireServiceRoleOrAdmin 체크
-- `SUPABASE_SERVICE_ROLE_KEY`는 reserved secret이라 삭제 불가 → INTERNAL_CRON_JWT 별도 운용
+- service-level 수동 호출: legacy service_role JWT 금지, `sb_secret_...` API key만 허용
+- service client는 `SUPABASE_SECRET_KEYS.default`를 우선 사용하고 legacy env는 호환 fallback으로만 둠
 
 ## 어드민 UI
 - admin_screen.dart "크롤 소스" 탭: CRUD + 수동 실행 + 실행 결과 표시

@@ -38,8 +38,8 @@ https://supabase.com/docs/guides/getting-started/api-keys#what-to-do-if-a-secret
 
 ### 2. 새 INTERNAL_CRON_JWT 발급
 
-로테이션 후 새 키 기준으로 cron 전용 service_role JWT 를 발급한다.
-(기존과 동일한 방식으로 재발급 — service_role 클레임 JWT)
+cron 전용 랜덤 secret 을 발급한다. 이 값은 Supabase JWT가 아니며, pg_cron 호출과
+Edge Function `INTERNAL_CRON_JWT` env var 비교에만 사용한다.
 
 ### 3. Vault 에 저장
 
@@ -62,7 +62,7 @@ supabase db push   # 또는 034 SQL 을 대시보드 SQL Editor 에서 실행
 
 ### 5. 환경변수 교체
 
-- Edge Function: `INTERNAL_CRON_JWT` = 2단계의 새 JWT
+- Edge Function: `INTERNAL_CRON_JWT` = 2단계의 새 랜덤 secret
 - (로테이션으로 바뀐 경우) 앱·CI 의 anon/service_role 키도 새 값으로 교체
 
 ### 6. 검증
@@ -94,6 +94,12 @@ select public.invoke_edge_function('embed-pending', '{}'::jsonb);
 - ✅ Legacy `anon`/`service_role` JWT-based API keys **Disabled** (2026-05-31)
 - ✅ Legacy HS256 Shared Secret **Revoked** (2026-05-31)
 - ✅ Revoke 후 cron 전부 200 정상 동작 확인
+- ✅ 노출 JWT REST 호출 401 확인 (2026-07-10)
+- ✅ Edge Function service-level 호출에서 legacy JWT 형태 거부 (2026-07-10)
+  - `seed-intent-examples`가 `verify_jwt=true` 기본값 + `SUPABASE_SERVICE_ROLE_KEY`
+    Bearer 비교로 노출 JWT를 받아들이는 회귀를 발견.
+  - `requireServiceRole`은 이제 `sb_secret_...` secret API key만 허용하고,
+    `seed-intent-examples`도 `verify_jwt=false` + 함수 내부 인증으로 통일.
 
 ## 노출 키 완전 차단 — legacy → 새 API 키 마이그레이션 (별도 세션)
 
@@ -107,15 +113,16 @@ select public.invoke_edge_function('embed-pending', '{}'::jsonb);
 - service_role 사용 Edge Function 5곳: `embed-pending`, `notify-cron`, `crawl-dispatch`,
   `seed-intent-examples`, `_shared/supabase.ts`(serviceClient) — 새 secret key 동작 검증 필요
 - `notify-cron` 은 cron secret 인증 누락 버그가 있었으며 `requireServiceRoleOrAdmin` 으로 수정 완료
+- `seed-intent-examples` 도 새 secret API key를 함수 내부에서 검증하도록 `verify_jwt=false` 필요
 
 **절차**
 1. Settings → API Keys 에서 publishable/secret key 발급·확인
 2. (전환기) legacy 와 새 키가 병행 동작하므로, 새 키로 앱·Edge 동작 먼저 검증
 3. 앱 재빌드: `SUPABASE_ANON_KEY = sb_publishable_...`
-4. Edge Function 의 `SUPABASE_SERVICE_ROLE_KEY` 의존부가 새 secret key 로 정상 동작하는지 확인
+4. Edge Function 의 service client가 `SUPABASE_SECRET_KEYS.default = sb_secret_...` 로 정상 동작하는지 확인
 5. API Keys → `anon`/`service_role` legacy 키 **Disable**
 6. JWT Keys → Legacy HS256 (Shared Secret) → **Revoke**
-7. 검증: 노출 JWT 로 REST 호출 시 **401** 확인
+7. 검증: 노출 JWT 로 REST 호출 시 **401**, service-level Edge Function 호출 시 **403/401** 확인
    ```
    curl -s -o /dev/null -w "%{http_code}" \
      -H "apikey: <노출JWT>" -H "Authorization: Bearer <노출JWT>" \
