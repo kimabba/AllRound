@@ -125,7 +125,12 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        // JY-121(Codex P1): 준비 완료(_visible=false) 전엔 child 를 빌드하지 않는다.
+        // Stack 은 child 를 스플래시 오버레이와 동시에 빌드하므로, 그대로 두면
+        // 화면들이 카탈로그 로드 전 fallback 라벨로 먼저 빌드되고, plain singleton
+        // 이라 리빌드 트리거가 없어 stale kato 라벨이 남는다. child 를 로드 완료
+        // 후 최초 빌드시켜 첫 프레임부터 kato 한글 라벨이 나오게 한다.
+        if (!_visible) widget.child,
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(

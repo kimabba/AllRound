@@ -196,6 +196,9 @@ class DivisionCatalog {
   // JY-121: 로드 시도(성공/실패 무관) 완료 신호. 스플래시 게이트가 이걸 기다려
   // 첫 화면 빌드 전 카탈로그를 준비, stale fallback(kato 원문 노출)을 예방한다.
   Completer<void> _ready = Completer<void>();
+  // load 세대 카운터. reset()/재로드가 in-flight load 를 무효화해, 늦게 도착한
+  // 옛 load 결과가 새 상태·새 _ready 를 오염시키지 않게 한다(Codex P2).
+  int _generation = 0;
   Future<void> get whenReady => _ready.future;
   void _markReady() {
     if (!_ready.isCompleted) _ready.complete();
@@ -212,17 +215,21 @@ class DivisionCatalog {
   /// tennis_divisions 를 읽어 카탈로그를 교체한다(멱등).
   /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 기존 상태를 유지한다.
   Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
     try {
       final rows = await client
           .from('tennis_divisions')
           .select('code, org_code, label_ko, gender')
           .eq('is_active', true)
           .order('code');
-      ingestRows((rows as List).cast<Map<String, dynamic>>());
+      // reset()/재로드로 세대가 바뀌었으면 이 결과는 버린다(stale 반영 방지).
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
     } catch (_) {
       // fallback 유지 — 앱 진입 차단 금지.
     } finally {
-      _markReady();
+      if (gen == _generation) _markReady();
     }
   }
 
@@ -248,6 +255,7 @@ class DivisionCatalog {
     _ordered = null;
     _byCode = null;
     _ready = Completer<void>();
+    _generation++;
   }
 
   /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
