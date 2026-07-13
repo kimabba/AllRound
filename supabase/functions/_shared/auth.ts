@@ -55,16 +55,47 @@ export function requireServiceRole(
   req: Request,
 ): { error: Response } | Record<string, never> {
   const auth = req.headers.get('Authorization') ?? '';
-  const token = auth.replace('Bearer ', '');
+  const token = auth.replace('Bearer ', '').trim();
   if (!token) {
     return { error: errorResponse('Missing token in Authorization header', 401) };
   }
 
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!serviceKey || token !== serviceKey) {
-    return { error: errorResponse('Forbidden: Invalid Service Key', 403) };
+  // Legacy service_role JWTs are permanently compromised for this project.
+  // Only the new opaque Supabase secret API keys may be used for service-level invocation.
+  if (!token.startsWith('sb_secret_')) {
+    return { error: errorResponse('Forbidden: Legacy service JWTs are not accepted', 403) };
+  }
+
+  const serviceKeys = getSecretApiKeys();
+  if (!serviceKeys.includes(token)) {
+    return { error: errorResponse('Forbidden: Invalid Secret API Key', 403) };
   }
   return {};
+}
+
+function getSecretApiKeys(): string[] {
+  const keys: string[] = [];
+  const encoded = Deno.env.get('SUPABASE_SECRET_KEYS');
+  if (encoded) {
+    try {
+      const parsed = JSON.parse(encoded) as unknown;
+      if (parsed && typeof parsed === 'object') {
+        for (const value of Object.values(parsed as Record<string, unknown>)) {
+          if (typeof value === 'string' && value.startsWith('sb_secret_')) {
+            keys.push(value);
+          }
+        }
+      }
+    } catch {
+      // Fall through to explicit env fallbacks.
+    }
+  }
+
+  for (const name of ['SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    const value = Deno.env.get(name);
+    if (value?.startsWith('sb_secret_')) keys.push(value);
+  }
+  return keys;
 }
 
 // pg_cron / invoke_edge_function 에서 사용하는 내부 호출 인증.
@@ -86,7 +117,7 @@ export function requireServiceRoleOrAdmin(
   // 1) cron secret (pg_cron / invoke_edge_function 내부 호출)
   const cronResult = requireCronSecret(req);
   if (!('error' in cronResult)) return Promise.resolve({});
-  // 2) service_role JWT
+  // 2) Supabase secret API key (sb_secret_...), never legacy service_role JWT
   const srResult = requireServiceRole(req);
   if (!('error' in srResult)) return Promise.resolve({});
   // 3) admin 사용자 JWT
