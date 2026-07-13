@@ -8,7 +8,7 @@ import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/r
  * pg_cron 이 5분마다 호출.
  * 임베딩이 없거나 stale 한 tournaments / rule_articles 를 배치 처리.
  *
- * 인증: pg_cron → invoke_edge_function() 가 SERVICE_ROLE_KEY 로 호출.
+ * 인증: pg_cron → invoke_edge_function() 가 INTERNAL_CRON_JWT 로 호출.
  *       (Functions 의 verify_jwt 는 supabase/config.toml 에서 false 로 설정)
  */
 const BATCH_SIZE = 32;

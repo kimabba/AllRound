@@ -87,6 +87,8 @@ GEMINI_MODEL=gemini-2.0-flash
 SUPABASE_URL=                 # Supabase injects this
 SUPABASE_ANON_KEY=            # Supabase injects this
 SUPABASE_SERVICE_ROLE_KEY=    # Supabase injects this
+SUPABASE_PUBLISHABLE_KEYS=    # JSON dictionary; userClient uses default first
+SUPABASE_SECRET_KEYS=         # JSON dictionary; serviceClient uses default first
 FCM_SERVER_KEY=               # optional push sending
 CRAWL_TENNIS_GWANGJU_URL=     # optional crawler targets
 CRAWL_TENNIS_JEONNAM_URL=
@@ -97,7 +99,7 @@ CRAWL_TENNIS_KOREA_URL=
 
 ```sql
 alter database postgres set app.cron_invoke_url = 'https://<project>.functions.supabase.co';
-alter database postgres set app.cron_invoke_key = '<service-role-jwt>';
+alter database postgres set app.cron_invoke_key = '<internal-random-cron-secret>';
 ```
 
 ### Flutter `--dart-define`

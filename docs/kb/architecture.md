@@ -53,12 +53,12 @@ Flutter App
 3단계 인증 체계:
 
 1. **requireCronSecret** — `INTERNAL_CRON_JWT` env var 비교 (pg_cron 내부 호출)
-2. **requireServiceRole** — `SUPABASE_SERVICE_ROLE_KEY` 비교
+2. **requireServiceRole** — `sb_secret_...` 형태의 Supabase secret API key 비교
 3. **requireAdmin** — JWT 검증 + `users.role = 'admin'` 확인
 
 복합 함수:
 - `requireUser` — 일반 사용자 인증 (JWT → auth.getUser → users.role 조회)
-- `requireServiceRoleOrAdmin` — cronSecret → serviceRole → admin 순서 체크
+- `requireServiceRoleOrAdmin` — cronSecret → secret API key → admin 순서 체크
 
 ## 환경변수
 
@@ -66,7 +66,8 @@ Flutter App
 ```
 GEMINI_API_KEY, GEMINI_MODEL=gemini-2.0-flash
 SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (platform 주입)
-INTERNAL_CRON_JWT (pg_cron 전용, service_role JWT 값)
+SUPABASE_PUBLISHABLE_KEYS, SUPABASE_SECRET_KEYS (새 API key JSON dictionary)
+INTERNAL_CRON_JWT (pg_cron 전용 랜덤 secret)
 FCM_SERVER_KEY (push 발송)
 ```
 

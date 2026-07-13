@@ -9,7 +9,7 @@
  *   - 의도 카테고리/시드 텍스트 변경 시 재실행 (멱등 — 시작 시 기존 행 전체 삭제 후 다시 INSERT).
  *
  * 보안:
- *   - service_role 또는 admin 만 호출 가능 (`requireServiceRoleOrAdmin`).
+ *   - sb_secret_ API key 또는 admin 만 호출 가능 (`requireServiceRoleOrAdmin`).
  *   - 일반 사용자 (anon/authenticated) 는 403.
  *   - 실제 INSERT 는 service_role 클라이언트로 수행 (intent_examples 테이블은 service_role 만 접근 가능).
  *
