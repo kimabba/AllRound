@@ -100,19 +100,19 @@ Deno.test('extractSlots: "강원" → gangwon', () => {
   assertEquals(slots.region, 'gangwon');
 });
 
-Deno.test('extractSlots: "대전" → chungcheong', () => {
+Deno.test('extractSlots: "대전" → daejeon', () => {
   const slots = extractSlots('대전 풋살 대회', FIXED_NOW);
-  assertEquals(slots.region, 'chungcheong');
+  assertEquals(slots.region, 'daejeon');
 });
 
-Deno.test('extractSlots: "부산" → busan_ulsan_gn', () => {
+Deno.test('extractSlots: "부산" → busan', () => {
   const slots = extractSlots('부산 대회', FIXED_NOW);
-  assertEquals(slots.region, 'busan_ulsan_gn');
+  assertEquals(slots.region, 'busan');
 });
 
-Deno.test('extractSlots: "대구" → daegu_gb', () => {
+Deno.test('extractSlots: "대구" → daegu', () => {
   const slots = extractSlots('대구 테니스', FIXED_NOW);
-  assertEquals(slots.region, 'daegu_gb');
+  assertEquals(slots.region, 'daegu');
 });
 
 Deno.test('extractSlots: 영문 region code "gwangju" 직접 매칭', () => {

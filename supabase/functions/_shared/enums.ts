@@ -45,27 +45,47 @@ export function isValidTennisOrg(value: string): value is TennisOrg {
 // =========================
 // Region (권역)
 // =========================
+// 표준 17개 광역시도. Dart grade_labels.dart regionCodes / seed.sql regions 와 코드·순서 1:1.
+// deprecated 묶음 코드(seoul_metro 등)는 여기서 제외 — 신규 저장은 시도 코드만 사용한다.
 export const REGION_CODES = [
-  'gwangju',
-  'jeonnam',
-  'seoul_metro',
-  'busan_ulsan_gn',
-  'daegu_gb',
-  'chungcheong',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'gangwon',
+  'daejeon',
+  'sejong',
+  'chungbuk',
+  'chungnam',
+  'gwangju',
+  'jeonbuk',
+  'jeonnam',
+  'busan',
+  'ulsan',
+  'daegu',
+  'gyeongbuk',
+  'gyeongnam',
   'jeju',
 ] as const;
 
 export type RegionCode = typeof REGION_CODES[number];
 
 export const REGION_LABELS: Record<RegionCode, string> = {
-  gwangju: '광주',
-  jeonnam: '전남',
-  seoul_metro: '수도권',
-  busan_ulsan_gn: '부산·울산·경남',
-  daegu_gb: '대구·경북',
-  chungcheong: '충청',
+  seoul: '서울',
+  gyeonggi: '경기',
+  incheon: '인천',
   gangwon: '강원',
+  daejeon: '대전',
+  sejong: '세종',
+  chungbuk: '충북',
+  chungnam: '충남',
+  gwangju: '광주',
+  jeonbuk: '전북',
+  jeonnam: '전남',
+  busan: '부산',
+  ulsan: '울산',
+  daegu: '대구',
+  gyeongbuk: '경북',
+  gyeongnam: '경남',
   jeju: '제주',
 };
 

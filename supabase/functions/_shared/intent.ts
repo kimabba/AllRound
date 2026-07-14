@@ -81,15 +81,25 @@ export interface RuleClassification {
 // 주의: 동음/부분 매칭 false-positive 회피.
 //   - '경기' 는 "경기도" (region) 와 "경기" (match/game) 가 동음 → 경기도/경기지역 같은 명시 표현만 채택.
 //   - '경남'/'경북' 도 유사 위험이 있으나 동호인 도메인에서 단독 사용 빈도 낮음.
+// 표준 17개 광역시도. '경기' 단독은 시합(경기) 동음이의라 '경기도|경기 지역'만 매칭.
 const REGION_ALIASES: ReadonlyArray<{ pattern: RegExp; code: RegionCode }> = [
+  { pattern: /(서울특별시|서울시|서울)/, code: 'seoul' },
+  { pattern: /(경기도|경기\s*지역)/, code: 'gyeonggi' },
+  { pattern: /(인천광역시|인천시|인천)/, code: 'incheon' },
+  { pattern: /(강원특별자치도|강원도|강원)/, code: 'gangwon' },
+  { pattern: /(대전광역시|대전시|대전)/, code: 'daejeon' },
+  { pattern: /(세종특별자치시|세종시|세종)/, code: 'sejong' },
+  { pattern: /(충청북도|충북)/, code: 'chungbuk' },
+  { pattern: /(충청남도|충남)/, code: 'chungnam' },
   { pattern: /(광주광역시|광주시|광주)/, code: 'gwangju' },
+  { pattern: /(전라북도|전북)/, code: 'jeonbuk' },
   { pattern: /(전라남도|전남)/, code: 'jeonnam' },
-  { pattern: /(수도권|서울|경기도|경기\s*지역|인천)/, code: 'seoul_metro' },
-  { pattern: /(부산|울산|경남|경상남도)/, code: 'busan_ulsan_gn' },
-  { pattern: /(대구|경북|경상북도)/, code: 'daegu_gb' },
-  { pattern: /(충청|충북|충남|대전|세종)/, code: 'chungcheong' },
-  { pattern: /(강원)/, code: 'gangwon' },
-  { pattern: /(제주)/, code: 'jeju' },
+  { pattern: /(부산광역시|부산시|부산)/, code: 'busan' },
+  { pattern: /(울산광역시|울산시|울산)/, code: 'ulsan' },
+  { pattern: /(대구광역시|대구시|대구)/, code: 'daegu' },
+  { pattern: /(경상북도|경북)/, code: 'gyeongbuk' },
+  { pattern: /(경상남도|경남)/, code: 'gyeongnam' },
+  { pattern: /(제주특별자치도|제주도|제주)/, code: 'jeju' },
 ];
 
 // 영문 region code 자체가 메시지에 등장한 경우 그대로 채택.
