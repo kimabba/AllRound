@@ -13,8 +13,12 @@
  *
  * 주의: 이 모듈은 한국어 동호인 도메인 한정. 다국어 확장 시 별도 모듈로 분리.
  *
- * Shadow mode: 분류 결과는 메트릭/SSE 이벤트로만 발송, 실제 routing 은 안 함.
- * Day 5-6 에서 SQL+템플릿 routing 활성화 예정.
+ * 라우팅 상태 (JY-107 확정):
+ *   - 룰 분류(confidence=1.0): 실제 라우팅 활성 — ROUTABLE_INTENTS 에 대해 검색 실행.
+ *   - 임베딩 분류: shadow-only. 관측(SSE/메트릭)만 하고 라우팅은 안 한다.
+ *     실측상 similarity 상한이 ~0.86 < 라우팅 게이트 0.95 라 구조적으로 라우팅에 미도달.
+ *     시드 품질(intent 당 7개, leave-one-out 정확도 67%, 오분류 similarity 가 정확분류보다
+ *     높음) 개선 전까지 임베딩 라우팅은 켜지 않는다. 상세는 chat/types.ts 게이트 주석 참고.
  */
 
 import { REGION_CODES, type RegionCode } from './enums.ts';
