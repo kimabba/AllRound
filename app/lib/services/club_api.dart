@@ -187,6 +187,21 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
+  Future<MyClubJoinRequest?> myPendingClubJoinRequest(String clubId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final Object? raw = await supabase
+        .from('club_join_requests')
+        .select('id, status, created_at')
+        .eq('club_id', clubId)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+    if (raw is! Map) return null;
+    return MyClubJoinRequest.fromJson(Map<String, dynamic>.from(raw));
+  }
+
   Future<void> leaveClub(String clubId) async {
     final res = await httpPost(
       uri('clubs-join'),

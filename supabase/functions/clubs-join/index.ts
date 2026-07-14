@@ -154,6 +154,23 @@ Deno.serve(async (req) => {
       return errorResponse('Already a member', 409);
     }
 
+    const { data: existingRequest, error: existingRequestError } = await supa
+      .from('club_join_requests')
+      .select('id, status')
+      .eq('club_id', clubId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingRequestError) {
+      return errorResponse(existingRequestError.message, 500);
+    }
+    if (existingRequest?.status === 'pending') {
+      return jsonResponse({
+        ok: true,
+        action: 'already_pending',
+        request_id: existingRequest.id,
+      });
+    }
+
     // 가입 신청 (upsert — 취소 후 재신청 허용)
     const { data: joinRequest, error } = await supa
       .from('club_join_requests')

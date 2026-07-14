@@ -1,4 +1,28 @@
-// 클럽 활동 MVP 모델: 모임 일정 + 멤버
+// 클럽 활동 MVP 모델: 가입 신청 + 모임 일정 + 멤버
+
+class MyClubJoinRequest {
+  const MyClubJoinRequest({
+    required this.id,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String status;
+  final DateTime? createdAt;
+
+  bool get isPending => status == 'pending';
+
+  factory MyClubJoinRequest.fromJson(Map<String, dynamic> json) {
+    final rawCreatedAt = json['created_at'];
+    return MyClubJoinRequest(
+      id: json['id'] as String,
+      status: (json['status'] as String?) ?? 'pending',
+      createdAt:
+          rawCreatedAt is String ? DateTime.tryParse(rawCreatedAt) : null,
+    );
+  }
+}
 
 class ClubMember {
   final String userId;

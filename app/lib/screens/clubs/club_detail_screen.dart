@@ -38,6 +38,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   Future<List<ClubMember>>? _membersF;
   Future<List<ClubEvent>>? _eventsF;
   int? _monthlyFee;
+  MyClubJoinRequest? _myJoinRequest;
+  bool _joinRequestLoading = false;
+  bool _joinRequestLoadFailed = false;
+  int _joinRequestLoadId = 0;
 
   Club? _club;
   bool _loading = false;
@@ -61,7 +65,46 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   void _initTab() {
     _monthlyFee = club.monthlyFee;
     _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
-    if (club.isMember) _reload();
+    if (club.isMember) {
+      _reload();
+    } else {
+      unawaited(_loadMyJoinRequest());
+    }
+  }
+
+  Future<void> _loadMyJoinRequest() async {
+    if (_club == null || club.isMember || !club.isApproved) {
+      _joinRequestLoadId += 1;
+      if (mounted) {
+        setState(() {
+          _myJoinRequest = null;
+          _joinRequestLoading = false;
+          _joinRequestLoadFailed = false;
+        });
+      }
+      return;
+    }
+
+    final loadId = ++_joinRequestLoadId;
+    setState(() {
+      _joinRequestLoading = true;
+      _joinRequestLoadFailed = false;
+    });
+    try {
+      final request =
+          await ref.read(apiProvider).myPendingClubJoinRequest(club.id);
+      if (!mounted || loadId != _joinRequestLoadId) return;
+      setState(() {
+        _myJoinRequest = request;
+        _joinRequestLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || loadId != _joinRequestLoadId) return;
+      setState(() {
+        _joinRequestLoading = false;
+        _joinRequestLoadFailed = true;
+      });
+    }
   }
 
   Future<void> _fetchClub() async {
@@ -93,6 +136,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       setState(() {
         _club = fetched;
         _monthlyFee = fetched.monthlyFee;
+        if (fetched.isMember) {
+          _joinRequestLoadId += 1;
+          _myJoinRequest = null;
+          _joinRequestLoading = false;
+          _joinRequestLoadFailed = false;
+        }
         if (_tab == null || _tab!.length != nextTabLength) {
           final nextIndex =
               ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
@@ -101,7 +150,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _tab!.index = nextIndex;
         }
       });
-      if (fetched.isMember) _reload();
+      if (fetched.isMember) {
+        _reload();
+      } else {
+        await _loadMyJoinRequest();
+      }
     } catch (_) {
       // 기존 화면 데이터가 있으면 그대로 사용한다.
     }
@@ -191,6 +244,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     setState(() => _inFlight = true);
     try {
       await ref.read(apiProvider).joinClub(club.id);
+      await _loadMyJoinRequest();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('가입 신청이 완료되었습니다')),
@@ -200,6 +254,50 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('가입 신청 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _inFlight = false);
+    }
+  }
+
+  Future<void> _cancelJoinRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('가입 신청 취소'),
+        content: Text('${club.name} 가입 신청을 취소할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('유지'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('신청 취소'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _inFlight = true);
+    try {
+      await ref.read(apiProvider).cancelJoinClub(club.id);
+      _joinRequestLoadId += 1;
+      if (!mounted) return;
+      setState(() {
+        _myJoinRequest = null;
+        _joinRequestLoading = false;
+        _joinRequestLoadFailed = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('가입 신청을 취소했습니다.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('가입 신청 취소 실패: $error')),
+        );
       }
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -340,7 +438,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   club: club,
                   monthlyFee: _monthlyFee,
                   inFlight: _inFlight,
+                  joinRequest: _myJoinRequest,
+                  joinRequestLoading: _joinRequestLoading,
+                  joinRequestLoadFailed: _joinRequestLoadFailed,
                   onJoin: _join,
+                  onCancelJoin: _cancelJoinRequest,
+                  onRetryJoinStatus: _loadMyJoinRequest,
                   onLeave: _leave,
                 ),
                 isMember
@@ -671,13 +774,23 @@ class _IntroTab extends StatelessWidget {
   final Club club;
   final int? monthlyFee;
   final bool inFlight;
+  final MyClubJoinRequest? joinRequest;
+  final bool joinRequestLoading;
+  final bool joinRequestLoadFailed;
   final VoidCallback onJoin;
+  final VoidCallback onCancelJoin;
+  final VoidCallback onRetryJoinStatus;
   final VoidCallback onLeave;
   const _IntroTab({
     required this.club,
     required this.monthlyFee,
     required this.inFlight,
+    required this.joinRequest,
+    required this.joinRequestLoading,
+    required this.joinRequestLoadFailed,
     required this.onJoin,
+    required this.onCancelJoin,
+    required this.onRetryJoinStatus,
     required this.onLeave,
   });
 
@@ -795,7 +908,53 @@ class _IntroTab extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.xl),
-        if (!club.isMember)
+        if (!club.isMember && joinRequestLoading)
+          FilledButton.icon(
+            onPressed: null,
+            icon: const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            label: const Text('가입 신청 상태 확인 중'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          )
+        else if (!club.isMember && joinRequestLoadFailed)
+          OutlinedButton.icon(
+            onPressed: inFlight ? null : onRetryJoinStatus,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('가입 신청 상태 다시 확인'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          )
+        else if (!club.isMember && joinRequest?.isPending == true) ...[
+          FilledButton.tonalIcon(
+            onPressed: inFlight ? null : onCancelJoin,
+            icon: inFlight
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.hourglass_top_rounded),
+            label: const Text('가입 승인 대기 중 · 취소하기'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          ),
+          if (joinRequest?.createdAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                '신청일 ${_formatJoinRequestDate(joinRequest!.createdAt)}',
+                textAlign: TextAlign.center,
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+        ] else if (!club.isMember)
           FilledButton.icon(
             onPressed: inFlight ? null : onJoin,
             icon: inFlight
