@@ -54,6 +54,8 @@ class ClubEvent {
   final String? description;
   final String? locationText;
   final DateTime startsAt;
+  final int? fee;
+  final int? capacity;
   final int goingCount;
   final int notGoingCount;
   final String? myStatus; // 'going' | 'not_going' | null
@@ -67,6 +69,8 @@ class ClubEvent {
     this.description,
     this.locationText,
     required this.startsAt,
+    this.fee,
+    this.capacity,
     this.goingCount = 0,
     this.notGoingCount = 0,
     this.myStatus,
@@ -76,6 +80,7 @@ class ClubEvent {
   bool get iAmGoing => myStatus == 'going';
   bool get iAmNotGoing => myStatus == 'not_going';
   int get responseCount => goingCount + notGoingCount;
+  bool get isFull => capacity != null && goingCount >= capacity!;
 
   factory ClubEvent.fromJson(
     Map<String, dynamic> j, {
@@ -107,6 +112,8 @@ class ClubEvent {
       description: j['description'] as String?,
       locationText: j['location_text'] as String?,
       startsAt: DateTime.parse(j['starts_at'] as String),
+      fee: j['fee'] as int?,
+      capacity: j['capacity'] as int?,
       goingCount: going,
       notGoingCount: notGoing,
       myStatus: myStatus,

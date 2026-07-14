@@ -349,6 +349,8 @@ mixin ClubApi on ApiBase {
     String? description,
     String? locationText,
     required DateTime startsAt,
+    int? fee,
+    int? capacity,
   }) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
@@ -361,18 +363,28 @@ mixin ClubApi on ApiBase {
       if (locationText != null && locationText.isNotEmpty)
         'location_text': locationText,
       'starts_at': startsAt.toUtc().toIso8601String(),
+      if (fee != null) 'fee': fee,
+      if (capacity != null) 'capacity': capacity,
     });
   }
 
   Future<void> respondEvent(String eventId, {required bool going}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
-    await supabase.from('club_event_attendees').upsert({
-      'event_id': eventId,
-      'user_id': uid,
-      'status': going ? 'going' : 'not_going',
-      'responded_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'event_id,user_id');
+    try {
+      await supabase.rpc('respond_club_event', params: {
+        'p_event_id': eventId,
+        'p_status': going ? 'going' : 'not_going',
+      });
+    } catch (error) {
+      if (!error.toString().contains('respond_club_event')) rethrow;
+      await supabase.from('club_event_attendees').upsert({
+        'event_id': eventId,
+        'user_id': uid,
+        'status': going ? 'going' : 'not_going',
+        'responded_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'event_id,user_id');
+    }
   }
 
   // ── 즐겨찾기 ─────────────────────────────────────────────────

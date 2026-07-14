@@ -328,12 +328,14 @@ class SimpleClubTile extends StatelessWidget {
   final Club? club;
   final bool isFavorite;
   final ClubFavoriteToggle? onFavoriteToggle;
+  final VoidCallback? onOpen;
 
   const SimpleClubTile({
     super.key,
     required this.club,
     this.isFavorite = false,
     this.onFavoriteToggle,
+    this.onOpen,
   });
 
   @override
@@ -358,7 +360,7 @@ class SimpleClubTile extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: () => context.push('/clubs/${item.id}', extra: item),
+      onTap: onOpen ?? () => context.push('/clubs/${item.id}', extra: item),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.sm),

@@ -552,7 +552,7 @@ class _IntroTab extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         AppCard(
-          variant: AppCardVariant.elevated,
+          variant: AppCardVariant.outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2104,7 +2104,9 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('클럽 삭제'),
-        content: Text('${widget.club.name} 클럽을 삭제할까요? 삭제하면 목록에서 내려갑니다.'),
+        content: Text(
+          '${widget.club.name} 클럽을 정말 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -2116,7 +2118,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
               backgroundColor: Theme.of(ctx).colorScheme.error,
               foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
-            child: const Text('삭제'),
+            child: const Text('삭제하기'),
           ),
         ],
       ),
@@ -2127,9 +2129,9 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
     try {
       await ref.read(apiProvider).deleteClub(widget.club.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('클럽을 삭제했습니다')),
-        );
+        ref.invalidate(myClubsProvider);
+        ref.invalidate(myFavoriteClubsProvider);
+        ref.invalidate(clubFavoriteIdsProvider);
         widget.onDeleted();
       }
     } catch (e) {
@@ -2335,12 +2337,19 @@ class _EventCardState extends ConsumerState<_EventCard> {
               children: [
                 _InfoChip(
                   icon: Icons.event_available_rounded,
-                  label: '${e.goingCount}명 참석',
+                  label: e.capacity == null
+                      ? '${e.goingCount}명 참석'
+                      : '${e.goingCount}/${e.capacity}명',
                 ),
                 _InfoChip(
                   icon: Icons.event_busy_rounded,
                   label: '${e.notGoingCount}명 불참',
                 ),
+                if (e.fee != null)
+                  _InfoChip(
+                    icon: Icons.payments_outlined,
+                    label: '${e.fee}원',
+                  ),
                 if (e.responseCount > 0)
                   TextButton.icon(
                     onPressed: _showResponses,
@@ -2386,12 +2395,14 @@ class _EventCardState extends ConsumerState<_EventCard> {
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: _busy ? null : () => _respond(true),
+                    onPressed: _busy || (e.isFull && !e.iAmGoing)
+                        ? null
+                        : () => _respond(true),
                     style: FilledButton.styleFrom(
                       backgroundColor: e.iAmGoing ? cs.primary : null,
                       foregroundColor: e.iAmGoing ? cs.onPrimary : null,
                     ),
-                    child: const Text('참석'),
+                    child: Text(e.isFull && !e.iAmGoing ? '마감' : '참석'),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -2596,6 +2607,8 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
   final _title = TextEditingController();
   final _location = TextEditingController();
   final _desc = TextEditingController();
+  final _fee = TextEditingController();
+  final _capacity = TextEditingController();
   DateTime? _startsAt;
   bool _busy = false;
 
@@ -2604,6 +2617,8 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
     _title.dispose();
     _location.dispose();
     _desc.dispose();
+    _fee.dispose();
+    _capacity.dispose();
     super.dispose();
   }
 
@@ -2634,6 +2649,17 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       );
       return;
     }
+    final fee =
+        _fee.text.trim().isEmpty ? null : int.tryParse(_fee.text.trim());
+    final capacity = _capacity.text.trim().isEmpty
+        ? null
+        : int.tryParse(_capacity.text.trim());
+    if ((fee != null && fee < 0) || (capacity != null && capacity < 1)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비용과 제한 인원을 올바르게 입력하세요.')),
+      );
+      return;
+    }
     setState(() => _busy = true);
     try {
       await ref.read(apiProvider).createClubEvent(
@@ -2642,6 +2668,8 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
             description: _desc.text.trim(),
             locationText: _location.text.trim(),
             startsAt: _startsAt!,
+            fee: fee,
+            capacity: capacity,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -2690,6 +2718,32 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
             controller: _desc,
             decoration: const InputDecoration(labelText: '설명'),
             maxLines: 2,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _fee,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '참가 비용',
+                    suffixText: '원',
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: TextField(
+                  controller: _capacity,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '제한 인원',
+                    suffixText: '명',
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -2847,7 +2901,10 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
                     itemCount: _posts!.length,
                     itemBuilder: (_, i) => Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _PostRow(post: _posts![i]),
+                      child: _PostRow(
+                        post: _posts![i],
+                        onTap: () => _showPostDetail(_posts![i]),
+                      ),
                     ),
                   ),
                 ),
@@ -2868,6 +2925,52 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
       ),
     );
     if (created == true) _load();
+  }
+
+  Future<void> _showPostDetail(ClubPost post) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.68,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          children: [
+            Text(post.tagLabel,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                    )),
+            const SizedBox(height: AppSpacing.sm),
+            Text(post.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: AppSpacing.xs),
+            Text('${post.authorName ?? '익명'} · ${post.createdAt.toLocal()}'),
+            const Divider(height: AppSpacing.xl),
+            Text(post.body,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(height: 1.6)),
+            for (final url in post.imageUrls) ...[
+              const SizedBox(height: AppSpacing.md),
+              ClipRRect(
+                borderRadius: AppRadius.card,
+                child: Image.network(url, fit: BoxFit.cover),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -3379,7 +3482,8 @@ class _TagChip extends StatelessWidget {
 
 class _PostRow extends StatelessWidget {
   final ClubPost post;
-  const _PostRow({required this.post});
+  final VoidCallback onTap;
+  const _PostRow({required this.post, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -3397,80 +3501,93 @@ class _PostRow extends StatelessWidget {
             ? cs.primary.withValues(alpha: 0.38)
             : cs.outlineVariant;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: AppRadius.card,
-        border: Border.all(color: borderColor),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppShadows.card
-            : null,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isNotice) ...[
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: cs.errorContainer,
-                borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.card,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: AppRadius.card,
+          border: Border.all(color: borderColor),
+          boxShadow: Theme.of(context).brightness == Brightness.light
+              ? AppShadows.card
+              : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isNotice) ...[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.campaign_rounded,
+                    size: 20, color: cs.onErrorContainer),
               ),
-              child: Icon(Icons.campaign_rounded,
-                  size: 20, color: cs.onErrorContainer),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (post.isPinned)
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (post.isPinned)
+                        _PostMetaChip(
+                          icon: Icons.push_pin_rounded,
+                          label: '상단 고정',
+                          color: cs.primary,
+                          background: cs.primaryContainer,
+                        ),
                       _PostMetaChip(
-                        icon: Icons.push_pin_rounded,
-                        label: '상단 고정',
-                        color: cs.primary,
-                        background: cs.primaryContainer,
+                        icon: isNotice
+                            ? Icons.campaign_rounded
+                            : Icons.article_outlined,
+                        label: isNotice ? '중요 공지' : post.tagLabel,
+                        color: isNotice ? cs.error : cs.onSurfaceVariant,
+                        background: isNotice
+                            ? cs.errorContainer
+                            : cs.surfaceContainerHighest,
                       ),
-                    _PostMetaChip(
-                      icon: isNotice
-                          ? Icons.campaign_rounded
-                          : Icons.article_outlined,
-                      label: isNotice ? '중요 공지' : post.tagLabel,
-                      color: isNotice ? cs.error : cs.onSurfaceVariant,
-                      background: isNotice
-                          ? cs.errorContainer
-                          : cs.surfaceContainerHighest,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  post.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: isNotice ? cs.onErrorContainer : cs.onSurface,
+                    ],
                   ),
-                ),
-                if (post.imageUrls.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _PostImagePreview(urls: post.imageUrls),
-                ],
-                if (isNotice || post.tag == 'photo') ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
-                    post.body,
+                    post.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    style: tt.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: isNotice ? cs.onErrorContainer : cs.onSurface,
+                    ),
+                  ),
+                  if (post.imageUrls.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _PostImagePreview(urls: post.imageUrls),
+                  ],
+                  if (isNotice || post.tag == 'photo') ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      post.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: isNotice
+                            ? cs.onErrorContainer.withValues(alpha: 0.76)
+                            : cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
                     style: tt.bodySmall?.copyWith(
                       color: isNotice
                           ? cs.onErrorContainer.withValues(alpha: 0.76)
@@ -3478,19 +3595,10 @@ class _PostRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
-                  style: tt.bodySmall?.copyWith(
-                    color: isNotice
-                        ? cs.onErrorContainer.withValues(alpha: 0.76)
-                        : cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
@@ -240,6 +241,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(activeSportProvider, (previous, next) {
+      if (next == null || next == previous) return;
+      setState(() {
+        _clubInterests = {next};
+        _showAllClubs = false;
+      });
+      _load();
+    });
     final cs = Theme.of(context).colorScheme;
     final favoriteClubIds =
         ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
@@ -327,6 +336,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         club: club,
                         isFavorite: favoriteClubIds.contains(club.id),
                         onFavoriteToggle: _toggleClubFavorite,
+                        onOpen: () => _openClub(club),
                       ),
                     ),
                 if (!hasClubNameQuery) ...[
@@ -433,6 +443,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         club: club,
                         isFavorite: favoriteClubIds.contains(club.id),
                         onFavoriteToggle: _toggleClubFavorite,
+                        onOpen: () => _openClub(club),
                       ),
                     ),
               ],
@@ -461,6 +472,19 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return false;
     }
     return true;
+  }
+
+  Future<void> _openClub(Club club) async {
+    final deleted = await context.push<bool>('/clubs/${club.id}', extra: club);
+    if (deleted != true || !mounted) return;
+    setState(() {
+      _clubs?.removeWhere((item) => item.id == club.id);
+      _myClubs?.removeWhere((item) => item.id == club.id);
+    });
+    ref.invalidate(myClubsProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('클럽이 삭제되었습니다.')),
+    );
   }
 
   String _selectedSportLabel(Set<String> interests) {
