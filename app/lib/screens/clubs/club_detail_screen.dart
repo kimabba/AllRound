@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,8 @@ import '../../theme/tokens.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+
+enum ClubDetailResult { membershipChanged, deleted }
 
 /// 클럽 상세 전체화면: 소개 / 멤버 / 일정 탭.
 ///
@@ -117,6 +120,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     });
   }
 
+  void _refreshMembershipData() {
+    ref.invalidate(myClubsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
+    unawaited(_refreshClub());
+  }
+
   Future<void> _toggleFavorite(bool isFavorite) async {
     if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
@@ -168,7 +177,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     try {
       await ref.read(apiProvider).deleteClub(club.id);
       ref.invalidate(myClubsProvider);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, ClubDetailResult.deleted);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,7 +232,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     setState(() => _inFlight = true);
     try {
       await ref.read(apiProvider).leaveClub(club.id);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, ClubDetailResult.membershipChanged);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -336,7 +347,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                     ? _MembersTab(
                         future: membersFuture,
                         club: club,
-                        onChanged: _reload,
+                        onChanged: _refreshMembershipData,
                       )
                     : _memberOnlyNotice(cs, tt),
                 isMember
@@ -357,11 +368,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                     onMonthlyFeeChanged: (value) {
                       setState(() => _monthlyFee = value);
                     },
-                    onChanged: () {
-                      _reload();
-                      _refreshClub();
-                    },
-                    onDeleted: () => Navigator.pop(context, true),
+                    onChanged: _refreshMembershipData,
+                    onDeleted: () => Navigator.pop(
+                      context,
+                      ClubDetailResult.deleted,
+                    ),
                   ),
               ],
             ),
