@@ -6,6 +6,7 @@ import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/club_sort.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/allround_logo.dart';
 import '../widgets/app_empty_state.dart';
@@ -41,6 +42,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
   bool _showAllClubs = false;
+  ClubSortOrder _clubSortOrder = ClubSortOrder.recommended;
   List<RecruitingPostPreview> _recruitingPosts = const [];
   bool _loadingRecruiting = false;
 
@@ -52,7 +54,19 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _loadMyClubs();
       _load();
       _loadRecruitingPosts();
+      _restoreClubSortOrder();
     });
+  }
+
+  Future<void> _restoreClubSortOrder() async {
+    final order = await loadClubSortOrder();
+    if (mounted) setState(() => _clubSortOrder = order);
+  }
+
+  Future<void> _selectClubSortOrder(ClubSortOrder? order) async {
+    if (order == null || order == _clubSortOrder) return;
+    setState(() => _clubSortOrder = order);
+    await saveClubSortOrder(order);
   }
 
   Future<void> _loadMyClubs() async {
@@ -343,7 +357,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
-    final recommendedClubs = _recommendedClubs(visibleClubs);
+    final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
+        ? _recommendedClubs(visibleClubs)
+        : sortClubs(visibleClubs, _clubSortOrder);
     final displayedRecommendationClubs = hasClubNameQuery || _showAllClubs
         ? recommendedClubs
         : recommendedClubs.take(3).toList();
@@ -391,6 +407,21 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                                 ..._clubFilters.labels,
                               ].join(' · ')
                             : '${_selectedSportLabel(_clubInterests)} 기준'),
+                    trailing: DropdownButtonHideUnderline(
+                      child: DropdownButton<ClubSortOrder>(
+                        value: _clubSortOrder,
+                        borderRadius: BorderRadius.circular(16),
+                        icon: const Icon(Icons.sort_rounded),
+                        onChanged: _selectClubSortOrder,
+                        items: [
+                          for (final order in ClubSortOrder.values)
+                            DropdownMenuItem(
+                              value: order,
+                              child: Text(order.label),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   if (_loading || _loadingMy) const LinearProgressIndicator(),

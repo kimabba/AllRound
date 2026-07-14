@@ -5,11 +5,13 @@ import '../../theme/tokens.dart';
 class SimpleSectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final Widget? trailing;
 
   const SimpleSectionHeader({
     super.key,
     required this.title,
     this.subtitle,
+    this.trailing,
   });
 
   @override
@@ -35,6 +37,10 @@ class SimpleSectionHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          trailing!,
+        ],
       ],
     );
   }
