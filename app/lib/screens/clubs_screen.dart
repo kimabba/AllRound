@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../config.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
@@ -38,6 +37,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
+  bool _showAllClubs = false;
   final Set<String> _closedRecruitingPostIds = {};
 
   @override
@@ -53,10 +53,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   Future<void> _loadMyClubs() async {
     setState(() => _loadingMy = true);
     try {
-      if (AppConfig.userDesignPreview) {
-        if (mounted) setState(() => _myClubs = _previewManagedClubs);
-        return;
-      }
       final list = await ref.read(apiProvider).myClubs();
       if (mounted) setState(() => _myClubs = list);
     } catch (e) {
@@ -73,10 +69,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _searchError = null;
     });
     try {
-      if (AppConfig.userDesignPreview) {
-        if (mounted) setState(() => _clubs = _previewSearchClubs);
-        return;
-      }
       final api = ref.read(apiProvider);
       final sports = _clubInterests.isEmpty
           ? const <String>['tennis', 'futsal']
@@ -109,6 +101,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       MaterialPageRoute(builder: (_) => const ClubCreateScreen()),
     );
     if (result == true) {
+      ref.invalidate(myClubsProvider);
       _loadMyClubs();
       _load();
     }
@@ -215,7 +208,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
-    if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
     ref.invalidate(clubFavoriteIdsProvider);
     ref.invalidate(myFavoriteClubsProvider);
@@ -225,8 +217,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final candidates = [
       ...?_clubs,
       ...?_myClubs,
-      ..._previewSearchClubs,
-      ..._previewManagedClubs,
     ];
     for (final club in candidates) {
       if (club.name == post.clubName && club.sport == post.sport) {
@@ -253,7 +243,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final cs = Theme.of(context).colorScheme;
     final favoriteClubIds =
         ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
-    final effectiveClubs = _clubs ?? _previewSearchClubs;
+    final effectiveClubs = _clubs ?? const <Club>[];
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
         .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
@@ -262,12 +252,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
-    final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
-    final displayedRecommendationClubs =
-        hasClubNameQuery ? recommendedClubs : recommendedClubs.take(3).toList();
-    final myMembershipClubs = (_myClubs ?? _previewManagedClubs)
-        .where((club) => club.isMember)
-        .toList();
+    final recommendedClubs = _recommendedClubs(visibleClubs);
+    final displayedRecommendationClubs = hasClubNameQuery || _showAllClubs
+        ? recommendedClubs
+        : recommendedClubs.take(3).toList();
+    final myMembershipClubs =
+        (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
@@ -339,6 +329,29 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         onFavoriteToggle: _toggleClubFavorite,
                       ),
                     ),
+                if (!hasClubNameQuery) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showAllClubs = !_showAllClubs;
+                          if (_showAllClubs) {
+                            _clubInterests = {'tennis', 'futsal'};
+                          }
+                        });
+                        if (_showAllClubs) _load();
+                      },
+                      icon: Icon(
+                        _showAllClubs
+                            ? Icons.expand_less_rounded
+                            : Icons.groups_2_outlined,
+                      ),
+                      label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
+                    ),
+                  ),
+                ],
                 // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
                 if (_nearbyNewClubsEnabled) ...[
                   const SizedBox(height: AppSpacing.lg),
@@ -393,7 +406,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   const SizedBox(height: AppSpacing.xl),
                 ],
                 TeamRecruitingBoard(
-                  posts: _visibleRecruitingPosts(_clubInterests),
+                  posts: _visibleRecruitingPosts(),
                   showOpenOnly: _showOpenRecruitingOnly,
                   canManage: managedClubs.isNotEmpty,
                   onShowOpenOnlyChanged: (value) {
@@ -471,7 +484,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       });
   }
 
-  List<Club> _recommendedPreviewClubs(List<Club> source) {
+  List<Club> _recommendedClubs(List<Club> source) {
     final scored = [
       for (final club in source)
         (
@@ -490,187 +503,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return scored.map((item) => item.club).toList();
   }
 
-  List<RecruitingPostPreview> _visibleRecruitingPosts(Set<String> interests) {
-    final now = DateTime.now();
-    final posts = [
-      for (final post in _previewRecruitingPosts)
-        if (_closedRecruitingPostIds.contains(post.id) && !post.isClosed)
-          post.copyWith(isClosed: true, closedAt: now)
-        else
-          post,
-    ].where((post) {
-      if (!interests.contains(post.sport)) return false;
-      if (post.isClosed && post.closedAt != null) {
-        // Keep just-closed recruiting posts visible briefly so managers can
-        // confirm the state change, then remove them from the public list.
-        return now.difference(post.closedAt!).inHours < 24;
-      }
-      return true;
-    }).toList();
-
-    if (_showOpenRecruitingOnly) {
-      return posts.where((post) => !post.isClosed).toList();
-    }
-    return posts;
+  List<RecruitingPostPreview> _visibleRecruitingPosts() {
+    return const <RecruitingPostPreview>[];
   }
 }
-
-final _previewManagedClubs = [
-  Club(
-    id: 'preview-managed-futsal',
-    sport: 'futsal',
-    name: '광주 위너스 풋살클럽',
-    region: '광주',
-    address: '광주 북구 풋살파크',
-    description: '주말 저녁 풋살 멤버를 모집하는 클럽',
-    memberCount: 18,
-    myRole: 'owner',
-  ),
-  Club(
-    id: 'preview-managed-tennis',
-    sport: 'tennis',
-    name: '올라운드 테니스 크루',
-    region: '광주',
-    address: '염주실내테니스장',
-    description: '초보부터 함께 치는 테니스 모임',
-    memberCount: 24,
-    myRole: 'manager',
-  ),
-];
-
-final _previewRecruitingPosts = [
-  RecruitingPostPreview(
-    id: 'preview-recruiting-futsal-open-1',
-    sport: 'futsal',
-    clubName: '광주 위너스 풋살클럽',
-    title: '주말 저녁 정기전 팀원 모집',
-    region: '광주',
-    place: '광주 북구 풋살파크 A구장',
-    schedule: '6/22 (토) 19:00',
-    grade: '초급 · 중급',
-    gender: '혼성',
-    age: '20대 · 30대',
-    fieldCount: 4,
-    keeperCount: 1,
-    totalCount: 5,
-    cost: '10,000원',
-    intro: '정기적으로 주말 저녁에 뛰는 팀입니다. 초급자도 부담 없이 참여할 수 있어요.',
-  ),
-  RecruitingPostPreview(
-    id: 'preview-recruiting-tennis-open-1',
-    sport: 'tennis',
-    clubName: '올라운드 테니스 크루',
-    title: '토요일 복식 랠리 멤버 모집',
-    region: '광주',
-    place: '염주실내테니스장',
-    schedule: '6/29 (토) 10:00',
-    grade: '신입 · 5부',
-    gender: '무관',
-    age: '무관',
-    fieldCount: 0,
-    keeperCount: 0,
-    totalCount: 2,
-    cost: '코트비 N분의 1',
-    intro: '복식 랠리를 함께할 멤버를 찾고 있습니다. 랠리가 가능한 초보도 환영합니다.',
-  ),
-  RecruitingPostPreview(
-    id: 'preview-recruiting-futsal-closed-1',
-    sport: 'futsal',
-    clubName: '리얼 FS 신규회원 모집중',
-    title: '평일 야간 풋살 게스트 모집',
-    region: '광주',
-    place: '첨단 풋살파크',
-    schedule: '6/19 (수) 21:00',
-    grade: '입문 · 초급',
-    gender: '남성',
-    age: '30대',
-    fieldCount: 0,
-    keeperCount: 0,
-    totalCount: 0,
-    cost: '마감',
-    intro: '평일 야간에 가볍게 합류할 게스트를 모집했던 글입니다.',
-    isClosed: true,
-    closedAt: DateTime(2026, 6, 17, 18),
-  ),
-];
-
-final _previewSearchClubs = [
-  Club(
-    id: 'preview-new-futsal-1',
-    sport: 'futsal',
-    name: '리얼 FS 신규회원 모집중',
-    region: '광주',
-    address: '광주 북구 풋살파크',
-    description: '평일 저녁과 주말에 함께 뛰는 풋살 클럽',
-    memberCount: 78,
-    meetingDays: const ['화', '목', '토'],
-    monthlyFee: 30000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-  Club(
-    id: 'preview-new-tennis-1',
-    sport: 'tennis',
-    name: '올라운드 테니스 크루',
-    region: '광주',
-    address: '염주실내테니스장',
-    description: '초보부터 랠리까지 함께 치는 테니스 모임',
-    memberCount: 24,
-    meetingDays: const ['수', '토'],
-    monthlyFee: 20000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 2)),
-  ),
-  Club(
-    id: 'preview-new-futsal-2',
-    sport: 'futsal',
-    name: '광주 위너스 풋살클럽',
-    region: '광주',
-    address: '수완 풋살파크',
-    description: '초급자도 참여 가능한 주말 풋살 클럽',
-    memberCount: 32,
-    meetingDays: const ['일'],
-    monthlyFee: 10000,
-    genderPreference: 'male',
-    createdAt: DateTime.now().subtract(const Duration(days: 5)),
-  ),
-  Club(
-    id: 'preview-new-tennis-2',
-    sport: 'tennis',
-    name: '광주 랠리메이트',
-    region: '광주',
-    address: '상무 테니스코트',
-    description: '퇴근 후 가볍게 치는 직장인 테니스 클럽',
-    memberCount: 41,
-    meetingDays: const ['월', '목'],
-    monthlyFee: 40000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 6)),
-  ),
-  Club(
-    id: 'preview-rec-futsal-1',
-    sport: 'futsal',
-    name: '첨단 풋살 러닝메이트',
-    region: '광주',
-    address: '첨단 풋살센터',
-    description: '입문자와 초급자가 편하게 참여하는 모임',
-    memberCount: 18,
-    meetingDays: const ['금'],
-    monthlyFee: 0,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 14)),
-  ),
-  Club(
-    id: 'preview-rec-tennis-1',
-    sport: 'tennis',
-    name: '주말 테니스 친구들',
-    region: '광주',
-    address: '광주 월드컵 테니스장',
-    description: '주말 오전 중심의 테니스 동호회',
-    memberCount: 56,
-    meetingDays: const ['토', '일'],
-    monthlyFee: 50000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 21)),
-  ),
-];

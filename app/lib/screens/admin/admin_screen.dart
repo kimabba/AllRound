@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../config.dart';
 import '../../models/admin.dart';
 import '../../models/crawl_source.dart';
@@ -572,8 +573,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       } else {
         final first = executed.first as Map<String, dynamic>;
         final status = first['status']?.toString() ?? 'unknown';
-        summary =
-            '${s.slug}: $status · '
+        summary = '${s.slug}: $status · '
             'fetched ${first['fetched_count'] ?? 0} · '
             'inserted ${first['inserted_count'] ?? 0} · '
             'updated ${first['updated_count'] ?? 0}';
@@ -664,6 +664,17 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: '뒤로가기',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/profile');
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         title: const Text('관리자'),
         bottom: TabBar(
           controller: _tab,
@@ -733,12 +744,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final selectedInView = visibleIds.intersection(_selectedDraftIds).length;
     final allSelected =
         filtered.isNotEmpty && selectedInView == filtered.length;
-    final crawlerCount = _drafts
-        .where((r) => r['submission_kind'] == 'crawler')
-        .length;
-    final userCount = _drafts
-        .where((r) => r['submission_kind'] == 'user')
-        .length;
+    final crawlerCount =
+        _drafts.where((r) => r['submission_kind'] == 'crawler').length;
+    final userCount =
+        _drafts.where((r) => r['submission_kind'] == 'user').length;
 
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -843,9 +852,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final title = t['title'] as String? ?? '(제목 없음)';
           final sport = t['sport'] as String? ?? '';
           final startDate = t['start_date']?.toString() ?? '';
-          final date = startDate.length >= 10
-              ? startDate.substring(0, 10)
-              : startDate;
+          final date =
+              startDate.length >= 10 ? startDate.substring(0, 10) : startDate;
           final region = t['region'] as String? ?? '';
           final sourceUrl = t['source_url'] as String? ?? '';
           final posterUrl = t['poster_url'] as String? ?? '';
@@ -854,11 +862,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final submitterEmail = t['submitted_by_email'] as String?;
           final sourceLabel = kind == 'user'
               ? (submitterEmail != null
-                    ? submitterEmail.split('@').first
-                    : 'user')
+                  ? submitterEmail.split('@').first
+                  : 'user')
               : source.isEmpty
-              ? 'crawler'
-              : source;
+                  ? 'crawler'
+                  : source;
           final selected = _selectedDraftIds.contains(id);
 
           return Padding(
@@ -892,7 +900,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                               Expanded(
                                 child: Text(
                                   sourceLabel,
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
                                       ?.copyWith(color: Colors.grey),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -991,8 +1001,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                 runSpacing: 8,
                 children: [
                   Checkbox(
-                    value: _selectedPendingClubIds.length ==
-                        _pendingClubs.length,
+                    value:
+                        _selectedPendingClubIds.length == _pendingClubs.length,
                     onChanged: _clubReviewInFlight
                         ? null
                         : (selected) {
@@ -1012,24 +1022,24 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                         : '${_selectedPendingClubIds.length}개 선택',
                   ),
                   FilledButton.icon(
-                    onPressed: _selectedPendingClubIds.isEmpty ||
-                            _clubReviewInFlight
-                        ? null
-                        : () => _reviewClubs(
-                              _selectedPendingClubIds.toList(),
-                              approve: true,
-                            ),
+                    onPressed:
+                        _selectedPendingClubIds.isEmpty || _clubReviewInFlight
+                            ? null
+                            : () => _reviewClubs(
+                                  _selectedPendingClubIds.toList(),
+                                  approve: true,
+                                ),
                     icon: const Icon(Icons.check_rounded),
                     label: const Text('선택 승인'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _selectedPendingClubIds.isEmpty ||
-                            _clubReviewInFlight
-                        ? null
-                        : () => _reviewClubs(
-                              _selectedPendingClubIds.toList(),
-                              approve: false,
-                            ),
+                    onPressed:
+                        _selectedPendingClubIds.isEmpty || _clubReviewInFlight
+                            ? null
+                            : () => _reviewClubs(
+                                  _selectedPendingClubIds.toList(),
+                                  approve: false,
+                                ),
                     icon: const Icon(Icons.close_rounded),
                     label: const Text('선택 거절'),
                   ),

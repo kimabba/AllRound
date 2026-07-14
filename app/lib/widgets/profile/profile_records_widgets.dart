@@ -18,6 +18,50 @@ import 'profile_sports_widgets.dart';
 class MyClubsSection extends ConsumerWidget {
   const MyClubsSection({super.key});
 
+  Future<void> _deletePendingClub(
+    BuildContext context,
+    WidgetRef ref,
+    Club club,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('클럽 삭제'),
+        content: Text('${club.name} 클럽 생성 요청을 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiProvider).deleteClub(club.id);
+      ref.invalidate(myClubsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('클럽 생성 요청을 삭제했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('클럽 삭제 실패: $error')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
@@ -81,6 +125,39 @@ class MyClubsSection extends ConsumerWidget {
                                         color: cs.onSurfaceVariant,
                                       ),
                                     ),
+                                    const SizedBox(height: AppSpacing.xs),
+                                    _ClubStatusBadge(status: club.status),
+                                    if (club.isPending && club.isOwner) ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Wrap(
+                                        spacing: AppSpacing.xs,
+                                        children: [
+                                          OutlinedButton.icon(
+                                            onPressed: () => context.push(
+                                              '/clubs/${club.id}',
+                                              extra: club,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.edit_outlined,
+                                              size: 16,
+                                            ),
+                                            label: const Text('수정'),
+                                          ),
+                                          TextButton.icon(
+                                            onPressed: () => _deletePendingClub(
+                                              context,
+                                              ref,
+                                              club,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('삭제'),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -96,6 +173,40 @@ class MyClubsSection extends ConsumerWidget {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _ClubStatusBadge extends StatelessWidget {
+  const _ClubStatusBadge({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (label, foreground, background) = switch (status) {
+      'approved' => ('승인', cs.primary, cs.primaryContainer),
+      'rejected' => ('반려', cs.error, cs.errorContainer),
+      _ => ('승인 대기', cs.onSurfaceVariant, cs.surfaceContainerHighest),
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
     );
   }
 }

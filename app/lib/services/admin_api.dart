@@ -90,7 +90,8 @@ mixin AdminApi on ApiBase {
       uri('clubs-approve'),
       headers: await authHeaders(),
       body: jsonEncode({
-        'club_ids': clubIds,
+        if (clubIds.length == 1) 'club_id': clubIds.single,
+        if (clubIds.length > 1) 'club_ids': clubIds,
         'action': approve ? 'approve' : 'reject',
         if (trimmedReason != null && trimmedReason.isNotEmpty)
           'reason': trimmedReason,
@@ -195,11 +196,8 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row = await supabase
-          .from('crawl_sources')
-          .select()
-          .eq('id', id)
-          .single();
+      final row =
+          await supabase.from('crawl_sources').select().eq('id', id).single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase
