@@ -170,7 +170,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       await supa.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'kr.allround.app://login-callback/',
+        // 모바일은 딥링크 스킴으로 복귀. 웹(admin/웹빌드)에서는 모바일 스킴을 쓰면
+        // 브라우저로 못 돌아오므로 redirectTo 를 비워 현재 origin 으로 복귀시킨다 (JY-132).
+        redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
         // 로그아웃 후 재로그인 시 직전 구글 계정으로 자동 재인증되지 않도록
         // 계정 선택 화면을 항상 노출한다 (JY-113).
         queryParams: const {'prompt': 'select_account'},
@@ -402,15 +404,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
-                      if (AppConfig.googleWebClientId.isNotEmpty ||
-                          AppConfig.googleIosClientId.isNotEmpty) ...[
-                        _SocialButton(
-                          onPressed: _busy ? null : _googleSignIn,
-                          icon: Icons.account_circle_outlined,
-                          label: '구글로 계속하기',
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
+                      // 구글 로그인은 signInWithOAuth(Supabase 서버 OAuth) 방식이라
+                      // 앱 클라이언트 ID가 필요 없다. 항상 노출한다 (과거엔 미사용
+                      // 값 googleWebClientId 유무로 게이트했으나, 그 값이 빠진 릴리스
+                      // 빌드에서 버튼이 사라지는 버그였다).
+                      _SocialButton(
+                        onPressed: _busy ? null : _googleSignIn,
+                        icon: Icons.account_circle_outlined,
+                        label: '구글로 계속하기',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
                       TextButton(
                         onPressed: _busy ? null : _showEmailAuthSheet,
                         style: TextButton.styleFrom(
