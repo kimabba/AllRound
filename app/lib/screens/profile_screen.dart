@@ -227,12 +227,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
     final profile = ref.watch(myProfileProvider).valueOrNull;
+    final unreadNotificationCount =
+        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
 
     final email = user?.email ?? '';
     final emailPrefix = email.contains('@') ? email.split('@').first : email;
     // 앱 활동 표시명: 닉네임 → 실명 → 이메일 앞부분 → '사용자'
-    final displayName = profile?.displayName ??
-        (emailPrefix.isEmpty ? '사용자' : emailPrefix);
+    final displayName =
+        profile?.displayName ?? (emailPrefix.isEmpty ? '사용자' : emailPrefix);
     // 본인만 보는 정보 줄: 실명(표시명과 다를 때만) · 만 나이
     final realName = profile?.name?.trim();
     final age = profile?.ageOn(DateTime.now());
@@ -292,9 +294,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 AccountSection(
                   ref: ref,
+                  unreadNotificationCount: unreadNotificationCount,
                   tournamentNotificationsEnabled: _notifyTournament,
                   clubNotificationsEnabled: _notifyClub,
                   coachNotificationsEnabled: _notifyCoach,
+                  onNotificationInboxTap: () => context.push('/notifications'),
                   onNotificationTap: _showNotificationSettings,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),

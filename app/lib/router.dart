@@ -17,6 +17,7 @@ import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/friend_schedule_screen.dart';
 import 'screens/more_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
 // 웹은 dart:io 미지원 → stub 사용
@@ -98,6 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+          GoRoute(
+            path: '/notifications',
+            builder: (_, __) => const NotificationsScreen(),
+          ),
           GoRoute(
             path: '/favorites',
             builder: (_, __) => const FavoritesScreen(),
@@ -192,6 +197,7 @@ class _MainShell extends ConsumerWidget {
     '/speed-gun',
     '/rules',
     '/profile',
+    '/notifications',
     '/favorites',
     '/friend-schedule',
   ];

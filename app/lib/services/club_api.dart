@@ -258,6 +258,18 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
+  Future<void> resubmitClubReview(String clubId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'resubmit_review',
+      }),
+    );
+    check(res);
+  }
+
   Future<void> deleteClub(String clubId) async {
     final res = await httpPost(
       uri('clubs-join'),

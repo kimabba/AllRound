@@ -69,16 +69,40 @@ mixin AdminApi on ApiBase {
     required bool approve,
     String? reason,
   }) async {
+    await reviewClubs(
+      [clubId],
+      approve: approve,
+      reason: reason,
+    );
+  }
+
+  Future<int> reviewClubs(
+    List<String> clubIds, {
+    required bool approve,
+    String? reason,
+  }) async {
+    if (clubIds.isEmpty) return 0;
+    final trimmedReason = reason?.trim();
+    if (!approve && (trimmedReason == null || trimmedReason.isEmpty)) {
+      throw ArgumentError('rejection reason required');
+    }
     final res = await httpPost(
       uri('clubs-approve'),
       headers: await authHeaders(),
       body: jsonEncode({
-        'club_id': clubId,
+        'club_ids': clubIds,
         'action': approve ? 'approve' : 'reject',
-        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        if (trimmedReason != null && trimmedReason.isNotEmpty)
+          'reason': trimmedReason,
       }),
     );
     check(res);
+    final decoded = jsonDecode(res.body);
+    if (decoded is Map<String, dynamic>) {
+      final count = decoded['count'];
+      if (count is num) return count.toInt();
+    }
+    return clubIds.length;
   }
 
   // ── 크롤 소스 ─────────────────────────────────────────────────

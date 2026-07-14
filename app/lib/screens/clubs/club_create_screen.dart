@@ -54,23 +54,34 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (!(_formKey.currentState?.validate() ?? true)) return;
     setState(() => _submitting = true);
     try {
+      final warnings = <String>[];
       String? logoUrl;
       if (_logoBytes != null) {
-        logoUrl = await ref.read(apiProvider).uploadClubLogo(
-              bytes: _logoBytes!,
-              extension: _logoExtension,
-              contentType: _logoContentType,
-            );
+        try {
+          logoUrl = await ref.read(apiProvider).uploadClubLogo(
+                bytes: _logoBytes!,
+                extension: _logoExtension,
+                contentType: _logoContentType,
+              );
+        } catch (_) {
+          warnings.add('클럽 로고 업로드에 실패해 로고 없이 제출했습니다.');
+        }
       }
       final introImageUrls = <String>[];
       for (final image in _introImages) {
-        introImageUrls.add(
-          await ref.read(apiProvider).uploadClubIntroImage(
-                bytes: image.bytes,
-                extension: image.extension,
-                contentType: image.contentType,
-              ),
-        );
+        try {
+          introImageUrls.add(
+            await ref.read(apiProvider).uploadClubIntroImage(
+                  bytes: image.bytes,
+                  extension: image.extension,
+                  contentType: image.contentType,
+                ),
+          );
+        } catch (_) {
+          if (!warnings.contains('소개 사진 업로드에 실패해 사진 없이 제출했습니다.')) {
+            warnings.add('소개 사진 업로드에 실패해 사진 없이 제출했습니다.');
+          }
+        }
       }
       final fee = int.tryParse(_monthlyFee.text.trim());
       await ref.read(apiProvider).createClub(
@@ -89,8 +100,12 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'),
+          SnackBar(
+            content: Text(
+              warnings.isEmpty
+                  ? '클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'
+                  : '클럽 생성 요청은 제출되었습니다. ${warnings.join(' ')}',
+            ),
           ),
         );
         Navigator.pop(context, true);
@@ -682,8 +697,10 @@ class _IntroClubStep extends StatelessWidget {
             hintText: '클럽 소개, 활동 내용, 가입 조건 등',
             alignLabelWithHint: true,
           ),
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          minLines: 5,
           maxLines: 5,
-          textInputAction: TextInputAction.done,
         ),
         const SizedBox(height: AppSpacing.md),
         _IntroPhotoPicker(

@@ -265,9 +265,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
     final displayedRecommendationClubs =
         hasClubNameQuery ? recommendedClubs : recommendedClubs.take(3).toList();
-    final joinedClubs = (_myClubs ?? _previewManagedClubs)
+    final myMembershipClubs = (_myClubs ?? _previewManagedClubs)
         .where((club) => club.isMember)
         .toList();
+    final joinedClubs =
+        myMembershipClubs.where((club) => club.isApproved).toList();
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
@@ -405,13 +407,21 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 const SimpleSectionHeader(title: '가입한 클럽'),
                 const SizedBox(height: AppSpacing.sm),
-                SimpleClubTile(
-                  club: joinedClubs.isEmpty ? null : joinedClubs.first,
-                  isFavorite: joinedClubs.isEmpty
-                      ? false
-                      : favoriteClubIds.contains(joinedClubs.first.id),
-                  onFavoriteToggle: _toggleClubFavorite,
-                ),
+                if (joinedClubs.isEmpty)
+                  SimpleClubTile(
+                    club: null,
+                    onFavoriteToggle: _toggleClubFavorite,
+                  )
+                else
+                  for (final club in joinedClubs)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: SimpleClubTile(
+                        club: club,
+                        isFavorite: favoriteClubIds.contains(club.id),
+                        onFavoriteToggle: _toggleClubFavorite,
+                      ),
+                    ),
               ],
             ),
           ),

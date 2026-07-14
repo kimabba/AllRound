@@ -62,6 +62,20 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// 로컬 테스트용 운영진 계정 이메일.
+  /// 실제 권한은 서버의 users.role 이 결정한다.
+  static const testAdminEmail = String.fromEnvironment(
+    'TEST_ADMIN_EMAIL',
+    defaultValue: 'test1@naver.com',
+  );
+
+  /// 로컬 테스트용 일반 계정 이메일.
+  /// 비워두면 일반 계정 로그인 버튼은 이메일 직접 입력 흐름으로 연다.
+  static const testUserEmail = String.fromEnvironment(
+    'TEST_USER_EMAIL',
+    defaultValue: '',
+  );
+
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(

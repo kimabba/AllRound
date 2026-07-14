@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,7 +12,6 @@ import '../../theme/tokens.dart';
 const Color _primaryBlue = Color(0xFF1E3A8A);
 const Color _primaryBlueSoft = Color(0xFF1E40AF);
 const Color _futsalGreen = Color(0xFF84CC16);
-
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -109,6 +109,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
+  Future<void> _openEmailFlow({
+    required bool signUp,
+    String presetEmail = '',
+  }) async {
+    if (_busy) return;
+    _setMode(signUp: signUp);
+    _email.text = presetEmail;
+    await _showEmailAuthSheet();
+  }
+
   Future<void> _googleSignIn() async {
     setState(() {
       _busy = true;
@@ -126,7 +136,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             UserAttributes(data: {
               'marketing_consent': consent,
               if (consent)
-                'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
+                'marketing_consent_at':
+                    DateTime.now().toUtc().toIso8601String(),
             }),
           );
         }
@@ -286,6 +297,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // 로컬 관리자 모드(make admin): 마케팅·온보딩 카피를 숨기고
     // 이메일·구글 로그인만 노출. 실제 권한은 서버 RLS.
     final adminMode = AppConfig.adminMode;
+    final showTestShortcuts = kDebugMode;
 
     return Scaffold(
       body: Container(
@@ -385,6 +397,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
+                      if (showTestShortcuts) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        _TestLoginShortcutCard(
+                          adminEmail: AppConfig.testAdminEmail,
+                          userEmail: AppConfig.testUserEmail,
+                          busy: _busy,
+                          onAdminLogin: () => _openEmailFlow(
+                            signUp: false,
+                            presetEmail: AppConfig.testAdminEmail,
+                          ),
+                          onUserLogin: () => _openEmailFlow(
+                            signUp: false,
+                            presetEmail: AppConfig.testUserEmail,
+                          ),
+                          onUserSignUp: () => _openEmailFlow(
+                            signUp: true,
+                            presetEmail: AppConfig.testUserEmail,
+                          ),
+                        ),
+                      ],
                       if (!adminMode) ...[
                         const SizedBox(height: AppSpacing.lg),
                         Text(
@@ -398,8 +430,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(height: AppSpacing.md),
                         _MarketingConsentRow(
                           value: _marketingConsent,
-                          onChanged: (value) =>
-                              setState(() => _marketingConsent = value ?? false),
+                          onChanged: (value) => setState(
+                              () => _marketingConsent = value ?? false),
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
@@ -410,6 +442,176 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TestLoginShortcutCard extends StatelessWidget {
+  const _TestLoginShortcutCard({
+    required this.adminEmail,
+    required this.userEmail,
+    required this.busy,
+    required this.onAdminLogin,
+    required this.onUserLogin,
+    required this.onUserSignUp,
+  });
+
+  final String adminEmail;
+  final String userEmail;
+  final bool busy;
+  final VoidCallback onAdminLogin;
+  final VoidCallback onUserLogin;
+  final VoidCallback onUserSignUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final hasPresetUserEmail = userEmail.trim().isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '로컬 테스트 바로가기',
+            style: tt.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '운영진 계정과 일반 계정 진입을 빠르게 열어줍니다. 실제 권한은 서버 기준입니다.',
+            style: tt.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.80),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _TestLoginItem(
+            icon: Icons.admin_panel_settings_outlined,
+            title: '운영진 계정',
+            subtitle: adminEmail,
+            buttonLabel: '운영진 로그인',
+            busy: busy,
+            onPressed: onAdminLogin,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _TestLoginItem(
+            icon: Icons.person_outline_rounded,
+            title: '일반 계정',
+            subtitle: hasPresetUserEmail ? userEmail : '회원가입 또는 일반 로그인 테스트',
+            buttonLabel: hasPresetUserEmail ? '일반 로그인' : '일반 로그인 열기',
+            busy: busy,
+            onPressed: onUserLogin,
+            secondaryLabel: '새 일반 계정 회원가입',
+            onSecondaryPressed: onUserSignUp,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestLoginItem extends StatelessWidget {
+  const _TestLoginItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.buttonLabel,
+    required this.busy,
+    required this.onPressed,
+    this.secondaryLabel,
+    this.onSecondaryPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String buttonLabel;
+  final bool busy;
+  final VoidCallback onPressed;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondaryPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: tt.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: tt.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.78),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: busy ? null : onPressed,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              backgroundColor: Colors.white,
+              foregroundColor: _primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: Text(
+              buttonLabel,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          if (secondaryLabel != null && onSecondaryPressed != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            TextButton(
+              onPressed: busy ? null : onSecondaryPressed,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(40),
+              ),
+              child: Text(
+                secondaryLabel!,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

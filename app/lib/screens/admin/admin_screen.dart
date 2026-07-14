@@ -46,6 +46,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   // Tab 3: pending clubs
   List<Club> _pendingClubs = [];
   bool _loadingPendingClubs = false;
+  final Set<String> _selectedPendingClubIds = {};
+  bool _clubReviewInFlight = false;
 
   @override
   void initState() {
@@ -338,7 +340,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     if (mounted) setState(() => _loadingPendingClubs = true);
     try {
       final list = await ref.read(apiProvider).pendingClubs();
-      if (mounted) setState(() => _pendingClubs = list);
+      if (mounted) {
+        setState(() {
+          _pendingClubs = list;
+          final pendingIds = list.map((club) => club.id).toSet();
+          _selectedPendingClubIds.retainAll(pendingIds);
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -351,18 +359,66 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   }
 
   Future<void> _approveClub(String clubId, {required bool approve}) async {
+    await _reviewClubs([clubId], approve: approve);
+  }
+
+  Future<String?> _requestClubRejectionReason(int count) async {
+    final controller = TextEditingController();
+    String? validationMessage;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(count == 1 ? '클럽 거절 사유' : '$count개 클럽 거절 사유'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: '운영자가 수정할 수 있도록 사유를 입력하세요',
+              errorText: validationMessage,
+            ),
+            autofocus: true,
+            maxLines: 3,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isEmpty) {
+                  setDialogState(() => validationMessage = '거절 사유를 입력하세요');
+                  return;
+                }
+                Navigator.pop(ctx, value);
+              },
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('거절'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return reason;
+  }
+
+  Future<void> _reviewClubs(
+    List<String> clubIds, {
+    required bool approve,
+  }) async {
+    if (clubIds.isEmpty || _clubReviewInFlight) return;
     String? reason;
     if (!approve) {
-      final ctrl = TextEditingController();
-      final ok = await showDialog<bool>(
+      reason = await _requestClubRejectionReason(clubIds.length);
+      if (reason == null) return;
+    } else if (clubIds.length > 1) {
+      final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('거절 사유'),
-          content: TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(hintText: '사유를 입력하세요'),
-            autofocus: true,
-          ),
+          title: const Text('선택 클럽 일괄 승인'),
+          content: Text('${clubIds.length}개 클럽을 승인하시겠어요?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -370,23 +426,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('거절'),
+              child: const Text('승인'),
             ),
           ],
         ),
       );
-      if (ok != true) return;
-      reason = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
+      if (confirmed != true) return;
     }
+    if (mounted) setState(() => _clubReviewInFlight = true);
     try {
-      await ref
+      final count = await ref
           .read(apiProvider)
-          .approveClub(clubId, approve: approve, reason: reason);
+          .reviewClubs(clubIds, approve: approve, reason: reason);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(approve ? '클럽 승인 완료' : '클럽 거절 완료')),
+          SnackBar(
+            content: Text(approve ? '$count개 클럽 승인 완료' : '$count개 클럽 거절 완료'),
+          ),
         );
+        setState(() => _selectedPendingClubIds.removeAll(clubIds));
       }
       await _loadPendingClubs();
     } catch (e) {
@@ -395,6 +453,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           context,
         ).showSnackBar(SnackBar(content: Text('처리 실패: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _clubReviewInFlight = false);
     }
   }
 
@@ -919,70 +979,149 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     }
     return RefreshIndicator(
       onRefresh: _loadPendingClubs,
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.all(12),
-        itemCount: _pendingClubs.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) {
-          final c = _pendingClubs[i];
-          final meta = [
-            c.sport == 'tennis' ? '테니스' : '풋살',
-            if (c.region != null) c.region!,
-            if (c.address != null) c.address!,
-          ].join(' · ');
-          return Card(
+        children: [
+          Card(
             child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text(c.name, style: Theme.of(context).textTheme.titleMedium),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(meta, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                  if (c.contact != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '연락처: ${c.contact!}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  if (c.description != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      c.description!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 36),
-                        ),
-                        onPressed: () => _approveClub(c.id, approve: true),
-                        child: const Text('승인'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 36),
-                        ),
-                        onPressed: () => _approveClub(c.id, approve: false),
-                        child: const Text('거절'),
-                      ),
-                    ],
+                  Checkbox(
+                    value: _selectedPendingClubIds.length ==
+                        _pendingClubs.length,
+                    onChanged: _clubReviewInFlight
+                        ? null
+                        : (selected) {
+                            setState(() {
+                              _selectedPendingClubIds.clear();
+                              if (selected == true) {
+                                _selectedPendingClubIds.addAll(
+                                  _pendingClubs.map((club) => club.id),
+                                );
+                              }
+                            });
+                          },
+                  ),
+                  Text(
+                    _selectedPendingClubIds.isEmpty
+                        ? '전체 선택'
+                        : '${_selectedPendingClubIds.length}개 선택',
+                  ),
+                  FilledButton.icon(
+                    onPressed: _selectedPendingClubIds.isEmpty ||
+                            _clubReviewInFlight
+                        ? null
+                        : () => _reviewClubs(
+                              _selectedPendingClubIds.toList(),
+                              approve: true,
+                            ),
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('선택 승인'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _selectedPendingClubIds.isEmpty ||
+                            _clubReviewInFlight
+                        ? null
+                        : () => _reviewClubs(
+                              _selectedPendingClubIds.toList(),
+                              approve: false,
+                            ),
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('선택 거절'),
                   ),
                 ],
               ),
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 8),
+          for (final c in _pendingClubs) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _selectedPendingClubIds.contains(c.id),
+                      onChanged: _clubReviewInFlight
+                          ? null
+                          : (selected) {
+                              setState(() {
+                                if (selected == true) {
+                                  _selectedPendingClubIds.add(c.id);
+                                } else {
+                                  _selectedPendingClubIds.remove(c.id);
+                                }
+                              });
+                            },
+                    ),
+                    Expanded(child: _buildPendingClubReviewContent(c)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
       ),
+    );
+  }
+
+  Widget _buildPendingClubReviewContent(Club club) {
+    final meta = [
+      club.sport == 'tennis' ? '테니스' : '풋살',
+      if (club.region != null) club.region!,
+      if (club.address != null) club.address!,
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(club.name, style: Theme.of(context).textTheme.titleMedium),
+        if (meta.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(meta, style: Theme.of(context).textTheme.bodySmall),
+        ],
+        if (club.contact != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            '연락처: ${club.contact!}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (club.description != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            club.description!,
+            style: Theme.of(context).textTheme.bodySmall,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
+              onPressed: _clubReviewInFlight
+                  ? null
+                  : () => _approveClub(club.id, approve: true),
+              child: const Text('승인'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+              onPressed: _clubReviewInFlight
+                  ? null
+                  : () => _approveClub(club.id, approve: false),
+              child: const Text('거절'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
