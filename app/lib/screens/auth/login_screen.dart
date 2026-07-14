@@ -390,15 +390,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
-                      if (AppConfig.googleWebClientId.isNotEmpty ||
-                          AppConfig.googleIosClientId.isNotEmpty) ...[
-                        _SocialButton(
-                          onPressed: _busy ? null : _googleSignIn,
-                          icon: Icons.account_circle_outlined,
-                          label: '구글로 계속하기',
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
+                      // 구글 로그인은 signInWithOAuth(Supabase 서버 OAuth) 방식이라
+                      // 앱 클라이언트 ID가 필요 없다. 항상 노출한다 (과거엔 미사용
+                      // 값 googleWebClientId 유무로 게이트했으나, 그 값이 빠진 릴리스
+                      // 빌드에서 버튼이 사라지는 버그였다).
+                      _SocialButton(
+                        onPressed: _busy ? null : _googleSignIn,
+                        icon: Icons.account_circle_outlined,
+                        label: '구글로 계속하기',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
                       TextButton(
                         onPressed: _busy ? null : _showEmailAuthSheet,
                         style: TextButton.styleFrom(
