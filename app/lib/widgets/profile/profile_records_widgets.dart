@@ -12,7 +12,7 @@ import 'profile_settings_widgets.dart';
 import 'profile_sports_widgets.dart';
 
 // ────────────────────────────────────────────────────────────
-// 내가 등록한 클럽 섹션
+// 관리 중인 클럽 섹션
 // ────────────────────────────────────────────────────────────
 
 class MyClubsSection extends ConsumerWidget {
@@ -68,111 +68,107 @@ class MyClubsSection extends ConsumerWidget {
     final tt = Theme.of(context).textTheme;
     final clubs = ref.watch(myClubsProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '관리 중인 클럽',
-          action: SectionActionButton(
-            label: '둘러보기',
-            onTap: () => context.go('/clubs'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        clubs.when(
-          loading: () =>
-              const AppCard(child: Center(child: CircularProgressIndicator())),
-          error: (_, __) => AppCard(
-            child: Text(
-              '등록 클럽을 불러오지 못했습니다.',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ),
-          data: (items) => items.isEmpty
-              ? AppCard(
-                  variant: AppCardVariant.elevated,
-                  borderRadius: BorderRadius.circular(16),
-                  child: MyClubEmptyContent(cs: cs, tt: tt),
-                )
-              : Column(
-                  children: [
-                    for (final club in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: AppCard(
-                          variant: AppCardVariant.elevated,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Row(
-                            children: [
-                              ProfileSportThumbnail(sport: club.sport),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      club.name,
-                                      style: tt.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w900,
-                                      ),
+    return clubs.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        final managedClubs = items.where((club) => club.isOwner).toList();
+        if (managedClubs.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: '관리 중인 클럽'),
+            const SizedBox(height: AppSpacing.md),
+            Column(
+              children: [
+                for (final club in managedClubs)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: AppCard(
+                      variant: AppCardVariant.elevated,
+                      borderRadius: BorderRadius.circular(16),
+                      padding: EdgeInsets.zero,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => context.push(
+                          '/clubs/${club.id}',
+                          extra: club,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Row(children: [
+                            ProfileSportThumbnail(sport: club.sport),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    club.name,
+                                    style: tt.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w900,
                                     ),
-                                    Text(
-                                      [
-                                        sportLabelFromString(club.sport),
-                                        if (club.region != null) club.region!,
-                                      ].join(' · '),
-                                      style: tt.bodySmall?.copyWith(
-                                        color: cs.onSurfaceVariant,
-                                      ),
+                                  ),
+                                  Text(
+                                    [
+                                      sportLabelFromString(club.sport),
+                                      if (club.region != null) club.region!,
+                                    ].join(' · '),
+                                    style: tt.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
                                     ),
-                                    const SizedBox(height: AppSpacing.xs),
-                                    _ClubStatusBadge(status: club.status),
-                                    if (club.isPending && club.isOwner) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Wrap(
-                                        spacing: AppSpacing.xs,
-                                        children: [
-                                          OutlinedButton.icon(
-                                            onPressed: () => context.push(
-                                              '/clubs/${club.id}',
-                                              extra: club,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.edit_outlined,
-                                              size: 16,
-                                            ),
-                                            label: const Text('수정'),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  _ClubStatusBadge(status: club.status),
+                                  if (club.isPending && club.isOwner) ...[
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Wrap(
+                                      spacing: AppSpacing.xs,
+                                      children: [
+                                        OutlinedButton.icon(
+                                          onPressed: () => context.push(
+                                            '/clubs/${club.id}',
+                                            extra: club,
                                           ),
-                                          TextButton.icon(
-                                            onPressed: () => _deletePendingClub(
-                                              context,
-                                              ref,
-                                              club,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.delete_outline_rounded,
-                                              size: 16,
-                                            ),
-                                            label: const Text('삭제'),
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 16,
                                           ),
-                                        ],
-                                      ),
-                                    ],
+                                          label: const Text('수정'),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () => _deletePendingClub(
+                                            context,
+                                            ref,
+                                            club,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('삭제'),
+                                        ),
+                                      ],
+                                    ),
                                   ],
-                                ),
+                                ],
                               ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ]),
                         ),
                       ),
-                  ],
-                ),
-        ),
-      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

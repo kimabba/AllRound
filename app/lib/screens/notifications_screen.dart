@@ -54,6 +54,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     await ref.read(apiProvider).markAllNotificationsRead();
     ref.invalidate(unreadNotificationCountProvider);
     await _refresh();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모든 알림을 읽음으로 표시했습니다.')),
+      );
+    }
   }
 
   @override
@@ -160,97 +165,115 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final item = notifications[index];
-                return AppCard(
-                  variant: item.isRead
-                      ? AppCardVariant.outlined
-                      : AppCardVariant.elevated,
-                  padding: EdgeInsets.zero,
-                  child: InkWell(
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: item.isRead
+                        ? cs.surface
+                        : cs.primaryContainer.withValues(alpha: 0.28),
                     borderRadius: BorderRadius.circular(AppRadius.lg),
-                    onTap: () => _openNotification(item),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: item.isRead
-                                  ? cs.surfaceContainerHighest
-                                  : cs.primaryContainer,
-                              borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: AppCard(
+                    variant: item.isRead
+                        ? AppCardVariant.outlined
+                        : AppCardVariant.elevated,
+                    padding: EdgeInsets.zero,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      onTap: () => _openNotification(item),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: item.isRead
+                                    ? cs.surfaceContainerHighest
+                                    : cs.primaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                _iconFor(item.type),
+                                size: 20,
+                                color: item.isRead
+                                    ? cs.onSurfaceVariant
+                                    : cs.onPrimaryContainer,
+                              ),
                             ),
-                            child: Icon(
-                              _iconFor(item.type),
-                              size: 20,
-                              color: item.isRead
-                                  ? cs.onSurfaceVariant
-                                  : cs.onPrimaryContainer,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        item.title,
-                                        style: tt.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w900,
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.title,
+                                          style: tt.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    if (!item.isRead)
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: cs.primary,
-                                          shape: BoxShape.circle,
+                                      if (!item.isRead)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: cs.primary,
+                                            borderRadius:
+                                                BorderRadius.circular(99),
+                                          ),
+                                          child: Text(
+                                            '새 알림',
+                                            style: tt.labelSmall?.copyWith(
+                                              color: cs.onPrimary,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  item.typeLabel,
-                                  style: tt.labelMedium?.copyWith(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w800,
+                                    ],
                                   ),
-                                ),
-                                if (item.body != null &&
-                                    item.body!.trim().isNotEmpty) ...[
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
-                                    item.body!,
-                                    style: tt.bodyMedium?.copyWith(
+                                    item.typeLabel,
+                                    style: tt.labelMedium?.copyWith(
+                                      color: cs.primary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (item.body != null &&
+                                      item.body!.trim().isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Text(
+                                      item.body!,
+                                      style: tt.bodyMedium?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                        height: 1.45,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    _formatNotificationDate(item.createdAt),
+                                    style: tt.labelSmall?.copyWith(
                                       color: cs.onSurfaceVariant,
-                                      height: 1.45,
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  _formatNotificationDate(item.createdAt),
-                                  style: tt.labelSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ],
+                            const SizedBox(width: AppSpacing.sm),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

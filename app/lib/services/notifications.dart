@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 
@@ -22,12 +24,22 @@ Future<void> initNotifications(ApiService api) async {
 
   final token = await messaging.getToken();
   if (token != null) {
-    final platform = Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
+    final platform =
+        Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
     await api.registerDeviceToken(token, platform);
   }
 
   messaging.onTokenRefresh.listen((t) {
-    final platform = Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
+    final platform =
+        Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
     api.registerDeviceToken(t, platform);
+  });
+
+  FirebaseMessaging.onMessage.listen((_) async {
+    final preferences = await SharedPreferences.getInstance();
+    final soundEnabled = preferences.getBool('notify.sound') ?? true;
+    if (soundEnabled) {
+      await SystemSound.play(SystemSoundType.alert);
+    }
   });
 }
