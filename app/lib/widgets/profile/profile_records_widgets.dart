@@ -72,7 +72,7 @@ class MyClubsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: '내가 등록한 클럽',
+          title: '관리 중인 클럽',
           action: SectionActionButton(
             label: '둘러보기',
             onTap: () => context.go('/clubs'),
