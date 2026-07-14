@@ -422,28 +422,55 @@ String tennisOrgLabel(String org) => tennisOrgLabels[org] ?? org;
 String tennisOrgShortLabel(String org) => tennisOrgShortLabels[org] ?? org;
 
 // =========================
-// Region (권역)
+// Region (표준 17개 광역시도)
 // =========================
+// 정본: DB public.regions (is_active=true) 와 코드·라벨 1:1. 지도상 순서(수도권→강원→충청→호남→영남→제주).
+// 묶음 코드(seoul_metro 등)는 deprecated(regions.is_active=false)라 UI 선택지엔 없지만,
+// backfill 이전 데이터의 라벨 표시를 위해 regionLabels 에는 하위호환으로 유지한다.
 const regionCodes = <String>[
-  'gwangju',
-  'jeonnam',
-  'seoul_metro',
-  'busan_ulsan_gn',
-  'daegu_gb',
-  'chungcheong',
+  'seoul',
+  'gyeonggi',
+  'incheon',
   'gangwon',
+  'daejeon',
+  'sejong',
+  'chungbuk',
+  'chungnam',
+  'gwangju',
+  'jeonbuk',
+  'jeonnam',
+  'busan',
+  'ulsan',
+  'daegu',
+  'gyeongbuk',
+  'gyeongnam',
   'jeju',
 ];
 
 const regionLabels = <String, String>{
+  // 17개 광역시도 (regions.is_active=true)
+  'seoul': '서울',
+  'gyeonggi': '경기',
+  'incheon': '인천',
+  'gangwon': '강원',
+  'daejeon': '대전',
+  'sejong': '세종',
+  'chungbuk': '충북',
+  'chungnam': '충남',
   'gwangju': '광주',
+  'jeonbuk': '전북',
   'jeonnam': '전남',
+  'busan': '부산',
+  'ulsan': '울산',
+  'daegu': '대구',
+  'gyeongbuk': '경북',
+  'gyeongnam': '경남',
+  'jeju': '제주',
+  // deprecated 묶음 코드 — 표시 하위호환용(backfill 이전 데이터)
   'seoul_metro': '수도권',
   'busan_ulsan_gn': '부산·울산·경남',
   'daegu_gb': '대구·경북',
   'chungcheong': '충청',
-  'gangwon': '강원',
-  'jeju': '제주',
 };
 
 bool isValidRegionCode(String value) => regionCodes.contains(value);

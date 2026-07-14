@@ -24,7 +24,9 @@ Deno.test('shared enums expose stable sport grade order', () => {
 Deno.test('regionCodeFromLabel maps 한글 권역명 → RegionCode', () => {
   assertEquals(regionCodeFromLabel('광주'), 'gwangju');
   assertEquals(regionCodeFromLabel('전남'), 'jeonnam');
-  assertEquals(regionCodeFromLabel('수도권'), 'seoul_metro');
+  assertEquals(regionCodeFromLabel('서울'), 'seoul');
+  assertEquals(regionCodeFromLabel('경기'), 'gyeonggi');
+  assertEquals(regionCodeFromLabel('전북'), 'jeonbuk');
   assertEquals(regionCodeFromLabel(' 광주 '), 'gwangju'); // trim
   assertEquals(regionCodeFromLabel('없는지역'), null);
   assertEquals(regionCodeFromLabel(''), null);
@@ -46,13 +48,22 @@ Deno.test('shared enums expose tennis org and region catalogs', () => {
     'local',
   ]);
   assertEquals(REGION_CODES, [
-    'gwangju',
-    'jeonnam',
-    'seoul_metro',
-    'busan_ulsan_gn',
-    'daegu_gb',
-    'chungcheong',
+    'seoul',
+    'gyeonggi',
+    'incheon',
     'gangwon',
+    'daejeon',
+    'sejong',
+    'chungbuk',
+    'chungnam',
+    'gwangju',
+    'jeonbuk',
+    'jeonnam',
+    'busan',
+    'ulsan',
+    'daegu',
+    'gyeongbuk',
+    'gyeongnam',
     'jeju',
   ]);
 });

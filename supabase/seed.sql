@@ -88,22 +88,28 @@ insert into public.rule_articles (sport, category, title, body, order_idx) value
 --   045_seed_regions.sql 이 정식 시드(ON CONFLICT DO UPDATE)이므로
 --   여기서는 충돌 시 무시. enum 일관성 검사(check_enums.py)용으로 유지.
 -- =========================
+-- 표준 17개 광역시도. code·순서는 Dart grade_labels.dart regionCodes / enums.ts REGION_CODES 와 1:1.
+-- 묶음 코드(seoul_metro 등)는 프로덕션 마이그레이션에서 is_active=false 로 유지되며 신규 seed 엔 넣지 않는다.
 insert into public.regions(code, display_name_ko, governing_associations, uses_kato, uses_kata, notes) values
-  ('gwangju', '광주', ARRAY['KTA-광주(GJTA)'], false, false,
+  ('seoul', '서울', ARRAY['kta'], true, true, '전국 단위 협회 다수(KTA·KATO·KATA).'),
+  ('gyeonggi', '경기', ARRAY['kta'], true, true, '전국 단위 협회 다수.'),
+  ('incheon', '인천', ARRAY['kta'], true, true, '전국 단위 협회 다수.'),
+  ('gangwon', '강원', ARRAY['kta'], false, false, '도 단위 메이저 대회 중심(평창백일홍배).'),
+  ('daejeon', '대전', ARRAY['kta'], false, false, '시니어연맹 별도 활성.'),
+  ('sejong', '세종', ARRAY['kta'], false, false, null),
+  ('chungbuk', '충북', ARRAY['kta'], false, false, null),
+  ('chungnam', '충남', ARRAY['kta'], false, false, null),
+  ('gwangju', '광주', ARRAY['gj'], true, true,
    '2026-05-01 전남과 분리 운영. 자체 스포츠공정위, 자체 디비전리그. 약 130 클럽 1.5만 동호인. 자체 부서: 골드/금배/일반/신인. 자체 등급 1~6급+신인.'),
-  ('jeonnam', '전남', ARRAY['KTA-전남'], false, false,
+  ('jeonbuk', '전북', ARRAY['kta'], false, false, '전북특별자치도.'),
+  ('jeonnam', '전남', ARRAY['jn'], true, true,
    '2026-05-01 광주와 분리 운영. 시·군 협회(여수·광양·순천·목포·나주·강진·해남·영광 등) 산하. 일부 합동 대회 잔존.'),
-  ('seoul_metro', '수도권', ARRAY['KTA-서울','KTA-경기','KTA-인천'], true, true,
-   'KATA 본부 위치. 동호인 1인이 KATA+KATO+KTA 동시 등록 일반.'),
-  ('busan_ulsan_gn', '부산·울산·경남', ARRAY['KTA-부산','KTA-울산','KTA-경남'], true, false,
-   'KATO 비중 큼, 부산오픈챌린저 등.'),
-  ('daegu_gb', '대구·경북', ARRAY['KTA-대구','KTA-경북'], true, false,
-   '울진금강송배 KATO 전국대회. 아카시아배 등 합동.'),
-  ('chungcheong', '충청', ARRAY['KTA-대전','KTA-충남','KTA-충북','KTA-세종'], false, false,
-   '시니어연맹 별도 활성.'),
-  ('gangwon', '강원', ARRAY['KTA-강원'], false, false,
-   '도 단위 메이저 대회 중심(평창백일홍배).'),
-  ('jeju', '제주', ARRAY['KTA-제주'], false, false,
+  ('busan', '부산', ARRAY['kta'], false, false, 'KATO 비중 큼, 부산오픈챌린저 등.'),
+  ('ulsan', '울산', ARRAY['kta'], false, false, null),
+  ('daegu', '대구', ARRAY['kta'], false, false, '울진금강송배 KATO 전국대회 인접. 아카시아배 등 합동.'),
+  ('gyeongbuk', '경북', ARRAY['kta'], false, false, null),
+  ('gyeongnam', '경남', ARRAY['kta'], false, false, null),
+  ('jeju', '제주', ARRAY['kta'], false, false,
    '자체 점수제(1~9), 가장 독자적. 2026 혼복 등급 미반영.')
 on conflict (code) do nothing;
 
