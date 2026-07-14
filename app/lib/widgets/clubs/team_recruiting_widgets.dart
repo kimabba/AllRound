@@ -1,88 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/club_recruiting.dart';
 import '../../models/tournament.dart';
+import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../app_card.dart';
 import 'club_tiles.dart';
 
-class RecruitingPostPreview {
-  final String id;
-  final String sport;
-  final String clubName;
-  final String title;
-  final String region;
-  final String place;
-  final String schedule;
-  final String grade;
-  final String gender;
-  final String age;
-  final int fieldCount;
-  final int keeperCount;
-  final int totalCount;
-  final String cost;
-  final String? intro;
-  final bool isClosed;
-  final DateTime? closedAt;
-
-  const RecruitingPostPreview({
-    required this.id,
-    required this.sport,
-    required this.clubName,
-    required this.title,
-    required this.region,
-    required this.place,
-    required this.schedule,
-    required this.grade,
-    required this.gender,
-    required this.age,
-    required this.fieldCount,
-    required this.keeperCount,
-    required this.totalCount,
-    required this.cost,
-    this.intro,
-    this.isClosed = false,
-    this.closedAt,
-  });
-
-  RecruitingPostPreview copyWith({bool? isClosed, DateTime? closedAt}) {
-    return RecruitingPostPreview(
-      id: id,
-      sport: sport,
-      clubName: clubName,
-      title: title,
-      region: region,
-      place: place,
-      schedule: schedule,
-      grade: grade,
-      gender: gender,
-      age: age,
-      fieldCount: fieldCount,
-      keeperCount: keeperCount,
-      totalCount: totalCount,
-      cost: cost,
-      intro: intro,
-      isClosed: isClosed ?? this.isClosed,
-      closedAt: closedAt ?? this.closedAt,
-    );
-  }
-
-  String get countLabel {
-    if (sport == 'futsal') {
-      return '필드 $fieldCount명 · 키퍼 $keeperCount명';
-    }
-    return '$totalCount명';
-  }
-
-  String get introText =>
-      intro?.trim().isNotEmpty == true ? intro!.trim() : '자세한 모집 조건을 확인해보세요.';
-}
-
 class TeamRecruitingBoard extends StatelessWidget {
   final List<RecruitingPostPreview> posts;
   final bool showOpenOnly;
-  final bool canManage;
+  final bool isLoading;
+  final Set<String> managedClubIds;
   final ValueChanged<bool> onShowOpenOnlyChanged;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
@@ -91,7 +23,8 @@ class TeamRecruitingBoard extends StatelessWidget {
     super.key,
     required this.posts,
     required this.showOpenOnly,
-    required this.canManage,
+    required this.isLoading,
+    required this.managedClubIds,
     required this.onShowOpenOnlyChanged,
     required this.onClosePost,
     required this.onOpenPost,
@@ -136,7 +69,9 @@ class TeamRecruitingBoard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (posts.isEmpty)
+          if (isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (posts.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -151,12 +86,12 @@ class TeamRecruitingBoard extends StatelessWidget {
               ),
             )
           else
-            for (final post in posts.take(3))
+            for (final post in posts)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: TeamRecruitingPostCard(
                   post: post,
-                  canManage: canManage,
+                  canManage: managedClubIds.contains(post.clubId),
                   onClose: () => onClosePost(post),
                   onTap: () => onOpenPost(post),
                 ),
@@ -360,11 +295,54 @@ class MiniInfoChip extends StatelessWidget {
   }
 }
 
-class TeamRecruitingDetailScreen extends StatelessWidget {
+class TeamRecruitingDetailScreen extends ConsumerStatefulWidget {
   final RecruitingPostPreview post;
   final Club? club;
 
   const TeamRecruitingDetailScreen({super.key, required this.post, this.club});
+
+  @override
+  ConsumerState<TeamRecruitingDetailScreen> createState() =>
+      _TeamRecruitingDetailScreenState();
+}
+
+class _TeamRecruitingDetailScreenState
+    extends ConsumerState<TeamRecruitingDetailScreen> {
+  bool _busy = false;
+  bool _applied = false;
+
+  RecruitingPostPreview get post => widget.post;
+  Club? get club => widget.club;
+
+  Future<void> _contactForParticipation() async {
+    final targetClub = club;
+    if (targetClub == null || post.isClosed || _busy) return;
+    if (targetClub.isMember || _applied) {
+      await context.push('/clubs/${targetClub.id}', extra: targetClub);
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).joinClub(
+            targetClub.id,
+            message: '팀원모집 참여 신청: ${post.title}',
+          );
+      if (!mounted) return;
+      setState(() => _applied = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('운영진에게 참여 신청을 보냈습니다.')),
+      );
+      await context.push('/clubs/${targetClub.id}', extra: targetClub);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('참여 신청을 보내지 못했습니다. 잠시 후 다시 시도해주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -521,13 +499,24 @@ class TeamRecruitingDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('참여 문의 기능은 준비 중입니다.')),
-                );
-              },
-              icon: const Icon(Icons.chat_bubble_outline_rounded),
-              label: const Text('참여 문의하기'),
+              onPressed: post.isClosed || club == null || _busy
+                  ? null
+                  : _contactForParticipation,
+              icon: _busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chat_bubble_outline_rounded),
+              label: Text(
+                post.isClosed
+                    ? '모집이 마감되었습니다'
+                    : club?.isMember == true
+                        ? '클럽에서 문의하기'
+                        : _applied
+                            ? '가입 승인 상태 확인'
+                            : '참여 신청하기',
+              ),
             ),
           ],
         ),
@@ -641,17 +630,18 @@ class _RecruitingDetailRow extends StatelessWidget {
   }
 }
 
-class TeamRecruitingDraftSheet extends StatefulWidget {
+class TeamRecruitingDraftSheet extends ConsumerStatefulWidget {
   final List<Club> managedClubs;
 
   const TeamRecruitingDraftSheet({super.key, required this.managedClubs});
 
   @override
-  State<TeamRecruitingDraftSheet> createState() =>
+  ConsumerState<TeamRecruitingDraftSheet> createState() =>
       _TeamRecruitingDraftSheetState();
 }
 
-class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
+class _TeamRecruitingDraftSheetState
+    extends ConsumerState<TeamRecruitingDraftSheet> {
   static const _genders = ['무관', '여성', '남성', '혼성'];
   static const _ages = ['무관', '20대', '30대', '40대', '50대 이상'];
   static const _futsalPositions = ['필드·키퍼', '필드', '키퍼'];
@@ -666,6 +656,14 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
   int _fieldCount = 4;
   int _keeperCount = 1;
   int _tennisCount = 2;
+  bool _busy = false;
+
+  late final TextEditingController _titleController;
+  late final TextEditingController _placeController;
+  late final TextEditingController _dateController;
+  late final TextEditingController _timeController;
+  late final TextEditingController _costController;
+  late final TextEditingController _introController;
 
   Club get _selectedClub =>
       widget.managedClubs.firstWhere((club) => club.id == _selectedClubId);
@@ -673,6 +671,28 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
   bool get _isFutsal => _selectedClub.sport == 'futsal';
 
   List<String> get _gradeOptions => _isFutsal ? _futsalGrades : _tennisGrades;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _placeController = TextEditingController(text: _selectedClub.address ?? '');
+    _dateController = TextEditingController();
+    _timeController = TextEditingController();
+    _costController = TextEditingController();
+    _introController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _placeController.dispose();
+    _dateController.dispose();
+    _timeController.dispose();
+    _costController.dispose();
+    _introController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showClubPicker() async {
     final selected = await showModalBottomSheet<Club>(
@@ -685,10 +705,66 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
       ),
     );
     if (selected == null) return;
+    final previousAddress = _selectedClub.address?.trim() ?? '';
     setState(() {
       _selectedClubId = selected.id;
       _grade = _gradeOptions.first;
+      if (_placeController.text.trim().isEmpty ||
+          _placeController.text.trim() == previousAddress) {
+        _placeController.text = selected.address ?? '';
+      }
     });
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    final title = _titleController.text.trim();
+    final place = _placeController.text.trim();
+    final date = _dateController.text.trim();
+    final time = _timeController.text.trim();
+    if (title.isEmpty || place.isEmpty || date.isEmpty || time.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('제목, 장소, 날짜, 시간을 모두 입력해주세요.')),
+      );
+      return;
+    }
+
+    final fieldCount = _isFutsal && _position != '키퍼' ? _fieldCount : 0;
+    final keeperCount = _isFutsal && _position != '필드' ? _keeperCount : 0;
+    final totalCount = _isFutsal ? fieldCount + keeperCount : _tennisCount;
+    if (totalCount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모집 인원을 1명 이상 선택해주세요.')),
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).createTeamRecruitingPost(
+            clubId: _selectedClub.id,
+            title: title,
+            place: place,
+            schedule: '$date $time',
+            skillLevel: _grade,
+            gender: _gender,
+            age: _age,
+            position: _isFutsal ? _position : null,
+            fieldCount: fieldCount,
+            keeperCount: keeperCount,
+            totalCount: totalCount,
+            cost: _costController.text,
+            intro: _introController.text,
+          );
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모집글을 올리지 못했습니다. 잠시 후 다시 시도해주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -749,6 +825,16 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
               _ManagedClubSelectorField(
                 club: _selectedClub,
                 onTap: _showClubPicker,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _titleController,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                  labelText: '모집글 제목',
+                  hintText: '예: 토요일 저녁 함께 뛸 팀원 모집해요',
+                  prefixIcon: Icon(Icons.title_rounded),
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               RecruitingSection(
@@ -888,12 +974,13 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                       ),
               ),
               const SizedBox(height: AppSpacing.md),
-              const RecruitingSection(
+              RecruitingSection(
                 title: '운동 정보',
                 child: Column(
                   children: [
                     TextField(
-                      decoration: InputDecoration(
+                      controller: _placeController,
+                      decoration: const InputDecoration(
                         labelText: '운동하는 장소',
                         hintText: '예: 광주 북구 풋살파크 A구장',
                         prefixIcon: Icon(Icons.place_rounded),
@@ -904,7 +991,8 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                       children: [
                         Expanded(
                           child: TextField(
-                            decoration: InputDecoration(
+                            controller: _dateController,
+                            decoration: const InputDecoration(
                               labelText: '날짜',
                               hintText: '6/22 (토)',
                               prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -914,7 +1002,8 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                         SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: TextField(
-                            decoration: InputDecoration(
+                            controller: _timeController,
+                            decoration: const InputDecoration(
                               labelText: '시간',
                               hintText: '19:00',
                               prefixIcon: Icon(Icons.schedule_rounded),
@@ -925,8 +1014,8 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                     ),
                     SizedBox(height: AppSpacing.sm),
                     TextField(
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
+                      controller: _costController,
+                      decoration: const InputDecoration(
                         labelText: '비용',
                         hintText: '예: 10,000원 또는 무료',
                         prefixIcon: Icon(Icons.payments_rounded),
@@ -936,26 +1025,26 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              const RecruitingSection(
+              RecruitingSection(
                 title: '상세 내용',
                 child: TextField(
+                  controller: _introController,
                   minLines: 4,
                   maxLines: 6,
-                  decoration: InputDecoration(
+                  maxLength: 1000,
+                  decoration: const InputDecoration(
                     hintText: '필요 포지션, 준비물, 경기 수준, 연락 방식 등을 적어주세요.',
                     alignLabelWithHint: true,
                     labelText: '기타 내용',
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              OptionalPhotoPicker(),
               const SizedBox(height: AppSpacing.lg),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _busy ? null : () => Navigator.pop(context),
                       child: const Text('취소'),
                     ),
                   ),
@@ -963,13 +1052,14 @@ class _TeamRecruitingDraftSheetState extends State<TeamRecruitingDraftSheet> {
                   Expanded(
                     flex: 2,
                     child: FilledButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('팀원모집 글쓰기 UI 미리보기입니다.')),
-                        );
-                      },
-                      icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text('모집글 올리기'),
+                      onPressed: _busy ? null : _submit,
+                      icon: _busy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.edit_note_rounded),
+                      label: Text(_busy ? '올리는 중...' : '모집글 올리기'),
                     ),
                   ),
                 ],

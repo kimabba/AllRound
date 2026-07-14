@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
 import '../models/club_post.dart';
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
 import 'api_base.dart';
@@ -161,6 +162,77 @@ mixin ClubApi on ApiBase {
     }
     final row = await query.eq('id', clubId).single();
     return Club.fromJson(row);
+  }
+
+  // ── 팀원 모집 ──────────────────────────────────────────────
+
+  Future<List<RecruitingPostPreview>> teamRecruitingPosts() async {
+    final Object raw = await supabase
+        .from('club_recruiting_posts')
+        .select(
+          '*, clubs!inner(id, name, sport, region, status)',
+        )
+        .eq('clubs.status', 'approved')
+        .order('created_at', ascending: false)
+        .limit(50);
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (row) => RecruitingPostPreview.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<RecruitingPostPreview> createTeamRecruitingPost({
+    required String clubId,
+    required String title,
+    required String place,
+    required String schedule,
+    required String skillLevel,
+    required String gender,
+    required String age,
+    required int fieldCount,
+    required int keeperCount,
+    required int totalCount,
+    String? position,
+    String? intro,
+    String cost = '협의',
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+
+    final Object raw = await supabase
+        .from('club_recruiting_posts')
+        .insert({
+          'club_id': clubId,
+          'created_by': userId,
+          'title': title.trim(),
+          'place': place.trim(),
+          'schedule_text': schedule.trim(),
+          'skill_level': skillLevel,
+          'gender_text': gender,
+          'age_text': age,
+          'position_text': position,
+          'field_count': fieldCount,
+          'keeper_count': keeperCount,
+          'total_count': totalCount,
+          'cost_text': cost.trim().isEmpty ? '협의' : cost.trim(),
+          if (intro?.trim().isNotEmpty == true) 'intro': intro!.trim(),
+        })
+        .select('*, clubs!inner(id, name, sport, region, status)')
+        .single();
+    if (raw is! Map) throw const FormatException('Invalid recruiting post');
+    return RecruitingPostPreview.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<void> closeTeamRecruitingPost(String postId) async {
+    await supabase.from('club_recruiting_posts').update({
+      'status': 'closed',
+      'closed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', postId);
   }
 
   // ── 가입 / 탈퇴 ──────────────────────────────────────────────

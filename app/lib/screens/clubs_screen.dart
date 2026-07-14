@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
@@ -40,7 +41,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
   bool _showAllClubs = false;
-  final Set<String> _closedRecruitingPostIds = {};
+  List<RecruitingPostPreview> _recruitingPosts = const [];
+  bool _loadingRecruiting = false;
 
   @override
   void initState() {
@@ -49,6 +51,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMyClubs();
       _load();
+      _loadRecruitingPosts();
     });
   }
 
@@ -97,10 +100,27 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     }
   }
 
+  Future<void> _loadRecruitingPosts() async {
+    setState(() => _loadingRecruiting = true);
+    try {
+      final posts = await ref.read(apiProvider).teamRecruitingPosts();
+      if (mounted) setState(() => _recruitingPosts = posts);
+    } catch (error) {
+      debugPrint('teamRecruitingPosts error: $error');
+      if (mounted) setState(() => _recruitingPosts = const []);
+    } finally {
+      if (mounted) setState(() => _loadingRecruiting = false);
+    }
+  }
+
   Future<void> _refreshClubLists() async {
     ref.invalidate(myClubsProvider);
     ref.invalidate(myFavoriteClubsProvider);
-    await Future.wait([_loadMyClubs(), _load()]);
+    await Future.wait([
+      _loadMyClubs(),
+      _load(),
+      _loadRecruitingPosts(),
+    ]);
   }
 
   Future<void> _openCreate() async {
@@ -192,12 +212,19 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openTeamRecruitingSheet(List<Club> managedClubs) async {
-    await showModalBottomSheet<void>(
+    final created = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => TeamRecruitingDraftSheet(managedClubs: managedClubs),
     );
+    if (created == true) {
+      await _loadRecruitingPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('팀원 모집글을 올렸습니다.')),
+      );
+    }
   }
 
   Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
@@ -227,7 +254,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       ...?_myClubs,
     ];
     for (final club in candidates) {
-      if (club.name == post.clubName && club.sport == post.sport) {
+      if (club.id == post.clubId) {
         return club;
       }
     }
@@ -235,15 +262,63 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openRecruitingDetail(RecruitingPostPreview post) async {
+    Club? club = _clubForRecruitingPost(post);
+    if (club == null) {
+      try {
+        club = await ref.read(apiProvider).getClub(post.clubId);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('클럽 정보를 불러오지 못했습니다.')),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
         builder: (_) => TeamRecruitingDetailScreen(
           post: post,
-          club: _clubForRecruitingPost(post),
+          club: club,
         ),
       ),
     );
+  }
+
+  Future<void> _closeRecruitingPost(RecruitingPostPreview post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('모집을 마감할까요?'),
+        content: Text('“${post.title}” 글은 마감 후 다시 열 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('마감하기'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiProvider).closeTeamRecruitingPost(post.id);
+      await _loadRecruitingPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('팀원 모집을 마감했습니다.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모집을 마감하지 못했습니다.')),
+      );
+    }
   }
 
   @override
@@ -429,13 +504,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   TeamRecruitingBoard(
                     posts: _visibleRecruitingPosts(),
                     showOpenOnly: _showOpenRecruitingOnly,
-                    canManage: managedClubs.isNotEmpty,
+                    isLoading: _loadingRecruiting,
+                    managedClubIds: managedClubs.map((club) => club.id).toSet(),
                     onShowOpenOnlyChanged: (value) {
                       setState(() => _showOpenRecruitingOnly = value);
                     },
-                    onClosePost: (post) {
-                      setState(() => _closedRecruitingPostIds.add(post.id));
-                    },
+                    onClosePost: _closeRecruitingPost,
                     onOpenPost: _openRecruitingDetail,
                   ),
                   const SizedBox(height: AppSpacing.xl),
@@ -554,6 +628,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   List<RecruitingPostPreview> _visibleRecruitingPosts() {
-    return const <RecruitingPostPreview>[];
+    return _recruitingPosts
+        .where((post) => _clubInterests.contains(post.sport))
+        .where((post) => !_showOpenRecruitingOnly || !post.isClosed)
+        .toList(growable: false);
   }
 }
