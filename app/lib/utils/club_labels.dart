@@ -83,3 +83,17 @@ String clubMonthlyFeeLabel(int fee) {
   if (fee % 1000 == 0) return '월회비 ${fee ~/ 1000}천원';
   return '월회비 $fee원';
 }
+
+const int clubMonthlyFeeMax = 1000000;
+
+String? clubMonthlyFeeInputError(String? value) {
+  final raw = value?.trim() ?? '';
+  if (raw.isEmpty) return null;
+
+  final fee = int.tryParse(raw);
+  if (fee == null) return '회비는 숫자로 입력해주세요';
+  if (fee < 0 || fee > clubMonthlyFeeMax) {
+    return '회비는 0원 이상 100만원 이하로 입력해주세요';
+  }
+  return null;
+}

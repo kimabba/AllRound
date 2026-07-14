@@ -41,4 +41,18 @@ void main() {
       expect(clubMonthlyFeeLabel(0), '월회비 무료');
     });
   });
+
+  group('club monthly fee input', () {
+    test('empty and valid values pass', () {
+      expect(clubMonthlyFeeInputError(''), isNull);
+      expect(clubMonthlyFeeInputError('0'), isNull);
+      expect(clubMonthlyFeeInputError('1000000'), isNull);
+    });
+
+    test('non-numeric and out-of-range values fail', () {
+      expect(clubMonthlyFeeInputError('free'), isNotNull);
+      expect(clubMonthlyFeeInputError('-1'), isNotNull);
+      expect(clubMonthlyFeeInputError('1000001'), isNotNull);
+    });
+  });
 }

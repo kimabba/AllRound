@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_image_upload.dart';
+import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
@@ -51,25 +53,24 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       setState(() => _step = 0);
       return;
     }
+    if (!_validateOperationStep()) {
+      setState(() => _step = 1);
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? true)) return;
     setState(() => _submitting = true);
     try {
-      final warnings = <String>[];
       String? logoUrl;
-      if (_logoBytes != null) {
-        try {
+      final introImageUrls = <String>[];
+      try {
+        if (_logoBytes != null) {
           logoUrl = await ref.read(apiProvider).uploadClubLogo(
                 bytes: _logoBytes!,
                 extension: _logoExtension,
                 contentType: _logoContentType,
               );
-        } catch (_) {
-          warnings.add('클럽 로고 업로드에 실패해 로고 없이 제출했습니다.');
         }
-      }
-      final introImageUrls = <String>[];
-      for (final image in _introImages) {
-        try {
+        for (final image in _introImages) {
           introImageUrls.add(
             await ref.read(apiProvider).uploadClubIntroImage(
                   bytes: image.bytes,
@@ -77,11 +78,16 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                   contentType: image.contentType,
                 ),
           );
-        } catch (_) {
-          if (!warnings.contains('소개 사진 업로드에 실패해 사진 없이 제출했습니다.')) {
-            warnings.add('소개 사진 업로드에 실패해 사진 없이 제출했습니다.');
-          }
         }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('사진 업로드에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.'),
+            ),
+          );
+        }
+        return;
       }
       final fee = int.tryParse(_monthlyFee.text.trim());
       await ref.read(apiProvider).createClub(
@@ -100,12 +106,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              warnings.isEmpty
-                  ? '클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'
-                  : '클럽 생성 요청은 제출되었습니다. ${warnings.join(' ')}',
-            ),
+          const SnackBar(
+            content: Text('클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'),
           ),
         );
         Navigator.pop(context, true);
@@ -131,8 +133,19 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     return true;
   }
 
+  bool _validateOperationStep() {
+    final error = clubMonthlyFeeInputError(_monthlyFee.text);
+    if (error == null) return true;
+    _formKey.currentState?.validate();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error)),
+    );
+    return false;
+  }
+
   void _goNext() {
     if (_step == 0 && !_validateBasicStep()) return;
+    if (_step == 1 && !_validateOperationStep()) return;
     FocusScope.of(context).unfocus();
     setState(() => _step = (_step + 1).clamp(0, 2).toInt());
   }
@@ -151,13 +164,22 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     );
     if (picked == null) return;
 
-    final bytes = await picked.readAsBytes();
-    final extension = _extensionFromName(picked.name);
+    final PreparedClubImage image;
+    try {
+      image = await prepareClubImage(picked);
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
+    }
     if (!mounted) return;
     setState(() {
-      _logoBytes = bytes;
-      _logoExtension = extension;
-      _logoContentType = _contentTypeForExtension(extension);
+      _logoBytes = image.bytes;
+      _logoExtension = image.extension;
+      _logoContentType = image.contentType;
     });
   }
 
@@ -233,15 +255,24 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (picked.isEmpty) return;
 
     final nextImages = <_PendingIntroImage>[];
-    for (final image in picked.take(remaining)) {
-      final extension = _extensionFromName(image.name);
-      nextImages.add(
-        _PendingIntroImage(
-          bytes: await image.readAsBytes(),
-          extension: extension,
-          contentType: _contentTypeForExtension(extension),
-        ),
-      );
+    try {
+      for (final file in picked.take(remaining)) {
+        final image = await prepareClubImage(file);
+        nextImages.add(
+          _PendingIntroImage(
+            bytes: image.bytes,
+            extension: image.extension,
+            contentType: image.contentType,
+          ),
+        );
+      }
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
     }
 
     if (!mounted) return;
@@ -392,27 +423,6 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       ),
     );
   }
-}
-
-String _extensionFromName(String name) {
-  final dot = name.lastIndexOf('.');
-  if (dot < 0 || dot == name.length - 1) return 'jpg';
-  final ext = name.substring(dot + 1).toLowerCase();
-  return switch (ext) {
-    'png' => 'png',
-    'webp' => 'webp',
-    'jpeg' => 'jpg',
-    'jpg' => 'jpg',
-    _ => 'jpg',
-  };
-}
-
-String _contentTypeForExtension(String extension) {
-  return switch (extension) {
-    'png' => 'image/png',
-    'webp' => 'image/webp',
-    _ => 'image/jpeg',
-  };
 }
 
 class _ClubCreateStepHeader extends StatelessWidget {
@@ -648,6 +658,7 @@ class _OperationClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: monthlyFee,
+          validator: clubMonthlyFeeInputError,
           decoration: const InputDecoration(
             labelText: '월 회비 (원)',
             hintText: '예: 30000',
