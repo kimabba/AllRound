@@ -11,6 +11,7 @@ import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/age.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
@@ -75,7 +76,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
   bool get _canAdvance => switch (_step) {
-        0 => _realName.text.trim().length >= 2 && _birthDate != null,
+        0 => _realName.text.trim().length >= 2 &&
+            _birthDate != null &&
+            !isUnderMinSignupAge(_birthDate!, DateTime.now()),
         1 => _regionCode != null,
         _ => _canSubmit,
       };
@@ -90,7 +93,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       helpText: '생년월일 선택',
     );
     if (picked != null) {
-      setState(() => _birthDate = picked);
+      final underage = isUnderMinSignupAge(picked, now);
+      setState(() {
+        _birthDate = picked;
+        _error = underage ? '만 $kMinSignupAge세 이상만 가입할 수 있습니다.' : null;
+      });
     }
   }
 
@@ -439,7 +446,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ref.invalidate(userTennisOrgsProvider);
       if (mounted) context.go('/');
     } catch (e) {
-      setState(() => _error = e.toString());
+      final msg = e.toString().contains('MINOR_NOT_ALLOWED')
+          ? '만 $kMinSignupAge세 이상만 가입할 수 있습니다.'
+          : e.toString();
+      setState(() => _error = msg);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
