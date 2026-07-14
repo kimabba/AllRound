@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
+
 /// 빌드 시점 환경변수 (--dart-define).
 ///
 /// flutter run \
@@ -62,10 +64,26 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// 개발용 프리뷰/관리자 우회 플래그 중 하나라도 켜져 있는지.
+  /// 릴리스 빌드 차단(assertConfigured) 및 회귀 테스트에서 사용.
+  static bool get hasDevOverrideFlags =>
+      adminDesignPreview || userDesignPreview || adminMode;
+
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
         'SUPABASE_URL / SUPABASE_ANON_KEY 가 설정되지 않았습니다. --dart-define 으로 전달하세요.',
+      );
+    }
+    // 릴리스 빌드에는 개발용 프리뷰/관리자 우회 플래그가 절대 들어가면 안 된다.
+    // dart-define·kReleaseMode 는 컴파일 상수라, 릴리스 빌드에서 우회 플래그가 켜져
+    // 있으면 앱 시작 즉시 실패시켜 스토어 빌드로 새는 것을 차단한다 (JY-6).
+    // debug/profile(로컬 개발·디자인 프리뷰)은 영향 없음.
+    if (kReleaseMode && hasDevOverrideFlags) {
+      throw StateError(
+        'release build 에 개발용 플래그가 켜져 있습니다 '
+        '(ADMIN_DESIGN_PREVIEW / USER_DESIGN_PREVIEW / ADMIN_MODE). '
+        '프로덕션 빌드에서는 제거하세요.',
       );
     }
   }
