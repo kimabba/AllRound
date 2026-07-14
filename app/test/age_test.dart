@@ -16,18 +16,18 @@ void main() {
     });
   });
 
-  group('isUnderMinSignupAge — 만 19세 게이트', () {
-    test('만 19세 생일 당일 → 허용(미만 아님)', () {
-      expect(isUnderMinSignupAge(DateTime(2007, 7, 14), now), isFalse);
+  group('isUnderMinSignupAge — 만 14세 게이트', () {
+    test('만 14세 생일 당일 → 허용(미만 아님)', () {
+      expect(isUnderMinSignupAge(DateTime(2012, 7, 14), now), isFalse);
     });
-    test('만 18세(생일 하루 전) → 차단', () {
-      expect(isUnderMinSignupAge(DateTime(2007, 7, 15), now), isTrue);
+    test('만 13세(생일 하루 전) → 차단', () {
+      expect(isUnderMinSignupAge(DateTime(2012, 7, 15), now), isTrue);
     });
     test('만 20세 → 허용', () {
       expect(isUnderMinSignupAge(DateTime(2006, 1, 1), now), isFalse);
     });
-    test('만 13세 → 차단', () {
-      expect(isUnderMinSignupAge(DateTime(2013, 1, 1), now), isTrue);
+    test('만 10세 → 차단', () {
+      expect(isUnderMinSignupAge(DateTime(2016, 1, 1), now), isTrue);
     });
   });
 }
