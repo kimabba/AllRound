@@ -333,7 +333,6 @@ class _Header extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final isTennis = club.sport == 'tennis';
     final accent = AppSportColors.forSport(club.sport);
-    final description = club.description?.trim();
 
     return Container(
       width: double.infinity,
@@ -403,18 +402,6 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
-            if (description != null && description.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                description,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: tt.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
-            ],
           ],
         ),
       ),
