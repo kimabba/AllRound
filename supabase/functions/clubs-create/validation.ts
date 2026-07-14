@@ -56,3 +56,29 @@ export function parseGenderPreference(
   }
   return { ok: true, value };
 }
+
+export function parseWebsite(
+  value: unknown,
+): ValidationResult<string | null> {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: null };
+  }
+  if (typeof value !== 'string') {
+    return { ok: false, message: 'website must be a valid HTTP(S) URL' };
+  }
+
+  const website = value.trim();
+  if (website === '') return { ok: true, value: null };
+  try {
+    const url = new URL(website);
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.hostname === ''
+    ) {
+      return { ok: false, message: 'website must be a valid HTTP(S) URL' };
+    }
+  } catch {
+    return { ok: false, message: 'website must be a valid HTTP(S) URL' };
+  }
+  return { ok: true, value: website };
+}

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/tournament.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_empty_state.dart';
 import 'team_recruiting_widgets.dart';
@@ -242,7 +243,7 @@ class NearbyNewClubCard extends StatelessWidget {
                     ),
                     MiniInfoChip(
                       icon: Icons.groups_rounded,
-                      label: '멤버 ${club.memberCount}',
+                      label: clubMemberCountLabel(club.memberCount),
                     ),
                   ],
                 ),
@@ -299,7 +300,7 @@ class SimpleClubMiniTile extends StatelessWidget {
                 style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
               Text(
-                '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'}',
+                '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · ${clubMemberCountLabel(club.memberCount)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -420,7 +421,7 @@ class SimpleClubTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${sportLabelFromString(item.sport)} · ${item.region ?? '지역 미정'} · 멤버 ${item.memberCount}',
+                    '${sportLabelFromString(item.sport)} · ${item.region ?? '지역 미정'} · ${clubMemberCountLabel(item.memberCount)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),

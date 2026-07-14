@@ -55,4 +55,24 @@ void main() {
       expect(clubMonthlyFeeInputError('1000001'), isNotNull);
     });
   });
+
+  group('club website input', () {
+    test('empty and web URLs pass', () {
+      expect(clubWebsiteInputError(''), isNull);
+      expect(clubWebsiteInputError('https://example.com/club'), isNull);
+      expect(clubWebsiteInputError('http://example.com'), isNull);
+    });
+
+    test('missing scheme and non-web schemes fail', () {
+      expect(clubWebsiteInputError('example.com'), isNotNull);
+      expect(clubWebsiteInputError('ftp://example.com'), isNotNull);
+      expect(clubWebsiteInputError('https://'), isNotNull);
+    });
+  });
+
+  test('club member count label shows the total safely', () {
+    expect(clubMemberCountLabel(12), '총 12명');
+    expect(clubMemberCountLabel(0), '총 0명');
+    expect(clubMemberCountLabel(-1), '총 0명');
+  });
 }

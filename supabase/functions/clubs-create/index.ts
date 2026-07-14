@@ -4,7 +4,12 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
-import { parseGenderPreference, parseMeetingDays, parseMonthlyFee } from './validation.ts';
+import {
+  parseGenderPreference,
+  parseMeetingDays,
+  parseMonthlyFee,
+  parseWebsite,
+} from './validation.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -74,6 +79,10 @@ Deno.serve(async (req) => {
   if (!parsedGenderPreference.ok) {
     return errorResponse(parsedGenderPreference.message, 400);
   }
+  const parsedWebsite = parseWebsite(body.website);
+  if (!parsedWebsite.ok) {
+    return errorResponse(parsedWebsite.message, 400);
+  }
 
   const supa = serviceClient();
   const logoUrl = optionalUrl(body.logo_url);
@@ -86,7 +95,7 @@ Deno.serve(async (req) => {
     logo_url: logoUrl,
     intro_image_urls: introImageUrls,
     contact: optionalText(body.contact),
-    website: optionalUrl(body.website) ?? optionalText(body.website),
+    website: parsedWebsite.value,
     description: optionalText(body.description),
     meeting_days: parsedMeetingDays.value,
     monthly_fee: parsedMonthlyFee.value,

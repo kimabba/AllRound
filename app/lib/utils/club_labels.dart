@@ -97,3 +97,18 @@ String? clubMonthlyFeeInputError(String? value) {
   }
   return null;
 }
+
+String? clubWebsiteInputError(String? value) {
+  final raw = value?.trim() ?? '';
+  if (raw.isEmpty) return null;
+
+  final uri = Uri.tryParse(raw);
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https') ||
+      uri.host.isEmpty) {
+    return '웹사이트 주소는 http:// 또는 https://로 입력해주세요';
+  }
+  return null;
+}
+
+String clubMemberCountLabel(int count) => '총 ${count < 0 ? 0 : count}명';

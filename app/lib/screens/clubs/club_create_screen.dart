@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_create_draft.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
@@ -35,9 +38,39 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   String? _genderPreference;
   int _step = 0;
   bool _submitting = false;
+  String? _submittingLabel;
+  Timer? _draftSaveTimer;
+  ClubCreateDraftStore? _draftStore;
+  String? _draftUserId;
+  bool _draftReady = false;
+  bool _submitted = false;
+
+  List<TextEditingController> get _draftTextControllers => [
+        _name,
+        _region,
+        _address,
+        _contact,
+        _website,
+        _description,
+        _monthlyFee,
+      ];
+
+  @override
+  void initState() {
+    super.initState();
+    for (final controller in _draftTextControllers) {
+      controller.addListener(_scheduleDraftSave);
+    }
+    unawaited(_restoreDraft());
+  }
 
   @override
   void dispose() {
+    _draftSaveTimer?.cancel();
+    if (_draftReady && !_submitted) unawaited(_saveDraftNow());
+    for (final controller in _draftTextControllers) {
+      controller.removeListener(_scheduleDraftSave);
+    }
     _name.dispose();
     _region.dispose();
     _address.dispose();
@@ -46,6 +79,147 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     _description.dispose();
     _monthlyFee.dispose();
     super.dispose();
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!mounted) return;
+
+      final userId = ref.read(supabaseProvider).auth.currentUser?.id;
+      final store = ClubCreateDraftStore(preferences);
+      final draft = userId == null ? null : store.load(userId);
+      _draftStore = store;
+      _draftUserId = userId;
+
+      setState(() {
+        if (draft != null) {
+          _sport = draft.sport;
+          _name.text = draft.name;
+          _region.text = draft.region;
+          _address.text = draft.address;
+          _contact.text = draft.contact;
+          _website.text = draft.website;
+          _description.text = draft.description;
+          _monthlyFee.text = draft.monthlyFee;
+          _meetingDays
+            ..clear()
+            ..addAll(draft.meetingDays);
+          _genderPreference = draft.genderPreference;
+          _step = draft.step;
+        }
+        _draftReady = true;
+      });
+
+      if (draft != null && draft.hasUserContent && mounted) {
+        final message = draft.hadSelectedImages
+            ? '임시저장 내용을 불러왔습니다. 사진은 다시 선택해주세요.'
+            : '임시저장 내용을 불러왔습니다.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } catch (_) {
+      // 로컬 저장소가 손상돼도 클럽 작성 화면 자체는 계속 사용할 수 있어야 한다.
+      if (mounted) setState(() => _draftReady = true);
+    }
+  }
+
+  ClubCreateDraft _currentDraft() => ClubCreateDraft(
+        sport: _sport,
+        name: _name.text,
+        region: _region.text,
+        address: _address.text,
+        contact: _contact.text,
+        website: _website.text,
+        description: _description.text,
+        monthlyFee: _monthlyFee.text,
+        meetingDays: _meetingDays.toList(growable: false),
+        genderPreference: _genderPreference,
+        step: _step,
+        hadSelectedImages: _logoBytes != null || _introImages.isNotEmpty,
+      );
+
+  void _scheduleDraftSave() {
+    if (!_draftReady || _submitted) return;
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(const Duration(milliseconds: 600), () {
+      unawaited(_saveDraftNow());
+    });
+  }
+
+  Future<void> _saveDraftNow() async {
+    final store = _draftStore;
+    final userId = _draftUserId;
+    if (store == null || userId == null || _submitted) return;
+
+    final draft = _currentDraft();
+    try {
+      if (draft.hasUserContent) {
+        await store.save(userId, draft);
+      } else {
+        await store.clear(userId);
+      }
+    } catch (_) {
+      // 임시저장 실패가 작성 흐름을 막거나 처리되지 않은 비동기 오류가 되지 않게 한다.
+    }
+  }
+
+  Future<void> _clearSavedDraft() async {
+    _draftSaveTimer?.cancel();
+    final store = _draftStore;
+    final userId = _draftUserId;
+    if (store != null && userId != null) await store.clear(userId);
+  }
+
+  Future<void> _confirmReset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('작성 내용 초기화'),
+        content: const Text('입력한 내용과 선택한 사진을 모두 지울까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('초기화'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _draftSaveTimer?.cancel();
+    setState(() {
+      _draftReady = false;
+      for (final controller in _draftTextControllers) {
+        controller.clear();
+      }
+      _sport = ref.read(activeSportProvider) ?? 'tennis';
+      _logoBytes = null;
+      _introImages.clear();
+      _meetingDays.clear();
+      _genderPreference = null;
+      _step = 0;
+    });
+    try {
+      await _clearSavedDraft();
+    } catch (_) {
+      // 초기화는 메모리 상태를 기준으로 완료하고 로컬 저장소 오류는 다음 저장 때 복구한다.
+    } finally {
+      if (mounted) setState(() => _draftReady = true);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('작성 내용을 초기화했습니다.')),
+    );
+  }
+
+  void _setSubmittingLabel(String label) {
+    if (mounted) setState(() => _submittingLabel = label);
   }
 
   Future<void> _submit() async {
@@ -58,19 +232,31 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _submittingLabel = '제출 준비 중';
+    });
     try {
       String? logoUrl;
       final introImageUrls = <String>[];
+      final imageCount = (_logoBytes == null ? 0 : 1) + _introImages.length;
+      var uploadedImageCount = 0;
       try {
         if (_logoBytes != null) {
+          _setSubmittingLabel(
+            '사진 업로드 ${uploadedImageCount + 1}/$imageCount',
+          );
           logoUrl = await ref.read(apiProvider).uploadClubLogo(
                 bytes: _logoBytes!,
                 extension: _logoExtension,
                 contentType: _logoContentType,
               );
+          uploadedImageCount += 1;
         }
         for (final image in _introImages) {
+          _setSubmittingLabel(
+            '사진 업로드 ${uploadedImageCount + 1}/$imageCount',
+          );
           introImageUrls.add(
             await ref.read(apiProvider).uploadClubIntroImage(
                   bytes: image.bytes,
@@ -78,6 +264,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                   contentType: image.contentType,
                 ),
           );
+          uploadedImageCount += 1;
         }
       } catch (_) {
         if (mounted) {
@@ -89,6 +276,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         }
         return;
       }
+      _setSubmittingLabel('클럽 생성 요청 중');
       final fee = int.tryParse(_monthlyFee.text.trim());
       await ref.read(apiProvider).createClub(
             sport: _sport,
@@ -104,6 +292,13 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             monthlyFee: fee,
             genderPreference: _genderPreference,
           );
+      _draftSaveTimer?.cancel();
+      _submitted = true;
+      try {
+        await _clearSavedDraft();
+      } catch (_) {
+        // 클럽 생성 성공 이후 로컬 임시저장 삭제 실패는 제출 결과에 영향을 주지 않는다.
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -118,7 +313,12 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             .showSnackBar(SnackBar(content: Text('제출 실패: $e')));
       }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _submittingLabel = null;
+        });
+      }
     }
   }
 
@@ -134,7 +334,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   bool _validateOperationStep() {
-    final error = clubMonthlyFeeInputError(_monthlyFee.text);
+    final error = clubWebsiteInputError(_website.text) ??
+        clubMonthlyFeeInputError(_monthlyFee.text);
     if (error == null) return true;
     _formKey.currentState?.validate();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -148,11 +349,13 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (_step == 1 && !_validateOperationStep()) return;
     FocusScope.of(context).unfocus();
     setState(() => _step = (_step + 1).clamp(0, 2).toInt());
+    _scheduleDraftSave();
   }
 
   void _goPrevious() {
     FocusScope.of(context).unfocus();
     setState(() => _step = (_step - 1).clamp(0, 2).toInt());
+    _scheduleDraftSave();
   }
 
   Future<void> _pickLogo() async {
@@ -181,6 +384,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       _logoExtension = image.extension;
       _logoContentType = image.contentType;
     });
+    _scheduleDraftSave();
   }
 
   Future<void> _showLogoSheet() async {
@@ -227,6 +431,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                     onTap: () {
                       Navigator.pop(sheetContext);
                       setState(() => _logoBytes = null);
+                      _scheduleDraftSave();
                     },
                   ),
                 ],
@@ -277,6 +482,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     if (!mounted) return;
     setState(() => _introImages.addAll(nextImages));
+    _scheduleDraftSave();
     if (picked.length > remaining) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('소개 사진은 최대 5장까지만 추가했습니다.')),
@@ -298,6 +504,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       }
       _region.text = selected.label;
     });
+    _scheduleDraftSave();
   }
 
   @override
@@ -319,108 +526,153 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('클럽 만들기')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxl,
-            vertical: AppSpacing.lg,
+      appBar: AppBar(
+        title: const Text('클럽 만들기'),
+        actions: [
+          IconButton(
+            onPressed: !_draftReady || _submitting ? null : _confirmReset,
+            icon: const Icon(Icons.restart_alt_rounded),
+            tooltip: '작성 내용 초기화',
           ),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ClubCreateStepHeader(step: _step),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_step == 0)
-                      _BasicClubStep(
-                        sport: _sport,
-                        sportsToShow: sportsToShow,
-                        logoBytes: _logoBytes,
-                        name: _name,
-                        region: _region,
-                        address: _address,
-                        onLogoTap: _showLogoSheet,
-                        onSportChanged: (sport) =>
-                            setState(() => _sport = sport),
-                        onRegionTap: _showRegionPicker,
-                      )
-                    else if (_step == 1)
-                      _OperationClubStep(
-                        contact: _contact,
-                        website: _website,
-                        monthlyFee: _monthlyFee,
-                        meetingDays: _meetingDays,
-                        genderPreference: _genderPreference,
-                        onMeetingDayChanged: (day, selected) => setState(() {
-                          if (selected) {
-                            _meetingDays.add(day);
-                          } else {
-                            _meetingDays.remove(day);
-                          }
-                        }),
-                        onGenderChanged: (value) =>
-                            setState(() => _genderPreference = value),
-                      )
-                    else
-                      _IntroClubStep(
-                        description: _description,
-                        introImages: _introImages,
-                        onAddIntroImages: _pickIntroImages,
-                        onRemoveIntroImage: (index) => setState(() {
-                          _introImages.removeAt(index);
-                        }),
-                      ),
-                    if (_step == 2) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: cs.secondaryContainer.withValues(alpha: 0.5),
-                          borderRadius: AppRadius.card,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: cs.onSecondaryContainer,
-                              size: 18,
+        ],
+      ),
+      body: !_draftReady
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xxl,
+                  vertical: AppSpacing.lg,
+                ),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ClubCreateStepHeader(step: _step),
+                          const SizedBox(height: AppSpacing.sm),
+                          const _ClubDraftNotice(),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (_step == 0)
+                            _BasicClubStep(
+                              sport: _sport,
+                              sportsToShow: sportsToShow,
+                              logoBytes: _logoBytes,
+                              name: _name,
+                              region: _region,
+                              address: _address,
+                              onLogoTap: _showLogoSheet,
+                              onSportChanged: (sport) {
+                                setState(() => _sport = sport);
+                                _scheduleDraftSave();
+                              },
+                              onRegionTap: _showRegionPicker,
+                            )
+                          else if (_step == 1)
+                            _OperationClubStep(
+                              contact: _contact,
+                              website: _website,
+                              monthlyFee: _monthlyFee,
+                              meetingDays: _meetingDays,
+                              genderPreference: _genderPreference,
+                              onMeetingDayChanged: (day, selected) =>
+                                  setState(() {
+                                if (selected) {
+                                  _meetingDays.add(day);
+                                } else {
+                                  _meetingDays.remove(day);
+                                }
+                                _scheduleDraftSave();
+                              }),
+                              onGenderChanged: (value) {
+                                setState(() => _genderPreference = value);
+                                _scheduleDraftSave();
+                              },
+                            )
+                          else
+                            _IntroClubStep(
+                              description: _description,
+                              introImages: _introImages,
+                              onAddIntroImages: _pickIntroImages,
+                              onRemoveIntroImage: (index) => setState(() {
+                                _introImages.removeAt(index);
+                                _scheduleDraftSave();
+                              }),
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text(
-                                '클럽 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: cs.onSecondaryContainer,
+                          if (_step == 2) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: cs.secondaryContainer
+                                    .withValues(alpha: 0.5),
+                                borderRadius: AppRadius.card,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    color: cs.onSecondaryContainer,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: Text(
+                                      '클럽 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: cs.onSecondaryContainer,
+                                          ),
                                     ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
+                          const SizedBox(height: AppSpacing.xl),
+                          _ClubCreateStepActions(
+                            step: _step,
+                            submitting: _submitting,
+                            submittingLabel: _submittingLabel,
+                            onPrevious: _goPrevious,
+                            onNext: _goNext,
+                            onSubmit: _submit,
+                          ),
+                        ],
                       ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    _ClubCreateStepActions(
-                      step: _step,
-                      submitting: _submitting,
-                      onPrevious: _goPrevious,
-                      onNext: _goNext,
-                      onSubmit: _submit,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
+    );
+  }
+}
+
+class _ClubDraftNotice extends StatelessWidget {
+  const _ClubDraftNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.cloud_done_outlined, size: 16, color: cs.onSurfaceVariant),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            '작성 내용은 이 기기에 자동 저장됩니다. 사진은 제외됩니다.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -633,6 +885,7 @@ class _OperationClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: website,
+          validator: clubWebsiteInputError,
           decoration: const InputDecoration(
             labelText: '웹사이트 / SNS',
             hintText: 'https://',
@@ -728,6 +981,7 @@ class _ClubCreateStepActions extends StatelessWidget {
   const _ClubCreateStepActions({
     required this.step,
     required this.submitting,
+    required this.submittingLabel,
     required this.onPrevious,
     required this.onNext,
     required this.onSubmit,
@@ -735,6 +989,7 @@ class _ClubCreateStepActions extends StatelessWidget {
 
   final int step;
   final bool submitting;
+  final String? submittingLabel;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onSubmit;
@@ -758,10 +1013,17 @@ class _ClubCreateStepActions extends StatelessWidget {
           child: FilledButton(
             onPressed: submitting ? null : (isLastStep ? onSubmit : onNext),
             child: submitting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Flexible(child: Text(submittingLabel ?? '처리 중')),
+                    ],
                   )
                 : Text(isLastStep ? '생성 요청 제출' : '다음'),
           ),
