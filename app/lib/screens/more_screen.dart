@@ -22,14 +22,14 @@ class MoreScreen extends ConsumerWidget {
         label: 'MY',
         subtitle: '프로필, 종목 설정, 내 클럽, 대회 기록',
         color: cs.primary,
-        onTap: () => context.go('/profile'),
+        onTap: () => context.push('/profile'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
         label: '관심',
         subtitle: '관심 대회와 클럽 모아보기',
         color: cs.tertiary,
-        onTap: () => context.go('/favorites'),
+        onTap: () => context.push('/favorites'),
       ),
     ];
 
@@ -39,7 +39,7 @@ class MoreScreen extends ConsumerWidget {
         label: '룰북',
         subtitle: '테니스와 풋살 규칙 확인',
         color: AppSportColors.tennis,
-        onTap: () => context.go('/rules'),
+        onTap: () => context.push('/rules'),
       ),
       if (kIsWeb && isAdmin)
         _MenuItem(

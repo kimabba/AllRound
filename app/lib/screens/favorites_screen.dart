@@ -9,6 +9,7 @@ import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/allround_logo.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/tournament_card.dart';
@@ -85,10 +86,20 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
           tournaments: items,
           favoriteIds: favoriteIds,
           onFavoriteToggle: (tournament) async {
-            await ref.read(apiProvider).toggleFavorite(tournament.id, false);
-            ref.invalidate(favoriteIdsProvider);
-            ref.invalidate(myFavoriteTournamentsProvider);
-            ref.invalidate(myTournamentRecordsProvider);
+            try {
+              await ref.read(apiProvider).toggleFavorite(tournament.id, false);
+              ref.invalidate(favoriteIdsProvider);
+              ref.invalidate(myFavoriteTournamentsProvider);
+              ref.invalidate(myTournamentRecordsProvider);
+            } catch (_) {
+              if (context.mounted) {
+                AppToast.show(
+                  context,
+                  '관심 해제에 실패했어요. 잠시 후 다시 시도해 주세요.',
+                  kind: AppToastKind.error,
+                );
+              }
+            }
           },
         );
       },
