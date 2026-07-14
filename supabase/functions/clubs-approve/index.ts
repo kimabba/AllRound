@@ -10,16 +10,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseClubIds(body: Record<string, unknown>): string[] {
-  const candidates = Array.isArray(body.club_ids)
-    ? body.club_ids
-    : [body.club_id];
+  const candidates = Array.isArray(body.club_ids) ? body.club_ids : [body.club_id];
 
-  return [...new Set(
-    candidates
-      .filter((value): value is string => typeof value === 'string')
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
-  )];
+  return [
+    ...new Set(
+      candidates
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  ];
 }
 
 Deno.serve(async (req) => {
@@ -50,9 +50,7 @@ Deno.serve(async (req) => {
     return errorResponse('action must be approve|reject', 400);
   }
 
-  const reason = typeof rawBody.reason === 'string'
-    ? rawBody.reason.trim()
-    : '';
+  const reason = typeof rawBody.reason === 'string' ? rawBody.reason.trim() : '';
   if (action === 'reject' && reason.length === 0) {
     return errorResponse('reason is required when rejecting clubs', 400);
   }
