@@ -109,9 +109,7 @@ done
 {
   "SUPABASE_URL": "https://<ref>.supabase.co",
   "SUPABASE_ANON_KEY": "<publishable-anon-key>",
-  "API_BASE_URL": "",
-  "GOOGLE_WEB_CLIENT_ID": "<google-oauth-client-id>",
-  "GOOGLE_IOS_CLIENT_ID": "<google-ios-client-id>"
+  "API_BASE_URL": ""
 }
 ```
 

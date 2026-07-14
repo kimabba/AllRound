@@ -108,8 +108,6 @@ alter database postgres set app.cron_invoke_key = '<internal-random-cron-secret>
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 API_BASE_URL=                 # optional; defaults to $SUPABASE_URL/functions/v1
-GOOGLE_WEB_CLIENT_ID=         # optional
-GOOGLE_IOS_CLIENT_ID=         # optional
 ```
 
 ## Operational notes
