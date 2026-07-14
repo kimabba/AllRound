@@ -1076,20 +1076,6 @@ class _RegionPickerSheet extends StatelessWidget {
   }
 }
 
-const _regionOptions = [
-  _RegionOption('서울'),
-  _RegionOption('경기'),
-  _RegionOption('인천'),
-  _RegionOption('부산'),
-  _RegionOption('울산'),
-  _RegionOption('경남'),
-  _RegionOption('대구'),
-  _RegionOption('경북'),
-  _RegionOption('충북'),
-  _RegionOption('충남'),
-  _RegionOption('전북'),
-  _RegionOption('광주'),
-  _RegionOption('전남'),
-  _RegionOption('강원'),
-  _RegionOption('제주'),
+final _regionOptions = [
+  for (final code in regionCodes) _RegionOption(regionLabel(code)),
 ];

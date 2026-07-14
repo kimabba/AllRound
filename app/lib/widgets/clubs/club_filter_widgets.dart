@@ -207,7 +207,9 @@ class ClubFilterSheet extends StatefulWidget {
 }
 
 class _ClubFilterSheetState extends State<ClubFilterSheet> {
-  static const _regions = ['서울', '경기', '인천', '광주', '부산', '대구', '대전'];
+  static final _regions = [
+    for (final code in regionCodes) regionLabel(code),
+  ];
   static const _genders = ['여성', '남성', '혼성'];
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 
