@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -159,7 +160,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       await supa.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'kr.allround.app://login-callback/',
+        // 모바일은 딥링크 스킴으로 복귀. 웹(admin/웹빌드)에서는 모바일 스킴을 쓰면
+        // 브라우저로 못 돌아오므로 redirectTo 를 비워 현재 origin 으로 복귀시킨다 (JY-132).
+        redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
         // 로그아웃 후 재로그인 시 직전 구글 계정으로 자동 재인증되지 않도록
         // 계정 선택 화면을 항상 노출한다 (JY-113).
         queryParams: const {'prompt': 'select_account'},

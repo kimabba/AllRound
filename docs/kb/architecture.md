@@ -75,7 +75,6 @@ FCM_SERVER_KEY (push 발송)
 ```
 SUPABASE_URL, SUPABASE_ANON_KEY
 API_BASE_URL (기본: $SUPABASE_URL/functions/v1)
-GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID
 ```
 
 ## 공유 모듈 (`_shared/`)
