@@ -3238,46 +3238,332 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => DraggableScrollableSheet(
+      builder: (_) => _PostDetailSheet(post: post),
+    );
+    await _load();
+  }
+}
+
+class _PostDetailSheet extends ConsumerStatefulWidget {
+  const _PostDetailSheet({required this.post});
+
+  final ClubPost post;
+
+  @override
+  ConsumerState<_PostDetailSheet> createState() => _PostDetailSheetState();
+}
+
+class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
+  final _commentController = TextEditingController();
+  List<ClubPostComment>? _comments;
+  bool _loadingComments = false;
+  bool _sendingComment = false;
+  String? _commentError;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post.allowsComments) _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    setState(() {
+      _loadingComments = true;
+      _commentError = null;
+    });
+    try {
+      final comments = await ref.read(apiProvider).postComments(widget.post.id);
+      if (!mounted) return;
+      setState(() => _comments = comments);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _commentError = '댓글을 불러오지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _loadingComments = false);
+    }
+  }
+
+  Future<void> _submitComment() async {
+    if (_sendingComment || !widget.post.allowsComments) return;
+    final body = _commentController.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('댓글 내용을 입력해주세요.')),
+      );
+      return;
+    }
+
+    setState(() => _sendingComment = true);
+    try {
+      final comment = await ref.read(apiProvider).addComment(
+            postId: widget.post.id,
+            body: body,
+          );
+      if (!mounted) return;
+      setState(() {
+        _comments = [...?_comments, comment];
+        _commentController.clear();
+        _commentError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('댓글을 등록하지 못했습니다. 다시 시도해주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final post = widget.post;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
         expand: false,
-        initialChildSize: 0.68,
-        minChildSize: 0.4,
-        maxChildSize: 0.92,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.all(AppSpacing.lg),
+        initialChildSize: 0.78,
+        minChildSize: 0.48,
+        maxChildSize: 0.94,
+        builder: (context, controller) => Column(
           children: [
-            Text(post.tagLabel,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                children: [
+                  Text(
+                    post.tagLabel,
+                    style: tt.labelLarge?.copyWith(
+                      color: cs.primary,
                       fontWeight: FontWeight.w800,
-                    )),
-            const SizedBox(height: AppSpacing.sm),
-            Text(post.title,
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(height: AppSpacing.xs),
-            Text('${post.authorName ?? '익명'} · ${post.createdAt.toLocal()}'),
-            const Divider(height: AppSpacing.xl),
-            Text(post.body,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(height: 1.6)),
-            for (final url in post.imageUrls) ...[
-              const SizedBox(height: AppSpacing.md),
-              ClipRRect(
-                borderRadius: AppRadius.card,
-                child: Image.network(url, fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    post.title,
+                    style: tt.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${post.authorDisplayName} · ${_postDateText(post.createdAt)}',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const Divider(height: AppSpacing.xl),
+                  Text(
+                    post.body,
+                    style: tt.bodyLarge?.copyWith(height: 1.6),
+                  ),
+                  for (final url in post.imageUrls) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    ClipRRect(
+                      borderRadius: AppRadius.card,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 180,
+                          color: cs.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.xl),
+                  if (!post.allowsComments)
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: AppRadius.card,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.campaign_outlined, color: cs.primary),
+                          const SizedBox(width: AppSpacing.sm),
+                          const Expanded(
+                            child: Text('공지사항은 댓글을 받지 않습니다.'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      '댓글 ${_comments?.length ?? 0}',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (_loadingComments)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_commentError != null)
+                      _CommentLoadError(
+                        message: _commentError!,
+                        onRetry: _loadComments,
+                      )
+                    else if (_comments?.isEmpty ?? true)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.lg,
+                        ),
+                        child: Text(
+                          '첫 댓글을 남겨보세요.',
+                          textAlign: TextAlign.center,
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      for (final comment in _comments!)
+                        _CommentRow(comment: comment),
+                  ],
+                ],
               ),
-            ],
+            ),
+            if (post.allowsComments)
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(top: BorderSide(color: cs.outlineVariant)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        enabled: !_sendingComment,
+                        minLines: 1,
+                        maxLines: 3,
+                        maxLength: 1000,
+                        decoration: const InputDecoration(
+                          hintText: '댓글을 입력하세요',
+                          counterText: '',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton.filled(
+                      onPressed: _sendingComment ? null : _submitComment,
+                      tooltip: '댓글 등록',
+                      icon: _sendingComment
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_rounded),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+}
+
+class _CommentRow extends StatelessWidget {
+  const _CommentRow({required this.comment});
+
+  final ClubPostComment comment;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: cs.primaryContainer,
+            child: Icon(
+              Icons.person_rounded,
+              size: 18,
+              color: cs.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.authorDisplayName,
+                  style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  _postDateText(comment.createdAt),
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                Text(comment.body, style: tt.bodyMedium),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommentLoadError extends StatelessWidget {
+  const _CommentLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: cs.error),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message)),
+          TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
+      ),
+    );
+  }
+}
+
+String _postDateText(DateTime date) {
+  final local = date.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}/${local.day} $hour:$minute';
 }
 
 class _PostWriteEntry extends StatelessWidget {
@@ -3893,7 +4179,7 @@ class _PostRow extends StatelessWidget {
                   ],
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
+                    '${post.authorDisplayName} · ${_timeAgo(post.createdAt)}${post.allowsComments && post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
                     style: tt.bodySmall?.copyWith(
                       color: isNotice
                           ? cs.onErrorContainer.withValues(alpha: 0.76)

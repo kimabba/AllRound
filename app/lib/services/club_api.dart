@@ -585,13 +585,14 @@ mixin ClubApi on ApiBase {
     required String postId,
     required String body,
   }) async {
-    final userId = supabase.auth.currentUser!.id;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
     final row = await supabase
         .from('club_post_comments')
         .insert({
           'post_id': postId,
           'author_id': userId,
-          'body': body,
+          'body': body.trim(),
         })
         .select('*, users!author_id(name)')
         .single();
