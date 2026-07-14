@@ -9,6 +9,7 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
+import '../../utils/recent_tournaments.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
@@ -137,6 +138,25 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     }
   }
 
+  Future<void> _openRecentTournaments() async {
+    final userId = ref.read(currentUserProvider)?.id ?? 'guest';
+    final store = await RecentTournamentStore.create();
+    final entries = store.load(userId);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _RecentTournamentsSheet(
+        entries: entries,
+        onClear: () => store.clear(userId),
+        onOpen: (entry) {
+          context.push('/tournaments/${entry.id}');
+        },
+      ),
+    );
+  }
+
   String _formatSearchError(Object error) {
     final text = error.toString();
     if (text.contains('503') || text.contains('BOOT_ERROR')) {
@@ -164,20 +184,26 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     // 등급 근거가 있을 때만 배지를 노출한다.
     final hasGradeBasis =
         (ref.watch(userSportsProvider).valueOrNull?.isNotEmpty ?? false) ||
-        (ref.watch(userTennisOrgsProvider).valueOrNull?.isNotEmpty ?? false);
+            (ref.watch(userTennisOrgsProvider).valueOrNull?.isNotEmpty ??
+                false);
     final myGradeIds = hasGradeBasis
         ? (ref
-                  .watch(homeTournamentsProvider)
-                  .valueOrNull
-                  ?.map((t) => t.id)
-                  .toSet() ??
-              const <String>{})
+                .watch(homeTournamentsProvider)
+                .valueOrNull
+                ?.map((t) => t.id)
+                .toSet() ??
+            const <String>{})
         : const <String>{};
 
     return Scaffold(
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '대회 · 모집'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: '최근 본 대회',
+            onPressed: _openRecentTournaments,
+          ),
           IconButton(
             icon: const Icon(Icons.add_rounded),
             tooltip: '대회 제보',
@@ -249,15 +275,19 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                                 context.push('/tournaments/${tournament.id}'),
                             onFavoriteToggle: (tournament, isFavorite) async {
                               try {
-                                await ref
-                                    .read(apiProvider)
-                                    .toggleFavorite(
+                                await ref.read(apiProvider).toggleFavorite(
                                       tournament.id,
                                       !isFavorite,
                                     );
                                 ref.invalidate(favoriteIdsProvider);
                                 ref.invalidate(myFavoriteTournamentsProvider);
                                 ref.invalidate(myTournamentRecordsProvider);
+                                if (!isFavorite && context.mounted) {
+                                  AppToast.show(
+                                    context,
+                                    '관심 대회로 저장했어요. 신청 마감일과 대회 3일 전에 알려드려요.',
+                                  );
+                                }
                               } catch (_) {
                                 if (context.mounted) {
                                   AppToast.show(
@@ -446,6 +476,144 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RecentTournamentsSheet extends StatelessWidget {
+  const _RecentTournamentsSheet({
+    required this.entries,
+    required this.onClear,
+    required this.onOpen,
+  });
+
+  final List<RecentTournamentEntry> entries;
+  final Future<void> Function() onClear;
+  final ValueChanged<RecentTournamentEntry> onOpen;
+
+  Future<void> _clear(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('최근 본 기록을 지울까요?'),
+        content: const Text('이 기기에 저장된 최근 본 대회 기록만 삭제됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('기록 지우기'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await onClear();
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return SafeArea(
+      child: FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '최근 본 대회',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  if (entries.isNotEmpty)
+                    TextButton(
+                      onPressed: () => _clear(context),
+                      child: const Text('기록 지우기'),
+                    ),
+                ],
+              ),
+              Text(
+                '최근 확인한 대회를 이 기기에 최대 10개 보관해요.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (entries.isEmpty)
+                const Expanded(
+                  child: AppEmptyState(
+                    icon: Icons.history_rounded,
+                    title: '최근 본 대회가 없습니다',
+                    description: '대회 상세를 확인하면 여기에 바로 모아드려요.',
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final deadline = entry.applicationDeadline;
+                      final place = entry.location ?? entry.region;
+                      final subtitle = [
+                        sportLabelFromString(entry.sport),
+                        '${entry.startDate.month}/${entry.startDate.day}',
+                        if (place?.trim().isNotEmpty == true) place!.trim(),
+                        if (deadline != null)
+                          '신청마감 ${deadline.month}/${deadline.day}',
+                      ].join(' · ');
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor: cs.primaryContainer,
+                          child: Icon(
+                            entry.sport == 'futsal'
+                                ? Icons.sports_soccer_rounded
+                                : Icons.sports_tennis_rounded,
+                            color: cs.onPrimaryContainer,
+                          ),
+                        ),
+                        title: Text(
+                          entry.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        subtitle: Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () {
+                          Navigator.pop(context);
+                          onOpen(entry);
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -50,6 +50,9 @@
 ### 대회
 - `searchTournaments()`, `submitTournament()`, `approveTournament()`
 - `tournamentReviewQueue()`, `bulkApproveTournaments()`, `bulkRejectTournaments()`
+- 월 캘린더와 날짜별 대회 목록을 한 화면에서 제공
+- 상세 화면을 열면 사용자별 최근 본 대회를 기기에 최대 10개 저장
+- 관심 대회는 `notify-cron`이 신청 마감일과 대회 D-3 알림을 만들며, 알림 탭 시 해당 대회 상세로 이동
 
 ### 클럽
 - `searchClubs()`, `myClubs()`, `createClub()`

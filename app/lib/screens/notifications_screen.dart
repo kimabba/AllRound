@@ -44,6 +44,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
 
     if (!mounted) return;
+    final referenceId = notification.referenceId;
+    if (notification.referenceType == 'tournament' &&
+        referenceId != null &&
+        referenceId.isNotEmpty) {
+      context.push('/tournaments/$referenceId');
+      return;
+    }
     final clubId = notification.clubId;
     if (clubId != null && clubId.isNotEmpty) {
       context.push('/clubs/$clubId');
@@ -143,7 +150,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        '가입 신청, 승인, 공지 알림이 여기에 표시됩니다.',
+                        '대회 마감, 가입 신청, 승인, 공지 알림이 여기에 표시됩니다.',
                         textAlign: TextAlign.center,
                         style: tt.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
@@ -299,6 +306,10 @@ IconData _iconFor(String type) {
       return Icons.push_pin_outlined;
     case 'club_event':
       return Icons.event_outlined;
+    case 'tournament_d3':
+      return Icons.event_available_rounded;
+    case 'tournament_deadline':
+      return Icons.timer_rounded;
     default:
       return Icons.notifications_outlined;
   }

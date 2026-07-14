@@ -10,6 +10,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_toast.dart';
 
@@ -34,6 +35,16 @@ class _TournamentDetailScreenState
     _load();
   }
 
+  Future<void> _rememberTournament(Tournament tournament) async {
+    try {
+      final userId = ref.read(currentUserProvider)?.id ?? 'guest';
+      final store = await RecentTournamentStore.create();
+      await store.record(userId, tournament);
+    } catch (error) {
+      debugPrint('recent tournament save error: $error');
+    }
+  }
+
   Future<void> _load() async {
     if (AppConfig.userDesignPreview &&
         widget.tournamentId.startsWith('preview-')) {
@@ -42,6 +53,7 @@ class _TournamentDetailScreenState
         _loading = false;
         _error = _t == null ? '프리뷰 대회 정보를 찾을 수 없습니다.' : null;
       });
+      if (_t != null) await _rememberTournament(_t!);
       return;
     }
 
@@ -65,6 +77,7 @@ class _TournamentDetailScreenState
         _t = Tournament.fromJson(row);
         _loading = false;
       });
+      await _rememberTournament(_t!);
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -82,8 +95,7 @@ class _TournamentDetailScreenState
     final isFav = (favorites.valueOrNull ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview =
-        AppConfig.userDesignPreview &&
+    final isPreview = AppConfig.userDesignPreview &&
         widget.tournamentId.startsWith('preview-');
 
     return Scaffold(
@@ -105,6 +117,12 @@ class _TournamentDetailScreenState
                   ref.invalidate(favoriteIdsProvider);
                   ref.invalidate(myFavoriteTournamentsProvider);
                   ref.invalidate(myTournamentRecordsProvider);
+                  if (!isFav && context.mounted) {
+                    AppToast.show(
+                      context,
+                      '관심 대회로 저장했어요. 신청 마감일과 대회 3일 전에 알려드려요.',
+                    );
+                  }
                 } catch (_) {
                   if (context.mounted) {
                     AppToast.show(
@@ -124,10 +142,10 @@ class _TournamentDetailScreenState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _TournamentDetailError(message: _error!, onRetry: _load)
-          : _t == null
-          ? const Center(child: Text('대회 정보 없음'))
-          : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+              ? _TournamentDetailError(message: _error!, onRetry: _load)
+              : _t == null
+                  ? const Center(child: Text('대회 정보 없음'))
+                  : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
     );
   }
 }
@@ -429,9 +447,9 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w900,
-        ),
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
       ),
     );
   }
@@ -560,9 +578,9 @@ class _DetailPreviewBanner extends StatelessWidget {
             child: Text(
               '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
           ),
         ],
