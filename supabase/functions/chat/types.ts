@@ -93,10 +93,16 @@ export interface IntentClassifyRow {
 export const QA_CACHE_THRESHOLD = 0.92;
 export const QA_CACHE_TTL_HOURS = 24;
 
-// Intent classifier settings
+// Intent classifier settings.
+// 임베딩 KNN 관측용 하한 — intent_classify RPC 가 이 값 이상 유사한 예시만 다수결에 포함.
 export const INTENT_KNN_THRESHOLD = 0.75;
 
-// Day 5-6 routing settings
+// 라우팅(검색 실제 실행) 게이트. 룰 분류(confidence=1.0)만 이 문턱을 넘는다.
+// 임베딩 분류는 confidence=cosine similarity 이고 실측상 상한이 ~0.86 (JY-107) 이라
+// 이 게이트를 구조적으로 넘지 못한다 → 의도된 shadow-only 동작이다. 버그 아님.
+// 근거: 시드(intent 당 7개) leave-one-out 정확도 67%, 오분류의 similarity 가 정확분류보다
+// 높아 similarity 임계값으로 correct/wrong 을 분리할 수 없다. 문턱을 낮추면 ~33% 오라우팅.
+// 시드 대폭 보강 + 정확도 재평가 전까지 임베딩 라우팅을 켜지 않는다.
 export const ROUTING_CONFIDENCE_THRESHOLD = 0.95;
 
 // Regulation RAG context token management (migration 077)
