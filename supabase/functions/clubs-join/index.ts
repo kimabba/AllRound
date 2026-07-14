@@ -412,7 +412,7 @@ Deno.serve(async (req) => {
         status_reason: 'deleted_by_owner',
       })
       .eq('id', clubId)
-      .eq('status', 'approved');
+      .in('status', ['pending', 'approved', 'rejected']);
     if (error) return errorResponse(error.message, 500);
 
     // 삭제된 클럽의 active 멤버십을 정리(left)해 내 클럽/멤버 목록에서 사라지게 한다.

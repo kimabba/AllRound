@@ -121,6 +121,21 @@ class MyClubsSection extends ConsumerWidget {
                                   ),
                                   const SizedBox(height: AppSpacing.xs),
                                   _ClubStatusBadge(status: club.status),
+                                  if (club.isRejected &&
+                                      club.statusReason != null &&
+                                      club.statusReason !=
+                                          'deleted_by_owner') ...[
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Text(
+                                      '반려 사유: ${club.statusReason}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: tt.bodySmall?.copyWith(
+                                        color: cs.error,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                   if (club.isPending && club.isOwner) ...[
                                     const SizedBox(height: AppSpacing.sm),
                                     Wrap(

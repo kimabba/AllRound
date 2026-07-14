@@ -124,6 +124,60 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     ref.invalidate(myFavoriteClubsProvider);
   }
 
+  Future<void> _resubmitRejectedClub() async {
+    try {
+      await ref.read(apiProvider).resubmitClubReview(club.id);
+      ref.invalidate(myClubsProvider);
+      await _refreshClub();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('재심사를 요청했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('재심사 요청 실패: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteRejectedClub() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('반려 클럽 삭제'),
+        content: Text('${club.name} 클럽을 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('삭제하기'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(apiProvider).deleteClub(club.id);
+      ref.invalidate(myClubsProvider);
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('클럽 삭제 실패: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _join() async {
     setState(() => _inFlight = true);
     try {
@@ -243,6 +297,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       ),
       body: Column(
         children: [
+          if (club.isRejected && club.statusReason != 'deleted_by_owner')
+            _RejectedClubBanner(
+              reason: club.statusReason,
+              onDelete: _deleteRejectedClub,
+              onEdit: () => _tab?.animateTo(_tab!.length - 1),
+              onResubmit: _resubmitRejectedClub,
+            ),
           _Header(club: club),
           Material(
             color: cs.surface,
@@ -323,6 +384,81 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
 }
 
 // ─── 헤더 ────────────────────────────────────────────────────────
+class _RejectedClubBanner extends StatelessWidget {
+  const _RejectedClubBanner({
+    required this.reason,
+    required this.onDelete,
+    required this.onEdit,
+    required this.onResubmit,
+  });
+
+  final String? reason;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onResubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        0,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: cs.error.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '클럽 승인이 반려되었습니다',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            reason?.trim().isNotEmpty == true
+                ? reason!
+                : '관리자가 반려 사유를 등록하지 않았습니다.',
+            style: TextStyle(color: cs.onErrorContainer),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              TextButton.icon(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('삭제'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('수정하기'),
+              ),
+              FilledButton.icon(
+                onPressed: onResubmit,
+                icon: const Icon(Icons.replay_rounded),
+                label: const Text('재심사 요청'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   final Club club;
   const _Header({required this.club});

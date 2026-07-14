@@ -221,6 +221,8 @@ class _MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
+    final currentPath =
+        GoRouter.of(context).routeInformationProvider.value.uri.path;
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
@@ -234,7 +236,7 @@ class _MainShell extends ConsumerWidget {
               child: child,
             ),
           ),
-          if (loc != '/notifications')
+          if (currentPath != '/notifications')
             Positioned(
               top: MediaQuery.paddingOf(context).top + 8,
               right: 12,
