@@ -11,6 +11,7 @@ import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
 
@@ -159,12 +160,19 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final myGradeIds = ref
-            .watch(homeTournamentsProvider)
-            .valueOrNull
-            ?.map((t) => t.id)
-            .toSet() ??
-        const <String>{};
+    // 등급·협회 등록이 없으면 홈 목록 = 전체 대회이므로 "내 등급" 배지가 거짓이 된다.
+    // 등급 근거가 있을 때만 배지를 노출한다.
+    final hasGradeBasis =
+        (ref.watch(userSportsProvider).valueOrNull?.isNotEmpty ?? false) ||
+        (ref.watch(userTennisOrgsProvider).valueOrNull?.isNotEmpty ?? false);
+    final myGradeIds = hasGradeBasis
+        ? (ref
+                  .watch(homeTournamentsProvider)
+                  .valueOrNull
+                  ?.map((t) => t.id)
+                  .toSet() ??
+              const <String>{})
+        : const <String>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -190,13 +198,17 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             child: _buildCalendarFilterControls(cs),
           ),
           _buildActiveFilterChipsRow(cs),
-          if (_loading) LinearProgressIndicator(color: cs.primary),
+          // 재검색(기존 결과 유지) 중에만 상단 바. 최초 로드는 아래 스켈레톤이 담당.
+          if (_loading && _results != null)
+            LinearProgressIndicator(color: cs.primary),
           if (_usingPreviewData) const _PreviewDataBanner(),
           Expanded(
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)
                 : _results == null
-                    ? const SizedBox.shrink()
+                    ? (_loading
+                        ? const _TournamentSkeletonList()
+                        : const SizedBox.shrink())
                     : _results!.isEmpty
                         ? const AppEmptyState(
                             icon: Icons.search_off_rounded,
@@ -236,12 +248,25 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                             onTap: (tournament) =>
                                 context.push('/tournaments/${tournament.id}'),
                             onFavoriteToggle: (tournament, isFavorite) async {
-                              await ref
-                                  .read(apiProvider)
-                                  .toggleFavorite(tournament.id, !isFavorite);
-                              ref.invalidate(favoriteIdsProvider);
-                              ref.invalidate(myFavoriteTournamentsProvider);
-                              ref.invalidate(myTournamentRecordsProvider);
+                              try {
+                                await ref
+                                    .read(apiProvider)
+                                    .toggleFavorite(
+                                      tournament.id,
+                                      !isFavorite,
+                                    );
+                                ref.invalidate(favoriteIdsProvider);
+                                ref.invalidate(myFavoriteTournamentsProvider);
+                                ref.invalidate(myTournamentRecordsProvider);
+                              } catch (_) {
+                                if (context.mounted) {
+                                  AppToast.show(
+                                    context,
+                                    '관심 저장에 실패했어요. 잠시 후 다시 시도해 주세요.',
+                                    kind: AppToastKind.error,
+                                  );
+                                }
+                              }
                             },
                           ),
           ),
@@ -666,23 +691,36 @@ class _TournamentMonthCalendar extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           for (var row = 0; row < rowCount; row++)
-            Row(
-              children: List.generate(7, (col) {
-                final cellDate = _dateForCell(
-                  focusedMonth,
-                  leadingEmptyCells,
-                  row * 7 + col,
+            Builder(
+              builder: (context) {
+                final weekDates = [
+                  for (var col = 0; col < 7; col++)
+                    _dateForCell(
+                      focusedMonth,
+                      leadingEmptyCells,
+                      row * 7 + col,
+                    ),
+                ];
+                final bands = bandFlagsForWeek(weekDates, tournaments);
+                return Row(
+                  children: List.generate(7, (col) {
+                    final cellDate = weekDates[col];
+                    final band = bands[col];
+                    return Expanded(
+                      child: _CalendarDayCell(
+                        date: cellDate,
+                        today: today,
+                        selectedDate: selectedDate,
+                        count: _tournamentCountOnDate(cellDate, tournaments),
+                        hasBand: band.hasBand,
+                        isBandStart: band.isBandStart,
+                        isBandEnd: band.isBandEnd,
+                        onTap: onDateSelected,
+                      ),
+                    );
+                  }),
                 );
-                return Expanded(
-                  child: _CalendarDayCell(
-                    date: cellDate,
-                    today: today,
-                    selectedDate: selectedDate,
-                    count: _tournamentCountOnDate(cellDate, tournaments),
-                    onTap: onDateSelected,
-                  ),
-                );
-              }),
+              },
             ),
         ],
       ),
@@ -729,6 +767,10 @@ class _CalendarDayCell extends StatelessWidget {
   final DateTime? selectedDate;
   // 그 날짜에 걸친 대회 수. 0이면 표시하지 않는다.
   final int count;
+  // 멀티데이 대회 범위 밴드: 그날 걸침 여부 + Row 단위 구간 시작/끝(둥근 모서리).
+  final bool hasBand;
+  final bool isBandStart;
+  final bool isBandEnd;
   final ValueChanged<DateTime> onTap;
 
   const _CalendarDayCell({
@@ -736,6 +778,9 @@ class _CalendarDayCell extends StatelessWidget {
     required this.today,
     required this.selectedDate,
     required this.count,
+    required this.hasBand,
+    required this.isBandStart,
+    required this.isBandEnd,
     required this.onTap,
   });
 
@@ -757,65 +802,84 @@ class _CalendarDayCell extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         height: 46,
-        child: Center(
-          child: SizedBox.square(
-            dimension: 40,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: isSelected ? 34 : 30,
-                  height: isSelected ? 34 : 30,
-                  decoration: BoxDecoration(
-                    color: isSelected ? cs.primary : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: isToday && !isSelected
-                        ? Border.all(color: cs.primary, width: 1.3)
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${currentDate.day}',
-                    style: tt.labelLarge?.copyWith(
-                      color: isSelected ? cs.onPrimary : cs.onSurface,
-                      fontWeight: isSelected || isToday
-                          ? FontWeight.w900
-                          : FontWeight.w700,
-                    ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 멀티데이 대회 범위 밴드: 셀 폭을 꽉 채워 인접 셀과 이어붙고,
+            // 날짜 원 뒤(맨 아래) 레이어에 그린다.
+            if (hasBand)
+              Container(
+                height: 30,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.horizontal(
+                    left: isBandStart ? const Radius.circular(15) : Radius.zero,
+                    right: isBandEnd ? const Radius.circular(15) : Radius.zero,
                   ),
                 ),
-                if (count > 0)
-                  Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      alignment: Alignment.center,
+              ),
+            Center(
+              child: SizedBox.square(
+                dimension: 40,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: isSelected ? 34 : 30,
+                      height: isSelected ? 34 : 30,
                       decoration: BoxDecoration(
-                        color: isSelected ? cs.onPrimary : cs.primary,
+                        color: isSelected ? cs.primary : Colors.transparent,
                         shape: BoxShape.circle,
-                        // 캘린더 카드 배경(surfaceContainerLow)과 동일한 테두리로 배지 분리.
-                        border: Border.all(
-                          color: cs.surfaceContainerLow,
-                          width: 1.5,
-                        ),
+                        border: isToday && !isSelected
+                            ? Border.all(color: cs.primary, width: 1.3)
+                            : null,
                       ),
+                      alignment: Alignment.center,
                       child: Text(
-                        count > 9 ? '9+' : '$count',
-                        style: tt.labelSmall?.copyWith(
-                          color: isSelected ? cs.primary : cs.onPrimary,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                          fontSize: 9,
+                        '${currentDate.day}',
+                        style: tt.labelLarge?.copyWith(
+                          color: isSelected ? cs.onPrimary : cs.onSurface,
+                          fontWeight: isSelected || isToday
+                              ? FontWeight.w900
+                              : FontWeight.w700,
                         ),
                       ),
                     ),
-                  ),
-              ],
+                    if (count > 0)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: isSelected ? cs.onPrimary : cs.primary,
+                            shape: BoxShape.circle,
+                            // 캘린더 카드 배경(surfaceContainerLow)과 동일한 테두리로 배지 분리.
+                            border: Border.all(
+                              color: cs.surfaceContainerLow,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            count > 9 ? '9+' : '$count',
+                            style: tt.labelSmall?.copyWith(
+                              color: isSelected ? cs.primary : cs.onPrimary,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -922,6 +986,40 @@ int _tournamentCountOnDate(DateTime? date, List<Tournament> tournaments) {
   return tournaments
       .where((tournament) => _isDateInTournament(date, tournament))
       .length;
+}
+
+/// 그 날짜에 2일 이상짜리(멀티데이) 대회가 걸쳐 있으면 true.
+/// null 셀(월 앞뒤 여백)은 false로 흡수해 호출부 인접 비교를 단순화한다.
+@visibleForTesting
+bool multiDayBandOnDate(DateTime? date, List<Tournament> tournaments) {
+  if (date == null) return false;
+  return tournaments.any(
+    (t) =>
+        t.endDate != null &&
+        _dateOnly(t.endDate!).isAfter(_dateOnly(t.startDate)) &&
+        _isDateInTournament(date, t),
+  );
+}
+
+/// 셀별 밴드 표시/모서리 플래그. Row(주) 단위 인접 비교라 주간 경계는 자동 처리된다.
+typedef BandFlags = ({bool hasBand, bool isBandStart, bool isBandEnd});
+
+/// 한 주(7칸, null = 빈 셀) 날짜 배열에 대해 셀별 밴드 플래그를 계산한다.
+@visibleForTesting
+List<BandFlags> bandFlagsForWeek(
+  List<DateTime?> weekDates,
+  List<Tournament> tournaments,
+) {
+  final hasBand =
+      weekDates.map((d) => multiDayBandOnDate(d, tournaments)).toList();
+  return [
+    for (var i = 0; i < weekDates.length; i++)
+      (
+        hasBand: hasBand[i],
+        isBandStart: hasBand[i] && (i == 0 || !hasBand[i - 1]),
+        isBandEnd: hasBand[i] && (i == weekDates.length - 1 || !hasBand[i + 1]),
+      ),
+  ];
 }
 
 List<Tournament> _tournamentsOnDate(
@@ -1662,6 +1760,33 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
         color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
         fontWeight: FontWeight.w700,
       ),
+    );
+  }
+}
+
+/// 최초 로드용 플레이스홀더. 카드 크기의 회색 박스로 레이아웃 점프를 줄인다.
+/// (skeletonizer 패키지는 최신 Flutter Canvas API와 비호환이라 의존하지 않는다.)
+class _TournamentSkeletonList extends StatelessWidget {
+  const _TournamentSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        for (var i = 0; i < 4; i++)
+          Container(
+            height: 92,
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: AppRadius.card,
+              border: Border.all(color: cs.outlineVariant),
+            ),
+          ),
+      ],
     );
   }
 }

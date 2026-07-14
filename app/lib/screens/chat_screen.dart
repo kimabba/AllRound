@@ -139,7 +139,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.contains('API_KEY_INVALID') ||
         text.contains('API key not valid') ||
         text.contains('GEMINI_API_KEY')) {
-      return 'AI 챗봇 API 키가 설정되지 않았거나 올바르지 않습니다. supabase/functions/.env의 GEMINI_API_KEY를 실제 Gemini 키로 바꾼 뒤 백엔드를 다시 실행해 주세요.';
+      // 내부 경로·환경변수명(GEMINI_API_KEY 등)은 사용자에게 노출하지 않는다.
+      return 'AI 코치를 일시적으로 이용할 수 없어요. 잠시 후 다시 시도해 주세요.';
     }
     if (text.contains('401') || text.contains('JWT')) {
       return '로그인 세션을 확인할 수 없습니다. 다시 로그인한 뒤 시도해 주세요.';

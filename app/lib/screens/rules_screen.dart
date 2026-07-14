@@ -276,7 +276,11 @@ class _RuleBookBody extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.xl),
         _PopularRulesList(
-          articles: _popularArticles(hasQuery ? filtered : grouped!),
+          // 검색 결과는 잘리면 원하는 룰을 놓칠 수 있어 전체 표시, 기본은 상위 8개.
+          articles: _popularArticles(
+            hasQuery ? filtered : grouped!,
+            limit: hasQuery ? null : 8,
+          ),
           sport: sport,
           title: hasQuery ? '검색 결과' : '자주 찾는 룰',
         ),
@@ -295,15 +299,21 @@ class _RuleBookBody extends StatelessWidget {
     for (final entry in source.entries) {
       final categoryMatches = entry.key.toLowerCase().contains(lower);
       final articles = entry.value.where((article) {
-        return categoryMatches || article.title.toLowerCase().contains(lower);
+        return categoryMatches ||
+            article.title.toLowerCase().contains(lower) ||
+            article.body.toLowerCase().contains(lower);
       }).toList();
       if (articles.isNotEmpty) out[entry.key] = articles;
     }
     return out;
   }
 
-  List<RuleArticle> _popularArticles(Map<String, List<RuleArticle>> source) {
-    return source.values.expand((items) => items).take(8).toList();
+  List<RuleArticle> _popularArticles(
+    Map<String, List<RuleArticle>> source, {
+    int? limit,
+  }) {
+    final all = source.values.expand((items) => items).toList();
+    return limit == null ? all : all.take(limit).toList();
   }
 }
 

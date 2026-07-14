@@ -41,12 +41,12 @@ void main() {
     expect(find.textContaining('6/13'), findsWidgets);
   });
 
-  testWidgets('목록 카드는 신청 마감 정보를 노출하지 않는다', (tester) async {
+  testWidgets('목록 카드는 신청 마감일을 노출한다', (tester) async {
     await tester.pumpWidget(
       wrap(makeTournament(applicationDeadline: DateTime(2026, 6, 20))),
     );
-    expect(find.text('신청'), findsNothing);
-    expect(find.textContaining('6/20'), findsNothing);
+    expect(find.text('신청'), findsOneWidget);
+    expect(find.textContaining('6/20'), findsWidgets);
   });
 
   testWidgets('location 을 region 과 함께 노출한다', (tester) async {

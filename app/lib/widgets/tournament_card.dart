@@ -34,6 +34,7 @@ class TournamentCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
+    final deadlineText = _deadlineText();
     final brightness = Theme.of(context).brightness;
     const radius = AppRadius.card;
 
@@ -134,6 +135,14 @@ class TournamentCard extends StatelessWidget {
                     label: '대회',
                     value: _dateText(),
                   ),
+                  if (deadlineText != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    _InfoLine(
+                      icon: Icons.timer_rounded,
+                      label: '신청',
+                      value: deadlineText,
+                    ),
+                  ],
                   if (_locationText().isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.xs),
                     _InfoLine(
@@ -154,11 +163,36 @@ class TournamentCard extends StatelessWidget {
   String _dateText() =>
       tournamentDateText(tournament.startDate, tournament.endDate, _df.format);
 
+  /// 신청 마감일 + D-day. 마감일이 없으면 null(줄 자체를 그리지 않음).
+  String? _deadlineText() {
+    final d = tournament.applicationDeadline;
+    if (d == null) return null;
+    final date = _df.format(d);
+    // 종료 상태면 마감일이 미래여도 D-day 대신 마감으로 표시.
+    if (tournament.status == 'closed' || tournament.status == 'cancelled') {
+      return '$date · 마감';
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final daysLeft = d.difference(today).inDays;
+    if (daysLeft < 0) return '$date · 마감';
+    if (daysLeft == 0) return '$date · D-day';
+    return '$date · D-$daysLeft';
+  }
+
   String _locationText() =>
       locationText(tournament.location, tournament.region);
 
   _StatusBadgeData _status(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // closed/cancelled는 마감일과 무관하게 종료 상태 — 상세·신청바와 기준 통일.
+    if (tournament.status == 'closed' || tournament.status == 'cancelled') {
+      return _StatusBadgeData(
+        label: _statusLabel(tournament.status),
+        foreground: cs.onSurfaceVariant,
+        background: cs.surfaceContainerHighest,
+      );
+    }
     final deadline = tournament.applicationDeadline;
     if (deadline != null) {
       final today = DateTime.now();

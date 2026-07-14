@@ -95,9 +95,24 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..forward();
-    Timer(const Duration(milliseconds: 1800), () {
-      if (mounted) setState(() => _visible = false);
-    });
+    _dismissSplashWhenReady();
+  }
+
+  /// 최소 브랜딩 시간(1800ms)을 지키되, 세션 복원(콜드스타트)이면 부서 카탈로그
+  /// DB 로드 완료까지 함께 대기해 첫 화면이 kato 한글 라벨로 그려지게 한다(JY-121).
+  /// 로드 지연 시 상한 3초. 미인증이면 카탈로그를 기다리지 않는다(fallback 로그인 플로우).
+  Future<void> _dismissSplashWhenReady() async {
+    final waits = <Future<void>>[
+      Future<void>.delayed(const Duration(milliseconds: 1800)),
+    ];
+    if (Supabase.instance.client.auth.currentSession != null) {
+      waits.add(
+        DivisionCatalog.instance.whenReady
+            .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
+      );
+    }
+    await Future.wait(waits);
+    if (mounted) setState(() => _visible = false);
   }
 
   @override
@@ -110,7 +125,12 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        // JY-121(Codex P1): 준비 완료(_visible=false) 전엔 child 를 빌드하지 않는다.
+        // Stack 은 child 를 스플래시 오버레이와 동시에 빌드하므로, 그대로 두면
+        // 화면들이 카탈로그 로드 전 fallback 라벨로 먼저 빌드되고, plain singleton
+        // 이라 리빌드 트리거가 없어 stale kato 라벨이 남는다. child 를 로드 완료
+        // 후 최초 빌드시켜 첫 프레임부터 kato 한글 라벨이 나오게 한다.
+        if (!_visible) widget.child,
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(

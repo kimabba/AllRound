@@ -380,6 +380,8 @@ Deno.serve(async (req) => {
           ((userSports ?? []) as UserSport[]).map((s) => s.sport),
         );
 
+        // 룰 분류(confidence=1.0)만 이 게이트를 넘는다. 임베딩 분류는 shadow-only —
+        // similarity 상한이 게이트 미만이라 여기서 항상 탈락한다 (의도된 동작, JY-107).
         const isRoutable = ROUTABLE_INTENTS.has(intentResult.intent) &&
           intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD;
 

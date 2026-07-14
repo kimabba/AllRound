@@ -83,6 +83,19 @@ class Tournament {
     this.regulationBody,
   });
 
+  /// 접수 마감 여부 공용 판정. 상태칩·신청바·카드가 같은 기준을 쓰도록 단일화한다.
+  /// 기준: closed/cancelled 이거나, 신청 마감일이 지났거나,
+  /// (마감일이 없으면) published 인데 대회 시작일이 지난 경우.
+  bool get isRegistrationClosed {
+    if (status == 'closed' || status == 'cancelled') return true;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (applicationDeadline != null) {
+      return applicationDeadline!.difference(today).inDays < 0;
+    }
+    return status == 'published' && startDate.isBefore(today);
+  }
+
   factory Tournament.fromJson(Map<String, dynamic> j) {
     // 확장 테이블 데이터 (JOIN 시 nested, RPC 시 flat — 둘 다 호환)
     final tennis = j['tennis_tournament_details'] as Map<String, dynamic>?;

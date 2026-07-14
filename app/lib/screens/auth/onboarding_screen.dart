@@ -19,18 +19,8 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/allround_logo.dart';
 
 const _profileAvatarPrefsKey = 'profile.avatar.base64';
-const _onboardingRegionChoices = <_RegionChoice>[
-  _RegionChoice(code: 'seoul_metro', label: '서울'),
-  _RegionChoice(code: 'seoul_metro', label: '경기'),
-  _RegionChoice(code: 'seoul_metro', label: '인천'),
-  _RegionChoice(code: 'busan_ulsan_gn', label: '부산·울산·경남'),
-  _RegionChoice(code: 'daegu_gb', label: '대구·경북'),
-  _RegionChoice(code: 'chungcheong', label: '충청'),
-  _RegionChoice(code: 'gwangju', label: '광주'),
-  _RegionChoice(code: 'jeonnam', label: '전남'),
-  _RegionChoice(code: 'gangwon', label: '강원'),
-  _RegionChoice(code: 'jeju', label: '제주'),
-];
+// 지역 선택지는 grade_labels.dart 의 regionCodes(표준 17개 광역시도) 정본을 그대로 쓴다.
+// code=label 1:1 이므로 별도 choices 목록이나 displayLabel 이중 상태가 필요 없다.
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -55,7 +45,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   // 권역 (테니스 한정, 선택)
   String? _regionCode;
-  String? _regionDisplayLabel;
 
   // Multi-org (테니스 한정, 다중)
   final List<_OrgDraft> _orgs = [];
@@ -280,13 +269,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _existingRegionReady) return;
       // 사용자가 이미 지역을 직접 선택했다면 덮어쓰지 않는다.
-      final restoredRegionCode =
-          _regionCode ?? _restoreRegionCode(tennisOrgs);
-      final restoredRegionLabel =
-          _regionDisplayLabel ?? _restoreRegionDisplayLabel(restoredRegionCode);
+      final restoredRegionCode = _regionCode ?? _restoreRegionCode(tennisOrgs);
       setState(() {
         _regionCode = restoredRegionCode;
-        _regionDisplayLabel = restoredRegionLabel;
         _existingRegionReady = true;
       });
     });
@@ -295,17 +280,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _restoreRegionCode(List<UserTennisOrg> tennisOrgs) {
     for (final org in tennisOrgs) {
       final code = org.regionCode;
-      if (code != null && code.isNotEmpty) return code;
+      // 17시도 정본에 있는 코드만 복원. deprecated 묶음 코드(seoul_metro 등,
+      // backfill 이전 데이터)는 목록에 없으므로 사용자가 다시 선택하게 둔다.
+      if (code != null && regionCodes.contains(code)) return code;
     }
     return null;
-  }
-
-  String? _restoreRegionDisplayLabel(String? code) {
-    if (code == null) return null;
-    return _onboardingRegionChoices
-        .where((choice) => choice.code == code)
-        .map((choice) => choice.label)
-        .firstOrNull;
   }
 
   void _selectGrade(Sport sport, String? grade) {
@@ -793,15 +772,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            for (final region in _onboardingRegionChoices)
+            for (final code in regionCodes)
               _RegionOption(
-                label: region.label,
-                selected: _regionCode == region.code &&
-                    _regionDisplayLabel == region.label,
-                onTap: () => setState(() {
-                  _regionCode = region.code;
-                  _regionDisplayLabel = region.label;
-                }),
+                label: regionLabel(code),
+                selected: _regionCode == code,
+                onTap: () => setState(() => _regionCode = code),
               ),
           ],
         ),
@@ -822,7 +797,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '${_regionCode == null ? '' : '${_regionDisplayLabel ?? regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
+          '${_regionCode == null ? '' : '${regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -1388,16 +1363,6 @@ class _PhotoSheetAction extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RegionChoice {
-  final String code;
-  final String label;
-
-  const _RegionChoice({
-    required this.code,
-    required this.label,
-  });
 }
 
 class _RegionOption extends StatelessWidget {
