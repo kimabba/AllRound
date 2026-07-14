@@ -18,10 +18,11 @@ begin
   -- birth_date 가 (오늘 - 14년) 보다 최근이면 아직 만 14세 미만.
   if new.birth_date is not null
      and new.birth_date > (current_date - interval '14 years') then
-    raise exception 'MINOR_NOT_ALLOWED'
-      using
-        message = '만 14세 이상만 가입할 수 있습니다.',
-        errcode = 'check_violation';
+    -- format string 과 using message 를 함께 쓰면 'MESSAGE already specified' 오류.
+    -- 코드(MINOR_NOT_ALLOWED)는 message 앞에 붙여 클라이언트가 파싱하게 한다.
+    raise exception using
+      errcode = 'check_violation',
+      message = 'MINOR_NOT_ALLOWED: 만 14세 이상만 가입할 수 있습니다.';
   end if;
   return new;
 end;
