@@ -73,8 +73,8 @@ admin:
 # 전제(모두 gitignore — 빌드하는 사람 로컬에만 존재):
 #   · app/android/key.properties + 서명 .jks  (Play 업로드용 서명)
 #   · app/android/app/google-services.json     (구글 로그인/FCM)
-#   · app/.env.local 에 프로덕션 값 + GOOGLE_WEB_CLIENT_ID / GOOGLE_IOS_CLIENT_ID
-#     (없으면 로그인 화면에서 구글 로그인 버튼이 숨겨진다 — login_screen.dart 참고)
+#   · app/.env.local 에 프로덕션 SUPABASE_URL / SUPABASE_ANON_KEY / API_BASE_URL
+#     (구글 로그인은 signInWithOAuth 라 앱 클라이언트 ID 불필요 — Supabase 설정 사용)
 # --release → kReleaseMode=true 라 config.dart 의 개발용 우회 플래그
 #   (ADMIN_MODE / *_DESIGN_PREVIEW) 가드가 활성화된다 (JY-6). 프로덕션 빌드에
 #   dev 플래그가 새면 앱이 시작 즉시 실패하므로 dart-define 에 절대 넣지 않는다.
@@ -82,14 +82,12 @@ admin:
 release-android:
 	@test -f app/.env.local || (echo "❌ app/.env.local 없음" && exit 1)
 	@test -f app/android/key.properties || (echo "❌ app/android/key.properties 없음 — 없이 빌드하면 debug 서명이라 Play 업로드 불가" && exit 1)
-	@grep -q GOOGLE_WEB_CLIENT_ID app/.env.local || echo "⚠️  app/.env.local 에 GOOGLE_WEB_CLIENT_ID 없음 → 구글 로그인 버튼이 숨겨집니다. 채우고 다시 빌드하세요."
 	cd app && flutter build appbundle --release --dart-define-from-file=.env.local
 	@echo "✅ .aab 생성: app/build/app/outputs/bundle/release/app-release.aab → Play Console 업로드"
 
 release-ios:
 	@test -f app/.env.local || (echo "❌ app/.env.local 없음" && exit 1)
 	@test -f app/ios/ExportOptions.plist || (echo "❌ app/ios/ExportOptions.plist 없음 — Apple 서명/배포 설정 필요 (Apple Developer 조직 계정 승인 후 생성)" && exit 1)
-	@grep -q GOOGLE_IOS_CLIENT_ID app/.env.local || echo "⚠️  app/.env.local 에 GOOGLE_IOS_CLIENT_ID 없음 → 구글 로그인 버튼이 숨겨집니다."
 	cd app && flutter build ipa --release --dart-define-from-file=.env.local --export-options-plist=ios/ExportOptions.plist
 	@echo "✅ .ipa 생성: app/build/ios/ipa/ → Transporter/Xcode 로 App Store Connect 업로드"
 
