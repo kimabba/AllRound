@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,7 +47,7 @@ class MoreScreen extends ConsumerWidget {
         color: AppSportColors.tennis,
         onTap: () => context.push('/rules'),
       ),
-      if (kIsWeb && isAdmin)
+      if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
           label: '어드민',
