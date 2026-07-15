@@ -85,6 +85,8 @@ class ChatTournamentCard extends StatelessWidget {
                 : dateText,
             cs: cs,
             tt: tt,
+            // 마감이 붙는 경우 좁은 폰에서 잘리지 않게 2줄까지 허용.
+            maxLines: item.applicationDeadline != null ? 2 : 1,
           ),
           if (item.location != null) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -117,6 +119,8 @@ class _InfoRow extends StatelessWidget {
   final String value;
   final ColorScheme cs;
   final TextTheme tt;
+  // 일정+마감처럼 좁은 폰에서 한 줄에 안 들어가면 다음 줄로 넘긴다(기본 1줄).
+  final int maxLines;
 
   const _InfoRow({
     required this.icon,
@@ -124,6 +128,7 @@ class _InfoRow extends StatelessWidget {
     required this.value,
     required this.cs,
     required this.tt,
+    this.maxLines = 1,
   });
 
   @override
@@ -140,6 +145,7 @@ class _InfoRow extends StatelessWidget {
           child: Text(
             value,
             style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            maxLines: maxLines,
             overflow: TextOverflow.ellipsis,
           ),
         ),
