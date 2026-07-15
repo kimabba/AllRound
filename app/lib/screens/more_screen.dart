@@ -83,6 +83,18 @@ class MoreScreen extends ConsumerWidget {
           mode: LaunchMode.externalApplication,
         ),
       ),
+      _MenuItem(
+        icon: Icons.support_agent_rounded,
+        label: '고객지원',
+        subtitle: '문의 및 계정 삭제 안내',
+        color: cs.onSurfaceVariant,
+        onTap: () => launchUrl(
+          Uri.parse(
+            'https://kimabba.github.io/AllRound/legal/support.html',
+          ),
+          mode: LaunchMode.externalApplication,
+        ),
+      ),
     ];
 
     return Scaffold(

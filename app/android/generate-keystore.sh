@@ -11,7 +11,7 @@ set -e
 
 KEYSTORE_DIR="keystore"
 KEYSTORE_FILE="$KEYSTORE_DIR/upload-keystore.jks"
-KEY_ALIAS="upload"
+KEY_ALIAS="allround-upload"
 VALIDITY_DAYS=10000
 
 mkdir -p "$KEYSTORE_DIR"

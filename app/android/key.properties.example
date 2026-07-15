@@ -1,4 +1,4 @@
 storePassword=
 keyPassword=
-keyAlias=upload
+keyAlias=allround-upload
 storeFile=../keystore/upload-keystore.jks

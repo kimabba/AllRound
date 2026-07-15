@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <rect width="1024" height="500" fill="#1E3A8A"/>
+  <circle cx="190" cy="250" r="138" fill="#EEF2FF" opacity="0.12"/>
+  <path
+    d="M 259 164 A 94 94 0 1 0 127 305"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="30"
+    stroke-linecap="round"
+  />
+  <path
+    d="M 105 297 A 116 116 0 0 0 277 298"
+    fill="none"
+    stroke="#84CC16"
+    stroke-width="25"
+    stroke-linecap="round"
+  />
+  <path
+    d="M 139 296 L 251 177"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="35"
+    stroke-linecap="round"
+  />
+  <circle cx="263" cy="161" r="25" fill="#F97316"/>
+  <circle cx="123" cy="307" r="15" fill="#FFFFFF"/>
+
+  <text x="370" y="220" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="800" letter-spacing="2">ALLROUND</text>
+  <text x="374" y="285" fill="#E2E8F0" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="600">테니스 · 풋살, 한 곳에서</text>
+  <rect x="374" y="326" width="88" height="8" rx="4" fill="#84CC16"/>
+  <rect x="472" y="326" width="88" height="8" rx="4" fill="#F97316"/>
+</svg>
