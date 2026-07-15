@@ -52,7 +52,7 @@ app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	cd app && flutter run -d $(DEVICE_ID) --dart-define-from-file=.env.local
 
-# 터미널 3: 웹빌드 — 사용자 테스트용 (빌드 후 로컬 서버)
+# 터미널 3: 웹빌드 — 로컬 전용 (빌드 후 로컬 서버, 배포 안 함 · JY-81)
 web:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다." && exit 1)
 	cd app && flutter build web --dart-define-from-file=.env.local

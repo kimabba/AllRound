@@ -433,6 +433,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             division: o.divisionLocal.text.trim().isEmpty
                 ? 'default'
                 : o.divisionLocal.text.trim(),
+            divisionCodes: o.selectedDivisionCodes.toList(),
             score: double.tryParse(o.score.text.trim()),
             regionCode: _regionCode,
             isPrimary: o.org == _primaryOrg,

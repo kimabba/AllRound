@@ -192,6 +192,23 @@ Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
 
   try {
     await ref.read(apiProvider).deleteAccount();
+    // 완료 안내 후 로그아웃(→ 로그인 화면). signOut 하면 화면이 전환되므로
+    // 안내는 signOut 전에 보여준다.
+    if (context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('탈퇴 완료'),
+          content: const Text('회원 탈퇴가 완료되었습니다.\n그동안 이용해 주셔서 감사합니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+    }
     await ref.read(supabaseProvider).auth.signOut();
     // signOut 이 authState 변경 → 앱이 로그인 화면으로 라우팅.
   } catch (_) {

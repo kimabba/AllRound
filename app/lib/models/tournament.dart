@@ -207,7 +207,8 @@ class Region {
 
 class UserTennisOrg {
   final String org; // 'kta'|'kato'|...|'gj'|'jn'|'local'
-  final String division; // text NOT NULL (PK의 일부)
+  final String division; // text NOT NULL (PK의 일부) — 표시용 라벨
+  final List<String> divisionCodes; // 자격매칭용 카탈로그 코드 (JY-136)
   final double? score;
   final bool isPrimary;
   final String? regionCode;
@@ -217,6 +218,7 @@ class UserTennisOrg {
   UserTennisOrg({
     required this.org,
     required this.division,
+    this.divisionCodes = const [],
     this.score,
     this.isPrimary = false,
     this.regionCode,
@@ -234,6 +236,10 @@ class UserTennisOrg {
     return UserTennisOrg(
       org: j['org'] as String,
       division: j['division'] as String,
+      divisionCodes: (j['division_codes'] as List?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       score: score,
       isPrimary: (j['is_primary'] as bool?) ?? false,
       regionCode: j['region_code'] as String?,
@@ -246,6 +252,7 @@ class UserTennisOrg {
         'user_id': userId,
         'org': org,
         'division': division,
+        'division_codes': divisionCodes,
         'score': score,
         'is_primary': isPrimary,
         'region_code': regionCode,
