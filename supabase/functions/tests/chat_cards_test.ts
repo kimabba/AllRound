@@ -369,3 +369,53 @@ Deno.test('isGradeRegisteredForSport: 풋살은 grade 존재가 조건', () => {
 Deno.test('isGradeRegisteredForSport: sport null 이면 false', () => {
   assertEquals(isGradeRegisteredForSport(null, [{ division_codes: ['x'] }], ['y']), false);
 });
+
+// ── codex 리뷰 후속 (JY-101) ──────────────────────────────────────
+
+Deno.test('buildTournamentCards: eligible=false 면 배지 숨김', () => {
+  const cards = buildTournamentCards([SAMPLE_ROW], false);
+  assertEquals(cards[0].eligible, false);
+});
+
+Deno.test('buildTournamentCards: eligible 기본값은 true(자격자 검색)', () => {
+  assertEquals(buildTournamentCards([SAMPLE_ROW])[0].eligible, true);
+});
+
+Deno.test('parseTournamentRefine: 잘못된 date 형식은 null 로 떨군다', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: true,
+    date_from: 'garbage',
+    date_to: '2026-07-31',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, null);
+    assertEquals(r.value.date_to, '2026-07-31');
+  }
+});
+
+Deno.test('parseTournamentRefine: from>to 뒤집힘은 둘 다 떨군다', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: false,
+    date_from: '2026-08-01',
+    date_to: '2026-07-01',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, null);
+    assertEquals(r.value.date_to, null);
+  }
+});
+
+Deno.test('parseTournamentRefine: 정상 ISO 날짜 범위는 유지', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: true,
+    date_from: '2026-07-01',
+    date_to: '2026-07-31',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, '2026-07-01');
+    assertEquals(r.value.date_to, '2026-07-31');
+  }
+});

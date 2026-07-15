@@ -76,9 +76,13 @@ export interface TournamentSearchTextContext {
 
 const MAX_CARDS = 10;
 
-/// `tournament_search_by_slots`(only_my_grade=true) 결과를 카드 아이템으로 변환.
-/// 그 RPC는 참가 가능한 대회만 반환하므로 eligible=true 로 표기한다.
-export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardItem[] {
+/// `tournament_search_by_slots` 결과를 카드 아이템으로 변환.
+/// eligible 은 호출자가 필터 상태로 넘긴다: only_my_grade=true(참가 가능 대회만
+/// 반환) 면 true, 전체 검색(false)이면 자격을 알 수 없으므로 false 로 배지 숨김(JY-101).
+export function buildTournamentCards(
+  rows: TournamentCardRow[],
+  eligible = true,
+): TournamentCardItem[] {
   return rows.slice(0, MAX_CARDS).map((r) => ({
     id: r.id,
     title: r.title,
@@ -88,7 +92,7 @@ export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardI
     start_date: r.start_date,
     end_date: r.end_date,
     application_deadline: r.application_deadline ?? null,
-    eligible: true,
+    eligible,
     eligible_grades: r.eligible_grades ?? [],
     entry_fee: r.entry_fee,
     format: r.format,
@@ -323,13 +327,24 @@ export function parseTournamentRefine(input: unknown): ParseResult<TournamentRef
     return { ok: false };
   }
   const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  // date 는 PG date 파라미터로 나가므로 ISO(YYYY-MM-DD) 만 통과시킨다. 형식이
+  // 아니거나 from>to 로 뒤집힌 조작 payload 는 날짜 필터를 떨궈 RPC 에러를 막는다.
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const isoDateOrNull = (v: unknown): string | null =>
+    typeof v === 'string' && ISO_DATE_RE.test(v) ? v : null;
+  let dateFrom = isoDateOrNull(input.date_from);
+  let dateTo = isoDateOrNull(input.date_to);
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    dateFrom = null;
+    dateTo = null;
+  }
   return {
     ok: true,
     value: {
       sport: (sport as 'tennis' | 'futsal' | null) ?? null,
       region_code: strOrNull(input.region_code),
-      date_from: strOrNull(input.date_from),
-      date_to: strOrNull(input.date_to),
+      date_from: dateFrom,
+      date_to: dateTo,
       only_my_grade: onlyMyGrade,
     },
   };
