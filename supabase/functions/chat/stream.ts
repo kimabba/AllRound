@@ -39,19 +39,22 @@ export function buildDbCitations(
 export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): unknown {
   if (tournaments.length === 0) return null;
   const cardRows: TournamentCardRow[] = tournaments.slice(0, 10).map((t) => {
-    // SemanticTournament(RAG)엔 location/deadline 필드가 없어 요강에서 끌어올린다.
-    // 카드 간소화로 요강 칩을 없앤 뒤에도 장소·마감이 상단 InfoRow 에 남도록.
+    // SemanticTournament(RAG)엔 location 필드가 없어 요강에서 장소를 끌어올린다.
+    // 카드 간소화로 요강 칩을 없앤 뒤에도 장소가 상단 InfoRow 에 남도록.
+    // 마감은 semantic_search 가 application_deadline 컬럼을 반환하지 않고 요강에도
+    // 마감 라벨이 없어 RAG 카드엔 표시 불가(상세 화면에서 확인).
     const reg = normalizeRegulationFields(t.regulation_fields);
-    const pick = (labels: string[]) => reg.find((f) => labels.includes(f.label))?.value ?? null;
+    const location = reg.find((f) => ['장소', '경기장', '대회장'].includes(f.label))?.value ??
+      null;
     return {
       id: t.id,
       sport: t.sport as 'tennis' | 'futsal',
       title: t.title,
       start_date: t.start_date,
       end_date: null,
-      application_deadline: pick(['신청마감', '신청 마감', '접수마감', '접수 마감']),
+      application_deadline: null,
       region: t.region ?? null,
-      location: pick(['장소', '경기장', '대회장']),
+      location,
       eligible_grades: t.eligible_grades ?? [],
       entry_fee: null,
       format: null,
