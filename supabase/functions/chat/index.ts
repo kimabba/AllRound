@@ -181,6 +181,10 @@ Deno.serve(async (req) => {
                 'regulation_fields, regulation_body',
             )
             .eq('id', selectedEntity.id)
+            // 카드 검색(status='published'/'closed')과 동일 가시성 명시(defense-in-depth,
+            // JY-102). RLS 로도 막히지만 코드에 명시해 본인 draft/rejected 비대칭 노출과
+            // 정책 드리프트를 방어. club selected_entity 의 .eq('status','approved') 와 대칭.
+            .in('status', ['published', 'closed'])
             .maybeSingle();
           const selRow = selRaw as Record<string, unknown> | null;
 
