@@ -12,6 +12,7 @@ import '../../utils/club_create_draft.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
   const ClubCreateScreen({super.key});
@@ -232,6 +233,12 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.community,
+    );
+    if (!allowed || !mounted) return;
     setState(() {
       _submitting = true;
       _submittingLabel = '제출 준비 중';
@@ -309,8 +316,13 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('제출 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '클럽 생성 요청을 제출하지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {

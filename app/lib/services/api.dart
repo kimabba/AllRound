@@ -3,6 +3,7 @@ import 'admin_api.dart';
 import 'chat_api.dart';
 import 'club_api.dart';
 import 'notification_api.dart';
+import 'moderation_api.dart';
 import 'rules_api.dart';
 import 'tournament_api.dart';
 import 'user_api.dart';
@@ -23,6 +24,7 @@ class ApiService extends ApiBase
         UserApi,
         RulesApi,
         NotificationApi,
+        ModerationApi,
         AdminApi,
         ChatApi {
   ApiService(super.supabase);

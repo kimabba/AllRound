@@ -7,10 +7,12 @@ import 'config.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
+import 'screens/admin/moderation_screen.dart';
 import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/blocked_users_screen.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs_screen.dart';
@@ -111,6 +113,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/friend-schedule',
             builder: (_, __) => const FriendScheduleScreen(),
           ),
+          GoRoute(
+            path: '/blocked-users',
+            builder: (_, __) => const BlockedUsersScreen(),
+          ),
         ],
       ),
       // 웹 전용
@@ -140,6 +146,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/tournaments',
             builder: (_, __) => const _AdminTournamentListScreen(),
+          ),
+          GoRoute(
+            path: '/admin/reports',
+            builder: (_, __) => const ModerationScreen(),
           ),
           GoRoute(
             path: '/admin/edit/:id',
@@ -200,6 +210,7 @@ class _MainShell extends ConsumerWidget {
     '/notifications',
     '/favorites',
     '/friend-schedule',
+    '/blocked-users',
   ];
 
   int _indexOf(String location) {

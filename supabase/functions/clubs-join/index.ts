@@ -12,6 +12,7 @@ import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { ugcAccessError } from '../_shared/ugc.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -133,6 +134,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'request') {
+    const accessError = await ugcAccessError(supa, userId, 'club_join');
+    if (accessError) return errorResponse(accessError, 403);
+
     // 클럽이 승인된 상태인지 확인
     const { data: club } = await supa
       .from('clubs')
@@ -350,6 +354,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'update_intro') {
+    const accessError = await ugcAccessError(supa, userId, 'community_create');
+    if (accessError) return errorResponse(accessError, 403);
+
     const member = await activeMember('role');
     if (member?.role !== 'owner' && member?.role !== 'manager') {
       return errorResponse('Only owner or manager can update club intro', 403);

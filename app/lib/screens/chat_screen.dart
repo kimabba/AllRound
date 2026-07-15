@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_ui.dart';
+import '../models/moderation.dart';
 import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
@@ -13,6 +14,7 @@ import '../theme/tokens.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -156,6 +158,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await _send();
   }
 
+  Future<void> _reportAssistantMessage(ChatMessage message) async {
+    final conversationId = ref.read(chatProvider).conversationId;
+    if (conversationId == null || message.content.trim().isEmpty) return;
+    try {
+      final messageId = await ref.read(apiProvider).findAssistantMessageId(
+            conversationId: conversationId,
+            content: message.content,
+          );
+      if (!mounted) return;
+      if (messageId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('아직 저장 중인 답변입니다. 잠시 후 다시 시도해주세요.')),
+        );
+        return;
+      }
+      await showUgcReportSheet(
+        context: context,
+        ref: ref,
+        targetType: UgcTargetType.aiMessage,
+        targetId: messageId,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')),
+        );
+      }
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -178,7 +210,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: '라운드 코치'),
+        title: const BrandedAppBarTitle(title: 'AI 라운드 코치'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -211,6 +243,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       itemBuilder: (_, i) => _MessageBubble(
                         msg: messages[i],
                         onCardAction: _sendWithEntity,
+                        onReport: !busy &&
+                                messages[i].role == 'assistant' &&
+                                messages[i].content.trim().isNotEmpty
+                            ? () => _reportAssistantMessage(messages[i])
+                            : null,
                       ),
                     ),
             ),
@@ -277,6 +314,13 @@ class _EmptyHint extends StatelessWidget {
               color: cs.onSurfaceVariant,
               height: 1.5,
             ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'AI가 생성한 답변으로 부정확할 수 있어요.\n'
+            '문제가 있는 답변은 바로 신고할 수 있습니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -424,10 +468,15 @@ class _InputBar extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.msg, required this.onCardAction});
+  const _MessageBubble({
+    required this.msg,
+    required this.onCardAction,
+    required this.onReport,
+  });
   final ChatMessage msg;
   final void Function(String message, String entityType, String entityId)
       onCardAction;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -527,6 +576,17 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
                   ],
+                if (onReport != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onReport,
+                      icon: const Icon(Icons.flag_outlined, size: 16),
+                      label: const Text('AI 답변 신고'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

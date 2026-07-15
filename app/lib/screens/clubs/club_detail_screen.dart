@@ -9,12 +9,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config.dart';
 import '../../models/club_event.dart';
 import '../../models/club_post.dart';
+import '../../models/moderation.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
@@ -186,6 +188,27 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     ref.invalidate(myFavoriteClubsProvider);
   }
 
+  Future<void> _reportClub() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.club,
+      targetId: club.id,
+    );
+  }
+
+  Future<void> _blockClubCreator() async {
+    final creatorId = club.createdBy;
+    if (creatorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: creatorId,
+      displayName: '클럽 개설자',
+    );
+    if (blocked && mounted) Navigator.pop(context);
+  }
+
   Future<void> _resubmitRejectedClub() async {
     try {
       await ref.read(apiProvider).resubmitClubReview(club.id);
@@ -241,6 +264,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   }
 
   Future<void> _join() async {
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.clubJoin,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _inFlight = true);
     try {
       await ref.read(apiProvider).joinClub(club.id);
@@ -252,8 +281,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('가입 신청 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '가입 신청을 완료하지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -387,6 +421,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final isFavorite = favoriteIds.contains(club.id);
     final membersFuture = _membersF ?? Future<List<ClubMember>>.value(const []);
     final eventsFuture = _eventsF ?? Future<List<ClubEvent>>.value(const []);
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateClub =
+        club.createdBy != null && club.createdBy != currentUserId;
 
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
@@ -402,6 +439,18 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   : Icons.bookmark_outline_rounded,
             ),
           ),
+          if (canModerateClub)
+            PopupMenuButton<String>(
+              tooltip: '클럽 더보기',
+              onSelected: (value) {
+                if (value == 'report') unawaited(_reportClub());
+                if (value == 'block') unawaited(_blockClubCreator());
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'report', child: Text('클럽 신고')),
+                PopupMenuItem(value: 'block', child: Text('개설자 차단')),
+              ],
+            ),
         ],
       ),
       body: Column(
@@ -2623,11 +2672,35 @@ class _EventCardState extends ConsumerState<_EventCard> {
     );
   }
 
+  Future<void> _reportEvent() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubEvent,
+      targetId: widget.event.id,
+    );
+  }
+
+  Future<void> _blockEventAuthor() async {
+    final authorId = widget.event.createdBy;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: '모임 작성자',
+    );
+    if (blocked) widget.onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final e = widget.event;
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateAuthor =
+        e.createdBy != null && e.createdBy != currentUserId;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -2636,31 +2709,50 @@ class _EventCardState extends ConsumerState<_EventCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _InfoChip(
-                  icon: Icons.event_available_rounded,
-                  label: e.capacity == null
-                      ? '${e.goingCount}명 참석'
-                      : '${e.goingCount}/${e.capacity}명',
-                ),
-                _InfoChip(
-                  icon: Icons.event_busy_rounded,
-                  label: '${e.notGoingCount}명 불참',
-                ),
-                if (e.fee != null)
-                  _InfoChip(
-                    icon: Icons.payments_outlined,
-                    label: '${e.fee}원',
+                Expanded(
+                  child: Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _InfoChip(
+                        icon: Icons.event_available_rounded,
+                        label: e.capacity == null
+                            ? '${e.goingCount}명 참석'
+                            : '${e.goingCount}/${e.capacity}명',
+                      ),
+                      _InfoChip(
+                        icon: Icons.event_busy_rounded,
+                        label: '${e.notGoingCount}명 불참',
+                      ),
+                      if (e.fee != null)
+                        _InfoChip(
+                          icon: Icons.payments_outlined,
+                          label: '${e.fee}원',
+                        ),
+                      if (e.responseCount > 0)
+                        TextButton.icon(
+                          onPressed: _showResponses,
+                          icon: const Icon(Icons.people_alt_outlined, size: 18),
+                          label: const Text('응답자 보기'),
+                        ),
+                    ],
                   ),
-                if (e.responseCount > 0)
-                  TextButton.icon(
-                    onPressed: _showResponses,
-                    icon: const Icon(Icons.people_alt_outlined, size: 18),
-                    label: const Text('응답자 보기'),
+                ),
+                if (canModerateAuthor)
+                  PopupMenuButton<String>(
+                    tooltip: '모임 더보기',
+                    onSelected: (value) {
+                      if (value == 'report') unawaited(_reportEvent());
+                      if (value == 'block') unawaited(_blockEventAuthor());
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'report', child: Text('모임 신고')),
+                      PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+                    ],
                   ),
               ],
             ),
@@ -2966,6 +3058,12 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       );
       return;
     }
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.community,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(apiProvider).createClubEvent(
@@ -2980,8 +3078,13 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('생성 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '모임을 만들지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -3299,6 +3402,13 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
       return;
     }
 
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.comment,
+    );
+    if (!allowed || !mounted) return;
+
     setState(() => _sendingComment = true);
     try {
       final comment = await ref.read(apiProvider).addComment(
@@ -3311,14 +3421,63 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
         _commentController.clear();
         _commentError = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('댓글을 등록하지 못했습니다. 다시 시도해주세요.')),
+        SnackBar(
+          content: Text(
+            ugcActionErrorMessage(
+              error,
+              fallback: '댓글을 등록하지 못했습니다. 다시 시도해주세요.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sendingComment = false);
     }
+  }
+
+  Future<void> _reportPost() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubPost,
+      targetId: widget.post.id,
+    );
+  }
+
+  Future<void> _blockPostAuthor() async {
+    final authorId = widget.post.authorId;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: widget.post.authorDisplayName,
+    );
+    if (blocked && mounted) Navigator.pop(context);
+  }
+
+  Future<void> _reportComment(ClubPostComment comment) async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubComment,
+      targetId: comment.id,
+    );
+  }
+
+  Future<void> _blockCommentAuthor(ClubPostComment comment) async {
+    final authorId = comment.authorId;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: comment.authorDisplayName,
+    );
+    if (blocked && mounted) await _loadComments();
   }
 
   @override
@@ -3327,6 +3486,9 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateAuthor =
+        post.authorId != null && post.authorId != currentUserId;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -3362,9 +3524,36 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '${post.authorDisplayName} · ${_postDateText(post.createdAt)}',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${post.authorDisplayName} · ${_postDateText(post.createdAt)}',
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ),
+                      if (canModerateAuthor)
+                        PopupMenuButton<String>(
+                          tooltip: '게시글 더보기',
+                          onSelected: (value) {
+                            if (value == 'report') unawaited(_reportPost());
+                            if (value == 'block') {
+                              unawaited(_blockPostAuthor());
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'report',
+                              child: Text('게시글 신고'),
+                            ),
+                            PopupMenuItem(
+                              value: 'block',
+                              child: Text('작성자 차단'),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
                   const Divider(height: AppSpacing.xl),
                   Text(
@@ -3435,7 +3624,13 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                       )
                     else
                       for (final comment in _comments!)
-                        _CommentRow(comment: comment),
+                        _CommentRow(
+                          comment: comment,
+                          canModerate: comment.authorId != null &&
+                              comment.authorId != currentUserId,
+                          onReport: () => _reportComment(comment),
+                          onBlock: () => _blockCommentAuthor(comment),
+                        ),
                   ],
                 ],
               ),
@@ -3490,9 +3685,17 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
 }
 
 class _CommentRow extends StatelessWidget {
-  const _CommentRow({required this.comment});
+  const _CommentRow({
+    required this.comment,
+    required this.canModerate,
+    required this.onReport,
+    required this.onBlock,
+  });
 
   final ClubPostComment comment;
+  final bool canModerate;
+  final VoidCallback onReport;
+  final VoidCallback onBlock;
 
   @override
   Widget build(BuildContext context) {
@@ -3530,6 +3733,18 @@ class _CommentRow extends StatelessWidget {
               ],
             ),
           ),
+          if (canModerate)
+            PopupMenuButton<String>(
+              tooltip: '댓글 더보기',
+              onSelected: (value) {
+                if (value == 'report') onReport();
+                if (value == 'block') onBlock();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'report', child: Text('댓글 신고')),
+                PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+              ],
+            ),
         ],
       ),
     );
@@ -3673,6 +3888,12 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
       );
       return;
     }
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.community,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _busy = true);
     try {
       final imageUrls = <String>[];
@@ -3696,8 +3917,13 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('게시글 작성 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '게시글을 등록하지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);

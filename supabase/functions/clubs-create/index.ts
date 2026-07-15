@@ -4,6 +4,7 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { ugcAccessError } from '../_shared/ugc.ts';
 import {
   parseGenderPreference,
   parseMeetingDays,
@@ -85,6 +86,12 @@ Deno.serve(async (req) => {
   }
 
   const supa = serviceClient();
+  const accessError = await ugcAccessError(
+    supa,
+    auth.user.id,
+    'community_create',
+  );
+  if (accessError) return errorResponse(accessError, 403);
   const logoUrl = optionalUrl(body.logo_url);
   const introImageUrls = optionalUrlArray(body.intro_image_urls, 5);
   const insertPayload: Record<string, unknown> = {
