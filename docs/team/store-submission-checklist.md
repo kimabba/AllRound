@@ -108,6 +108,7 @@
 - [x] `.env.local` 포함, 코드서명 없는 iPhoneOS Release 컴파일 성공 — `Runner.app` arm64, 번들 ID `kr.allround.app`, 버전 `1.0.0 (1)` ✅
 - [x] `ffmpeg_kit_flutter_new` 4.4.2로 갱신 — iOS simulator arm64, FFmpeg 보안 수정, Android Release JNI/흰 화면 수정 반영 ✅
 - [x] iPhone 17 Pro / iOS 26.5 시뮬레이터 빌드·설치·첫 실행·종료 후 재실행 성공. 로그인 화면 정상 렌더, 프로세스 유지, 치명 로그 없음 ✅
+- [x] iPhone 13 Pro / iOS 26.5 실기기에 `.env.local` 포함 Release 앱 설치 성공. 무료 테스트 ID `kr.allround.app.localtest`로 첫 실행·완전 종료 후 재실행·Wi-Fi 해제 후 셀룰러 실행까지 흰 화면/튕김 없이 통과 ✅ (로컬 프로파일 만료: 2026-07-21 18:40 KST, 조직 서명/TestFlight는 별도 진행)
 - [ ] Xcode 최신 SDK 빌드, TestFlight 업로드 → 내부 테스트
 - [ ] 스크린샷: 6.7"/6.9" 필수 세트 (+ iPad 지원 시 iPad). 스피드건 제외
 - [x] 앱 아이콘 1024², 알파 없음 확인 ✅. 이름/부제/키워드/설명은 `store-listing.md` 준비
@@ -146,6 +147,7 @@
 | 스토어 스크린샷 | ⏳ 실제 앱 화면 촬영 대기 |
 | iOS 무서명 Release 컴파일 | ✅ iPhoneOS arm64 `Runner.app` 생성, 번들/버전/권한 문구 확인 |
 | iOS 시뮬레이터 QA | ✅ iPhone 17 Pro 첫 실행·재실행 정상, 흰 화면/즉시 종료 없음 |
+| iOS 실기기 Release QA | ✅ iPhone 13 Pro에서 첫 실행·재실행·셀룰러 실행 정상 (`localtest`, 2026-07-21 만료) |
 | Android SDK/JDK·Release AAB | ⏳ 이 Mac에 SDK/JDK·업로드 키가 없어 빌드 대기 (`targetSdk=35` 설정은 확인) |
 | Play 개인계정 12/14 테스트 | ⏳ 계정유형 확인 필요 |
 | 심사용 데모 계정·노트 | ⏳ |
