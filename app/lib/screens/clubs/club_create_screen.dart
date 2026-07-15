@@ -285,7 +285,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       }
       _setSubmittingLabel('클럽 생성 요청 중');
       final fee = int.tryParse(_monthlyFee.text.trim());
-      await ref.read(apiProvider).createClub(
+      final createdClub = await ref.read(apiProvider).createClub(
             sport: _sport,
             name: _name.text.trim(),
             region: _region.text.trim(),
@@ -308,8 +308,12 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'),
+          SnackBar(
+            content: Text(
+              createdClub.isApproved
+                  ? '클럽이 생성되었습니다. 바로 운영할 수 있습니다.'
+                  : '클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.',
+            ),
           ),
         );
         Navigator.pop(context, true);
@@ -522,6 +526,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
 
     // 사용자가 등록한 종목만 선택지로 노출 (미등록 시에만 양쪽 fallback)
     final registered = (ref.watch(userSportsProvider).valueOrNull ?? [])
@@ -633,7 +638,9 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(
-                                      '클럽 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
+                                      isAdmin
+                                          ? '관리자가 만드는 클럽은 별도 검토 없이 즉시 생성됩니다.'
+                                          : '클럽 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall

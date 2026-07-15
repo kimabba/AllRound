@@ -1,10 +1,11 @@
-// clubs-create: 클럽 생성 요청 (status='pending' → 어드민 승인 대기)
+// clubs-create: 일반 사용자는 승인 요청, 전역 관리자는 즉시 승인된 클럽 생성
 // POST { sport, name, region?, address?, logo_url?, intro_image_urls?, contact?, website?, description? }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
+import { buildAdminClubApproval } from './approval.ts';
 import {
   parseGenderPreference,
   parseMeetingDays,
@@ -152,6 +153,35 @@ Deno.serve(async (req) => {
   if (ownerErr) {
     await supa.from('clubs').delete().eq('id', club!.id);
     return errorResponse('owner 등록 실패: ' + ownerErr.message, 500);
+  }
+
+  // 전역 관리자는 별도 검수 없이 즉시 승인한다.
+  // owner 등록 뒤 승인해 승인된 클럽이 owner 없이 노출되는 구간을 만들지 않는다.
+  const adminApproval = buildAdminClubApproval(
+    auth.user.isAdmin,
+    auth.user.id,
+    new Date().toISOString(),
+  );
+  if (adminApproval !== null) {
+    const {
+      data: approvedClub,
+      error: approvalError,
+    } = await supa
+      .from('clubs')
+      .update(adminApproval)
+      .eq('id', club!.id)
+      .eq('status', 'pending')
+      .select()
+      .single();
+
+    if (approvalError || !approvedClub) {
+      console.error('clubs-create admin auto-approval failed', {
+        code: approvalError?.code ?? 'missing_row',
+      });
+      await supa.from('clubs').delete().eq('id', club!.id);
+      return errorResponse('Admin club approval failed', 500);
+    }
+    club = approvedClub;
   }
 
   return jsonResponse({ club }, { status: 201 });
