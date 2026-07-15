@@ -54,16 +54,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == '/login' ? null : '/login';
       }
 
-      // 웹: onboarding skip, admin 경로는 admin만 접근 가능
-      if (kIsWeb) {
+      // 플랫폼과 무관하게 관리자 경로는 서버 role이 admin인 사용자만 허용한다.
+      if (loc.startsWith('/admin')) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
         final isAdmin = adminAsync.valueOrNull ?? false;
+        return isAdmin ? null : '/';
+      }
 
+      // 웹: onboarding skip
+      if (kIsWeb) {
         if (loc == '/login') return '/';
-        if (loc.startsWith('/admin')) {
-          return isAdmin ? null : '/';
-        }
         return null;
       }
 
@@ -72,9 +73,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.valueOrNull ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
-
-      // 앱에서는 어드민 경로 완전 차단 (웹 전용)
-      if (loc.startsWith('/admin')) return '/';
 
       if (loc == '/login') return '/';
       return null;

@@ -13,14 +13,7 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (AppConfig.adminDesignPreview) {
-      return Scaffold(
-        body: Row(
-          children: [
-            const _AdminSidebar(),
-            Expanded(child: child),
-          ],
-        ),
-      );
+      return _AdminShellLayout(child: child);
     }
 
     final isAdminAsync = ref.watch(isAdminProvider);
@@ -34,10 +27,29 @@ class AdminShell extends ConsumerWidget {
       ),
       data: (isAdmin) {
         if (!isAdmin) return const SizedBox.shrink();
+        return _AdminShellLayout(child: child);
+      },
+    );
+  }
+}
+
+class _AdminShellLayout extends StatelessWidget {
+  const _AdminShellLayout({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 700;
         return Scaffold(
           body: Row(
             children: [
-              const _AdminSidebar(),
+              if (compact)
+                const _AdminCompactNavigation()
+              else
+                const _AdminSidebar(),
               Expanded(child: child),
             ],
           ),
@@ -47,22 +59,27 @@ class AdminShell extends ConsumerWidget {
   }
 }
 
+const _adminItems = [
+  (path: '/admin', label: '대시보드', icon: Icons.dashboard_outlined),
+  (path: '/admin/drafts', label: 'Draft 승인', icon: Icons.fact_check_outlined),
+  (path: '/admin/sources', label: '크롤 소스', icon: Icons.rss_feed_outlined),
+  (path: '/admin/clubs', label: '클럽 승인', icon: Icons.groups_outlined),
+  (path: '/admin/kb', label: '지식베이스', icon: Icons.menu_book_outlined),
+  (path: '/admin/reports', label: '신고 · 제재', icon: Icons.gavel_outlined),
+  (
+    path: '/admin/tournaments',
+    label: '대회 편집',
+    icon: Icons.edit_note_outlined,
+  ),
+];
+
+bool _isAdminItemSelected(String currentLocation, String itemPath) {
+  return currentLocation == itemPath ||
+      (itemPath != '/admin' && currentLocation.startsWith(itemPath));
+}
+
 class _AdminSidebar extends ConsumerWidget {
   const _AdminSidebar();
-
-  static const _items = [
-    (path: '/admin', label: '대시보드', icon: Icons.dashboard_outlined),
-    (path: '/admin/drafts', label: 'Draft 승인', icon: Icons.fact_check_outlined),
-    (path: '/admin/sources', label: '크롤 소스', icon: Icons.rss_feed_outlined),
-    (path: '/admin/clubs', label: '클럽 승인', icon: Icons.groups_outlined),
-    (path: '/admin/kb', label: '지식베이스', icon: Icons.menu_book_outlined),
-    (path: '/admin/reports', label: '신고 · 제재', icon: Icons.gavel_outlined),
-    (
-      path: '/admin/tournaments',
-      label: '대회 편집',
-      icon: Icons.edit_note_outlined
-    ),
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -95,10 +112,9 @@ class _AdminSidebar extends ConsumerWidget {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                children: _items.map((item) {
-                  final selected = currentLocation == item.path ||
-                      (item.path != '/admin' &&
-                          currentLocation.startsWith(item.path));
+                children: _adminItems.map((item) {
+                  final selected =
+                      _isAdminItemSelected(currentLocation, item.path);
                   return ListTile(
                     leading: Icon(
                       item.icon,
@@ -157,6 +173,85 @@ class _AdminSidebar extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminCompactNavigation extends ConsumerWidget {
+  const _AdminCompactNavigation();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLocation = GoRouterState.of(context).matchedLocation;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 64,
+      child: Material(
+        color: colorScheme.surface,
+        elevation: 1,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  children: _adminItems.map((item) {
+                    final selected =
+                        _isAdminItemSelected(currentLocation, item.path);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Tooltip(
+                        message: item.label,
+                        child: IconButton(
+                          isSelected: selected,
+                          style: IconButton.styleFrom(
+                            backgroundColor: selected
+                                ? colorScheme.primaryContainer
+                                : Colors.transparent,
+                            foregroundColor: selected
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                          onPressed: () => context.go(item.path),
+                          icon: Icon(item.icon),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const Divider(height: 1),
+              Tooltip(
+                message: '앱으로 돌아가기',
+                child: IconButton(
+                  onPressed: () => context.go('/more'),
+                  icon: const Icon(Icons.home_outlined),
+                ),
+              ),
+              Tooltip(
+                message: '로그아웃',
+                child: IconButton(
+                  onPressed: () async {
+                    await Supabase.instance.client.auth
+                        .signOut(scope: SignOutScope.global);
+                  },
+                  icon: const Icon(Icons.logout_rounded),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
         ),
       ),
     );
