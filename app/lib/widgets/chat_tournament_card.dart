@@ -75,10 +75,14 @@ class ChatTournamentCard extends StatelessWidget {
               ],
             ),
           const SizedBox(height: AppSpacing.sm),
+          // 카드는 최소 정보만(일정+마감 한 줄, 장소). 참가비·주최/주관 등 상세는
+          // 상세 화면으로 유도해 카드가 길어지지 않게 한다.
           _InfoRow(
             icon: Icons.calendar_today_rounded,
             label: '일정',
-            value: dateText,
+            value: item.applicationDeadline != null
+                ? '$dateText  ·  마감 ${item.applicationDeadline}'
+                : dateText,
             cs: cs,
             tt: tt,
           ),
@@ -88,34 +92,6 @@ class ChatTournamentCard extends StatelessWidget {
               icon: Icons.location_on_rounded,
               label: '장소',
               value: item.location!,
-              cs: cs,
-              tt: tt,
-            ),
-          ],
-          if (item.applicationDeadline != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            _InfoRow(
-              icon: Icons.timer_rounded,
-              label: '신청 마감',
-              value: item.applicationDeadline!,
-              cs: cs,
-              tt: tt,
-            ),
-          ],
-          if (item.entryFee != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            _InfoRow(
-              icon: Icons.payments_rounded,
-              label: '참가비',
-              value: '${item.entryFee}원',
-              cs: cs,
-              tt: tt,
-            ),
-          ],
-          if (item.regulationFields.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _RegulationSummary(
-              fields: item.regulationFields,
               cs: cs,
               tt: tt,
             ),
@@ -131,55 +107,6 @@ class ChatTournamentCard extends StatelessWidget {
         ],
       ),
       ),
-    );
-  }
-}
-
-/// 요강 요약 — 라벨/값 칩 2~3개를 작게 wrap 으로 표시. 카드가 길어지지 않게 한다.
-class _RegulationSummary extends StatelessWidget {
-  final List<RegulationField> fields;
-  final ColorScheme cs;
-  final TextTheme tt;
-
-  const _RegulationSummary({
-    required this.fields,
-    required this.cs,
-    required this.tt,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: [
-        for (final f in fields)
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 3,
-            ),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: AppRadius.pill,
-            ),
-            child: RichText(
-              text: TextSpan(
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                children: [
-                  TextSpan(text: '${f.label} '),
-                  TextSpan(
-                    text: f.value,
-                    style: tt.labelSmall?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
