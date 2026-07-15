@@ -42,11 +42,14 @@ import {
 } from '../_shared/intent.ts';
 import {
   buildClubCards,
+  buildRefineChip,
   buildTournamentCards,
   type ClubCardRow,
   type ClubDetailRow,
+  isGradeRegisteredForSport,
   isTournamentCardRow,
   parseSelectedEntity,
+  parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
@@ -122,6 +125,10 @@ Deno.serve(async (req) => {
   const selectedEntityResult = parseSelectedEntity(body.selected_entity);
   const selectedEntity = selectedEntityResult.ok ? selectedEntityResult.value : null;
 
+  // 대회검색 정제 칩 재요청(JY-101): intent 분류를 건너뛰고 이 슬롯으로 바로 검색한다.
+  const refineResult = parseTournamentRefine(body.tournament_refine);
+  const tournamentRefine = refineResult.ok ? refineResult.value : null;
+
   const hashedUserId = await hashUserId(user.id);
 
   // User profile data
@@ -132,7 +139,7 @@ Deno.serve(async (req) => {
 
   const { data: userOrgs } = await supabase
     .from('user_tennis_orgs')
-    .select('org, division, score, is_primary, region_code')
+    .select('org, division, division_codes, score, is_primary, region_code')
     .eq('user_id', user.id);
 
   // Prior conversation (last 10 turns = 20 messages)
@@ -286,7 +293,20 @@ Deno.serve(async (req) => {
         const slots = extractSlots(userMessage);
         const ruleHit = classifyByRule(userMessage);
         let intentResult: IntentResult;
-        if (ruleHit) {
+        if (tournamentRefine) {
+          // JY-101: 정제 칩 재요청 — 분류/후속이어받기를 건너뛰고 tournament_search 로
+          // 고정하고, 슬롯은 페이로드에서 복원한다(임베딩은 이미 위에서 생성되나 미사용).
+          intentResult = buildRuleResult(
+            { intent: 'tournament_search', rule: 'refine_chip' },
+            {
+              sport: tournamentRefine.sport ?? undefined,
+              region: (tournamentRefine.region_code as RegionCode | null) ?? undefined,
+              date_range: tournamentRefine.date_from && tournamentRefine.date_to
+                ? { from: tournamentRefine.date_from, to: tournamentRefine.date_to }
+                : undefined,
+            },
+          );
+        } else if (ruleHit) {
           intentResult = buildRuleResult(ruleHit, slots);
         } else if (vectorLiteral) {
           let embeddingHit: IntentClassifyRow | null = null;
@@ -751,6 +771,8 @@ Deno.serve(async (req) => {
             ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
             : null;
           const dateRange = intentResult.slots.date_range;
+          // 기본은 전체(false). 정제 칩 재요청이면 그 값으로 좁히거나(true) 넓힌다(JY-101).
+          const onlyMyGrade = tournamentRefine?.only_my_grade ?? false;
 
           const { data: rows, error: routeErr } = await supabase.rpc(
             'tournament_search_by_slots',
@@ -762,8 +784,8 @@ Deno.serve(async (req) => {
               p_region_code: regionCode,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
-              // 채팅 기본 검색은 필터를 걸지 않는다(내 등급 필터는 백로그 JY-101).
-              p_only_my_grade: false,
+              // 기본 전체 · 정제 칩("내 등급만 보기") 재요청 시에만 등급 필터(JY-101).
+              p_only_my_grade: onlyMyGrade,
               p_match_count: 10,
               // 일정 조회는 마감 여부와 무관하게 유효 → 모집상태 필터 없음 + 마감(closed) 대회 포함.
               // (migration 079: p_include_closed + 다가오는 대회 우선 정렬)
@@ -841,12 +863,27 @@ Deno.serve(async (req) => {
             send('context', { tournaments: [], rules: [] });
             send('delta', { text: answerText });
             send('citation', { items: citations });
+            // 등급 등록자에게만 전체↔내 등급 전환 칩 하나(JY-101). 미등록자면 없음.
+            const gradeRegistered = isGradeRegisteredForSport(
+              requestedSport,
+              (userOrgs ?? []) as UserTennisOrgRow[],
+              ((userSports ?? []) as UserSport[]).map((s) => s.grade),
+            );
+            const refineChip = gradeRegistered
+              ? buildRefineChip(onlyMyGrade, {
+                sport: requestedSport,
+                region_code: regionCode ?? null,
+                date_from: dateRange?.from ?? null,
+                date_to: dateRange?.to ?? null,
+              })
+              : null;
             send('ui', {
               blocks: [
                 {
                   type: 'cards',
                   entity: 'tournament',
                   items: buildTournamentCards(typedRows),
+                  ...(refineChip ? { refine_chip: refineChip } : {}),
                 },
               ],
             });

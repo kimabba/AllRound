@@ -86,6 +86,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  /// 대회검색 정제 칩("내 등급만 보기"/"전체 대회 보기") 탭 → refine 페이로드로 재요청(JY-101).
+  Future<void> _sendWithRefine(
+      String label, Map<String, dynamic> refine) async {
+    final chat = ref.read(chatProvider);
+    if (chat.busy) return;
+
+    chat.addUserMessage(label);
+    _scrollToBottom();
+
+    final assistantIdx = chat.lastAssistantIndex;
+    final api = ref.read(apiProvider);
+
+    await _consumeChatStream(
+      api.chat(
+        message: label,
+        conversationId: chat.conversationId,
+        activeSport: ref.read(activeSportProvider),
+        tournamentRefine: refine,
+      ),
+      assistantIdx,
+    );
+  }
+
   Future<void> _consumeChatStream(
       Stream<ChatStreamEvent> stream, int assistantIdx) async {
     final chat = ref.read(chatProvider);
@@ -205,6 +228,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemBuilder: (_, i) => _MessageBubble(
                       msg: messages[i],
                       onCardAction: _sendWithEntity,
+                      onRefine: _sendWithRefine,
                     ),
                   ),
           ),
@@ -411,10 +435,15 @@ class _InputBar extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.msg, required this.onCardAction});
+  const _MessageBubble({
+    required this.msg,
+    required this.onCardAction,
+    required this.onRefine,
+  });
   final ChatMessage msg;
   final void Function(String message, String entityType, String entityId)
       onCardAction;
+  final void Function(String label, Map<String, dynamic> refine) onRefine;
 
   @override
   Widget build(BuildContext context) {
@@ -511,6 +540,24 @@ class _MessageBubble extends StatelessWidget {
                           item: item,
                           onAction: (message, entityId) =>
                               onCardAction(message, 'club', entityId),
+                        ),
+                      ),
+                    if (block.refineChip != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ActionChip(
+                            avatar: const Icon(
+                              Icons.filter_alt_outlined,
+                              size: 18,
+                            ),
+                            label: Text(block.refineChip!.label),
+                            onPressed: () => onRefine(
+                              block.refineChip!.label,
+                              block.refineChip!.refine,
+                            ),
+                          ),
                         ),
                       ),
                   ],

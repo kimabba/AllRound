@@ -1,11 +1,14 @@
 import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
   buildClubCards,
+  buildRefineChip,
   buildTournamentCards,
   type ClubCardRow,
   type ClubDetailRow,
+  isGradeRegisteredForSport,
   isTournamentCardRow,
   parseSelectedEntity,
+  parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
@@ -294,4 +297,75 @@ Deno.test('renderClubDetailText omits missing optional fields', () => {
   assert(!text.includes('월 회비'));
   assert(!text.includes('성별'));
   assert(!text.includes('연락처'));
+});
+
+// ── 정제 칩 (JY-101) ──────────────────────────────────────────────
+
+Deno.test('parseTournamentRefine: 유효 페이로드 파싱', () => {
+  const r = parseTournamentRefine({
+    sport: 'tennis',
+    region_code: 'gwangju',
+    date_from: '2026-07-01',
+    date_to: '2026-07-31',
+    only_my_grade: true,
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.sport, 'tennis');
+    assertEquals(r.value.region_code, 'gwangju');
+    assertEquals(r.value.only_my_grade, true);
+  }
+});
+
+Deno.test('parseTournamentRefine: only_my_grade 없으면 거부', () => {
+  assertEquals(parseTournamentRefine({ sport: 'tennis' }).ok, false);
+});
+
+Deno.test('parseTournamentRefine: 잘못된 sport 거부', () => {
+  assertEquals(
+    parseTournamentRefine({ sport: 'golf', only_my_grade: false }).ok,
+    false,
+  );
+});
+
+Deno.test('parseTournamentRefine: null/비객체 거부', () => {
+  assertEquals(parseTournamentRefine(null).ok, false);
+  assertEquals(parseTournamentRefine('x').ok, false);
+});
+
+Deno.test('buildRefineChip: 전체(false) → 내 등급만 칩', () => {
+  const chip = buildRefineChip(false, {
+    sport: 'tennis',
+    region_code: 'gwangju',
+    date_from: null,
+    date_to: null,
+  });
+  assertEquals(chip.label, '내 등급만 보기');
+  assertEquals(chip.refine.only_my_grade, true);
+  assertEquals(chip.refine.region_code, 'gwangju');
+});
+
+Deno.test('buildRefineChip: 내 등급(true) → 전체 보기 칩', () => {
+  const chip = buildRefineChip(true, {
+    sport: 'tennis',
+    region_code: null,
+    date_from: null,
+    date_to: null,
+  });
+  assertEquals(chip.label, '전체 대회 보기');
+  assertEquals(chip.refine.only_my_grade, false);
+});
+
+Deno.test('isGradeRegisteredForSport: 테니스는 division_codes 채워짐이 조건', () => {
+  assert(isGradeRegisteredForSport('tennis', [{ division_codes: ['gj_m_open'] }], []));
+  assert(!isGradeRegisteredForSport('tennis', [{ division_codes: [] }], []));
+});
+
+Deno.test('isGradeRegisteredForSport: 풋살은 grade 존재가 조건', () => {
+  assert(isGradeRegisteredForSport('futsal', [], ['y1to3']));
+  assert(!isGradeRegisteredForSport('futsal', [], [null, undefined]));
+});
+
+Deno.test('isGradeRegisteredForSport: sport null 이면 false', () => {
+  assertEquals(isGradeRegisteredForSport(null, [{ division_codes: ['x'] }], ['y']), false);
 });

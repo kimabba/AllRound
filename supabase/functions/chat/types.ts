@@ -9,6 +9,9 @@ export interface ChatBody {
   conversation_id?: string;
   active_sport?: string;
   selected_entity?: unknown;
+  // 대회검색 정제 칩 재요청(JY-101). 있으면 intent 분류를 건너뛰고 이 슬롯으로 바로 검색한다.
+  // 페이로드 파싱/타입은 _shared/chat_cards.ts 의 parseTournamentRefine/TournamentRefine.
+  tournament_refine?: unknown;
 }
 
 export interface UserSport {
@@ -20,6 +23,7 @@ export interface UserSport {
 export interface UserTennisOrgRow {
   org: string;
   division: string | null;
+  division_codes: string[];
   score: number | null;
   is_primary: boolean;
   region_code: string | null;
