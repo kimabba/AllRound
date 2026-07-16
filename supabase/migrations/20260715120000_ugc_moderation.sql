@@ -142,8 +142,10 @@ CREATE POLICY user_blocks_self_delete ON public.user_blocks
 CREATE POLICY user_blocks_admin_all ON public.user_blocks
   FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
-CREATE POLICY ugc_reports_reporter_select ON public.ugc_reports
-  FOR SELECT USING (reporter_id = (SELECT auth.uid()));
+-- 신고 조회는 admin(모더레이션 화면)만 허용한다. 신고자 본인 조회 정책을 두지 않는다:
+-- content_snapshot에 제3자 댓글·미공개 클럽 연락처·신고 대상 실명이 담기므로,
+-- 신고자에게 노출되면 개인정보 최소수집(§21) 위반이 된다. 신고 생성은 create_ugc_report
+-- RPC(security definer)로만 이뤄지고, 신고자용 조회 UI는 없다.
 CREATE POLICY ugc_reports_admin_all ON public.ugc_reports
   FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
