@@ -11,6 +11,7 @@ import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../utils/chat_content.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
@@ -521,7 +522,7 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       )
                     : MarkdownBody(
-                        data: _cleanAssistantContent(msg.content),
+                        data: cleanAssistantContent(msg.content),
                         selectable: true,
                         styleSheet: MarkdownStyleSheet(
                           p: tt.bodyMedium?.copyWith(
@@ -594,18 +595,6 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 어시스턴트 응답에서 raw 출처 ID 패턴 제거
-String _cleanAssistantContent(String content) {
-  if (content.isEmpty) return '…';
-  // "(출처: id xxx-xxx, ...)" or "(출처: xxx-xxx)" 패턴 제거
-  return content
-      .replaceAll(RegExp(r'\(출처:?\s*(?:id\s*)?[a-f0-9\-,\s]+\)'), '')
-      .replaceAll(
-          RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'),
-          '')
-      .trim();
 }
 
 class _CitationRow extends StatelessWidget {

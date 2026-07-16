@@ -2,14 +2,15 @@
  * chat/context.ts — User context hashing, system prompt building, context prompt builder.
  */
 
-import {
-  GRADE_LABELS,
-  REGION_LABELS,
-  SPORT_LABELS,
-  TENNIS_ORG_LABELS,
-} from '../_shared/enums.ts';
+import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
 import { buildRegulationContextLines } from '../_shared/regulation.ts';
-import type { SemanticRule, SemanticTournament, UserSport, UserTennisOrgRow, VenueRow } from './types.ts';
+import type {
+  SemanticRule,
+  SemanticTournament,
+  UserSport,
+  UserTennisOrgRow,
+  VenueRow,
+} from './types.ts';
 import { REGULATION_BODY_CONTEXT_CAP, REGULATION_BODY_TOP_N } from './types.ts';
 
 /**
@@ -104,7 +105,7 @@ ${profile}${orgProfile}
 - 한국에는 KTA·KATO·KATA·KTFS 등 여러 협회가 있고 등급 체계가 다릅니다.
 - 광주·전남은 2026.05.01자로 분리 운영 중입니다 (이중 등록 허용).
 - DB 컨텍스트가 있으면 이를 우선 인용합니다.
-- 출처는 DB id로만 명시합니다.
+- 내부 DB id·UUID는 답변 본문에 절대 표시하지 않습니다. 출처는 앱의 별도 출처·카드 UI가 표시합니다.
 - 의료/법적 조언은 하지 않습니다.`;
 }
 
@@ -145,7 +146,7 @@ export function buildContextPrompt(
       parts.push(`[관련 대회 — ${label}]`);
       for (const t of bySport.get(sport)!) {
         parts.push(
-          `- (id: ${t.id}) ${escapeForData(t.title)} | ${t.start_date} | ${
+          `- ${escapeForData(t.title)} | ${t.start_date} | ${
             escapeForData(t.region ?? '지역미상')
           } | 출전등급: ${t.eligible_grades.join(', ')}`,
         );
@@ -186,7 +187,7 @@ export function buildContextPrompt(
       parts.push(`[관련 룰북 — ${label}]`);
       for (const r of rulesBySport.get(sport)!) {
         const snippet = r.body.length > 1500 ? r.body.slice(0, 1500) + '\u2026' : r.body;
-        parts.push(`- (id: ${r.id}) [${r.category}] ${r.title}\n  ${snippet}`);
+        parts.push(`- [${r.category}] ${r.title}\n  ${snippet}`);
       }
       parts.push('');
     }
