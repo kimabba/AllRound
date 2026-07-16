@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
+import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
@@ -248,6 +249,79 @@ mixin ClubApi on ApiBase {
   }
 
   // ── 가입 / 탈퇴 ──────────────────────────────────────────────
+
+  Future<ClubInquiryThread?> myClubInquiry(String clubId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+    final Object? raw = await supabase
+        .from('club_inquiry_threads')
+        .select(
+          'id, club_id, requester_id, status, last_message_at, created_at',
+        )
+        .eq('club_id', clubId)
+        .eq('requester_id', userId)
+        .maybeSingle();
+    if (raw is! Map) return null;
+    return ClubInquiryThread.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<List<ClubInquiryThread>> managedClubInquiries(String clubId) async {
+    final Object raw = await supabase
+        .from('club_inquiry_threads')
+        .select(
+          'id, club_id, requester_id, status, last_message_at, created_at, '
+          'requester:users!club_inquiry_threads_requester_id_fkey(nickname)',
+        )
+        .eq('club_id', clubId)
+        .order('last_message_at', ascending: false);
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (row) => ClubInquiryThread.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<ClubInquiryMessage>> clubInquiryMessages(
+    String threadId,
+  ) async {
+    final Object raw = await supabase
+        .from('club_inquiry_messages')
+        .select('id, thread_id, sender_id, body, created_at')
+        .eq('thread_id', threadId)
+        .order('created_at');
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (row) => ClubInquiryMessage.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<String> sendClubInquiry({
+    String? clubId,
+    String? threadId,
+    required String body,
+  }) async {
+    final response = await httpPost(
+      uri('clubs-inquiries'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        if (clubId != null) 'club_id': clubId,
+        if (threadId != null) 'thread_id': threadId,
+        'body': body.trim(),
+      }),
+    );
+    check(response);
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json['thread_id'] as String;
+  }
 
   Future<void> joinClub(String clubId, {String? message}) async {
     final res = await httpPost(
