@@ -18,6 +18,36 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
   return supa.auth.onAuthStateChange;
 });
 
+/// 비밀번호 재설정 진행 상태. passwordRecovery 딥링크 진입 시 sticky 하게 true 가
+/// 되고, 새 비번 저장 성공 시 화면이 complete() 로 끈다. auth 이벤트의 최신값에
+/// 의존하면 updateUser 직후 userUpdated 관측 전 race 로 recovery 판정이 튀므로,
+/// 명시적 플래그로 고정한다.
+class RecoveryModeNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.listen(authStateProvider, (_, next) {
+      final event = next.valueOrNull?.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        state = true;
+      } else if (event == AuthChangeEvent.userUpdated ||
+          event == AuthChangeEvent.signedOut) {
+        // 비번 저장 성공(userUpdated) 또는 로그아웃 시 자동 해제. 위젯이 unmount
+        // 되어 complete() 를 못 불러도, 이전 사용자의 true 가 남지 않게 한다.
+        state = false;
+      }
+    });
+    // 콜드스타트 딥링크: listen 등록 전 이미 도착한 이벤트도 반영.
+    return ref.read(authStateProvider).valueOrNull?.event ==
+        AuthChangeEvent.passwordRecovery;
+  }
+
+  /// 저장 성공 직후 즉시 해제(context.go 전에 호출 → redirect 되돌림 race 제거).
+  void complete() => state = false;
+}
+
+final recoveryModeProvider =
+    NotifierProvider<RecoveryModeNotifier, bool>(RecoveryModeNotifier.new);
+
 final currentUserProvider = Provider<User?>((ref) {
   // authStateProvider 를 watch 해야 onAuthStateChange 시 재평가됨.
   // (이 줄 없으면 supabaseProvider 인스턴스가 안 바뀌어 currentUser 가 stale 상태로 고정 →
