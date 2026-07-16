@@ -56,6 +56,7 @@ class _AdminSidebar extends ConsumerWidget {
     (path: '/admin/sources', label: '크롤 소스', icon: Icons.rss_feed_outlined),
     (path: '/admin/clubs', label: '클럽 승인', icon: Icons.groups_outlined),
     (path: '/admin/kb', label: '지식베이스', icon: Icons.menu_book_outlined),
+    (path: '/admin/reports', label: '신고 · 제재', icon: Icons.gavel_outlined),
     (
       path: '/admin/tournaments',
       label: '대회 편집',

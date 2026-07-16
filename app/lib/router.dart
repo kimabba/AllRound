@@ -7,17 +7,20 @@ import 'config.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
+import 'screens/admin/moderation_screen.dart';
 import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/blocked_users_screen.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/friend_schedule_screen.dart';
 import 'screens/more_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
 // 웹은 dart:io 미지원 → stub 사용
@@ -112,12 +115,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
           GoRoute(
+            path: '/notifications',
+            builder: (_, __) => const NotificationsScreen(),
+          ),
+          GoRoute(
             path: '/favorites',
             builder: (_, __) => const FavoritesScreen(),
           ),
           GoRoute(
             path: '/friend-schedule',
             builder: (_, __) => const FriendScheduleScreen(),
+          ),
+          GoRoute(
+            path: '/blocked-users',
+            builder: (_, __) => const BlockedUsersScreen(),
           ),
         ],
       ),
@@ -148,6 +159,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/tournaments',
             builder: (_, __) => const _AdminTournamentListScreen(),
+          ),
+          GoRoute(
+            path: '/admin/reports',
+            builder: (_, __) => const ModerationScreen(),
           ),
           GoRoute(
             path: '/admin/edit/:id',
@@ -206,8 +221,10 @@ class _MainShell extends ConsumerWidget {
     '/speed-gun',
     '/rules',
     '/profile',
+    '/notifications',
     '/favorites',
     '/friend-schedule',
+    '/blocked-users',
   ];
 
   int _indexOf(String location) {
@@ -229,41 +246,59 @@ class _MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
+    final currentPath =
+        GoRouter.of(context).routeInformationProvider.value.uri.path;
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
-      body: ColoredBox(
-        color: cs.surfaceContainerLowest,
-        child: child,
-      ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border: Border(top: BorderSide(color: cs.outlineVariant)),
-          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-            child: NavigationBar(
-              selectedIndex: idx,
-              onDestinationSelected: (i) => context.go(_tabs[i].$1),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              height: 66,
-              destinations: [
-                for (final t in _tabs)
-                  NavigationDestination(
-                    icon: Icon(t.$2),
-                    selectedIcon: Icon(_selectedIcon(t.$2)),
-                    label: t.$3,
-                  ),
-              ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: ColoredBox(
+              color: cs.surfaceContainerLowest,
+              child: child,
             ),
           ),
-        ),
+          if (currentPath != '/notifications')
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 8,
+              right: 12,
+              child: const _NotificationBell(),
+            ),
+        ],
       ),
+      bottomNavigationBar: keyboardVisible
+          ? null
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
+                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                  child: NavigationBar(
+                    selectedIndex: idx,
+                    onDestinationSelected: (i) => context.go(_tabs[i].$1),
+                    labelBehavior:
+                        NavigationDestinationLabelBehavior.alwaysShow,
+                    height: 66,
+                    destinations: [
+                      for (final t in _tabs)
+                        NavigationDestination(
+                          icon: Icon(t.$2),
+                          selectedIcon: Icon(_selectedIcon(t.$2)),
+                          label: t.$3,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -275,6 +310,35 @@ class _MainShell extends ConsumerWidget {
       Icons.grid_view_outlined => Icons.grid_view_rounded,
       _ => icon,
     };
+  }
+}
+
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+
+    return Material(
+      color: cs.surface.withValues(alpha: 0.96),
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: Badge(
+        isLabelVisible: unread > 0,
+        label: Text(unread > 99 ? '99+' : '$unread'),
+        child: IconButton(
+          tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
+          onPressed: () => context.push('/notifications'),
+          icon: Icon(
+            unread > 0
+                ? Icons.notifications_rounded
+                : Icons.notifications_none_rounded,
+          ),
+        ),
+      ),
+    );
   }
 }
 

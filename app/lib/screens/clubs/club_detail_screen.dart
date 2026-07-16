@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,12 +9,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config.dart';
 import '../../models/club_event.dart';
 import '../../models/club_post.dart';
+import '../../models/moderation.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/moderation/ugc_moderation_widgets.dart';
+
+enum ClubDetailResult { membershipChanged, deleted }
 
 /// 클럽 상세 전체화면: 소개 / 멤버 / 일정 탭.
 ///
@@ -35,6 +40,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   Future<List<ClubMember>>? _membersF;
   Future<List<ClubEvent>>? _eventsF;
   int? _monthlyFee;
+  MyClubJoinRequest? _myJoinRequest;
+  bool _joinRequestLoading = false;
+  bool _joinRequestLoadFailed = false;
+  int _joinRequestLoadId = 0;
 
   Club? _club;
   bool _loading = false;
@@ -58,7 +67,46 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   void _initTab() {
     _monthlyFee = club.monthlyFee;
     _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
-    if (club.isMember) _reload();
+    if (club.isMember) {
+      _reload();
+    } else {
+      unawaited(_loadMyJoinRequest());
+    }
+  }
+
+  Future<void> _loadMyJoinRequest() async {
+    if (_club == null || club.isMember || !club.isApproved) {
+      _joinRequestLoadId += 1;
+      if (mounted) {
+        setState(() {
+          _myJoinRequest = null;
+          _joinRequestLoading = false;
+          _joinRequestLoadFailed = false;
+        });
+      }
+      return;
+    }
+
+    final loadId = ++_joinRequestLoadId;
+    setState(() {
+      _joinRequestLoading = true;
+      _joinRequestLoadFailed = false;
+    });
+    try {
+      final request =
+          await ref.read(apiProvider).myPendingClubJoinRequest(club.id);
+      if (!mounted || loadId != _joinRequestLoadId) return;
+      setState(() {
+        _myJoinRequest = request;
+        _joinRequestLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || loadId != _joinRequestLoadId) return;
+      setState(() {
+        _joinRequestLoading = false;
+        _joinRequestLoadFailed = true;
+      });
+    }
   }
 
   Future<void> _fetchClub() async {
@@ -90,6 +138,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       setState(() {
         _club = fetched;
         _monthlyFee = fetched.monthlyFee;
+        if (fetched.isMember) {
+          _joinRequestLoadId += 1;
+          _myJoinRequest = null;
+          _joinRequestLoading = false;
+          _joinRequestLoadFailed = false;
+        }
         if (_tab == null || _tab!.length != nextTabLength) {
           final nextIndex =
               ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
@@ -98,7 +152,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _tab!.index = nextIndex;
         }
       });
-      if (fetched.isMember) _reload();
+      if (fetched.isMember) {
+        _reload();
+      } else {
+        await _loadMyJoinRequest();
+      }
     } catch (_) {
       // 기존 화면 데이터가 있으면 그대로 사용한다.
     }
@@ -117,6 +175,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     });
   }
 
+  void _refreshMembershipData() {
+    ref.invalidate(myClubsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
+    unawaited(_refreshClub());
+  }
+
   Future<void> _toggleFavorite(bool isFavorite) async {
     if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
@@ -124,10 +188,92 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     ref.invalidate(myFavoriteClubsProvider);
   }
 
+  Future<void> _reportClub() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.club,
+      targetId: club.id,
+    );
+  }
+
+  Future<void> _blockClubCreator() async {
+    final creatorId = club.createdBy;
+    if (creatorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: creatorId,
+      displayName: '클럽 개설자',
+    );
+    if (blocked && mounted) Navigator.pop(context);
+  }
+
+  Future<void> _resubmitRejectedClub() async {
+    try {
+      await ref.read(apiProvider).resubmitClubReview(club.id);
+      ref.invalidate(myClubsProvider);
+      await _refreshClub();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('재심사를 요청했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('재심사 요청 실패: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteRejectedClub() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('반려 클럽 삭제'),
+        content: Text('${club.name} 클럽을 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('삭제하기'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(apiProvider).deleteClub(club.id);
+      ref.invalidate(myClubsProvider);
+      if (mounted) Navigator.pop(context, ClubDetailResult.deleted);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('클럽 삭제 실패: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _join() async {
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.clubJoin,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _inFlight = true);
     try {
       await ref.read(apiProvider).joinClub(club.id);
+      await _loadMyJoinRequest();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('가입 신청이 완료되었습니다')),
@@ -135,8 +281,57 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('가입 신청 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '가입 신청을 완료하지 못했습니다.'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _inFlight = false);
+    }
+  }
+
+  Future<void> _cancelJoinRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('가입 신청 취소'),
+        content: Text('${club.name} 가입 신청을 취소할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('유지'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('신청 취소'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _inFlight = true);
+    try {
+      await ref.read(apiProvider).cancelJoinClub(club.id);
+      _joinRequestLoadId += 1;
+      if (!mounted) return;
+      setState(() {
+        _myJoinRequest = null;
+        _joinRequestLoading = false;
+        _joinRequestLoadFailed = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('가입 신청을 취소했습니다.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('가입 신청 취소 실패: $error')),
+        );
       }
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -169,7 +364,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     setState(() => _inFlight = true);
     try {
       await ref.read(apiProvider).leaveClub(club.id);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, ClubDetailResult.membershipChanged);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -224,6 +421,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final isFavorite = favoriteIds.contains(club.id);
     final membersFuture = _membersF ?? Future<List<ClubMember>>.value(const []);
     final eventsFuture = _eventsF ?? Future<List<ClubEvent>>.value(const []);
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateClub =
+        club.createdBy != null && club.createdBy != currentUserId;
 
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
@@ -239,10 +439,29 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   : Icons.bookmark_outline_rounded,
             ),
           ),
+          if (canModerateClub)
+            PopupMenuButton<String>(
+              tooltip: '클럽 더보기',
+              onSelected: (value) {
+                if (value == 'report') unawaited(_reportClub());
+                if (value == 'block') unawaited(_blockClubCreator());
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'report', child: Text('클럽 신고')),
+                PopupMenuItem(value: 'block', child: Text('개설자 차단')),
+              ],
+            ),
         ],
       ),
       body: Column(
         children: [
+          if (club.isRejected && club.statusReason != 'deleted_by_owner')
+            _RejectedClubBanner(
+              reason: club.statusReason,
+              onDelete: _deleteRejectedClub,
+              onEdit: () => _tab?.animateTo(_tab!.length - 1),
+              onResubmit: _resubmitRejectedClub,
+            ),
           _Header(club: club),
           Material(
             color: cs.surface,
@@ -268,14 +487,19 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   club: club,
                   monthlyFee: _monthlyFee,
                   inFlight: _inFlight,
+                  joinRequest: _myJoinRequest,
+                  joinRequestLoading: _joinRequestLoading,
+                  joinRequestLoadFailed: _joinRequestLoadFailed,
                   onJoin: _join,
+                  onCancelJoin: _cancelJoinRequest,
+                  onRetryJoinStatus: _loadMyJoinRequest,
                   onLeave: _leave,
                 ),
                 isMember
                     ? _MembersTab(
                         future: membersFuture,
                         club: club,
-                        onChanged: _reload,
+                        onChanged: _refreshMembershipData,
                       )
                     : _memberOnlyNotice(cs, tt),
                 isMember
@@ -296,8 +520,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                     onMonthlyFeeChanged: (value) {
                       setState(() => _monthlyFee = value);
                     },
-                    onChanged: _reload,
-                    onDeleted: () => Navigator.pop(context, true),
+                    onChanged: _refreshMembershipData,
+                    onDeleted: () => Navigator.pop(
+                      context,
+                      ClubDetailResult.deleted,
+                    ),
                   ),
               ],
             ),
@@ -320,6 +547,81 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
 }
 
 // ─── 헤더 ────────────────────────────────────────────────────────
+class _RejectedClubBanner extends StatelessWidget {
+  const _RejectedClubBanner({
+    required this.reason,
+    required this.onDelete,
+    required this.onEdit,
+    required this.onResubmit,
+  });
+
+  final String? reason;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onResubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        0,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: cs.error.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '클럽 승인이 반려되었습니다',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            reason?.trim().isNotEmpty == true
+                ? reason!
+                : '관리자가 반려 사유를 등록하지 않았습니다.',
+            style: TextStyle(color: cs.onErrorContainer),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              TextButton.icon(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('삭제'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('수정하기'),
+              ),
+              FilledButton.icon(
+                onPressed: onResubmit,
+                icon: const Icon(Icons.replay_rounded),
+                label: const Text('재심사 요청'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   final Club club;
   const _Header({required this.club});
@@ -330,7 +632,6 @@ class _Header extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final isTennis = club.sport == 'tennis';
     final accent = AppSportColors.forSport(club.sport);
-    final description = club.description?.trim();
 
     return Container(
       width: double.infinity,
@@ -400,18 +701,6 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
-            if (description != null && description.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                description,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: tt.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -534,13 +823,23 @@ class _IntroTab extends StatelessWidget {
   final Club club;
   final int? monthlyFee;
   final bool inFlight;
+  final MyClubJoinRequest? joinRequest;
+  final bool joinRequestLoading;
+  final bool joinRequestLoadFailed;
   final VoidCallback onJoin;
+  final VoidCallback onCancelJoin;
+  final VoidCallback onRetryJoinStatus;
   final VoidCallback onLeave;
   const _IntroTab({
     required this.club,
     required this.monthlyFee,
     required this.inFlight,
+    required this.joinRequest,
+    required this.joinRequestLoading,
+    required this.joinRequestLoadFailed,
     required this.onJoin,
+    required this.onCancelJoin,
+    required this.onRetryJoinStatus,
     required this.onLeave,
   });
 
@@ -562,7 +861,7 @@ class _IntroTab extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         AppCard(
-          variant: AppCardVariant.elevated,
+          variant: AppCardVariant.outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -658,7 +957,53 @@ class _IntroTab extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.xl),
-        if (!club.isMember)
+        if (!club.isMember && joinRequestLoading)
+          FilledButton.icon(
+            onPressed: null,
+            icon: const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            label: const Text('가입 신청 상태 확인 중'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          )
+        else if (!club.isMember && joinRequestLoadFailed)
+          OutlinedButton.icon(
+            onPressed: inFlight ? null : onRetryJoinStatus,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('가입 신청 상태 다시 확인'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          )
+        else if (!club.isMember && joinRequest?.isPending == true) ...[
+          FilledButton.tonalIcon(
+            onPressed: inFlight ? null : onCancelJoin,
+            icon: inFlight
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.hourglass_top_rounded),
+            label: const Text('가입 승인 대기 중 · 취소하기'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+          ),
+          if (joinRequest?.createdAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                '신청일 ${_formatJoinRequestDate(joinRequest!.createdAt)}',
+                textAlign: TextAlign.center,
+                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+        ] else if (!club.isMember)
           FilledButton.icon(
             onPressed: inFlight ? null : onJoin,
             icon: inFlight
@@ -1027,6 +1372,67 @@ String _shortUserId(String userId) {
   return userId.length > 8 ? userId.substring(0, 8) : userId;
 }
 
+String _formatJoinRequestDate(DateTime? date) {
+  if (date == null) return '';
+  final local = date.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}/${local.day} $hour:$minute';
+}
+
+String? _stringValue(Object? value) => value is String ? value : null;
+
+Map<String, Object?>? _joinRequestUserFrom(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) {
+    return value.map<String, Object?>(
+      (key, entryValue) => MapEntry(key.toString(), entryValue),
+    );
+  }
+  if (value is List && value.isNotEmpty) {
+    return _joinRequestUserFrom(value.first);
+  }
+  return null;
+}
+
+class _ClubJoinRequest {
+  final String id;
+  final String userId;
+  final String? message;
+  final DateTime? createdAt;
+  final String? displayName;
+  final String? email;
+
+  const _ClubJoinRequest({
+    required this.id,
+    required this.userId,
+    required this.message,
+    required this.createdAt,
+    required this.displayName,
+    required this.email,
+  });
+
+  factory _ClubJoinRequest.fromJson(Map<String, dynamic> json) {
+    final user = _joinRequestUserFrom(json['users']);
+    return _ClubJoinRequest(
+      id: _stringValue(json['id']) ?? '',
+      userId: _stringValue(json['user_id']) ?? '',
+      message: _stringValue(json['message']),
+      createdAt: DateTime.tryParse(_stringValue(json['created_at']) ?? ''),
+      displayName: _stringValue(user?['name']),
+      email: _stringValue(user?['email']),
+    );
+  }
+
+  String get label {
+    final name = displayName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final userEmail = email?.trim();
+    if (userEmail != null && userEmail.isNotEmpty) return userEmail;
+    return '신청자 ${_shortUserId(userId)}';
+  }
+}
+
 // ─── 관리 탭 ──────────────────────────────────────────────────────
 class _ClubManagementTab extends ConsumerWidget {
   final Club club;
@@ -1083,6 +1489,11 @@ class _ClubManagementTab extends ConsumerWidget {
           monthlyFee: monthlyFee,
           onChanged: onMonthlyFeeChanged,
         ),
+        const SizedBox(height: AppSpacing.md),
+        _JoinRequestManageCard(
+          club: club,
+          onChanged: onChanged,
+        ),
         if (club.isOwner) ...[
           const SizedBox(height: AppSpacing.md),
           _MemberRoleManageCard(
@@ -1093,6 +1504,296 @@ class _ClubManagementTab extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           _DangerClubManageCard(club: club, onDeleted: onDeleted),
         ],
+      ],
+    );
+  }
+}
+
+class _JoinRequestManageCard extends ConsumerStatefulWidget {
+  final Club club;
+  final VoidCallback onChanged;
+
+  const _JoinRequestManageCard({
+    required this.club,
+    required this.onChanged,
+  });
+
+  @override
+  ConsumerState<_JoinRequestManageCard> createState() =>
+      _JoinRequestManageCardState();
+}
+
+class _JoinRequestManageCardState
+    extends ConsumerState<_JoinRequestManageCard> {
+  late Future<List<_ClubJoinRequest>> _future;
+  final Set<String> _busyRequestIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JoinRequestManageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.club.id != widget.club.id) {
+      _future = _load();
+    }
+  }
+
+  Future<List<_ClubJoinRequest>> _load() async {
+    final rows = await ref.read(apiProvider).pendingJoinRequests(
+          widget.club.id,
+        );
+    return rows
+        .map(_ClubJoinRequest.fromJson)
+        .where((request) => request.id.isNotEmpty && request.userId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  void _refresh() {
+    setState(() => _future = _load());
+  }
+
+  Future<bool> _confirmReject(_ClubJoinRequest request) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('가입 신청 거절'),
+        content: Text('${request.label}님의 가입 신청을 거절할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('거절'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _review(
+    _ClubJoinRequest request, {
+    required bool approve,
+  }) async {
+    if (!approve && !await _confirmReject(request)) return;
+    if (!mounted) return;
+    setState(() => _busyRequestIds.add(request.id));
+    try {
+      await ref.read(apiProvider).reviewJoinRequest(
+            request.id,
+            approve: approve,
+          );
+      if (!mounted) return;
+      widget.onChanged();
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(approve ? '가입 신청을 승인했습니다' : '가입 신청을 거절했습니다')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(approve ? '승인 실패: $e' : '거절 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyRequestIds.remove(request.id));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.how_to_reg_rounded, color: cs.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  '가입 신청 관리',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: '새로고침',
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '대기 중인 신청자를 확인하고 승인 또는 거절할 수 있습니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FutureBuilder<List<_ClubJoinRequest>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: LinearProgressIndicator(),
+                );
+              }
+              if (snap.hasError) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '가입 신청을 불러오지 못했습니다.',
+                      style: tt.bodyMedium?.copyWith(color: cs.error),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('다시 시도'),
+                    ),
+                  ],
+                );
+              }
+              final requests = snap.data ?? const <_ClubJoinRequest>[];
+              if (requests.isEmpty) {
+                return Text(
+                  '대기 중인 가입 신청이 없습니다.',
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                );
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < requests.length; i++) ...[
+                    if (i > 0) const Divider(height: AppSpacing.xl),
+                    _JoinRequestManageRow(
+                      request: requests[i],
+                      busy: _busyRequestIds.contains(requests[i].id),
+                      onApprove: () => _review(requests[i], approve: true),
+                      onReject: () => _review(requests[i], approve: false),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinRequestManageRow extends StatelessWidget {
+  final _ClubJoinRequest request;
+  final bool busy;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  const _JoinRequestManageRow({
+    required this.request,
+    required this.busy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final label = request.label;
+    final initial = label.characters.isEmpty ? '?' : label.characters.first;
+    final message = request.message?.trim();
+    final requestedAt = _formatJoinRequestDate(request.createdAt);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: cs.primaryContainer,
+              child: Text(
+                initial,
+                style: TextStyle(
+                  color: cs.onPrimaryContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    requestedAt.isEmpty ? '가입 신청 대기 중' : '신청일 $requestedAt',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  if (message != null && message.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: busy ? null : onApprove,
+                icon: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_rounded),
+                label: const Text('승인'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onReject,
+                icon: const Icon(Icons.close_rounded),
+                label: const Text('거절'),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1758,7 +2459,9 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('클럽 삭제'),
-        content: Text('${widget.club.name} 클럽을 삭제할까요? 삭제하면 목록에서 내려갑니다.'),
+        content: Text(
+          '${widget.club.name} 클럽을 정말 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1770,7 +2473,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
               backgroundColor: Theme.of(ctx).colorScheme.error,
               foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
-            child: const Text('삭제'),
+            child: const Text('삭제하기'),
           ),
         ],
       ),
@@ -1781,9 +2484,9 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
     try {
       await ref.read(apiProvider).deleteClub(widget.club.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('클럽을 삭제했습니다')),
-        );
+        ref.invalidate(myClubsProvider);
+        ref.invalidate(myFavoriteClubsProvider);
+        ref.invalidate(clubFavoriteIdsProvider);
         widget.onDeleted();
       }
     } catch (e) {
@@ -1969,11 +2672,35 @@ class _EventCardState extends ConsumerState<_EventCard> {
     );
   }
 
+  Future<void> _reportEvent() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubEvent,
+      targetId: widget.event.id,
+    );
+  }
+
+  Future<void> _blockEventAuthor() async {
+    final authorId = widget.event.createdBy;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: '모임 작성자',
+    );
+    if (blocked) widget.onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final e = widget.event;
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateAuthor =
+        e.createdBy != null && e.createdBy != currentUserId;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -1982,24 +2709,50 @@ class _EventCardState extends ConsumerState<_EventCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _InfoChip(
-                  icon: Icons.event_available_rounded,
-                  label: '${e.goingCount}명 참석',
+                Expanded(
+                  child: Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _InfoChip(
+                        icon: Icons.event_available_rounded,
+                        label: e.capacity == null
+                            ? '${e.goingCount}명 참석'
+                            : '${e.goingCount}/${e.capacity}명',
+                      ),
+                      _InfoChip(
+                        icon: Icons.event_busy_rounded,
+                        label: '${e.notGoingCount}명 불참',
+                      ),
+                      if (e.fee != null)
+                        _InfoChip(
+                          icon: Icons.payments_outlined,
+                          label: '${e.fee}원',
+                        ),
+                      if (e.responseCount > 0)
+                        TextButton.icon(
+                          onPressed: _showResponses,
+                          icon: const Icon(Icons.people_alt_outlined, size: 18),
+                          label: const Text('응답자 보기'),
+                        ),
+                    ],
+                  ),
                 ),
-                _InfoChip(
-                  icon: Icons.event_busy_rounded,
-                  label: '${e.notGoingCount}명 불참',
-                ),
-                if (e.responseCount > 0)
-                  TextButton.icon(
-                    onPressed: _showResponses,
-                    icon: const Icon(Icons.people_alt_outlined, size: 18),
-                    label: const Text('응답자 보기'),
+                if (canModerateAuthor)
+                  PopupMenuButton<String>(
+                    tooltip: '모임 더보기',
+                    onSelected: (value) {
+                      if (value == 'report') unawaited(_reportEvent());
+                      if (value == 'block') unawaited(_blockEventAuthor());
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'report', child: Text('모임 신고')),
+                      PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+                    ],
                   ),
               ],
             ),
@@ -2040,12 +2793,14 @@ class _EventCardState extends ConsumerState<_EventCard> {
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: _busy ? null : () => _respond(true),
+                    onPressed: _busy || (e.isFull && !e.iAmGoing)
+                        ? null
+                        : () => _respond(true),
                     style: FilledButton.styleFrom(
                       backgroundColor: e.iAmGoing ? cs.primary : null,
                       foregroundColor: e.iAmGoing ? cs.onPrimary : null,
                     ),
-                    child: const Text('참석'),
+                    child: Text(e.isFull && !e.iAmGoing ? '마감' : '참석'),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -2250,6 +3005,8 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
   final _title = TextEditingController();
   final _location = TextEditingController();
   final _desc = TextEditingController();
+  final _fee = TextEditingController();
+  final _capacity = TextEditingController();
   DateTime? _startsAt;
   bool _busy = false;
 
@@ -2258,6 +3015,8 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
     _title.dispose();
     _location.dispose();
     _desc.dispose();
+    _fee.dispose();
+    _capacity.dispose();
     super.dispose();
   }
 
@@ -2288,6 +3047,23 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       );
       return;
     }
+    final fee =
+        _fee.text.trim().isEmpty ? null : int.tryParse(_fee.text.trim());
+    final capacity = _capacity.text.trim().isEmpty
+        ? null
+        : int.tryParse(_capacity.text.trim());
+    if ((fee != null && fee < 0) || (capacity != null && capacity < 1)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비용과 제한 인원을 올바르게 입력하세요.')),
+      );
+      return;
+    }
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.community,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(apiProvider).createClubEvent(
@@ -2296,12 +3072,19 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
             description: _desc.text.trim(),
             locationText: _location.text.trim(),
             startsAt: _startsAt!,
+            fee: fee,
+            capacity: capacity,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('생성 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '모임을 만들지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -2344,6 +3127,32 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
             controller: _desc,
             decoration: const InputDecoration(labelText: '설명'),
             maxLines: 2,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _fee,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '참가 비용',
+                    suffixText: '원',
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: TextField(
+                  controller: _capacity,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '제한 인원',
+                    suffixText: '명',
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -2501,7 +3310,10 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
                     itemCount: _posts!.length,
                     itemBuilder: (_, i) => Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _PostRow(post: _posts![i]),
+                      child: _PostRow(
+                        post: _posts![i],
+                        onTap: () => _showPostDetail(_posts![i]),
+                      ),
                     ),
                   ),
                 ),
@@ -2523,6 +3335,450 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
     );
     if (created == true) _load();
   }
+
+  Future<void> _showPostDetail(ClubPost post) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _PostDetailSheet(post: post),
+    );
+    await _load();
+  }
+}
+
+class _PostDetailSheet extends ConsumerStatefulWidget {
+  const _PostDetailSheet({required this.post});
+
+  final ClubPost post;
+
+  @override
+  ConsumerState<_PostDetailSheet> createState() => _PostDetailSheetState();
+}
+
+class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
+  final _commentController = TextEditingController();
+  List<ClubPostComment>? _comments;
+  bool _loadingComments = false;
+  bool _sendingComment = false;
+  String? _commentError;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post.allowsComments) _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    setState(() {
+      _loadingComments = true;
+      _commentError = null;
+    });
+    try {
+      final comments = await ref.read(apiProvider).postComments(widget.post.id);
+      if (!mounted) return;
+      setState(() => _comments = comments);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _commentError = '댓글을 불러오지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _loadingComments = false);
+    }
+  }
+
+  Future<void> _submitComment() async {
+    if (_sendingComment || !widget.post.allowsComments) return;
+    final body = _commentController.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('댓글 내용을 입력해주세요.')),
+      );
+      return;
+    }
+
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.comment,
+    );
+    if (!allowed || !mounted) return;
+
+    setState(() => _sendingComment = true);
+    try {
+      final comment = await ref.read(apiProvider).addComment(
+            postId: widget.post.id,
+            body: body,
+          );
+      if (!mounted) return;
+      setState(() {
+        _comments = [...?_comments, comment];
+        _commentController.clear();
+        _commentError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ugcActionErrorMessage(
+              error,
+              fallback: '댓글을 등록하지 못했습니다. 다시 시도해주세요.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
+  }
+
+  Future<void> _reportPost() async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubPost,
+      targetId: widget.post.id,
+    );
+  }
+
+  Future<void> _blockPostAuthor() async {
+    final authorId = widget.post.authorId;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: widget.post.authorDisplayName,
+    );
+    if (blocked && mounted) Navigator.pop(context);
+  }
+
+  Future<void> _reportComment(ClubPostComment comment) async {
+    await showUgcReportSheet(
+      context: context,
+      ref: ref,
+      targetType: UgcTargetType.clubComment,
+      targetId: comment.id,
+    );
+  }
+
+  Future<void> _blockCommentAuthor(ClubPostComment comment) async {
+    final authorId = comment.authorId;
+    if (authorId == null) return;
+    final blocked = await confirmBlockUser(
+      context: context,
+      ref: ref,
+      userId: authorId,
+      displayName: comment.authorDisplayName,
+    );
+    if (blocked && mounted) await _loadComments();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final post = widget.post;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final canModerateAuthor =
+        post.authorId != null && post.authorId != currentUserId;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.78,
+        minChildSize: 0.48,
+        maxChildSize: 0.94,
+        builder: (context, controller) => Column(
+          children: [
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                children: [
+                  Text(
+                    post.tagLabel,
+                    style: tt.labelLarge?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    post.title,
+                    style: tt.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${post.authorDisplayName} · ${_postDateText(post.createdAt)}',
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ),
+                      if (canModerateAuthor)
+                        PopupMenuButton<String>(
+                          tooltip: '게시글 더보기',
+                          onSelected: (value) {
+                            if (value == 'report') unawaited(_reportPost());
+                            if (value == 'block') {
+                              unawaited(_blockPostAuthor());
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'report',
+                              child: Text('게시글 신고'),
+                            ),
+                            PopupMenuItem(
+                              value: 'block',
+                              child: Text('작성자 차단'),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const Divider(height: AppSpacing.xl),
+                  Text(
+                    post.body,
+                    style: tt.bodyLarge?.copyWith(height: 1.6),
+                  ),
+                  for (final url in post.imageUrls) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    ClipRRect(
+                      borderRadius: AppRadius.card,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 180,
+                          color: cs.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.xl),
+                  if (!post.allowsComments)
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: AppRadius.card,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.campaign_outlined, color: cs.primary),
+                          const SizedBox(width: AppSpacing.sm),
+                          const Expanded(
+                            child: Text('공지사항은 댓글을 받지 않습니다.'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      '댓글 ${_comments?.length ?? 0}',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (_loadingComments)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_commentError != null)
+                      _CommentLoadError(
+                        message: _commentError!,
+                        onRetry: _loadComments,
+                      )
+                    else if (_comments?.isEmpty ?? true)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.lg,
+                        ),
+                        child: Text(
+                          '첫 댓글을 남겨보세요.',
+                          textAlign: TextAlign.center,
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      for (final comment in _comments!)
+                        _CommentRow(
+                          comment: comment,
+                          canModerate: comment.authorId != null &&
+                              comment.authorId != currentUserId,
+                          onReport: () => _reportComment(comment),
+                          onBlock: () => _blockCommentAuthor(comment),
+                        ),
+                  ],
+                ],
+              ),
+            ),
+            if (post.allowsComments)
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(top: BorderSide(color: cs.outlineVariant)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        enabled: !_sendingComment,
+                        minLines: 1,
+                        maxLines: 3,
+                        maxLength: 1000,
+                        decoration: const InputDecoration(
+                          hintText: '댓글을 입력하세요',
+                          counterText: '',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton.filled(
+                      onPressed: _sendingComment ? null : _submitComment,
+                      tooltip: '댓글 등록',
+                      icon: _sendingComment
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_rounded),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentRow extends StatelessWidget {
+  const _CommentRow({
+    required this.comment,
+    required this.canModerate,
+    required this.onReport,
+    required this.onBlock,
+  });
+
+  final ClubPostComment comment;
+  final bool canModerate;
+  final VoidCallback onReport;
+  final VoidCallback onBlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: cs.primaryContainer,
+            child: Icon(
+              Icons.person_rounded,
+              size: 18,
+              color: cs.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.authorDisplayName,
+                  style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  _postDateText(comment.createdAt),
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                Text(comment.body, style: tt.bodyMedium),
+              ],
+            ),
+          ),
+          if (canModerate)
+            PopupMenuButton<String>(
+              tooltip: '댓글 더보기',
+              onSelected: (value) {
+                if (value == 'report') onReport();
+                if (value == 'block') onBlock();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'report', child: Text('댓글 신고')),
+                PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommentLoadError extends StatelessWidget {
+  const _CommentLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: cs.error),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message)),
+          TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
+      ),
+    );
+  }
+}
+
+String _postDateText(DateTime date) {
+  final local = date.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}/${local.day} $hour:$minute';
 }
 
 class _PostWriteEntry extends StatelessWidget {
@@ -2632,6 +3888,12 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
       );
       return;
     }
+    final allowed = await ensureUgcPermission(
+      context,
+      ref,
+      UgcActionKind.community,
+    );
+    if (!allowed || !mounted) return;
     setState(() => _busy = true);
     try {
       final imageUrls = <String>[];
@@ -2655,8 +3917,13 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('게시글 작성 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ugcActionErrorMessage(e, fallback: '게시글을 등록하지 못했습니다.'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -3033,7 +4300,8 @@ class _TagChip extends StatelessWidget {
 
 class _PostRow extends StatelessWidget {
   final ClubPost post;
-  const _PostRow({required this.post});
+  final VoidCallback onTap;
+  const _PostRow({required this.post, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -3051,80 +4319,93 @@ class _PostRow extends StatelessWidget {
             ? cs.primary.withValues(alpha: 0.38)
             : cs.outlineVariant;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: AppRadius.card,
-        border: Border.all(color: borderColor),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppShadows.card
-            : null,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isNotice) ...[
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: cs.errorContainer,
-                borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.card,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: AppRadius.card,
+          border: Border.all(color: borderColor),
+          boxShadow: Theme.of(context).brightness == Brightness.light
+              ? AppShadows.card
+              : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isNotice) ...[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.campaign_rounded,
+                    size: 20, color: cs.onErrorContainer),
               ),
-              child: Icon(Icons.campaign_rounded,
-                  size: 20, color: cs.onErrorContainer),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (post.isPinned)
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (post.isPinned)
+                        _PostMetaChip(
+                          icon: Icons.push_pin_rounded,
+                          label: '상단 고정',
+                          color: cs.primary,
+                          background: cs.primaryContainer,
+                        ),
                       _PostMetaChip(
-                        icon: Icons.push_pin_rounded,
-                        label: '상단 고정',
-                        color: cs.primary,
-                        background: cs.primaryContainer,
+                        icon: isNotice
+                            ? Icons.campaign_rounded
+                            : Icons.article_outlined,
+                        label: isNotice ? '중요 공지' : post.tagLabel,
+                        color: isNotice ? cs.error : cs.onSurfaceVariant,
+                        background: isNotice
+                            ? cs.errorContainer
+                            : cs.surfaceContainerHighest,
                       ),
-                    _PostMetaChip(
-                      icon: isNotice
-                          ? Icons.campaign_rounded
-                          : Icons.article_outlined,
-                      label: isNotice ? '중요 공지' : post.tagLabel,
-                      color: isNotice ? cs.error : cs.onSurfaceVariant,
-                      background: isNotice
-                          ? cs.errorContainer
-                          : cs.surfaceContainerHighest,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  post.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: isNotice ? cs.onErrorContainer : cs.onSurface,
+                    ],
                   ),
-                ),
-                if (post.imageUrls.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _PostImagePreview(urls: post.imageUrls),
-                ],
-                if (isNotice || post.tag == 'photo') ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
-                    post.body,
+                    post.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    style: tt.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: isNotice ? cs.onErrorContainer : cs.onSurface,
+                    ),
+                  ),
+                  if (post.imageUrls.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _PostImagePreview(urls: post.imageUrls),
+                  ],
+                  if (isNotice || post.tag == 'photo') ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      post.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: isNotice
+                            ? cs.onErrorContainer.withValues(alpha: 0.76)
+                            : cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${post.authorDisplayName} · ${_timeAgo(post.createdAt)}${post.allowsComments && post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
                     style: tt.bodySmall?.copyWith(
                       color: isNotice
                           ? cs.onErrorContainer.withValues(alpha: 0.76)
@@ -3132,19 +4413,10 @@ class _PostRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${post.authorName ?? '익명'} · ${_timeAgo(post.createdAt)}${post.commentCount > 0 ? ' · 댓글 ${post.commentCount}' : ''}',
-                  style: tt.bodySmall?.copyWith(
-                    color: isNotice
-                        ? cs.onErrorContainer.withValues(alpha: 0.76)
-                        : cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

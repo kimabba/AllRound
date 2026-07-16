@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
 import '../models/club_post.dart';
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
 import 'api_base.dart';
@@ -163,6 +164,77 @@ mixin ClubApi on ApiBase {
     return Club.fromJson(row);
   }
 
+  // ── 팀원 모집 ──────────────────────────────────────────────
+
+  Future<List<RecruitingPostPreview>> teamRecruitingPosts() async {
+    final Object raw = await supabase
+        .from('club_recruiting_posts')
+        .select(
+          '*, clubs!inner(id, name, sport, region, status)',
+        )
+        .eq('clubs.status', 'approved')
+        .order('created_at', ascending: false)
+        .limit(50);
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (row) => RecruitingPostPreview.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<RecruitingPostPreview> createTeamRecruitingPost({
+    required String clubId,
+    required String title,
+    required String place,
+    required String schedule,
+    required String skillLevel,
+    required String gender,
+    required String age,
+    required int fieldCount,
+    required int keeperCount,
+    required int totalCount,
+    String? position,
+    String? intro,
+    String cost = '협의',
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+
+    final Object raw = await supabase
+        .from('club_recruiting_posts')
+        .insert({
+          'club_id': clubId,
+          'created_by': userId,
+          'title': title.trim(),
+          'place': place.trim(),
+          'schedule_text': schedule.trim(),
+          'skill_level': skillLevel,
+          'gender_text': gender,
+          'age_text': age,
+          'position_text': position,
+          'field_count': fieldCount,
+          'keeper_count': keeperCount,
+          'total_count': totalCount,
+          'cost_text': cost.trim().isEmpty ? '협의' : cost.trim(),
+          if (intro?.trim().isNotEmpty == true) 'intro': intro!.trim(),
+        })
+        .select('*, clubs!inner(id, name, sport, region, status)')
+        .single();
+    if (raw is! Map) throw const FormatException('Invalid recruiting post');
+    return RecruitingPostPreview.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<void> closeTeamRecruitingPost(String postId) async {
+    await supabase.from('club_recruiting_posts').update({
+      'status': 'closed',
+      'closed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', postId);
+  }
+
   // ── 가입 / 탈퇴 ──────────────────────────────────────────────
 
   Future<void> joinClub(String clubId, {String? message}) async {
@@ -185,6 +257,21 @@ mixin ClubApi on ApiBase {
       body: jsonEncode({'club_id': clubId, 'action': 'cancel'}),
     );
     check(res);
+  }
+
+  Future<MyClubJoinRequest?> myPendingClubJoinRequest(String clubId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final Object? raw = await supabase
+        .from('club_join_requests')
+        .select('id, status, created_at')
+        .eq('club_id', clubId)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+    if (raw is! Map) return null;
+    return MyClubJoinRequest.fromJson(Map<String, dynamic>.from(raw));
   }
 
   Future<void> leaveClub(String clubId) async {
@@ -253,6 +340,18 @@ mixin ClubApi on ApiBase {
         'action': 'update_intro',
         'description': description,
         'intro_image_urls': introImageUrls,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> resubmitClubReview(String clubId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'resubmit_review',
       }),
     );
     check(res);
@@ -337,6 +436,8 @@ mixin ClubApi on ApiBase {
     String? description,
     String? locationText,
     required DateTime startsAt,
+    int? fee,
+    int? capacity,
   }) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
@@ -349,18 +450,28 @@ mixin ClubApi on ApiBase {
       if (locationText != null && locationText.isNotEmpty)
         'location_text': locationText,
       'starts_at': startsAt.toUtc().toIso8601String(),
+      if (fee != null) 'fee': fee,
+      if (capacity != null) 'capacity': capacity,
     });
   }
 
   Future<void> respondEvent(String eventId, {required bool going}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
-    await supabase.from('club_event_attendees').upsert({
-      'event_id': eventId,
-      'user_id': uid,
-      'status': going ? 'going' : 'not_going',
-      'responded_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'event_id,user_id');
+    try {
+      await supabase.rpc('respond_club_event', params: {
+        'p_event_id': eventId,
+        'p_status': going ? 'going' : 'not_going',
+      });
+    } catch (error) {
+      if (!error.toString().contains('respond_club_event')) rethrow;
+      await supabase.from('club_event_attendees').upsert({
+        'event_id': eventId,
+        'user_id': uid,
+        'status': going ? 'going' : 'not_going',
+        'responded_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'event_id,user_id');
+    }
   }
 
   // ── 즐겨찾기 ─────────────────────────────────────────────────
@@ -474,13 +585,14 @@ mixin ClubApi on ApiBase {
     required String postId,
     required String body,
   }) async {
-    final userId = supabase.auth.currentUser!.id;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
     final row = await supabase
         .from('club_post_comments')
         .insert({
           'post_id': postId,
           'author_id': userId,
-          'body': body,
+          'body': body.trim(),
         })
         .select('*, users!author_id(name)')
         .single();

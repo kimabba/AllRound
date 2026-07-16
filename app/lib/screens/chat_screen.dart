@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_ui.dart';
+import '../models/moderation.dart';
 import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/moderation/ugc_moderation_widgets.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
@@ -107,6 +109,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       assistantIdx,
     );
+  }
+
+  Future<void> _reportAssistantMessage(ChatMessage message) async {
+    final conversationId = ref.read(chatProvider).conversationId;
+    if (conversationId == null || message.content.trim().isEmpty) return;
+
+    try {
+      final messageId = await ref.read(apiProvider).findAssistantMessageId(
+            conversationId: conversationId,
+            content: message.content,
+          );
+      if (!mounted) return;
+      if (messageId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('아직 저장 중인 답변입니다. 잠시 후 다시 시도해주세요.')),
+        );
+        return;
+      }
+      await showUgcReportSheet(
+        context: context,
+        ref: ref,
+        targetType: UgcTargetType.aiMessage,
+        targetId: messageId,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')),
+        );
+      }
+    }
   }
 
   Future<void> _consumeChatStream(
@@ -229,6 +262,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       msg: messages[i],
                       onCardAction: _sendWithEntity,
                       onRefine: _sendWithRefine,
+                      onReport: !busy &&
+                              messages[i].role == 'assistant' &&
+                              messages[i].content.trim().isNotEmpty
+                          ? () => _reportAssistantMessage(messages[i])
+                          : null,
                     ),
                   ),
           ),
@@ -439,11 +477,13 @@ class _MessageBubble extends StatelessWidget {
     required this.msg,
     required this.onCardAction,
     required this.onRefine,
+    required this.onReport,
   });
   final ChatMessage msg;
   final void Function(String message, String entityType, String entityId)
       onCardAction;
   final void Function(String label, Map<String, dynamic> refine) onRefine;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -561,6 +601,17 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
                   ],
+                if (onReport != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onReport,
+                      icon: const Icon(Icons.flag_outlined, size: 16),
+                      label: const Text('AI 답변 신고'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

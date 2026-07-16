@@ -69,16 +69,39 @@ mixin AdminApi on ApiBase {
     required bool approve,
     String? reason,
   }) async {
-    final res = await httpPost(
-      uri('clubs-approve'),
-      headers: await authHeaders(),
-      body: jsonEncode({
-        'club_id': clubId,
-        'action': approve ? 'approve' : 'reject',
-        if (reason != null && reason.isNotEmpty) 'reason': reason,
-      }),
+    await reviewClubs(
+      [clubId],
+      approve: approve,
+      reason: reason,
     );
-    check(res);
+  }
+
+  Future<int> reviewClubs(
+    List<String> clubIds, {
+    required bool approve,
+    String? reason,
+  }) async {
+    if (clubIds.isEmpty) return 0;
+    final trimmedReason = reason?.trim();
+    if (!approve && (trimmedReason == null || trimmedReason.isEmpty)) {
+      throw ArgumentError('rejection reason required');
+    }
+    var processed = 0;
+    for (final clubId in clubIds) {
+      final res = await httpPost(
+        uri('clubs-approve'),
+        headers: await authHeaders(),
+        body: jsonEncode({
+          'club_id': clubId,
+          'action': approve ? 'approve' : 'reject',
+          if (trimmedReason != null && trimmedReason.isNotEmpty)
+            'reason': trimmedReason,
+        }),
+      );
+      check(res);
+      processed++;
+    }
+    return processed;
   }
 
   // ── 크롤 소스 ─────────────────────────────────────────────────
@@ -171,11 +194,8 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row = await supabase
-          .from('crawl_sources')
-          .select()
-          .eq('id', id)
-          .single();
+      final row =
+          await supabase.from('crawl_sources').select().eq('id', id).single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase

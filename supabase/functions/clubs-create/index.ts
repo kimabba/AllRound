@@ -4,6 +4,17 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { ugcAccessError } from '../_shared/ugc.ts';
+import {
+  parseGenderPreference,
+  parseMeetingDays,
+  parseMonthlyFee,
+  parseWebsite,
+} from './validation.ts';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function optionalText(value: unknown): string | null {
   return typeof value === 'string' ? value.trim() || null : null;
@@ -39,21 +50,48 @@ Deno.serve(async (req) => {
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
 
-  let body: Record<string, unknown>;
+  let rawBody: unknown;
   try {
-    body = await req.json();
+    rawBody = await req.json();
   } catch {
     return errorResponse('Invalid JSON', 400);
   }
+  if (!isRecord(rawBody)) return errorResponse('Invalid JSON object', 400);
+  const body = rawBody;
 
-  const sport = body.sport as string;
+  const sport = body.sport;
   if (sport !== 'tennis' && sport !== 'futsal') {
     return errorResponse('sport must be tennis or futsal', 400);
   }
-  const name = (body.name as string | undefined)?.trim();
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) return errorResponse('name is required', 400);
 
+  const parsedMeetingDays = parseMeetingDays(body.meeting_days);
+  if (!parsedMeetingDays.ok) {
+    return errorResponse(parsedMeetingDays.message, 400);
+  }
+  const parsedMonthlyFee = parseMonthlyFee(body.monthly_fee);
+  if (!parsedMonthlyFee.ok) {
+    return errorResponse(parsedMonthlyFee.message, 400);
+  }
+  const parsedGenderPreference = parseGenderPreference(
+    body.gender_preference,
+  );
+  if (!parsedGenderPreference.ok) {
+    return errorResponse(parsedGenderPreference.message, 400);
+  }
+  const parsedWebsite = parseWebsite(body.website);
+  if (!parsedWebsite.ok) {
+    return errorResponse(parsedWebsite.message, 400);
+  }
+
   const supa = serviceClient();
+  const accessError = await ugcAccessError(
+    supa,
+    auth.user.id,
+    'community_create',
+  );
+  if (accessError) return errorResponse(accessError, 403);
   const logoUrl = optionalUrl(body.logo_url);
   const introImageUrls = optionalUrlArray(body.intro_image_urls, 5);
   const insertPayload: Record<string, unknown> = {
@@ -64,13 +102,11 @@ Deno.serve(async (req) => {
     logo_url: logoUrl,
     intro_image_urls: introImageUrls,
     contact: optionalText(body.contact),
-    website: optionalUrl(body.website) ?? optionalText(body.website),
+    website: parsedWebsite.value,
     description: optionalText(body.description),
-    meeting_days: Array.isArray(body.meeting_days) ? body.meeting_days : [],
-    monthly_fee: typeof body.monthly_fee === 'number' ? body.monthly_fee : null,
-    gender_preference: typeof body.gender_preference === 'string'
-      ? body.gender_preference.trim() || null
-      : null,
+    meeting_days: parsedMeetingDays.value,
+    monthly_fee: parsedMonthlyFee.value,
+    gender_preference: parsedGenderPreference.value,
     status: 'pending',
     created_by: auth.user.id,
   };

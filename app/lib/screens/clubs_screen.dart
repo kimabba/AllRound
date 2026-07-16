@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../config.dart';
+import 'package:go_router/go_router.dart';
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/club_sort.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/allround_logo.dart';
 import '../widgets/app_empty_state.dart';
@@ -13,6 +15,7 @@ import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
 import 'clubs/club_create_screen.dart';
+import 'clubs/club_detail_screen.dart';
 
 class ClubsScreen extends ConsumerStatefulWidget {
   const ClubsScreen({super.key});
@@ -38,7 +41,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
   bool _showOpenRecruitingOnly = false;
-  final Set<String> _closedRecruitingPostIds = {};
+  bool _showAllClubs = false;
+  ClubSortOrder _clubSortOrder = ClubSortOrder.recommended;
+  List<RecruitingPostPreview> _recruitingPosts = const [];
+  bool _loadingRecruiting = false;
 
   @override
   void initState() {
@@ -47,16 +53,25 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMyClubs();
       _load();
+      _loadRecruitingPosts();
+      _restoreClubSortOrder();
     });
+  }
+
+  Future<void> _restoreClubSortOrder() async {
+    final order = await loadClubSortOrder();
+    if (mounted) setState(() => _clubSortOrder = order);
+  }
+
+  Future<void> _selectClubSortOrder(ClubSortOrder? order) async {
+    if (order == null || order == _clubSortOrder) return;
+    setState(() => _clubSortOrder = order);
+    await saveClubSortOrder(order);
   }
 
   Future<void> _loadMyClubs() async {
     setState(() => _loadingMy = true);
     try {
-      if (AppConfig.userDesignPreview) {
-        if (mounted) setState(() => _myClubs = _previewManagedClubs);
-        return;
-      }
       final list = await ref.read(apiProvider).myClubs();
       if (mounted) setState(() => _myClubs = list);
     } catch (e) {
@@ -73,10 +88,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _searchError = null;
     });
     try {
-      if (AppConfig.userDesignPreview) {
-        if (mounted) setState(() => _clubs = _previewSearchClubs);
-        return;
-      }
       final api = ref.read(apiProvider);
       final sports = _clubInterests.isEmpty
           ? const <String>['tennis', 'futsal']
@@ -103,12 +114,36 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     }
   }
 
+  Future<void> _loadRecruitingPosts() async {
+    setState(() => _loadingRecruiting = true);
+    try {
+      final posts = await ref.read(apiProvider).teamRecruitingPosts();
+      if (mounted) setState(() => _recruitingPosts = posts);
+    } catch (error) {
+      debugPrint('teamRecruitingPosts error: $error');
+      if (mounted) setState(() => _recruitingPosts = const []);
+    } finally {
+      if (mounted) setState(() => _loadingRecruiting = false);
+    }
+  }
+
+  Future<void> _refreshClubLists() async {
+    ref.invalidate(myClubsProvider);
+    ref.invalidate(myFavoriteClubsProvider);
+    await Future.wait([
+      _loadMyClubs(),
+      _load(),
+      _loadRecruitingPosts(),
+    ]);
+  }
+
   Future<void> _openCreate() async {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const ClubCreateScreen()),
     );
     if (result == true) {
+      ref.invalidate(myClubsProvider);
       _loadMyClubs();
       _load();
     }
@@ -191,12 +226,19 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openTeamRecruitingSheet(List<Club> managedClubs) async {
-    await showModalBottomSheet<void>(
+    final created = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => TeamRecruitingDraftSheet(managedClubs: managedClubs),
     );
+    if (created == true) {
+      await _loadRecruitingPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('팀원 모집글을 올렸습니다.')),
+      );
+    }
   }
 
   Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
@@ -215,7 +257,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
-    if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
     ref.invalidate(clubFavoriteIdsProvider);
     ref.invalidate(myFavoriteClubsProvider);
@@ -225,11 +266,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final candidates = [
       ...?_clubs,
       ...?_myClubs,
-      ..._previewSearchClubs,
-      ..._previewManagedClubs,
     ];
     for (final club in candidates) {
-      if (club.name == post.clubName && club.sport == post.sport) {
+      if (club.id == post.clubId) {
         return club;
       }
     }
@@ -237,23 +276,79 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openRecruitingDetail(RecruitingPostPreview post) async {
+    Club? club = _clubForRecruitingPost(post);
+    if (club == null) {
+      try {
+        club = await ref.read(apiProvider).getClub(post.clubId);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('클럽 정보를 불러오지 못했습니다.')),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
         builder: (_) => TeamRecruitingDetailScreen(
           post: post,
-          club: _clubForRecruitingPost(post),
+          club: club,
         ),
       ),
     );
   }
 
+  Future<void> _closeRecruitingPost(RecruitingPostPreview post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('모집을 마감할까요?'),
+        content: Text('“${post.title}” 글은 마감 후 다시 열 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('마감하기'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiProvider).closeTeamRecruitingPost(post.id);
+      await _loadRecruitingPosts();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('팀원 모집을 마감했습니다.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모집을 마감하지 못했습니다.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(activeSportProvider, (previous, next) {
+      if (next == null || next == previous) return;
+      setState(() {
+        _clubInterests = {next};
+        _showAllClubs = false;
+      });
+      _load();
+    });
     final cs = Theme.of(context).colorScheme;
     final favoriteClubIds =
         ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
-    final effectiveClubs = _clubs ?? _previewSearchClubs;
+    final effectiveClubs = _clubs ?? const <Club>[];
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))
         .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
@@ -262,12 +357,16 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
     final newClubs = nearbyNewClubs.take(4).toList();
-    final recommendedClubs = _recommendedPreviewClubs(visibleClubs);
-    final displayedRecommendationClubs =
-        hasClubNameQuery ? recommendedClubs : recommendedClubs.take(3).toList();
-    final joinedClubs = (_myClubs ?? _previewManagedClubs)
-        .where((club) => club.isMember)
-        .toList();
+    final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
+        ? _recommendedClubs(visibleClubs)
+        : sortClubs(visibleClubs, _clubSortOrder);
+    final displayedRecommendationClubs = hasClubNameQuery || _showAllClubs
+        ? recommendedClubs
+        : recommendedClubs.take(3).toList();
+    final myMembershipClubs =
+        (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
+    final joinedClubs =
+        myMembershipClubs.where((club) => club.isApproved).toList();
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
@@ -282,140 +381,192 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('클럽 만들기'),
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              112,
-            ),
-            sliver: SliverList.list(
-              children: [
-                _buildClubFilterControls(cs, hasClubNameQuery),
-                const SizedBox(height: AppSpacing.lg),
-                SimpleSectionHeader(
-                  title: hasClubNameQuery ? '검색결과' : '맞춤추천',
-                  subtitle: hasClubNameQuery
-                      ? '"${_clubNameQuery.trim()}"'
-                      : (_clubFilters.hasActive
-                          ? [
-                              _selectedSportLabel(_clubInterests),
-                              ..._clubFilters.labels,
-                            ].join(' · ')
-                          : '${_selectedSportLabel(_clubInterests)} 기준'),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                if (_loading || _loadingMy) const LinearProgressIndicator(),
-                if (_searchError != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    _searchError!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: cs.error),
-                  ),
-                ],
-                if (displayedRecommendationClubs.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                    child: AppEmptyState(
-                      icon: Icons.search_off_rounded,
-                      title: '조건에 맞는 클럽이 없습니다',
-                      description: '검색어를 줄이거나 맞춤 조건을 바꿔보세요.',
-                    ),
-                  )
-                else
-                  for (final club in displayedRecommendationClubs)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: SimpleClubTile(
-                        club: club,
-                        isFavorite: favoriteClubIds.contains(club.id),
-                        onFavoriteToggle: _toggleClubFavorite,
+      body: RefreshIndicator(
+        onRefresh: _refreshClubLists,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                112,
+              ),
+              sliver: SliverList.list(
+                children: [
+                  _buildClubFilterControls(cs, hasClubNameQuery),
+                  const SizedBox(height: AppSpacing.lg),
+                  SimpleSectionHeader(
+                    title: hasClubNameQuery ? '검색결과' : '맞춤추천',
+                    subtitle: hasClubNameQuery
+                        ? '"${_clubNameQuery.trim()}"'
+                        : (_clubFilters.hasActive
+                            ? [
+                                _selectedSportLabel(_clubInterests),
+                                ..._clubFilters.labels,
+                              ].join(' · ')
+                            : '${_selectedSportLabel(_clubInterests)} 기준'),
+                    trailing: DropdownButtonHideUnderline(
+                      child: DropdownButton<ClubSortOrder>(
+                        value: _clubSortOrder,
+                        borderRadius: BorderRadius.circular(16),
+                        icon: const Icon(Icons.sort_rounded),
+                        onChanged: _selectClubSortOrder,
+                        items: [
+                          for (final order in ClubSortOrder.values)
+                            DropdownMenuItem(
+                              value: order,
+                              child: Text(order.label),
+                            ),
+                        ],
                       ),
                     ),
-                // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
-                if (_nearbyNewClubsEnabled) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  SimplePanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SimpleSectionHeader(
-                          title: '내 주변에 새로 생겼어요',
-                          subtitle: '반경 5km · 최근 7일',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (_loading || _loadingMy) const LinearProgressIndicator(),
+                  if (_searchError != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      _searchError!,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: cs.error),
+                    ),
+                  ],
+                  if (displayedRecommendationClubs.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                      child: AppEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: '조건에 맞는 클럽이 없습니다',
+                        description: '검색어를 줄이거나 맞춤 조건을 바꿔보세요.',
+                      ),
+                    )
+                  else
+                    for (final club in displayedRecommendationClubs)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: SimpleClubTile(
+                          club: club,
+                          isFavorite: favoriteClubIds.contains(club.id),
+                          onFavoriteToggle: _toggleClubFavorite,
+                          onOpen: () => _openClub(club),
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        if (_loading || _loadingMy)
-                          const LinearProgressIndicator(),
-                        if (_searchError != null) ...[
+                      ),
+                  if (!hasClubNameQuery) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _showAllClubs = !_showAllClubs;
+                            if (_showAllClubs) {
+                              _clubInterests = {'tennis', 'futsal'};
+                            }
+                          });
+                          if (_showAllClubs) _load();
+                        },
+                        icon: Icon(
+                          _showAllClubs
+                              ? Icons.expand_less_rounded
+                              : Icons.groups_2_outlined,
+                        ),
+                        label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
+                      ),
+                    ),
+                  ],
+                  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
+                  if (_nearbyNewClubsEnabled) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    SimplePanel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SimpleSectionHeader(
+                            title: '내 주변에 새로 생겼어요',
+                            subtitle: '반경 5km · 최근 7일',
+                          ),
                           const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            _searchError!,
-                            style: TextStyle(color: cs.error),
+                          if (_loading || _loadingMy)
+                            const LinearProgressIndicator(),
+                          if (_searchError != null) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              _searchError!,
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.sm),
+                          SimpleClubGrid(
+                            clubs: newClubs,
+                            favoriteIds: favoriteClubIds,
+                            onFavoriteToggle: _toggleClubFavorite,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _openNearbyNewClubsSheet(nearbyNewClubs),
+                              icon: const Icon(Icons.near_me_rounded),
+                              label: const Text('내 주변 새 클럽 더보기'),
+                            ),
                           ),
                         ],
-                        const SizedBox(height: AppSpacing.sm),
-                        SimpleClubGrid(
-                          clubs: newClubs,
-                          favoriteIds: favoriteClubIds,
-                          onFavoriteToggle: _toggleClubFavorite,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                _openNearbyNewClubsSheet(nearbyNewClubs),
-                            icon: const Icon(Icons.near_me_rounded),
-                            label: const Text('내 주변 새 클럽 더보기'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                const SizedBox(height: AppSpacing.xl),
-                if (managedClubs.isNotEmpty) ...[
-                  SimpleActionCard(
-                    icon: Icons.person_add_alt_1_rounded,
-                    title: '팀원모집',
-                    subtitle: '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
-                    color: cs.secondaryContainer,
-                    onTap: () => _openTeamRecruitingSheet(managedClubs),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                  const SizedBox(height: AppSpacing.xl),
+                  if (managedClubs.isNotEmpty) ...[
+                    SimpleActionCard(
+                      icon: Icons.person_add_alt_1_rounded,
+                      title: '팀원모집',
+                      subtitle:
+                          '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
+                      color: cs.secondaryContainer,
+                      onTap: () => _openTeamRecruitingSheet(managedClubs),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+                  TeamRecruitingBoard(
+                    posts: _visibleRecruitingPosts(),
+                    showOpenOnly: _showOpenRecruitingOnly,
+                    isLoading: _loadingRecruiting,
+                    managedClubIds: managedClubs.map((club) => club.id).toSet(),
+                    onShowOpenOnlyChanged: (value) {
+                      setState(() => _showOpenRecruitingOnly = value);
+                    },
+                    onClosePost: _closeRecruitingPost,
+                    onOpenPost: _openRecruitingDetail,
                   ),
                   const SizedBox(height: AppSpacing.xl),
+                  const SimpleSectionHeader(title: '가입한 클럽'),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (joinedClubs.isEmpty)
+                    SimpleClubTile(
+                      club: null,
+                      onFavoriteToggle: _toggleClubFavorite,
+                    )
+                  else
+                    for (final club in joinedClubs)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: SimpleClubTile(
+                          club: club,
+                          isFavorite: favoriteClubIds.contains(club.id),
+                          onFavoriteToggle: _toggleClubFavorite,
+                          onOpen: () => _openClub(club),
+                        ),
+                      ),
                 ],
-                TeamRecruitingBoard(
-                  posts: _visibleRecruitingPosts(_clubInterests),
-                  showOpenOnly: _showOpenRecruitingOnly,
-                  canManage: managedClubs.isNotEmpty,
-                  onShowOpenOnlyChanged: (value) {
-                    setState(() => _showOpenRecruitingOnly = value);
-                  },
-                  onClosePost: (post) {
-                    setState(() => _closedRecruitingPostIds.add(post.id));
-                  },
-                  onOpenPost: _openRecruitingDetail,
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                const SimpleSectionHeader(title: '가입한 클럽'),
-                const SizedBox(height: AppSpacing.sm),
-                SimpleClubTile(
-                  club: joinedClubs.isEmpty ? null : joinedClubs.first,
-                  isFavorite: joinedClubs.isEmpty
-                      ? false
-                      : favoriteClubIds.contains(joinedClubs.first.id),
-                  onFavoriteToggle: _toggleClubFavorite,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -440,6 +591,33 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return true;
   }
 
+  Future<void> _openClub(Club club) async {
+    final result = await context.push<ClubDetailResult>(
+      '/clubs/${club.id}',
+      extra: club,
+    );
+    if (!mounted) return;
+
+    if (result == ClubDetailResult.deleted) {
+      setState(() {
+        _clubs?.removeWhere((item) => item.id == club.id);
+        _myClubs?.removeWhere((item) => item.id == club.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('클럽이 삭제되었습니다.')),
+      );
+    } else if (result == ClubDetailResult.membershipChanged) {
+      setState(() {
+        _myClubs?.removeWhere((item) => item.id == club.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('클럽에서 탈퇴했습니다.')),
+      );
+    }
+
+    await _refreshClubLists();
+  }
+
   String _selectedSportLabel(Set<String> interests) {
     if (interests.length == 1 && interests.isNotEmpty) {
       return sportLabelFromString(interests.first);
@@ -461,7 +639,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       });
   }
 
-  List<Club> _recommendedPreviewClubs(List<Club> source) {
+  List<Club> _recommendedClubs(List<Club> source) {
     final scored = [
       for (final club in source)
         (
@@ -480,187 +658,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return scored.map((item) => item.club).toList();
   }
 
-  List<RecruitingPostPreview> _visibleRecruitingPosts(Set<String> interests) {
-    final now = DateTime.now();
-    final posts = [
-      for (final post in _previewRecruitingPosts)
-        if (_closedRecruitingPostIds.contains(post.id) && !post.isClosed)
-          post.copyWith(isClosed: true, closedAt: now)
-        else
-          post,
-    ].where((post) {
-      if (!interests.contains(post.sport)) return false;
-      if (post.isClosed && post.closedAt != null) {
-        // Keep just-closed recruiting posts visible briefly so managers can
-        // confirm the state change, then remove them from the public list.
-        return now.difference(post.closedAt!).inHours < 24;
-      }
-      return true;
-    }).toList();
-
-    if (_showOpenRecruitingOnly) {
-      return posts.where((post) => !post.isClosed).toList();
-    }
-    return posts;
+  List<RecruitingPostPreview> _visibleRecruitingPosts() {
+    return _recruitingPosts
+        .where((post) => _clubInterests.contains(post.sport))
+        .where((post) => !_showOpenRecruitingOnly || !post.isClosed)
+        .toList(growable: false);
   }
 }
-
-final _previewManagedClubs = [
-  Club(
-    id: 'preview-managed-futsal',
-    sport: 'futsal',
-    name: '광주 위너스 풋살클럽',
-    region: '광주',
-    address: '광주 북구 풋살파크',
-    description: '주말 저녁 풋살 멤버를 모집하는 클럽',
-    memberCount: 18,
-    myRole: 'owner',
-  ),
-  Club(
-    id: 'preview-managed-tennis',
-    sport: 'tennis',
-    name: '올라운드 테니스 크루',
-    region: '광주',
-    address: '염주실내테니스장',
-    description: '초보부터 함께 치는 테니스 모임',
-    memberCount: 24,
-    myRole: 'manager',
-  ),
-];
-
-final _previewRecruitingPosts = [
-  RecruitingPostPreview(
-    id: 'preview-recruiting-futsal-open-1',
-    sport: 'futsal',
-    clubName: '광주 위너스 풋살클럽',
-    title: '주말 저녁 정기전 팀원 모집',
-    region: '광주',
-    place: '광주 북구 풋살파크 A구장',
-    schedule: '6/22 (토) 19:00',
-    grade: '초급 · 중급',
-    gender: '혼성',
-    age: '20대 · 30대',
-    fieldCount: 4,
-    keeperCount: 1,
-    totalCount: 5,
-    cost: '10,000원',
-    intro: '정기적으로 주말 저녁에 뛰는 팀입니다. 초급자도 부담 없이 참여할 수 있어요.',
-  ),
-  RecruitingPostPreview(
-    id: 'preview-recruiting-tennis-open-1',
-    sport: 'tennis',
-    clubName: '올라운드 테니스 크루',
-    title: '토요일 복식 랠리 멤버 모집',
-    region: '광주',
-    place: '염주실내테니스장',
-    schedule: '6/29 (토) 10:00',
-    grade: '신입 · 5부',
-    gender: '무관',
-    age: '무관',
-    fieldCount: 0,
-    keeperCount: 0,
-    totalCount: 2,
-    cost: '코트비 N분의 1',
-    intro: '복식 랠리를 함께할 멤버를 찾고 있습니다. 랠리가 가능한 초보도 환영합니다.',
-  ),
-  RecruitingPostPreview(
-    id: 'preview-recruiting-futsal-closed-1',
-    sport: 'futsal',
-    clubName: '리얼 FS 신규회원 모집중',
-    title: '평일 야간 풋살 게스트 모집',
-    region: '광주',
-    place: '첨단 풋살파크',
-    schedule: '6/19 (수) 21:00',
-    grade: '입문 · 초급',
-    gender: '남성',
-    age: '30대',
-    fieldCount: 0,
-    keeperCount: 0,
-    totalCount: 0,
-    cost: '마감',
-    intro: '평일 야간에 가볍게 합류할 게스트를 모집했던 글입니다.',
-    isClosed: true,
-    closedAt: DateTime(2026, 6, 17, 18),
-  ),
-];
-
-final _previewSearchClubs = [
-  Club(
-    id: 'preview-new-futsal-1',
-    sport: 'futsal',
-    name: '리얼 FS 신규회원 모집중',
-    region: '광주',
-    address: '광주 북구 풋살파크',
-    description: '평일 저녁과 주말에 함께 뛰는 풋살 클럽',
-    memberCount: 78,
-    meetingDays: const ['화', '목', '토'],
-    monthlyFee: 30000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-  Club(
-    id: 'preview-new-tennis-1',
-    sport: 'tennis',
-    name: '올라운드 테니스 크루',
-    region: '광주',
-    address: '염주실내테니스장',
-    description: '초보부터 랠리까지 함께 치는 테니스 모임',
-    memberCount: 24,
-    meetingDays: const ['수', '토'],
-    monthlyFee: 20000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 2)),
-  ),
-  Club(
-    id: 'preview-new-futsal-2',
-    sport: 'futsal',
-    name: '광주 위너스 풋살클럽',
-    region: '광주',
-    address: '수완 풋살파크',
-    description: '초급자도 참여 가능한 주말 풋살 클럽',
-    memberCount: 32,
-    meetingDays: const ['일'],
-    monthlyFee: 10000,
-    genderPreference: 'male',
-    createdAt: DateTime.now().subtract(const Duration(days: 5)),
-  ),
-  Club(
-    id: 'preview-new-tennis-2',
-    sport: 'tennis',
-    name: '광주 랠리메이트',
-    region: '광주',
-    address: '상무 테니스코트',
-    description: '퇴근 후 가볍게 치는 직장인 테니스 클럽',
-    memberCount: 41,
-    meetingDays: const ['월', '목'],
-    monthlyFee: 40000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 6)),
-  ),
-  Club(
-    id: 'preview-rec-futsal-1',
-    sport: 'futsal',
-    name: '첨단 풋살 러닝메이트',
-    region: '광주',
-    address: '첨단 풋살센터',
-    description: '입문자와 초급자가 편하게 참여하는 모임',
-    memberCount: 18,
-    meetingDays: const ['금'],
-    monthlyFee: 0,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 14)),
-  ),
-  Club(
-    id: 'preview-rec-tennis-1',
-    sport: 'tennis',
-    name: '주말 테니스 친구들',
-    region: '광주',
-    address: '광주 월드컵 테니스장',
-    description: '주말 오전 중심의 테니스 동호회',
-    memberCount: 56,
-    meetingDays: const ['토', '일'],
-    monthlyFee: 50000,
-    genderPreference: 'mixed',
-    createdAt: DateTime.now().subtract(const Duration(days: 21)),
-  ),
-];

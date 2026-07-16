@@ -31,6 +31,13 @@ class MoreScreen extends ConsumerWidget {
         color: cs.tertiary,
         onTap: () => context.push('/favorites'),
       ),
+      _MenuItem(
+        icon: Icons.person_off_rounded,
+        label: '차단 관리',
+        subtitle: '차단한 사용자 확인과 해제',
+        color: cs.error,
+        onTap: () => context.push('/blocked-users'),
+      ),
     ];
 
     final serviceItems = [

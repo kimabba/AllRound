@@ -19,6 +19,15 @@ Detailed rules live under `docs/rules/` and should be loaded only when the task 
 5. Root rule files stay small. Add detailed guidance under `docs/rules/`, then add a link here if needed.
 6. Before finalizing, run the checks relevant to the files changed, or state exactly why they were not run.
 
+## Loop prevention
+
+- 같은 파일 조사나 같은 계획을 두 번 반복하지 않는다.
+- 컨텍스트 압축 후 작업을 처음부터 재시작하지 않는다.
+- 압축 후에는 `git status`와 `git diff`로 현재 결과부터 확인한다.
+- 동일한 차단 상태가 두 번 반복되면 작업을 중단하고 사용자에게 보고한다.
+- 사용자가 이미 진단 완료라고 명시한 원인은 재조사하지 않는다.
+- 요청 범위 밖의 후속 기능은 구현하지 않는다.
+
 ## Load-on-demand rule map
 
 Read only the docs needed for the task:

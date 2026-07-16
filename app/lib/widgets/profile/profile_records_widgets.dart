@@ -12,11 +12,55 @@ import 'profile_settings_widgets.dart';
 import 'profile_sports_widgets.dart';
 
 // ────────────────────────────────────────────────────────────
-// 내가 등록한 클럽 섹션
+// 관리 중인 클럽 섹션
 // ────────────────────────────────────────────────────────────
 
 class MyClubsSection extends ConsumerWidget {
   const MyClubsSection({super.key});
+
+  Future<void> _deletePendingClub(
+    BuildContext context,
+    WidgetRef ref,
+    Club club,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('클럽 삭제'),
+        content: Text('${club.name} 클럽 생성 요청을 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiProvider).deleteClub(club.id);
+      ref.invalidate(myClubsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('클럽 생성 요청을 삭제했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('클럽 삭제 실패: $error')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,78 +68,156 @@ class MyClubsSection extends ConsumerWidget {
     final tt = Theme.of(context).textTheme;
     final clubs = ref.watch(myClubsProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '내가 등록한 클럽',
-          action: SectionActionButton(
-            label: '둘러보기',
-            onTap: () => context.go('/clubs'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        clubs.when(
-          loading: () =>
-              const AppCard(child: Center(child: CircularProgressIndicator())),
-          error: (_, __) => AppCard(
-            child: Text(
-              '등록 클럽을 불러오지 못했습니다.',
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ),
-          data: (items) => items.isEmpty
-              ? AppCard(
-                  variant: AppCardVariant.elevated,
-                  borderRadius: BorderRadius.circular(16),
-                  child: MyClubEmptyContent(cs: cs, tt: tt),
-                )
-              : Column(
-                  children: [
-                    for (final club in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: AppCard(
-                          variant: AppCardVariant.elevated,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Row(
-                            children: [
-                              ProfileSportThumbnail(sport: club.sport),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      club.name,
-                                      style: tt.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w900,
-                                      ),
+    return clubs.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        final managedClubs = items.where((club) => club.isOwner).toList();
+        if (managedClubs.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: '관리 중인 클럽'),
+            const SizedBox(height: AppSpacing.md),
+            Column(
+              children: [
+                for (final club in managedClubs)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: AppCard(
+                      variant: AppCardVariant.elevated,
+                      borderRadius: BorderRadius.circular(16),
+                      padding: EdgeInsets.zero,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => context.push(
+                          '/clubs/${club.id}',
+                          extra: club,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Row(children: [
+                            ProfileSportThumbnail(sport: club.sport),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    club.name,
+                                    style: tt.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w900,
                                     ),
+                                  ),
+                                  Text(
+                                    [
+                                      sportLabelFromString(club.sport),
+                                      if (club.region != null) club.region!,
+                                    ].join(' · '),
+                                    style: tt.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  _ClubStatusBadge(status: club.status),
+                                  if (club.isRejected &&
+                                      club.statusReason != null &&
+                                      club.statusReason !=
+                                          'deleted_by_owner') ...[
+                                    const SizedBox(height: AppSpacing.xs),
                                     Text(
-                                      [
-                                        sportLabelFromString(club.sport),
-                                        if (club.region != null) club.region!,
-                                      ].join(' · '),
+                                      '반려 사유: ${club.statusReason}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: tt.bodySmall?.copyWith(
-                                        color: cs.onSurfaceVariant,
+                                        color: cs.error,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ],
-                                ),
+                                  if (club.isPending && club.isOwner) ...[
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Wrap(
+                                      spacing: AppSpacing.xs,
+                                      children: [
+                                        OutlinedButton.icon(
+                                          onPressed: () => context.push(
+                                            '/clubs/${club.id}',
+                                            extra: club,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 16,
+                                          ),
+                                          label: const Text('수정'),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () => _deletePendingClub(
+                                            context,
+                                            ref,
+                                            club,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('삭제'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
                               ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ]),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ClubStatusBadge extends StatelessWidget {
+  const _ClubStatusBadge({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (label, foreground, background) = switch (status) {
+      'approved' => ('승인', cs.primary, cs.primaryContainer),
+      'rejected' => ('반려', cs.error, cs.errorContainer),
+      _ => ('승인 대기', cs.onSurfaceVariant, cs.surfaceContainerHighest),
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
         ),
-      ],
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
     );
   }
 }

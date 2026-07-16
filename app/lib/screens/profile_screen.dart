@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +18,7 @@ const _profileAvatarPrefsKey = 'profile.avatar.base64';
 const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
 const _notifyClubPrefsKey = 'notify.club_updates';
 const _notifyCoachPrefsKey = 'notify.coachbot_replies';
+const _notifySoundPrefsKey = 'notify.sound';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -31,6 +32,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _notifyTournament = true;
   bool _notifyClub = true;
   bool _notifyCoach = false;
+  bool _notifySound = true;
 
   @override
   void initState() {
@@ -49,6 +51,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _notifyTournament = prefs.getBool(_notifyTournamentPrefsKey) ?? true;
       _notifyClub = prefs.getBool(_notifyClubPrefsKey) ?? true;
       _notifyCoach = prefs.getBool(_notifyCoachPrefsKey) ?? false;
+      _notifySound = prefs.getBool(_notifySoundPrefsKey) ?? true;
     });
   }
 
@@ -144,8 +147,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     var tournament = _notifyTournament;
     var club = _notifyClub;
     var coach = _notifyCoach;
+    var sound = _notifySound;
 
-    final result = await showDialog<({bool tournament, bool club, bool coach})>(
+    final result = await showDialog<
+        ({bool tournament, bool club, bool coach, bool sound})>(
       context: context,
       builder: (dialogContext) {
         final cs = Theme.of(dialogContext).colorScheme;
@@ -188,6 +193,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     value: coach,
                     onChanged: (value) => setDialogState(() => coach = value),
                   ),
+                  Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  NotificationSwitchTile(
+                    icon: Icons.volume_up_outlined,
+                    title: '알림음',
+                    subtitle: '새 알림이 오면 기본 알림음 재생',
+                    value: sound,
+                    onChanged: (value) {
+                      setDialogState(() => sound = value);
+                      if (value) SystemSound.play(SystemSoundType.alert);
+                    },
+                  ),
                 ],
               ),
               actions: [
@@ -198,7 +214,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 FilledButton(
                   onPressed: () => Navigator.of(
                     dialogContext,
-                  ).pop((tournament: tournament, club: club, coach: coach)),
+                  ).pop((
+                    tournament: tournament,
+                    club: club,
+                    coach: coach,
+                    sound: sound,
+                  )),
                   child: const Text('저장'),
                 ),
               ],
@@ -213,11 +234,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
     await prefs.setBool(_notifyClubPrefsKey, result.club);
     await prefs.setBool(_notifyCoachPrefsKey, result.coach);
+    await prefs.setBool(_notifySoundPrefsKey, result.sound);
     if (!mounted) return;
     setState(() {
       _notifyTournament = result.tournament;
       _notifyClub = result.club;
       _notifyCoach = result.coach;
+      _notifySound = result.sound;
     });
   }
 
@@ -227,12 +250,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
     final profile = ref.watch(myProfileProvider).valueOrNull;
+    final unreadNotificationCount =
+        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
 
     final email = user?.email ?? '';
     final emailPrefix = email.contains('@') ? email.split('@').first : email;
     // 앱 활동 표시명: 닉네임 → 실명 → 이메일 앞부분 → '사용자'
-    final displayName = profile?.displayName ??
-        (emailPrefix.isEmpty ? '사용자' : emailPrefix);
+    final displayName =
+        profile?.displayName ?? (emailPrefix.isEmpty ? '사용자' : emailPrefix);
     // 본인만 보는 정보 줄: 실명(표시명과 다를 때만) · 만 나이
     final realName = profile?.name?.trim();
     final age = profile?.ageOn(DateTime.now());
@@ -292,9 +317,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 AccountSection(
                   ref: ref,
+                  unreadNotificationCount: unreadNotificationCount,
                   tournamentNotificationsEnabled: _notifyTournament,
                   clubNotificationsEnabled: _notifyClub,
                   coachNotificationsEnabled: _notifyCoach,
+                  onNotificationInboxTap: () => context.push('/notifications'),
                   onNotificationTap: _showNotificationSettings,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),

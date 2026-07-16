@@ -74,17 +74,21 @@ class AppearanceSection extends ConsumerWidget {
 
 class AccountSection extends StatelessWidget {
   final WidgetRef ref;
+  final int unreadNotificationCount;
   final bool tournamentNotificationsEnabled;
   final bool clubNotificationsEnabled;
   final bool coachNotificationsEnabled;
+  final VoidCallback onNotificationInboxTap;
   final VoidCallback onNotificationTap;
 
   const AccountSection({
     super.key,
     required this.ref,
+    required this.unreadNotificationCount,
     required this.tournamentNotificationsEnabled,
     required this.clubNotificationsEnabled,
     required this.coachNotificationsEnabled,
+    required this.onNotificationInboxTap,
     required this.onNotificationTap,
   });
 
@@ -105,6 +109,18 @@ class AccountSection extends StatelessWidget {
         AppCard(
           child: Column(
             children: [
+              ActionRow(
+                icon: Icons.notifications_active_outlined,
+                label: '알림함',
+                subtitle: unreadNotificationCount == 0
+                    ? '새 알림 없음'
+                    : '읽지 않은 알림 $unreadNotificationCount개',
+                onTap: onNotificationInboxTap,
+              ),
+              Divider(
+                height: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+              ),
               ActionRow(
                 icon: Icons.notifications_outlined,
                 label: '알림 설정',

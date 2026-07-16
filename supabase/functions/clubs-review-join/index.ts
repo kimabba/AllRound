@@ -3,6 +3,7 @@
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
+import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 Deno.serve(async (req) => {
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
   // 신청 정보 조회
   const { data: jr, error: jrErr } = await supa
     .from('club_join_requests')
-    .select('id, club_id, user_id, status')
+    .select('id, club_id, user_id, status, clubs(name)')
     .eq('id', requestId)
     .single();
 
@@ -88,6 +89,23 @@ Deno.serve(async (req) => {
     .eq('id', requestId);
 
   if (updateErr) return errorResponse(updateErr.message, 500);
+
+  const clubName = jr.clubs && typeof jr.clubs === 'object' && 'name' in jr.clubs &&
+      typeof jr.clubs.name === 'string'
+    ? jr.clubs.name
+    : '클럽';
+  const approved = action === 'approve';
+  await createNotification(supa, {
+    userId: jr.user_id,
+    type: approved ? 'club_join_approved' : 'club_join_rejected',
+    title: approved ? '클럽 가입이 승인되었습니다' : '클럽 가입 신청이 거절되었습니다',
+    body: approved
+      ? `${clubName} 가입이 승인되었습니다. 이제 클럽 멤버 화면을 확인할 수 있습니다.`
+      : `${clubName} 가입 신청이 거절되었습니다. 운영진에게 문의해 주세요.`,
+    referenceType: 'club_join_request',
+    referenceId: jr.id,
+    clubId: jr.club_id,
+  });
 
   return jsonResponse({ ok: true, action });
 });

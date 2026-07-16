@@ -1,7 +1,7 @@
 // clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
-//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'update_intro'|'delete_club'|'list_members',
+//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'update_intro'|'resubmit_review'|'delete_club'|'list_members',
 //   message?,
 //   target_user_id?,
 //   role?,
@@ -10,7 +10,9 @@
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
+import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { ugcAccessError } from '../_shared/ugc.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -132,10 +134,13 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'request') {
+    const accessError = await ugcAccessError(supa, userId, 'club_join');
+    if (accessError) return errorResponse(accessError, 403);
+
     // 클럽이 승인된 상태인지 확인
     const { data: club } = await supa
       .from('clubs')
-      .select('id, status')
+      .select('id, name, status')
       .eq('id', clubId)
       .single();
     if (!club || club.status !== 'approved') {
@@ -153,8 +158,25 @@ Deno.serve(async (req) => {
       return errorResponse('Already a member', 409);
     }
 
+    const { data: existingRequest, error: existingRequestError } = await supa
+      .from('club_join_requests')
+      .select('id, status')
+      .eq('club_id', clubId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingRequestError) {
+      return errorResponse(existingRequestError.message, 500);
+    }
+    if (existingRequest?.status === 'pending') {
+      return jsonResponse({
+        ok: true,
+        action: 'already_pending',
+        request_id: existingRequest.id,
+      });
+    }
+
     // 가입 신청 (upsert — 취소 후 재신청 허용)
-    const { error } = await supa
+    const { data: joinRequest, error } = await supa
       .from('club_join_requests')
       .upsert({
         club_id: clubId,
@@ -163,8 +185,41 @@ Deno.serve(async (req) => {
         status: 'pending',
         reviewed_by: null,
         reviewed_at: null,
-      }, { onConflict: 'club_id,user_id' });
+      }, { onConflict: 'club_id,user_id' })
+      .select('id')
+      .single();
     if (error) return errorResponse(error.message, 500);
+
+    // 신청자 라벨은 닉네임만 사용한다. 이메일과 name(실명)은 운영진·외부 FCM에
+    // 노출하지 않는다(개인정보). 닉네임이 없으면 비식별 사용자 ID로 대체한다.
+    const { data: requesterProfile } = await supa
+      .from('users')
+      .select('nickname')
+      .eq('id', userId)
+      .maybeSingle();
+    const requesterLabel = stringField(requesterProfile?.nickname)?.trim() ||
+      `사용자 ${userId.slice(0, 8)}`;
+    const { data: reviewers } = await supa
+      .from('club_members')
+      .select('user_id, role')
+      .eq('club_id', clubId)
+      .eq('status', 'active')
+      .in('role', ['owner', 'manager']);
+
+    for (const reviewer of reviewers ?? []) {
+      const reviewerId = typeof reviewer.user_id === 'string' ? reviewer.user_id : '';
+      if (!reviewerId || reviewerId === userId) continue;
+      await createNotification(supa, {
+        userId: reviewerId,
+        type: 'club_join_request',
+        title: '새 클럽 가입 신청',
+        body: `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
+        referenceType: 'club_join_request',
+        referenceId: typeof joinRequest?.id === 'string' ? joinRequest.id : null,
+        clubId,
+      });
+    }
+
     return jsonResponse({ ok: true, action: 'requested' });
   }
 
@@ -292,16 +347,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { error } = await supa
+    const { data: updatedClub, error } = await supa
       .from('clubs')
       .update({ monthly_fee: fee })
       .eq('id', clubId)
-      .eq('status', 'approved');
+      .in('status', ['approved', 'rejected'])
+      .select('id')
+      .maybeSingle();
     if (error) return errorResponse(error.message, 500);
+    if (!updatedClub) {
+      return errorResponse('Club cannot be updated in its current status', 409);
+    }
     return jsonResponse({ ok: true, action: 'monthly_fee_updated' });
   }
 
   if (action === 'update_intro') {
+    const accessError = await ugcAccessError(supa, userId, 'community_create');
+    if (accessError) return errorResponse(accessError, 403);
+
     const member = await activeMember('role');
     if (member?.role !== 'owner' && member?.role !== 'manager') {
       return errorResponse('Only owner or manager can update club intro', 403);
@@ -317,16 +380,57 @@ Deno.serve(async (req) => {
       return errorResponse(message, 400);
     }
 
-    const { error } = await supa
+    const { data: updatedClub, error } = await supa
       .from('clubs')
       .update({
         description,
         intro_image_urls: introImageUrls,
       })
       .eq('id', clubId)
-      .eq('status', 'approved');
+      .in('status', ['approved', 'rejected'])
+      .select('id')
+      .maybeSingle();
     if (error) return errorResponse(error.message, 500);
+    if (!updatedClub) {
+      return errorResponse('Club cannot be updated in its current status', 409);
+    }
     return jsonResponse({ ok: true, action: 'intro_updated' });
+  }
+
+  if (action === 'resubmit_review') {
+    const ownerError = await requireOwner();
+    if (ownerError) return ownerError;
+
+    const { data: club, error: clubError } = await supa
+      .from('clubs')
+      .select('status,status_reason')
+      .eq('id', clubId)
+      .maybeSingle();
+    if (clubError) return errorResponse(clubError.message, 500);
+    if (!club) return errorResponse('Club not found', 404);
+    if (club.status !== 'rejected') {
+      return errorResponse('Only rejected clubs can be resubmitted', 409);
+    }
+    if (club.status_reason === 'deleted_by_owner') {
+      return errorResponse('Deleted clubs cannot be resubmitted', 409);
+    }
+
+    const { data: updatedClub, error: updateError } = await supa
+      .from('clubs')
+      .update({
+        status: 'pending',
+        status_reason: null,
+        approved_by: null,
+        approved_at: null,
+      })
+      .eq('id', clubId)
+      .eq('status', 'rejected')
+      .select('id')
+      .maybeSingle();
+    if (updateError) return errorResponse(updateError.message, 500);
+    if (!updatedClub) return errorResponse('Club review status changed', 409);
+
+    return jsonResponse({ ok: true, action: 'review_resubmitted' });
   }
 
   if (action === 'delete_club') {
@@ -340,7 +444,7 @@ Deno.serve(async (req) => {
         status_reason: 'deleted_by_owner',
       })
       .eq('id', clubId)
-      .eq('status', 'approved');
+      .in('status', ['pending', 'approved', 'rejected']);
     if (error) return errorResponse(error.message, 500);
 
     // 삭제된 클럽의 active 멤버십을 정리(left)해 내 클럽/멤버 목록에서 사라지게 한다.
@@ -355,7 +459,7 @@ Deno.serve(async (req) => {
   }
 
   return errorResponse(
-    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|update_intro|delete_club|list_members',
+    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|update_intro|resubmit_review|delete_club|list_members',
     400,
   );
 });

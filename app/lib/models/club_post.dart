@@ -1,7 +1,7 @@
 class ClubPost {
   final String id;
   final String clubId;
-  final String authorId;
+  final String? authorId;
   final String? authorName;
   final String tag; // notice, free, recruit, photo
   final String title;
@@ -33,7 +33,7 @@ class ClubPost {
     return ClubPost(
       id: j['id'] as String,
       clubId: j['club_id'] as String,
-      authorId: j['author_id'] as String,
+      authorId: j['author_id'] as String?,
       authorName: author?['name'] as String?,
       tag: j['tag'] as String,
       title: j['title'] as String,
@@ -53,12 +53,20 @@ class ClubPost {
         'photo' => '사진',
         _ => tag,
       };
+
+  bool get allowsComments => const {'free', 'recruit', 'photo'}.contains(tag);
+
+  String get authorDisplayName {
+    if (authorId == null) return '탈퇴한 사용자';
+    final name = authorName?.trim();
+    return name == null || name.isEmpty ? '회원' : name;
+  }
 }
 
 class ClubPostComment {
   final String id;
   final String postId;
-  final String authorId;
+  final String? authorId;
   final String? authorName;
   final String body;
   final DateTime createdAt;
@@ -77,10 +85,16 @@ class ClubPostComment {
     return ClubPostComment(
       id: j['id'] as String,
       postId: j['post_id'] as String,
-      authorId: j['author_id'] as String,
+      authorId: j['author_id'] as String?,
       authorName: author?['name'] as String?,
       body: j['body'] as String,
       createdAt: DateTime.parse(j['created_at'] as String),
     );
+  }
+
+  String get authorDisplayName {
+    if (authorId == null) return '탈퇴한 사용자';
+    final name = authorName?.trim();
+    return name == null || name.isEmpty ? '회원' : name;
   }
 }
