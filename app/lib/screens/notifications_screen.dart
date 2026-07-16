@@ -45,6 +45,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     if (!mounted) return;
     final referenceId = notification.referenceId;
+    if (notification.referenceType == 'club_approval_request') {
+      context.push('/admin/clubs');
+      return;
+    }
     if (notification.referenceType == 'tournament' &&
         referenceId != null &&
         referenceId.isNotEmpty) {
@@ -296,6 +300,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
 IconData _iconFor(String type) {
   switch (type) {
+    case 'club_approval_request':
+      return Icons.admin_panel_settings_rounded;
     case 'club_join_request':
       return Icons.person_add_alt_1_rounded;
     case 'club_join_approved':

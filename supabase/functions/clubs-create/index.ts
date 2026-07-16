@@ -5,6 +5,7 @@ import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
+import { notifyAdminsOfPendingClub } from './notifications.ts';
 import {
   parseGenderPreference,
   parseMeetingDays,
@@ -152,6 +153,20 @@ Deno.serve(async (req) => {
   if (ownerErr) {
     await supa.from('clubs').delete().eq('id', club!.id);
     return errorResponse('owner 등록 실패: ' + ownerErr.message, 500);
+  }
+
+  // 클럽 생성 자체는 성공했으므로, 관리자 알림 실패가 응답을 실패로
+  // 바꾸지 않게 한다. 실패는 로그로 남겨 운영에서 확인한다.
+  const clubId = typeof club?.id === 'string' ? club.id : '';
+  if (clubId.length > 0) {
+    try {
+      await notifyAdminsOfPendingClub(supa, { clubId, clubName: name });
+    } catch (error) {
+      console.error(
+        'Failed to create club approval notifications:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+    }
   }
 
   return jsonResponse({ club }, { status: 201 });
