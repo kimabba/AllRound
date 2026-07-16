@@ -5,6 +5,7 @@
 import type { ChatTurn, GeminiUsage } from '../_shared/gemini.ts';
 import { streamChat } from '../_shared/gemini.ts';
 import { buildTournamentCards, type TournamentCardRow } from '../_shared/chat_cards.ts';
+import { normalizeRegulationFields } from '../_shared/regulation.ts';
 import type { DbCitation, SemanticRule, SemanticTournament, VenueRow } from './types.ts';
 
 /** Build DB citations from RAG results. */
@@ -37,20 +38,29 @@ export function buildDbCitations(
 /** Build tournament card UI blocks from SemanticTournament[]. */
 export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): unknown {
   if (tournaments.length === 0) return null;
-  const cardRows: TournamentCardRow[] = tournaments.slice(0, 10).map((t) => ({
-    id: t.id,
-    sport: t.sport as 'tennis' | 'futsal',
-    title: t.title,
-    start_date: t.start_date,
-    end_date: null,
-    application_deadline: null,
-    region: t.region ?? null,
-    location: null,
-    eligible_grades: t.eligible_grades ?? [],
-    entry_fee: null,
-    format: null,
-    regulation_fields: t.regulation_fields,
-  }));
+  const cardRows: TournamentCardRow[] = tournaments.slice(0, 10).map((t) => {
+    // SemanticTournament(RAG)엔 location 필드가 없어 요강에서 장소를 끌어올린다.
+    // 카드 간소화로 요강 칩을 없앤 뒤에도 장소가 상단 InfoRow 에 남도록.
+    // 마감은 semantic_search 가 application_deadline 컬럼을 반환하지 않고 요강에도
+    // 마감 라벨이 없어 RAG 카드엔 표시 불가(상세 화면에서 확인).
+    const reg = normalizeRegulationFields(t.regulation_fields);
+    const location = reg.find((f) => ['장소', '경기장', '대회장'].includes(f.label))?.value ??
+      null;
+    return {
+      id: t.id,
+      sport: t.sport as 'tennis' | 'futsal',
+      title: t.title,
+      start_date: t.start_date,
+      end_date: null,
+      application_deadline: null,
+      region: t.region ?? null,
+      location,
+      eligible_grades: t.eligible_grades ?? [],
+      entry_fee: null,
+      format: null,
+      regulation_fields: t.regulation_fields,
+    };
+  });
   return {
     blocks: [
       {

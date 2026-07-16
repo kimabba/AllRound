@@ -76,9 +76,13 @@ export interface TournamentSearchTextContext {
 
 const MAX_CARDS = 10;
 
-/// `tournament_search_by_slots`(only_my_grade=true) 결과를 카드 아이템으로 변환.
-/// 그 RPC는 참가 가능한 대회만 반환하므로 eligible=true 로 표기한다.
-export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardItem[] {
+/// `tournament_search_by_slots` 결과를 카드 아이템으로 변환.
+/// eligible 은 호출자가 필터 상태로 넘긴다: only_my_grade=true(참가 가능 대회만
+/// 반환) 면 true, 전체 검색(false)이면 자격을 알 수 없으므로 false 로 배지 숨김(JY-101).
+export function buildTournamentCards(
+  rows: TournamentCardRow[],
+  eligible = true,
+): TournamentCardItem[] {
   return rows.slice(0, MAX_CARDS).map((r) => ({
     id: r.id,
     title: r.title,
@@ -88,7 +92,7 @@ export function buildTournamentCards(rows: TournamentCardRow[]): TournamentCardI
     start_date: r.start_date,
     end_date: r.end_date,
     application_deadline: r.application_deadline ?? null,
-    eligible: true,
+    eligible,
     eligible_grades: r.eligible_grades ?? [],
     entry_fee: r.entry_fee,
     format: r.format,
@@ -293,4 +297,84 @@ export function parseSelectedEntity(input: unknown): ParseResult<SelectedEntity>
   if (!VALID_ENTITY_TYPES.includes(type as SelectedEntityType)) return { ok: false };
   if (!UUID_RE.test(id)) return { ok: false };
   return { ok: true, value: { type: type as SelectedEntityType, id } };
+}
+
+// ── 대회검색 "내 등급만 보기"/"전체 보기" 정제 칩 (JY-101) ────────────────
+// 전체 결과를 기본으로 보여주고, 등급 등록자에게만 반대 방향으로 좁히거나 넓히는
+// 칩 하나를 카드에 붙인다. 칩 탭 시 이 refine 페이로드로 재요청 → intent 분류를
+// 건너뛰고 같은 슬롯으로 only_my_grade 만 바꿔 재검색한다.
+
+export interface TournamentRefine {
+  sport: 'tennis' | 'futsal' | null;
+  region_code: string | null;
+  date_from: string | null;
+  date_to: string | null;
+  only_my_grade: boolean;
+}
+
+export interface RefineChip {
+  label: string;
+  refine: TournamentRefine;
+}
+
+/// 신뢰할 수 없는 입력에서 tournament_refine 페이로드를 검증한다.
+export function parseTournamentRefine(input: unknown): ParseResult<TournamentRefine> {
+  if (!isRecord(input)) return { ok: false };
+  const onlyMyGrade = input.only_my_grade;
+  if (typeof onlyMyGrade !== 'boolean') return { ok: false };
+  const sport = input.sport;
+  if (sport !== 'tennis' && sport !== 'futsal' && sport !== null && sport !== undefined) {
+    return { ok: false };
+  }
+  const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  // date 는 PG date 파라미터로 나가므로 ISO(YYYY-MM-DD) 만 통과시킨다. 형식이
+  // 아니거나 from>to 로 뒤집힌 조작 payload 는 날짜 필터를 떨궈 RPC 에러를 막는다.
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const isoDateOrNull = (v: unknown): string | null =>
+    typeof v === 'string' && ISO_DATE_RE.test(v) ? v : null;
+  let dateFrom = isoDateOrNull(input.date_from);
+  let dateTo = isoDateOrNull(input.date_to);
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    dateFrom = null;
+    dateTo = null;
+  }
+  return {
+    ok: true,
+    value: {
+      sport: (sport as 'tennis' | 'futsal' | null) ?? null,
+      region_code: strOrNull(input.region_code),
+      date_from: dateFrom,
+      date_to: dateTo,
+      only_my_grade: onlyMyGrade,
+    },
+  };
+}
+
+/// 현재 검색이 only_my_grade 였는지에 따라 반대 방향 칩 하나를 만든다.
+/// 전체(false) → "내 등급만 보기", 내 등급(true) → "전체 대회 보기".
+export function buildRefineChip(
+  currentOnlyMyGrade: boolean,
+  slots: Omit<TournamentRefine, 'only_my_grade'>,
+): RefineChip {
+  const next = !currentOnlyMyGrade;
+  return {
+    label: next ? '내 등급만 보기' : '전체 대회 보기',
+    refine: { ...slots, only_my_grade: next },
+  };
+}
+
+/// 해당 종목에 등급/부서를 등록한 사용자인지. 미등록자에겐 정제 칩을 노출하지 않는다.
+/// 테니스는 division_codes 가 채워진 소속이 있어야, 풋살은 grade 가 있어야 필터가 의미 있다.
+export function isGradeRegisteredForSport(
+  sport: 'tennis' | 'futsal' | null,
+  tennisOrgs: ReadonlyArray<{ division_codes: string[] }>,
+  futsalGrades: ReadonlyArray<string | null | undefined>,
+): boolean {
+  if (sport === 'tennis') {
+    return tennisOrgs.some((o) => (o.division_codes?.length ?? 0) > 0);
+  }
+  if (sport === 'futsal') {
+    return futsalGrades.some((g) => !!g);
+  }
+  return false;
 }

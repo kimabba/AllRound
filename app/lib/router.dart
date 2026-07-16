@@ -11,6 +11,7 @@ import 'screens/admin/moderation_screen.dart';
 import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
+import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
 import 'models/tournament.dart';
@@ -38,6 +39,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
       final loc = state.matchedLocation;
+
+      // 비밀번호 재설정 딥링크(passwordRecovery): 세션이 생겨 user!=null 이 되지만
+      // 홈이 아니라 새 비번 설정 화면으로 보낸다. recoveryModeProvider 가 sticky
+      // 하게 유지되므로 tokenRefreshed 등 다른 이벤트에 튕기지 않고, 저장 성공 시
+      // 화면이 complete() 로 끄고 context.go('/') 로 빠져나간다(이벤트 타이밍 race 없음).
+      if (user != null && ref.read(recoveryModeProvider)) {
+        return loc == '/reset-password' ? null : '/reset-password';
+      }
       final adminDesignPreview = kIsWeb && AppConfig.adminDesignPreview;
       final userDesignPreview = kIsWeb && AppConfig.userDesignPreview;
 
@@ -81,6 +90,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, __) => const ResetPasswordScreen(),
+      ),
       GoRoute(
         path: '/onboarding',
         builder: (_, __) => const OnboardingScreen(),
@@ -187,6 +200,7 @@ class GoRouterRefreshStream extends ChangeNotifier {
     ref.listen(authStateProvider, (_, __) => notifyListeners());
     ref.listen(userSportsProvider, (_, __) => notifyListeners());
     ref.listen(isAdminProvider, (_, __) => notifyListeners());
+    ref.listen(recoveryModeProvider, (_, __) => notifyListeners());
   }
 }
 

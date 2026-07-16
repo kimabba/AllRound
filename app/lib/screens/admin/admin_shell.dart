@@ -146,6 +146,12 @@ class _AdminSidebar extends ConsumerWidget {
                       ),
                     ),
                   OutlinedButton.icon(
+                    icon: const Icon(Icons.home_outlined, size: 16),
+                    label: const Text('앱 화면으로'),
+                    onPressed: () => context.go('/'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
                     icon: const Icon(Icons.logout, size: 16),
                     label: const Text('로그아웃'),
                     onPressed: () async {

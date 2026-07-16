@@ -11,10 +11,10 @@ import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
+import '../widgets/moderation/ugc_moderation_widgets.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
-import '../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -88,6 +88,60 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  /// 대회검색 정제 칩("내 등급만 보기"/"전체 대회 보기") 탭 → refine 페이로드로 재요청(JY-101).
+  Future<void> _sendWithRefine(
+      String label, Map<String, dynamic> refine) async {
+    final chat = ref.read(chatProvider);
+    if (chat.busy) return;
+
+    chat.addUserMessage(label);
+    _scrollToBottom();
+
+    final assistantIdx = chat.lastAssistantIndex;
+    final api = ref.read(apiProvider);
+
+    await _consumeChatStream(
+      api.chat(
+        message: label,
+        conversationId: chat.conversationId,
+        activeSport: ref.read(activeSportProvider),
+        tournamentRefine: refine,
+      ),
+      assistantIdx,
+    );
+  }
+
+  Future<void> _reportAssistantMessage(ChatMessage message) async {
+    final conversationId = ref.read(chatProvider).conversationId;
+    if (conversationId == null || message.content.trim().isEmpty) return;
+
+    try {
+      final messageId = await ref.read(apiProvider).findAssistantMessageId(
+            conversationId: conversationId,
+            content: message.content,
+          );
+      if (!mounted) return;
+      if (messageId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('아직 저장 중인 답변입니다. 잠시 후 다시 시도해주세요.')),
+        );
+        return;
+      }
+      await showUgcReportSheet(
+        context: context,
+        ref: ref,
+        targetType: UgcTargetType.aiMessage,
+        targetId: messageId,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')),
+        );
+      }
+    }
+  }
+
   Future<void> _consumeChatStream(
       Stream<ChatStreamEvent> stream, int assistantIdx) async {
     final chat = ref.read(chatProvider);
@@ -158,36 +212,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await _send();
   }
 
-  Future<void> _reportAssistantMessage(ChatMessage message) async {
-    final conversationId = ref.read(chatProvider).conversationId;
-    if (conversationId == null || message.content.trim().isEmpty) return;
-    try {
-      final messageId = await ref.read(apiProvider).findAssistantMessageId(
-            conversationId: conversationId,
-            content: message.content,
-          );
-      if (!mounted) return;
-      if (messageId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('아직 저장 중인 답변입니다. 잠시 후 다시 시도해주세요.')),
-        );
-        return;
-      }
-      await showUgcReportSheet(
-        context: context,
-        ref: ref,
-        targetType: UgcTargetType.aiMessage,
-        targetId: messageId,
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')),
-        );
-      }
-    }
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -208,9 +232,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final busy = chat.busy;
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: 'AI 라운드 코치'),
+        title: const BrandedAppBarTitle(title: '라운드 코치'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -223,34 +246,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: messages.isEmpty
-                  ? _EmptyHint(
-                      onSend: sendText,
-                      sport: ref.watch(activeSportProvider),
-                    )
-                  : ListView.builder(
-                      controller: _scroll,
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.md,
-                      ),
-                      itemCount: messages.length,
-                      itemBuilder: (_, i) => _MessageBubble(
-                        msg: messages[i],
-                        onCardAction: _sendWithEntity,
-                        onReport: !busy &&
-                                messages[i].role == 'assistant' &&
-                                messages[i].content.trim().isNotEmpty
-                            ? () => _reportAssistantMessage(messages[i])
-                            : null,
-                      ),
+            child: messages.isEmpty
+                ? _EmptyHint(
+                    onSend: sendText,
+                    sport: ref.watch(activeSportProvider),
+                  )
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.md,
                     ),
-            ),
+                    itemCount: messages.length,
+                    itemBuilder: (_, i) => _MessageBubble(
+                      msg: messages[i],
+                      onCardAction: _sendWithEntity,
+                      onRefine: _sendWithRefine,
+                      onReport: !busy &&
+                              messages[i].role == 'assistant' &&
+                              messages[i].content.trim().isNotEmpty
+                          ? () => _reportAssistantMessage(messages[i])
+                          : null,
+                    ),
+                  ),
           ),
           if (busy)
             LinearProgressIndicator(
@@ -294,7 +312,6 @@ class _EmptyHint extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SingleChildScrollView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xl,
         vertical: AppSpacing.lg,
@@ -314,13 +331,6 @@ class _EmptyHint extends StatelessWidget {
               color: cs.onSurfaceVariant,
               height: 1.5,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'AI가 생성한 답변으로 부정확할 수 있어요.\n'
-            '문제가 있는 답변은 바로 신고할 수 있습니다.',
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -400,10 +410,7 @@ class _InputBar extends StatelessWidget {
     const inputBorderRadius = AppRadius.card;
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
@@ -436,9 +443,7 @@ class _InputBar extends StatelessWidget {
                   ),
                 ),
                 textInputAction: TextInputAction.send,
-                minLines: 1,
-                maxLines: 3,
-                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                maxLines: 4,
                 onSubmitted: (_) => onSend(),
               ),
             ),
@@ -471,11 +476,13 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.msg,
     required this.onCardAction,
+    required this.onRefine,
     required this.onReport,
   });
   final ChatMessage msg;
   final void Function(String message, String entityType, String entityId)
       onCardAction;
+  final void Function(String label, Map<String, dynamic> refine) onRefine;
   final VoidCallback? onReport;
 
   @override
@@ -573,6 +580,24 @@ class _MessageBubble extends StatelessWidget {
                           item: item,
                           onAction: (message, entityId) =>
                               onCardAction(message, 'club', entityId),
+                        ),
+                      ),
+                    if (block.refineChip != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ActionChip(
+                            avatar: const Icon(
+                              Icons.filter_alt_outlined,
+                              size: 18,
+                            ),
+                            label: Text(block.refineChip!.label),
+                            onPressed: () => onRefine(
+                              block.refineChip!.label,
+                              block.refineChip!.refine,
+                            ),
+                          ),
                         ),
                       ),
                   ],

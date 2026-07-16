@@ -142,17 +142,34 @@ class ClubChatCardItem {
   }
 }
 
+/// 대회검색 결과에 붙는 "내 등급만 보기"/"전체 대회 보기" 정제 칩(JY-101).
+/// refine 페이로드를 그대로 다음 chat 요청의 tournament_refine 으로 되돌려보낸다.
+class RefineChip {
+  final String label;
+  final Map<String, dynamic> refine;
+  const RefineChip({required this.label, required this.refine});
+
+  static RefineChip? tryFromJson(Map<String, dynamic> j) {
+    final label = j['label'];
+    final refine = j['refine'];
+    if (label is! String || refine is! Map) return null;
+    return RefineChip(label: label, refine: refine.cast<String, dynamic>());
+  }
+}
+
 class ChatUiBlock {
   final String type; // 'cards'
   final String entity; // 'tournament' | 'club'
   final List<TournamentChatCardItem> tournamentItems;
   final List<ClubChatCardItem> clubItems;
+  final RefineChip? refineChip;
 
   const ChatUiBlock({
     required this.type,
     required this.entity,
     required this.tournamentItems,
     this.clubItems = const [],
+    this.refineChip,
   });
 
   /// `ui` 이벤트 data 에서 blocks 리스트를 파싱. 어떤 형식 오류든 빈 리스트로 흡수.
@@ -181,11 +198,16 @@ class ChatUiBlock {
           }
         }
       }
+      final refineRaw = block['refine_chip'];
+      final refineChip = refineRaw is Map
+          ? RefineChip.tryFromJson(refineRaw.cast<String, dynamic>())
+          : null;
       result.add(ChatUiBlock(
         type: (block['type'] as String?) ?? 'cards',
         entity: entity,
         tournamentItems: tournamentItems,
         clubItems: clubItems,
+        refineChip: refineChip,
       ));
     }
     return result;

@@ -1,11 +1,14 @@
 import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
   buildClubCards,
+  buildRefineChip,
   buildTournamentCards,
   type ClubCardRow,
   type ClubDetailRow,
+  isGradeRegisteredForSport,
   isTournamentCardRow,
   parseSelectedEntity,
+  parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
@@ -294,4 +297,125 @@ Deno.test('renderClubDetailText omits missing optional fields', () => {
   assert(!text.includes('월 회비'));
   assert(!text.includes('성별'));
   assert(!text.includes('연락처'));
+});
+
+// ── 정제 칩 (JY-101) ──────────────────────────────────────────────
+
+Deno.test('parseTournamentRefine: 유효 페이로드 파싱', () => {
+  const r = parseTournamentRefine({
+    sport: 'tennis',
+    region_code: 'gwangju',
+    date_from: '2026-07-01',
+    date_to: '2026-07-31',
+    only_my_grade: true,
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.sport, 'tennis');
+    assertEquals(r.value.region_code, 'gwangju');
+    assertEquals(r.value.only_my_grade, true);
+  }
+});
+
+Deno.test('parseTournamentRefine: only_my_grade 없으면 거부', () => {
+  assertEquals(parseTournamentRefine({ sport: 'tennis' }).ok, false);
+});
+
+Deno.test('parseTournamentRefine: 잘못된 sport 거부', () => {
+  assertEquals(
+    parseTournamentRefine({ sport: 'golf', only_my_grade: false }).ok,
+    false,
+  );
+});
+
+Deno.test('parseTournamentRefine: null/비객체 거부', () => {
+  assertEquals(parseTournamentRefine(null).ok, false);
+  assertEquals(parseTournamentRefine('x').ok, false);
+});
+
+Deno.test('buildRefineChip: 전체(false) → 내 등급만 칩', () => {
+  const chip = buildRefineChip(false, {
+    sport: 'tennis',
+    region_code: 'gwangju',
+    date_from: null,
+    date_to: null,
+  });
+  assertEquals(chip.label, '내 등급만 보기');
+  assertEquals(chip.refine.only_my_grade, true);
+  assertEquals(chip.refine.region_code, 'gwangju');
+});
+
+Deno.test('buildRefineChip: 내 등급(true) → 전체 보기 칩', () => {
+  const chip = buildRefineChip(true, {
+    sport: 'tennis',
+    region_code: null,
+    date_from: null,
+    date_to: null,
+  });
+  assertEquals(chip.label, '전체 대회 보기');
+  assertEquals(chip.refine.only_my_grade, false);
+});
+
+Deno.test('isGradeRegisteredForSport: 테니스는 division_codes 채워짐이 조건', () => {
+  assert(isGradeRegisteredForSport('tennis', [{ division_codes: ['gj_m_open'] }], []));
+  assert(!isGradeRegisteredForSport('tennis', [{ division_codes: [] }], []));
+});
+
+Deno.test('isGradeRegisteredForSport: 풋살은 grade 존재가 조건', () => {
+  assert(isGradeRegisteredForSport('futsal', [], ['y1to3']));
+  assert(!isGradeRegisteredForSport('futsal', [], [null, undefined]));
+});
+
+Deno.test('isGradeRegisteredForSport: sport null 이면 false', () => {
+  assertEquals(isGradeRegisteredForSport(null, [{ division_codes: ['x'] }], ['y']), false);
+});
+
+// ── codex 리뷰 후속 (JY-101) ──────────────────────────────────────
+
+Deno.test('buildTournamentCards: eligible=false 면 배지 숨김', () => {
+  const cards = buildTournamentCards([SAMPLE_ROW], false);
+  assertEquals(cards[0].eligible, false);
+});
+
+Deno.test('buildTournamentCards: eligible 기본값은 true(자격자 검색)', () => {
+  assertEquals(buildTournamentCards([SAMPLE_ROW])[0].eligible, true);
+});
+
+Deno.test('parseTournamentRefine: 잘못된 date 형식은 null 로 떨군다', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: true,
+    date_from: 'garbage',
+    date_to: '2026-07-31',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, null);
+    assertEquals(r.value.date_to, '2026-07-31');
+  }
+});
+
+Deno.test('parseTournamentRefine: from>to 뒤집힘은 둘 다 떨군다', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: false,
+    date_from: '2026-08-01',
+    date_to: '2026-07-01',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, null);
+    assertEquals(r.value.date_to, null);
+  }
+});
+
+Deno.test('parseTournamentRefine: 정상 ISO 날짜 범위는 유지', () => {
+  const r = parseTournamentRefine({
+    only_my_grade: true,
+    date_from: '2026-07-01',
+    date_to: '2026-07-31',
+  });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.value.date_from, '2026-07-01');
+    assertEquals(r.value.date_to, '2026-07-31');
+  }
 });
