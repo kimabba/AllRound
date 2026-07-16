@@ -16,6 +16,7 @@ import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
+import 'screens/clubs/club_inquiry_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/friend_schedule_screen.dart';
@@ -184,6 +185,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/tournaments/submit',
         builder: (_, __) => const TournamentSubmitScreen(),
+      ),
+      GoRoute(
+        path: '/clubs/:id/inquiries/manage',
+        builder: (_, state) => ClubInquiryInboxScreen(
+          clubId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/clubs/:id/inquiries/:threadId',
+        builder: (_, state) => ClubInquiryConversationScreen(
+          clubId: state.pathParameters['id']!,
+          threadId: state.pathParameters['threadId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/clubs/:id/inquiries',
+        builder: (_, state) => ClubInquiryConversationScreen(
+          clubId: state.pathParameters['id']!,
+        ),
       ),
       GoRoute(
         path: '/clubs/:id',

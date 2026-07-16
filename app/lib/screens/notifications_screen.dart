@@ -45,6 +45,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     if (!mounted) return;
     final referenceId = notification.referenceId;
+    final referenceType = notification.referenceType;
+    final clubId = notification.clubId;
+    if (referenceType != null &&
+        referenceType.startsWith('club_inquiry:') &&
+        clubId != null &&
+        clubId.isNotEmpty) {
+      final threadId = referenceType.substring('club_inquiry:'.length);
+      if (threadId.isNotEmpty) {
+        context.push('/clubs/$clubId/inquiries/$threadId');
+        return;
+      }
+    }
     if (notification.referenceType == 'club_approval_request') {
       context.push('/admin/clubs');
       return;
@@ -55,7 +67,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       context.push('/tournaments/$referenceId');
       return;
     }
-    final clubId = notification.clubId;
     if (clubId != null && clubId.isNotEmpty) {
       context.push('/clubs/$clubId');
     }
@@ -300,6 +311,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
 IconData _iconFor(String type) {
   switch (type) {
+    case 'club_inquiry_received':
+    case 'club_inquiry_reply':
+      return Icons.forum_rounded;
     case 'club_approval_request':
       return Icons.admin_panel_settings_rounded;
     case 'club_join_request':
