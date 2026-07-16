@@ -8,7 +8,7 @@ This repository uses a **small loader** rule system.
 
 ## Minimum mandatory rules
 
-0. **작업 시작 전 `docs/team/START-HERE.md` 필독** — 역할(드론/시리야/백과장/kimabba)·레인·출시 로드맵·주의사항.
+0. **작업 시작 전 `docs/team/START-HERE.md` 필독** — 역할(드론/시리/백과장/kimabba)·레인·출시 로드맵·주의사항.
 1. Preserve user changes; do not overwrite unrelated work.
 2. Server/DB are the source of truth for auth, eligibility, visibility, quotas, and admin decisions.
 3. Type safety is mandatory: no TypeScript `any`, avoid Dart `dynamic`, and require RLS/policies for new SQL tables.
