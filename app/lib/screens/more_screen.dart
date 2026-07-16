@@ -43,12 +43,12 @@ class MoreScreen extends ConsumerWidget {
         subtitle: '테니스와 풋살 규칙 확인',
         onTap: () => context.push('/rules'),
       ),
-      if (kIsWeb && isAdmin)
+      if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
-          label: '어드민',
-          subtitle: '관리자 메뉴',
-          onTap: () => context.go('/admin'),
+          label: kIsWeb ? '어드민' : '클럽 승인',
+          subtitle: kIsWeb ? '관리자 메뉴' : '승인 대기 클럽 확인·처리',
+          onTap: () => context.go(kIsWeb ? '/admin' : '/admin/clubs'),
         ),
     ];
 

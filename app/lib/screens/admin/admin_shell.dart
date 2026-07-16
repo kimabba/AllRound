@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ class AdminShell extends ConsumerWidget {
       ),
       data: (isAdmin) {
         if (!isAdmin) return const SizedBox.shrink();
+        if (!kIsWeb) return child;
         return Scaffold(
           body: Row(
             children: [

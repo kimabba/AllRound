@@ -80,13 +80,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      // 앱: 클럽 승인은 관리자가 알림에서 바로 처리할 수 있게
+      // 모바일에서도 해당 경로만 허용한다. 권한 판정은 서버 role이 기준이다.
+      if (loc == '/admin/clubs') {
+        final adminAsync = ref.read(isAdminProvider);
+        if (adminAsync.isLoading) return null;
+        return (adminAsync.valueOrNull ?? false) ? null : '/';
+      }
+
       // 앱: 기존 로직
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.valueOrNull ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
-      // 앱에서는 어드민 경로 완전 차단 (웹 전용)
+      // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.
       if (loc.startsWith('/admin')) return '/';
 
       if (loc == '/login') return '/';
