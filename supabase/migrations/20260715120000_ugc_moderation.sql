@@ -430,18 +430,25 @@ BEGIN
       WHERE e.id = p_target_id;
 
     WHEN 'club' THEN
+      -- 클럽 엔티티 신고는 승인(공개) 클럽이거나 해당 클럽 멤버/관리자만 가능하다.
+      -- 미공개(pending/rejected) 클럽의 연락처 등 개인정보 IDOR을 WHERE에서 차단하고,
+      -- contact는 스냅샷에서 제외한다(admin은 clubs 테이블을 직접 조회).
       SELECT c.created_by,
         jsonb_build_object(
           'club_id', c.id,
           'name', c.name,
           'description', c.description,
-          'contact', c.contact,
           'logo_url', c.logo_url,
           'created_at', c.created_at
         )
       INTO v_reported_user_id, v_snapshot
       FROM public.clubs c
-      WHERE c.id = p_target_id;
+      WHERE c.id = p_target_id
+        AND (
+          c.status = 'approved'
+          OR public.is_active_club_member(c.id)
+          OR public.is_admin()
+        );
 
     WHEN 'user' THEN
       SELECT u.id,
@@ -648,16 +655,23 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  -- to_jsonb(NEW)로 접근한다. PL/pgSQL simple CASE는 매칭되지 않는 분기의
+  -- NEW.<field> 참조까지 트리거 테이블 row 타입으로 resolve하므로, 여러 테이블이
+  -- 공유하는 이 함수에서 NEW.field를 직접 쓰면 'record new has no field ...' 로
+  -- 모든 UGC 쓰기가 실패한다. jsonb ->> 는 없는 필드에 NULL을 돌려줘 안전하다.
+  v_row jsonb := to_jsonb(NEW);
   v_text text;
   v_normalized text;
   v_term text;
 BEGIN
   v_text := CASE TG_TABLE_NAME
-    WHEN 'club_posts' THEN concat_ws(' ', NEW.title, NEW.body)
-    WHEN 'club_post_comments' THEN NEW.body
-    WHEN 'club_events' THEN concat_ws(' ', NEW.title, NEW.description, NEW.location_text)
-    WHEN 'clubs' THEN concat_ws(' ', NEW.name, NEW.description, NEW.contact)
-    WHEN 'club_join_requests' THEN COALESCE(NEW.message, '')
+    WHEN 'club_posts' THEN concat_ws(' ', v_row->>'title', v_row->>'body')
+    WHEN 'club_post_comments' THEN v_row->>'body'
+    WHEN 'club_events' THEN concat_ws(' ', v_row->>'title', v_row->>'description', v_row->>'location_text')
+    WHEN 'clubs' THEN concat_ws(' ', v_row->>'name', v_row->>'description', v_row->>'contact')
+    WHEN 'club_join_requests' THEN COALESCE(v_row->>'message', '')
+    WHEN 'club_recruiting_posts' THEN concat_ws(' ',
+      v_row->>'title', v_row->>'intro', v_row->>'place', v_row->>'schedule_text', v_row->>'position_text', v_row->>'cost_text')
     ELSE ''
   END;
   v_normalized := regexp_replace(lower(v_text), '[^a-z0-9가-힣ㄱ-ㅎㅏ-ㅣ]+', '', 'g');
@@ -695,6 +709,10 @@ CREATE TRIGGER clubs_ugc_filter
   FOR EACH ROW EXECUTE FUNCTION public.enforce_ugc_text_policy();
 CREATE TRIGGER club_join_requests_ugc_filter
   BEFORE INSERT OR UPDATE OF message ON public.club_join_requests
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_ugc_text_policy();
+CREATE TRIGGER club_recruiting_posts_ugc_filter
+  BEFORE INSERT OR UPDATE OF title, intro, place, schedule_text, position_text, cost_text
+  ON public.club_recruiting_posts
   FOR EACH ROW EXECUTE FUNCTION public.enforce_ugc_text_policy();
 
 -- 차단한 사용자와 차단당한 사용자의 UGC는 서로 보이지 않는다.
@@ -767,6 +785,7 @@ CREATE POLICY club_posts_update ON public.club_posts
     public.is_admin()
     OR (
       (author_id = (SELECT auth.uid()) OR public.is_club_manager(club_id))
+      AND public.is_active_club_member(club_id)
       AND public.has_accepted_current_ugc_terms()
       AND NOT public.has_active_ugc_penalty(
         ARRAY['community_restriction']::public.ugc_penalty_type[]
@@ -823,6 +842,38 @@ CREATE POLICY club_events_update ON public.club_events
     public.is_admin()
     OR (
       (created_by = (SELECT auth.uid()) OR public.is_club_manager(club_id))
+      AND public.is_active_club_member(club_id)
+      AND public.has_accepted_current_ugc_terms()
+      AND NOT public.has_active_ugc_penalty(
+        ARRAY['community_restriction']::public.ugc_penalty_type[]
+      )
+    )
+  );
+
+-- 모집글도 다른 UGC 쓰기 경로와 동일하게 약관 동의·제재 게이트를 적용한다.
+-- (has_* 함수가 이 파일에서 정의되므로, 원본 정책을 여기서 재정의한다. 20260714140000 파일보다 뒤.)
+DROP POLICY IF EXISTS club_recruiting_posts_insert ON public.club_recruiting_posts;
+CREATE POLICY club_recruiting_posts_insert ON public.club_recruiting_posts
+  FOR INSERT WITH CHECK (
+    public.is_admin()
+    OR (
+      created_by = (SELECT auth.uid())
+      AND public.is_club_manager(club_id)
+      AND public.has_accepted_current_ugc_terms()
+      AND NOT public.has_active_ugc_penalty(
+        ARRAY['community_restriction']::public.ugc_penalty_type[]
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS club_recruiting_posts_update ON public.club_recruiting_posts;
+CREATE POLICY club_recruiting_posts_update ON public.club_recruiting_posts
+  FOR UPDATE USING (
+    public.is_club_manager(club_id) OR public.is_admin()
+  ) WITH CHECK (
+    public.is_admin()
+    OR (
+      public.is_club_manager(club_id)
       AND public.has_accepted_current_ugc_terms()
       AND NOT public.has_active_ugc_penalty(
         ARRAY['community_restriction']::public.ugc_penalty_type[]

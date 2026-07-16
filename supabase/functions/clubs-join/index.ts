@@ -190,7 +190,15 @@ Deno.serve(async (req) => {
       .single();
     if (error) return errorResponse(error.message, 500);
 
-    const requesterLabel = auth.user.email?.trim() || `사용자 ${userId.slice(0, 8)}`;
+    // 신청자 라벨은 닉네임/이름만 사용한다. 이메일은 운영진·외부 FCM에 노출하지 않는다(개인정보).
+    const { data: requesterProfile } = await supa
+      .from('users')
+      .select('nickname, name')
+      .eq('id', userId)
+      .maybeSingle();
+    const requesterLabel = stringField(requesterProfile?.nickname)?.trim() ||
+      stringField(requesterProfile?.name)?.trim() ||
+      `사용자 ${userId.slice(0, 8)}`;
     const { data: reviewers } = await supa
       .from('club_members')
       .select('user_id, role')
