@@ -12,6 +12,7 @@ import '../../utils/grade_labels.dart';
 import '../../utils/recent_tournaments.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/notification_bell_action.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
@@ -209,6 +210,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
             tooltip: '대회 제보',
             onPressed: () => context.push('/tournaments/submit'),
           ),
+          const NotificationBellAction(),
         ],
       ),
       body: Column(

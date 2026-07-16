@@ -65,6 +65,11 @@
 - `myTennisOrgs()`, `saveTennisOrgs()`, `upsertTennisOrg()`, `deleteTennisOrg()`
 - `toggleFavorite()`, `myFavoriteIds()`
 
+### 알림
+- 모든 사용자 화면의 실제 AppBar 오른쪽에 알림함 버튼을 고정하고, 미읽 알림은 빨간 숫자 배지로 표시
+- 알림함에서 전체 읽음, 개별 읽음, 본인 알림 개별 삭제를 지원
+- 앱 화면 진입·포그라운드 복귀·30초 주기로 미읽 수를 갱신
+
 ### 챗봇
 - `chat()` — SSE 스트림 반환
 

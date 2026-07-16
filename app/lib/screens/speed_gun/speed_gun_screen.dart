@@ -7,6 +7,7 @@ import '../../services/video_processing_service.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/notification_bell_action.dart';
 import 'court_calibration_screen.dart';
 import 'speed_result_screen.dart';
 
@@ -137,7 +138,10 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('스피드건')),
+      appBar: AppBar(
+        title: const Text('스피드건'),
+        actions: const [NotificationBellAction()],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
@@ -256,7 +260,8 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
                 variant: AppCardVariant.outlined,
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
+                    Icon(Icons.error_outline_rounded,
+                        color: cs.error, size: 18),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(

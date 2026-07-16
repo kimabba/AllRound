@@ -11,6 +11,7 @@ import '../theme/tokens.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/notification_bell_action.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
   const RulesScreen({super.key});
@@ -139,7 +140,10 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('룰북')),
+        appBar: AppBar(
+          title: const Text('룰북'),
+          actions: const [NotificationBellAction()],
+        ),
         body: AppEmptyState(
           icon: Icons.menu_book_outlined,
           title: '룰북을 불러올 수 없어요',
@@ -154,6 +158,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       return Scaffold(
         appBar: AppBar(
           title: BrandedAppBarTitle(title: _titleForSport(_activeSport!)),
+          actions: const [NotificationBellAction()],
         ),
         backgroundColor: cs.surfaceContainerLow,
         floatingActionButton: const _AskCoachFab(),
@@ -170,6 +175,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     return Scaffold(
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '룰북'),
+        actions: const [NotificationBellAction()],
         bottom: TabBar(
           controller: _tab,
           tabs: const [

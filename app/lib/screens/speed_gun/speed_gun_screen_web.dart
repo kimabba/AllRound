@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/notification_bell_action.dart';
+
 // 웹 빌드용 stub — dart:io / FFmpeg 미지원 플랫폼에서 사용
 class SpeedGunScreen extends StatelessWidget {
   const SpeedGunScreen({super.key});
@@ -8,7 +10,10 @@ class SpeedGunScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('스피드건')),
+      appBar: AppBar(
+        title: const Text('스피드건'),
+        actions: const [NotificationBellAction()],
+      ),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

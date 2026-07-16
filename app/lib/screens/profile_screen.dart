@@ -12,6 +12,7 @@ import '../theme/tokens.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
+import '../widgets/notification_bell_action.dart';
 import '../widgets/profile/profile_sports_widgets.dart';
 
 const _profileAvatarPrefsKey = 'profile.avatar.base64';
@@ -281,6 +282,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
             onAvatarTap: _showProfilePhotoSheet,
+            actions: const [NotificationBellAction()],
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(

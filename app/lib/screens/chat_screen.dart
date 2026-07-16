@@ -16,6 +16,7 @@ import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
 import '../widgets/moderation/ugc_moderation_widgets.dart';
+import '../widgets/notification_bell_action.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -219,6 +220,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               icon: const Icon(Icons.add_comment_outlined),
               tooltip: '새 대화',
             ),
+          const NotificationBellAction(),
         ],
       ),
       body: Column(

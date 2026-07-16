@@ -14,6 +14,7 @@ import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
+import '../widgets/notification_bell_action.dart';
 import 'clubs/club_create_screen.dart';
 import 'clubs/club_detail_screen.dart';
 
@@ -375,6 +376,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
         title: const BrandedAppBarTitle(title: '클럽'),
+        actions: const [NotificationBellAction()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreate,

@@ -30,14 +30,16 @@ mixin NotificationApi on ApiBase {
   }
 
   Future<void> markNotificationRead(String id) async {
-    await supabase
-        .from('notifications')
-        .update({'is_read': true}).eq('id', id);
+    await supabase.from('notifications').update({'is_read': true}).eq('id', id);
   }
 
   Future<void> markAllNotificationsRead() async {
     await supabase
         .from('notifications')
         .update({'is_read': true}).eq('is_read', false);
+  }
+
+  Future<void> deleteNotification(String id) async {
+    await supabase.from('notifications').delete().eq('id', id);
   }
 }

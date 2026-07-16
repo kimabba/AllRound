@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/notification_bell_action.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -85,7 +86,10 @@ class MoreScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '더보기')),
+      appBar: AppBar(
+        title: const BrandedAppBarTitle(title: '더보기'),
+        actions: const [NotificationBellAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,

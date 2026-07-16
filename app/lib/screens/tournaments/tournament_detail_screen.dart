@@ -13,6 +13,7 @@ import '../../utils/grade_labels.dart';
 import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/notification_bell_action.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
   const TournamentDetailScreen({super.key, required this.tournamentId});
@@ -134,6 +135,7 @@ class _TournamentDetailScreenState
                 }
               },
             ),
+          const NotificationBellAction(),
         ],
       ),
       bottomNavigationBar: _t == null

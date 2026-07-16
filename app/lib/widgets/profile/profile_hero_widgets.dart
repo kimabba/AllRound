@@ -21,6 +21,7 @@ class ProfileHeroSliver extends StatelessWidget {
   final AsyncValue<List<UserTennisOrg>> tennisOrgs;
   final Uint8List? avatarBytes;
   final VoidCallback onAvatarTap;
+  final List<Widget> actions;
 
   const ProfileHeroSliver({
     super.key,
@@ -32,6 +33,7 @@ class ProfileHeroSliver extends StatelessWidget {
     required this.tennisOrgs,
     required this.avatarBytes,
     required this.onAvatarTap,
+    this.actions = const [],
   });
 
   @override
@@ -51,6 +53,7 @@ class ProfileHeroSliver extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
+      actions: actions,
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,

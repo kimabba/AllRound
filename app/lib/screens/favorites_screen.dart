@@ -11,6 +11,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/notification_bell_action.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/tournament_card.dart';
 
@@ -42,6 +43,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
     return Scaffold(
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '관심'),
+        actions: const [NotificationBellAction()],
         bottom: TabBar(
           controller: _tab,
           tabs: const [

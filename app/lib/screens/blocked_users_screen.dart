@@ -5,6 +5,7 @@ import '../models/moderation.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/notification_bell_action.dart';
 
 class BlockedUsersScreen extends ConsumerStatefulWidget {
   const BlockedUsersScreen({super.key});
@@ -51,7 +52,10 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '차단 관리')),
+      appBar: AppBar(
+        title: const BrandedAppBarTitle(title: '차단 관리'),
+        actions: const [NotificationBellAction()],
+      ),
       body: FutureBuilder<List<BlockedUser>>(
         future: _future,
         builder: (context, snapshot) {

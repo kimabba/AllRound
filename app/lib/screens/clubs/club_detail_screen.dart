@@ -17,6 +17,7 @@ import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
+import '../../widgets/notification_bell_action.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
@@ -451,6 +452,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                 PopupMenuItem(value: 'block', child: Text('개설자 차단')),
               ],
             ),
+          const NotificationBellAction(),
         ],
       ),
       body: Column(

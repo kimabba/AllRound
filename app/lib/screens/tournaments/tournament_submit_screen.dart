@@ -8,6 +8,7 @@ import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/notification_bell_action.dart';
 
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
@@ -121,7 +122,10 @@ class _TournamentSubmitScreenState
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('대회 제보')),
+      appBar: AppBar(
+        title: const Text('대회 제보'),
+        actions: const [NotificationBellAction()],
+      ),
       body: Form(
         key: _form,
         child: ListView(
@@ -347,13 +351,13 @@ class _TournamentSubmitScreenState
   }
 
   InputDecoration _inputDeco(String label) => InputDecoration(
-    labelText: label,
-    border: OutlineInputBorder(borderRadius: AppRadius.card),
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
-      vertical: AppSpacing.md,
-    ),
-  );
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: AppRadius.card),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+      );
 
   String? _optionalHttpUrlValidator(String? value) {
     final trimmed = value?.trim() ?? '';

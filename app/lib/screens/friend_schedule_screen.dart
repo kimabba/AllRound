@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../theme/tokens.dart';
+import '../widgets/notification_bell_action.dart';
 
 class FriendScheduleScreen extends StatefulWidget {
   const FriendScheduleScreen({super.key});
@@ -211,28 +212,7 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
             onPressed: () {},
             icon: const Icon(Icons.search_rounded, size: 30),
           ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                tooltip: '알림',
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded, size: 30),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFF4B3E),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          const NotificationBellAction(),
           const SizedBox(width: AppSpacing.xs),
         ],
       ),

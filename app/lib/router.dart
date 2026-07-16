@@ -230,28 +230,14 @@ class _MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final currentPath =
-        GoRouter.of(context).routeInformationProvider.value.uri.path;
     final idx = _indexOf(loc);
     final cs = Theme.of(context).colorScheme;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: cs.surfaceContainerLowest,
-              child: child,
-            ),
-          ),
-          if (currentPath != '/notifications')
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              right: 12,
-              child: const _NotificationBell(),
-            ),
-        ],
+      body: ColoredBox(
+        color: cs.surfaceContainerLowest,
+        child: child,
       ),
       bottomNavigationBar: keyboardVisible
           ? null
@@ -294,35 +280,6 @@ class _MainShell extends ConsumerWidget {
       Icons.grid_view_outlined => Icons.grid_view_rounded,
       _ => icon,
     };
-  }
-}
-
-class _NotificationBell extends ConsumerWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
-
-    return Material(
-      color: cs.surface.withValues(alpha: 0.96),
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: Badge(
-        isLabelVisible: unread > 0,
-        label: Text(unread > 99 ? '99+' : '$unread'),
-        child: IconButton(
-          tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
-          onPressed: () => context.push('/notifications'),
-          icon: Icon(
-            unread > 0
-                ? Icons.notifications_rounded
-                : Icons.notifications_none_rounded,
-          ),
-        ),
-      ),
-    );
   }
 }
 

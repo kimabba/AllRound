@@ -7,6 +7,7 @@ import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_card.dart';
 import '../widgets/allround_logo.dart';
+import '../widgets/notification_bell_action.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -18,6 +19,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   late Future<List<AppNotification>> _future;
+  final Set<String> _deletingIds = <String>{};
 
   @override
   void initState() {
@@ -32,6 +34,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<void> _refresh() async {
     ref.invalidate(unreadNotificationCountProvider);
     final future = _load();
+    if (!mounted) {
+      await future;
+      return;
+    }
     setState(() => _future = future);
     await future;
   }
@@ -68,6 +74,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
+  Future<void> _deleteNotification(AppNotification notification) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('알림 삭제'),
+        content: const Text('이 알림을 삭제할까요? 삭제한 알림은 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingIds.add(notification.id));
+    try {
+      await ref.read(apiProvider).deleteNotification(notification.id);
+      ref.invalidate(unreadNotificationCountProvider);
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('알림을 삭제했습니다.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('알림을 삭제하지 못했습니다. 다시 시도해주세요.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingIds.remove(notification.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -76,18 +123,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Row(
-          children: const [
-            AllRoundLogo(fontSize: 18),
-            SizedBox(width: AppSpacing.sm),
-            Text('알림함'),
-          ],
-        ),
+        title: const BrandedAppBarTitle(title: '알림함'),
         actions: [
           TextButton(
             onPressed: _markAllRead,
             child: const Text('전체 읽음'),
           ),
+          const NotificationBellAction(),
         ],
       ),
       body: FutureBuilder<List<AppNotification>>(
@@ -275,9 +317,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sm),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: cs.onSurfaceVariant,
+                            IconButton(
+                              tooltip: '알림 삭제',
+                              onPressed: _deletingIds.contains(item.id)
+                                  ? null
+                                  : () => _deleteNotification(item),
+                              icon: _deletingIds.contains(item.id)
+                                  ? const SizedBox.square(
+                                      dimension: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: cs.error,
+                                    ),
                             ),
                           ],
                         ),

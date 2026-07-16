@@ -13,6 +13,7 @@ import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
+import '../../widgets/notification_bell_action.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
   const ClubCreateScreen({super.key});
@@ -551,6 +552,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             icon: const Icon(Icons.restart_alt_rounded),
             tooltip: '작성 내용 초기화',
           ),
+          const NotificationBellAction(),
         ],
       ),
       body: !_draftReady
