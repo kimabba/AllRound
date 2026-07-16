@@ -100,6 +100,69 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// 비밀번호 재설정 메일 발송. 성공 시 시트를 닫고 스낵바로 안내한다.
+  /// 메일 링크는 구글 로그인과 동일한 딥링크 스킴으로 복귀해 passwordRecovery
+  /// 이벤트를 발생시키고, 라우터가 새 비번 설정 화면으로 보낸다.
+  Future<void> _forgotPassword({VoidCallback? onChanged}) async {
+    void set(VoidCallback fn) {
+      setState(fn);
+      onChanged?.call();
+    }
+
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      set(() => _error = '가입한 이메일을 입력한 뒤 눌러 주세요.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('비밀번호 재설정'),
+        content: Text('$email\n위 주소로 재설정 링크를 보낼까요?'),
+        actionsOverflowButtonSpacing: AppSpacing.sm,
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('메일 보내기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('취소'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    set(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(supabaseProvider).auth.resetPasswordForEmail(
+            email,
+            redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
+          );
+      if (!mounted) return;
+      setState(() => _busy = false);
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('재설정 메일을 보냈어요. 메일함을 확인해 주세요.')),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      set(() {
+        _busy = false;
+        _error = _authErrorMessage(e);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      set(() {
+        _busy = false;
+        _error = '오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      });
+    }
+  }
+
   /// Supabase AuthException 영어 원문을 사용자용 한국어로 매핑한다.
   String _authErrorMessage(AuthException e) {
     final m = e.message.toLowerCase();
@@ -256,6 +319,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                       ),
                     ],
+                    // 비밀번호 재설정은 kr.allround.app:// 딥링크로 앱을 여는
+                    // 흐름이라 모바일 전용. 웹(admin)에선 링크가 앱을 못 열고
+                    // 튕기므로 버튼을 숨긴다(admin 은 구글 로그인 권장). !kIsWeb.
+                    if (!_signUp && !kIsWeb)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _forgotPassword(
+                                    onChanged: () => setSheetState(() {}),
+                                  ),
+                          child: const Text('비밀번호를 잊으셨나요?'),
+                        ),
+                      ),
                     if (_error != null) ...[
                       const SizedBox(height: AppSpacing.md),
                       Text(
