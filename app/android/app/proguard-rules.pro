@@ -21,6 +21,12 @@
 -keep class org.tensorflow.lite.** { *; }
 -dontwarn org.tensorflow.lite.**
 
+# FFmpegKit registers Java methods from native code by their exact names.
+# The plugin ships these rules but does not expose them as consumer rules, so
+# the app must keep the package when R8/minification is enabled for release.
+-keep class com.antonkarpenko.ffmpegkit.** { *; }
+-dontwarn com.antonkarpenko.ffmpegkit.**
+
 # General Android rules
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
