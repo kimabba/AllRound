@@ -57,6 +57,37 @@ Deno.serve(async (req) => {
 
   const supa = serviceClient();
 
+  if (action === 'approve') {
+    const { data: pendingClubs, error: pendingClubsError } = await supa
+      .from('clubs')
+      .select('id, created_by')
+      .in('id', clubIds)
+      .eq('status', 'pending');
+    if (pendingClubsError) return errorResponse(pendingClubsError.message, 500);
+    if (!pendingClubs || pendingClubs.length === 0) {
+      return errorResponse('No pending clubs were found', 409);
+    }
+
+    const ownerMemberships = pendingClubs
+      .filter((club): club is { id: string; created_by: string } =>
+        typeof club.created_by === 'string'
+      )
+      .map((club) => ({
+        club_id: club.id,
+        user_id: club.created_by,
+        role: 'owner',
+        status: 'active',
+        left_at: null,
+      }));
+
+    if (ownerMemberships.length > 0) {
+      const { error: membershipError } = await supa
+        .from('club_members')
+        .upsert(ownerMemberships, { onConflict: 'club_id,user_id' });
+      if (membershipError) return errorResponse(membershipError.message, 500);
+    }
+  }
+
   const { data, error } = await supa
     .from('clubs')
     .update({
@@ -73,5 +104,6 @@ Deno.serve(async (req) => {
   if (!data || data.length === 0) {
     return errorResponse('No pending clubs were found', 409);
   }
+
   return jsonResponse({ ok: true, action, count: data.length });
 });
