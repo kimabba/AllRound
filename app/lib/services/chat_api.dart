@@ -12,6 +12,7 @@ mixin ChatApi on ApiBase {
     bool enableSearch = true,
     String? activeSport,
     Map<String, String>? selectedEntity,
+    Map<String, dynamic>? tournamentRefine,
   }) async* {
     final request = http.Request('POST', uri('chat'));
     final headers = await authHeaders();
@@ -25,6 +26,7 @@ mixin ChatApi on ApiBase {
       'enable_search': enableSearch,
       if (activeSport != null) 'active_sport': activeSport,
       if (selectedEntity != null) 'selected_entity': selectedEntity,
+      if (tournamentRefine != null) 'tournament_refine': tournamentRefine,
     });
 
     final client = http.Client();

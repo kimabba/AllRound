@@ -238,18 +238,20 @@ void main() {
       expect(sent, '상세 알려줘');
     });
 
-    testWidgets('renders regulation fields summary when present',
+    testWidgets('renders schedule and location, no fee/regulation clutter',
         (tester) async {
       const item = TournamentChatCardItem(
         id: '11111111-1111-1111-1111-111111111111',
         title: '영암 오픈',
         sport: 'tennis',
-        startDate: '2026-06-13',
+        location: '영암종합스포츠타운',
+        startDate: '2026-07-04',
+        applicationDeadline: '2026-07-01',
         eligible: true,
         eligibleGrades: [],
+        entryFee: 34000,
         regulationFields: [
-          RegulationField(label: '장소', value: '영암종합스포츠타운'),
-          RegulationField(label: '사용구', value: '헤드 챔피언십'),
+          RegulationField(label: '주최', value: '영암군 체육회'),
         ],
       );
       await tester.pumpWidget(MaterialApp(
@@ -261,14 +263,13 @@ void main() {
         ),
       ));
 
-      expect(
-        find.textContaining('영암종합스포츠타운', findRichText: true),
-        findsWidgets,
-      );
-      expect(
-        find.textContaining('헤드 챔피언십', findRichText: true),
-        findsWidgets,
-      );
+      // 일정+마감은 한 줄, 장소는 노출.
+      expect(find.textContaining('2026-07-04'), findsOneWidget);
+      expect(find.textContaining('마감'), findsOneWidget);
+      expect(find.text('영암종합스포츠타운'), findsOneWidget);
+      // 참가비·요강(주최) 은 카드에서 제거 — 상세 화면으로 유도.
+      expect(find.textContaining('34000'), findsNothing);
+      expect(find.textContaining('영암군 체육회', findRichText: true), findsNothing);
     });
 
     testWidgets('renders nothing extra when regulation fields empty',
