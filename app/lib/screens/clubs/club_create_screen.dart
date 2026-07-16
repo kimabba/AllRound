@@ -224,6 +224,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _submit() async {
+    // 약관 확인 같은 첫 await 전에 잠가야 빠른 연속 탭이 두 요청을 만들지 않는다.
+    if (_submitting || _submitted) return;
     if (!_validateBasicStep()) {
       setState(() => _step = 0);
       return;
@@ -233,17 +235,19 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
-    final allowed = await ensureUgcPermission(
-      context,
-      ref,
-      UgcActionKind.community,
-    );
-    if (!allowed || !mounted) return;
     setState(() {
       _submitting = true;
-      _submittingLabel = '제출 준비 중';
+      _submittingLabel = '권한 확인 중';
     });
     try {
+      final allowed = await ensureUgcPermission(
+        context,
+        ref,
+        UgcActionKind.community,
+      );
+      if (!allowed || !mounted) return;
+      _setSubmittingLabel('제출 준비 중');
+
       String? logoUrl;
       final introImageUrls = <String>[];
       final imageCount = (_logoBytes == null ? 0 : 1) + _introImages.length;
@@ -325,7 +329,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted && !_submitted) {
         setState(() {
           _submitting = false;
           _submittingLabel = null;
