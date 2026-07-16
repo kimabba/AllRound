@@ -13,7 +13,7 @@ List<ChatFollowUpSuggestion> chatFollowUpSuggestions(
   required String? sport,
 }) {
   final query = userMessage.trim().toLowerCase();
-  final sportLabel = sport == 'futsal' ? '풀살' : '테니스';
+  final sportLabel = sport == 'futsal' ? '풋살' : '테니스';
 
   if (_containsAny(query, const ['신청', '접수', '신청서'])) {
     return const [
@@ -68,7 +68,7 @@ List<ChatFollowUpSuggestion> chatFollowUpSuggestions(
 
   if (_containsAny(query, const ['규칙', '룰', '파울', '점수'])) {
     final scoreMessage =
-        sport == 'futsal' ? '풀살 경기 시간과 점수 규칙을 알려줘' : '테니스 세트와 점수 계산법을 알려줘';
+        sport == 'futsal' ? '풋살 경기 시간과 점수 규칙을 알려줘' : '테니스 세트와 점수 계산법을 알려줘';
     return [
       ChatFollowUpSuggestion(label: '점수 계산법', message: scoreMessage),
       ChatFollowUpSuggestion(

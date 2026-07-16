@@ -22,7 +22,7 @@ void main() {
       sport: 'futsal',
     );
 
-    expect(suggestions.first.message, contains('풀살'));
+    expect(suggestions.first.message, contains('풋살'));
     expect(suggestions.map((item) => item.label), contains('가입 방법은?'));
   });
 }
