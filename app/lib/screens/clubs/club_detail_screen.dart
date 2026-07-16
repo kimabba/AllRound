@@ -386,14 +386,14 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     if (_loading) {
       return Scaffold(
         backgroundColor: cs.surfaceContainerLowest,
-        appBar: AppBar(),
+        appBar: AppBar(actions: const [NotificationBellAction()]),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_error != null || _club == null) {
       return Scaffold(
         backgroundColor: cs.surfaceContainerLowest,
-        appBar: AppBar(),
+        appBar: AppBar(actions: const [NotificationBellAction()]),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

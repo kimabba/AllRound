@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/speed_measurement.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/notification_bell_action.dart';
 
 class SpeedResultScreen extends StatelessWidget {
   final SpeedResult result;
@@ -14,7 +15,10 @@ class SpeedResultScreen extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('속도 측정 결과')),
+      appBar: AppBar(
+        title: const Text('속도 측정 결과'),
+        actions: const [NotificationBellAction()],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
@@ -76,13 +80,17 @@ class SpeedResultScreen extends StatelessWidget {
                     label: '평균 속도',
                     value: '${result.avgSpeedKmh.toStringAsFixed(1)} km/h',
                   ),
-                  Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  Divider(
+                      height: 1,
+                      color: cs.outlineVariant.withValues(alpha: 0.5)),
                   _StatRow(
                     icon: Icons.videocam_rounded,
                     label: '촬영 프레임레이트',
                     value: '${result.fps.toStringAsFixed(0)} fps',
                   ),
-                  Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  Divider(
+                      height: 1,
+                      color: cs.outlineVariant.withValues(alpha: 0.5)),
                   _StatRow(
                     icon: Icons.sports_tennis_rounded,
                     label: '감지된 프레임',
@@ -131,8 +139,7 @@ class SpeedResultScreen extends StatelessWidget {
                     child: Text(
                       'MVP 버전 정확도: ±15~30% (레이더건 대비). '
                       '측면 카메라 각도·240fps 영상 권장.',
-                      style: tt.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ),
                 ],
@@ -150,7 +157,8 @@ class _StatRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _StatRow({required this.icon, required this.label, required this.value});
+  const _StatRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -219,8 +227,9 @@ class _TrajectoryPainter extends CustomPainter {
     for (var i = 1; i < trajectory.length; i++) {
       final prev = toScreen(trajectory[i - 1]);
       final cur = toScreen(trajectory[i]);
-      final speedRatio =
-          peakSpeed > 0 ? (trajectory[i].speedKmh / peakSpeed).clamp(0.0, 1.0) : 0.0;
+      final speedRatio = peakSpeed > 0
+          ? (trajectory[i].speedKmh / peakSpeed).clamp(0.0, 1.0)
+          : 0.0;
 
       final paint = Paint()
         ..strokeWidth = 3

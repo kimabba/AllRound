@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/speed_measurement.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/notification_bell_action.dart';
 
 class CourtCalibrationScreen extends StatefulWidget {
   final String firstFramePath;
@@ -31,6 +32,7 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
         title: const Text('코트 캘리브레이션'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        actions: const [NotificationBellAction()],
       ),
       backgroundColor: Colors.black,
       body: Column(
@@ -38,7 +40,9 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
           // 안내 배너
           Container(
             width: double.infinity,
-            color: done ? Colors.green.withValues(alpha: 0.2) : cs.primaryContainer,
+            color: done
+                ? Colors.green.withValues(alpha: 0.2)
+                : cs.primaryContainer,
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Text(
               done
@@ -142,9 +146,7 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
 
     // 표시 크기 → 실제 픽셀 좌표 변환
     // (간단히 직접 비율 사용 — 실제 ImageInfo가 있으면 더 정확)
-    final pixelPoints = _points
-        .map((p) => (x: p.dx, y: p.dy))
-        .toList();
+    final pixelPoints = _points.map((p) => (x: p.dx, y: p.dy)).toList();
 
     final calibration = CourtCalibration(
       pixelPoints: pixelPoints,
