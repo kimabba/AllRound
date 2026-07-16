@@ -67,7 +67,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
 
   void _initTab() {
     _monthlyFee = club.monthlyFee;
-    _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     if (club.isMember) {
       _reload();
     } else {
@@ -135,7 +135,6 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     try {
       final fetched = await ref.read(apiProvider).getClub(clubId);
       if (!mounted) return;
-      final nextTabLength = (fetched.isOwner || fetched.isManager) ? 5 : 4;
       setState(() {
         _club = fetched;
         _monthlyFee = fetched.monthlyFee;
@@ -145,11 +144,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _joinRequestLoading = false;
           _joinRequestLoadFailed = false;
         }
-        if (_tab == null || _tab!.length != nextTabLength) {
-          final nextIndex =
-              ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
+        if (_tab == null || _tab!.length != 4) {
+          final nextIndex = ((_tab?.index ?? 0).clamp(0, 3)).toInt();
           _tab?.dispose();
-          _tab = TabController(length: nextTabLength, vsync: this);
+          _tab = TabController(length: 4, vsync: this);
           _tab!.index = nextIndex;
         }
       });
@@ -378,6 +376,29 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     }
   }
 
+  Future<void> _openManagement() async {
+    final deleted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ClubManagementScreen(
+          club: club,
+          membersFuture: _membersF ?? Future.value(const <ClubMember>[]),
+          monthlyFee: _monthlyFee,
+          onMonthlyFeeChanged: (value) {
+            if (mounted) setState(() => _monthlyFee = value);
+          },
+          onChanged: _refreshMembershipData,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (deleted == true) {
+      Navigator.pop(context, ClubDetailResult.deleted);
+      return;
+    }
+    await _refreshClub();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -429,8 +450,14 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text(club.name),
+        title: const Text('클럽'),
         actions: [
+          if (_canManageClub)
+            TextButton.icon(
+              onPressed: _openManagement,
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: const Text('관리'),
+            ),
           IconButton(
             tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
             onPressed: () => _toggleFavorite(isFavorite),
@@ -460,10 +487,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
             _RejectedClubBanner(
               reason: club.statusReason,
               onDelete: _deleteRejectedClub,
-              onEdit: () => _tab?.animateTo(_tab!.length - 1),
+              onEdit: _openManagement,
               onResubmit: _resubmitRejectedClub,
             ),
-          _Header(club: club),
+          _Header(club: club, monthlyFee: _monthlyFee),
           Material(
             color: cs.surface,
             child: TabBar(
@@ -472,11 +499,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                 fontWeight: FontWeight.w800,
               ),
               tabs: [
-                const Tab(text: '소개'),
-                const Tab(text: '멤버'),
-                const Tab(text: '일정'),
+                const Tab(text: '홈'),
                 const Tab(text: '게시판'),
-                if (_canManageClub) const Tab(text: '관리'),
+                const Tab(text: '일정'),
+                const Tab(text: '멤버'),
               ],
             ),
           ),
@@ -488,30 +514,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   club: club,
                   monthlyFee: _monthlyFee,
                   inFlight: _inFlight,
-                  joinRequest: _myJoinRequest,
-                  joinRequestLoading: _joinRequestLoading,
-                  joinRequestLoadFailed: _joinRequestLoadFailed,
-                  onJoin: _join,
-                  onCancelJoin: _cancelJoinRequest,
-                  onRetryJoinStatus: _loadMyJoinRequest,
                   onLeave: _leave,
-                  onInquiry: () => Navigator.push<void>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ClubInquiryConversationScreen(
-                        clubId: club.id,
-                        clubName: club.name,
-                      ),
-                    ),
-                  ),
+                  onOpenPosts: () => _tab?.animateTo(1),
+                  onOpenEvents: () => _tab?.animateTo(2),
                 ),
-                isMember
-                    ? _MembersTab(
-                        future: membersFuture,
-                        club: club,
-                        onChanged: _refreshMembershipData,
-                      )
-                    : _memberOnlyNotice(cs, tt),
+                isMember ? _PostsTab(club: club) : _memberOnlyNotice(cs, tt),
                 isMember
                     ? _EventsTab(
                         club: club,
@@ -521,26 +528,38 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                         onChanged: _reload,
                       )
                     : _memberOnlyNotice(cs, tt),
-                isMember ? _PostsTab(club: club) : _memberOnlyNotice(cs, tt),
-                if (_canManageClub)
-                  _ClubManagementTab(
-                    club: club,
-                    membersFuture: membersFuture,
-                    monthlyFee: _monthlyFee,
-                    onMonthlyFeeChanged: (value) {
-                      setState(() => _monthlyFee = value);
-                    },
-                    onChanged: _refreshMembershipData,
-                    onDeleted: () => Navigator.pop(
-                      context,
-                      ClubDetailResult.deleted,
-                    ),
-                  ),
+                isMember
+                    ? _MembersTab(
+                        future: membersFuture,
+                        club: club,
+                        onChanged: _refreshMembershipData,
+                      )
+                    : _memberOnlyNotice(cs, tt),
               ],
             ),
           ),
         ],
       ),
+      bottomNavigationBar: !isMember && club.isApproved
+          ? _PreJoinActionBar(
+              inFlight: _inFlight,
+              joinRequest: _myJoinRequest,
+              joinRequestLoading: _joinRequestLoading,
+              joinRequestLoadFailed: _joinRequestLoadFailed,
+              onInquiry: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ClubInquiryConversationScreen(
+                    clubId: club.id,
+                    clubName: club.name,
+                  ),
+                ),
+              ),
+              onJoin: _join,
+              onCancelJoin: _cancelJoinRequest,
+              onRetryJoinStatus: _loadMyJoinRequest,
+            )
+          : null,
     );
   }
 
@@ -634,7 +653,9 @@ class _RejectedClubBanner extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   final Club club;
-  const _Header({required this.club});
+  final int? monthlyFee;
+
+  const _Header({required this.club, required this.monthlyFee});
 
   @override
   Widget build(BuildContext context) {
@@ -649,73 +670,163 @@ class _Header extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.sm,
         AppSpacing.lg,
-        AppSpacing.lg,
+        AppSpacing.md,
       ),
       decoration: BoxDecoration(
         color: cs.surface,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: AppCard(
-        variant: AppCardVariant.outlined,
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ClubLogo(club: club, size: 80),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          _MetaChip(
-                            icon: isTennis
-                                ? Icons.sports_tennis_rounded
-                                : Icons.sports_soccer_rounded,
-                            label: sportLabelFromString(club.sport),
-                            color: accent,
-                          ),
-                          if (club.region != null && club.region!.isNotEmpty)
-                            _MetaChip(
-                              icon: Icons.place_outlined,
-                              label: club.region!,
-                            ),
-                          _MetaChip(
-                            icon: Icons.groups_rounded,
-                            label: '${club.memberCount}명',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        club.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          height: 1.12,
-                        ),
-                      ),
-                      if (club.isMember) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        _RolePill(club: club),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ClubLogo(club: club, size: 68),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        _ClubStatusPill(club: club),
+                        if (club.isMember) _RolePill(club: club),
                       ],
-                    ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      club.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        height: 1.12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          isTennis
+                              ? Icons.sports_tennis_rounded
+                              : Icons.sports_soccer_rounded,
+                          size: 15,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            [
+                              sportLabelFromString(club.sport),
+                              if (club.region?.isNotEmpty == true) club.region!,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: AppRadius.card,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _HeaderStat(
+                    icon: Icons.groups_rounded,
+                    label: '멤버',
+                    value: '${club.memberCount}명',
+                  ),
+                ),
+                const _HeaderStatDivider(),
+                Expanded(
+                  child: _HeaderStat(
+                    icon: Icons.calendar_month_rounded,
+                    label: '활동일',
+                    value: club.meetingDays.isEmpty
+                        ? '미정'
+                        : club.meetingDays.join('·'),
+                  ),
+                ),
+                const _HeaderStatDivider(),
+                Expanded(
+                  child: _HeaderStat(
+                    icon: Icons.payments_outlined,
+                    label: '회비',
+                    value: monthlyFee == null
+                        ? '미정'
+                        : clubMonthlyFeeLabel(monthlyFee!),
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _HeaderStat extends StatelessWidget {
+  const _HeaderStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: cs.primary),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          Text(
+            label,
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderStatDivider extends StatelessWidget {
+  const _HeaderStatDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 38,
+        color: Theme.of(context).colorScheme.outlineVariant,
+      );
 }
 
 class _ClubLogo extends StatelessWidget {
@@ -758,48 +869,6 @@ class _ClubLogo extends StatelessWidget {
   }
 }
 
-class _MetaChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final fg = color ?? cs.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: (color ?? cs.primary)
-            .withValues(alpha: color == null ? 0.08 : 0.14),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _RolePill extends StatelessWidget {
   final Club club;
   const _RolePill({required this.club});
@@ -828,31 +897,183 @@ class _RolePill extends StatelessWidget {
   }
 }
 
+class _ClubStatusPill extends StatelessWidget {
+  const _ClubStatusPill({required this.club});
+
+  final Club club;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (label, background, foreground, icon) = club.isPending
+        ? (
+            '승인 대기',
+            cs.tertiaryContainer,
+            cs.onTertiaryContainer,
+            Icons.schedule_rounded,
+          )
+        : club.isRejected
+            ? (
+                '승인 반려',
+                cs.errorContainer,
+                cs.onErrorContainer,
+                Icons.error_outline_rounded,
+              )
+            : (
+                club.isMember ? '운영 중' : '가입 가능',
+                cs.secondaryContainer,
+                cs.onSecondaryContainer,
+                Icons.check_circle_outline_rounded,
+              );
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: foreground),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreJoinActionBar extends StatelessWidget {
+  const _PreJoinActionBar({
+    required this.inFlight,
+    required this.joinRequest,
+    required this.joinRequestLoading,
+    required this.joinRequestLoadFailed,
+    required this.onInquiry,
+    required this.onJoin,
+    required this.onCancelJoin,
+    required this.onRetryJoinStatus,
+  });
+
+  final bool inFlight;
+  final MyClubJoinRequest? joinRequest;
+  final bool joinRequestLoading;
+  final bool joinRequestLoadFailed;
+  final VoidCallback onInquiry;
+  final VoidCallback onJoin;
+  final VoidCallback onCancelJoin;
+  final VoidCallback onRetryJoinStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final waiting = joinRequest?.isPending == true;
+    final String actionLabel;
+    final IconData actionIcon;
+    final VoidCallback? action;
+
+    if (joinRequestLoading) {
+      actionLabel = '확인 중';
+      actionIcon = Icons.hourglass_empty_rounded;
+      action = null;
+    } else if (joinRequestLoadFailed) {
+      actionLabel = '상태 다시 확인';
+      actionIcon = Icons.refresh_rounded;
+      action = inFlight ? null : onRetryJoinStatus;
+    } else if (waiting) {
+      actionLabel = '승인 대기 · 취소';
+      actionIcon = Icons.schedule_rounded;
+      action = inFlight ? null : onCancelJoin;
+    } else {
+      actionLabel = '가입 신청';
+      actionIcon = Icons.person_add_rounded;
+      action = inFlight ? null : onJoin;
+    }
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onInquiry,
+                icon: const Icon(Icons.forum_outlined),
+                label: const Text('1:1 문의'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              flex: 2,
+              child: waiting
+                  ? FilledButton.tonalIcon(
+                      onPressed: action,
+                      icon: Icon(actionIcon),
+                      label: Text(actionLabel),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: action,
+                      icon: inFlight
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(actionIcon),
+                      label: Text(actionLabel),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── 소개 탭 ──────────────────────────────────────────────────────
 class _IntroTab extends StatelessWidget {
   final Club club;
   final int? monthlyFee;
   final bool inFlight;
-  final MyClubJoinRequest? joinRequest;
-  final bool joinRequestLoading;
-  final bool joinRequestLoadFailed;
-  final VoidCallback onJoin;
-  final VoidCallback onCancelJoin;
-  final VoidCallback onRetryJoinStatus;
   final VoidCallback onLeave;
-  final VoidCallback onInquiry;
+  final VoidCallback onOpenPosts;
+  final VoidCallback onOpenEvents;
+
   const _IntroTab({
     required this.club,
     required this.monthlyFee,
     required this.inFlight,
-    required this.joinRequest,
-    required this.joinRequestLoading,
-    required this.joinRequestLoadFailed,
-    required this.onJoin,
-    required this.onCancelJoin,
-    required this.onRetryJoinStatus,
     required this.onLeave,
-    required this.onInquiry,
+    required this.onOpenPosts,
+    required this.onOpenEvents,
   });
 
   @override
@@ -872,6 +1093,28 @@ class _IntroTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        if (club.isMember) ...[
+          Row(
+            children: [
+              Expanded(
+                child: _HomeQuickAction(
+                  icon: Icons.article_outlined,
+                  label: '게시판 보기',
+                  onTap: onOpenPosts,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _HomeQuickAction(
+                  icon: Icons.calendar_month_outlined,
+                  label: '일정 확인',
+                  onTap: onOpenEvents,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         AppCard(
           variant: AppCardVariant.outlined,
           child: Column(
@@ -969,79 +1212,7 @@ class _IntroTab extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.xl),
-        if (!club.isMember && club.isApproved) ...[
-          OutlinedButton.icon(
-            onPressed: onInquiry,
-            icon: const Icon(Icons.forum_outlined),
-            label: const Text('가입 전 1:1 문의'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        if (!club.isMember && joinRequestLoading)
-          FilledButton.icon(
-            onPressed: null,
-            icon: const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            label: const Text('가입 신청 상태 확인 중'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-            ),
-          )
-        else if (!club.isMember && joinRequestLoadFailed)
-          OutlinedButton.icon(
-            onPressed: inFlight ? null : onRetryJoinStatus,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('가입 신청 상태 다시 확인'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-            ),
-          )
-        else if (!club.isMember && joinRequest?.isPending == true) ...[
-          FilledButton.tonalIcon(
-            onPressed: inFlight ? null : onCancelJoin,
-            icon: inFlight
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.hourglass_top_rounded),
-            label: const Text('가입 승인 대기 중 · 취소하기'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-            ),
-          ),
-          if (joinRequest?.createdAt != null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                '신청일 ${_formatJoinRequestDate(joinRequest!.createdAt)}',
-                textAlign: TextAlign.center,
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ),
-        ] else if (!club.isMember)
-          FilledButton.icon(
-            onPressed: inFlight ? null : onJoin,
-            icon: inFlight
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.person_add_rounded),
-            label: const Text('가입 신청'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-            ),
-          )
-        else if (!club.isOwner)
+        if (club.isMember && !club.isOwner)
           OutlinedButton.icon(
             onPressed: inFlight ? null : onLeave,
             icon: const Icon(Icons.exit_to_app_rounded),
@@ -1085,6 +1256,55 @@ class _IntroTab extends StatelessWidget {
                   )),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeQuickAction extends StatelessWidget {
+  const _HomeQuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.primaryContainer.withValues(alpha: 0.58),
+      borderRadius: AppRadius.card,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.card,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: cs.onPrimaryContainer),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1456,7 +1676,89 @@ class _ClubJoinRequest {
   }
 }
 
-// ─── 관리 탭 ──────────────────────────────────────────────────────
+// ─── 관리 화면 ────────────────────────────────────────────────────
+class _ClubManagementScreen extends ConsumerStatefulWidget {
+  const _ClubManagementScreen({
+    required this.club,
+    required this.membersFuture,
+    required this.monthlyFee,
+    required this.onMonthlyFeeChanged,
+    required this.onChanged,
+  });
+
+  final Club club;
+  final Future<List<ClubMember>> membersFuture;
+  final int? monthlyFee;
+  final ValueChanged<int?> onMonthlyFeeChanged;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_ClubManagementScreen> createState() =>
+      _ClubManagementScreenState();
+}
+
+class _ClubManagementScreenState extends ConsumerState<_ClubManagementScreen> {
+  int? _monthlyFee;
+  late Future<List<ClubMember>> _membersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _monthlyFee = widget.monthlyFee;
+    _membersFuture = widget.membersFuture;
+  }
+
+  void _handleChanged() {
+    setState(() {
+      _membersFuture = ref.read(apiProvider).clubMembers(widget.club.id);
+    });
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+      appBar: AppBar(
+        title: const Text('클럽 관리'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(28),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: Text(
+                widget.club.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: _ClubManagementTab(
+        club: widget.club,
+        membersFuture: _membersFuture,
+        monthlyFee: _monthlyFee,
+        onMonthlyFeeChanged: (value) {
+          setState(() => _monthlyFee = value);
+          widget.onMonthlyFeeChanged(value);
+        },
+        onChanged: _handleChanged,
+        onDeleted: () => Navigator.pop(context, true),
+      ),
+    );
+  }
+}
+
 class _ClubManagementTab extends ConsumerWidget {
   final Club club;
   final Future<List<ClubMember>> membersFuture;
@@ -1501,7 +1803,12 @@ class _ClubManagementTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          '처리할 일',
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: AppSpacing.sm),
         AppCard(
           variant: AppCardVariant.outlined,
           child: Row(
@@ -1543,6 +1850,16 @@ class _ClubManagementTab extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
+        _JoinRequestManageCard(
+          club: club,
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          '클럽 설정',
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: AppSpacing.sm),
         _ClubIntroManageCard(
           club: club,
           onChanged: onChanged,
@@ -1552,11 +1869,6 @@ class _ClubManagementTab extends ConsumerWidget {
           club: club,
           monthlyFee: monthlyFee,
           onChanged: onMonthlyFeeChanged,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _JoinRequestManageCard(
-          club: club,
-          onChanged: onChanged,
         ),
         if (club.isOwner) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1693,6 +2005,15 @@ class _JoinRequestManageCardState
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
+              FutureBuilder<List<_ClubJoinRequest>>(
+                future: _future,
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.length ?? 0;
+                  return count > 0
+                      ? _PendingCountBadge(count: count)
+                      : const SizedBox.shrink();
+                },
+              ),
               IconButton(
                 tooltip: '새로고침',
                 onPressed: _refresh,
@@ -1755,6 +2076,33 @@ class _JoinRequestManageCardState
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PendingCountBadge extends StatelessWidget {
+  const _PendingCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(
+        color: cs.error,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onError,
+              fontWeight: FontWeight.w900,
+            ),
       ),
     );
   }
