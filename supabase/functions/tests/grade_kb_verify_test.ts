@@ -36,7 +36,7 @@ async function readText(relFromTestFile: string): Promise<string> {
 const KBS: Array<{ json: string; seed: string; org: string }> = [
   {
     json: '../../../docs/kb/grades/kato.divisions.json',
-    seed: '../../migrations/20260712000000_seed_kato_divisions.sql',
+    seed: '../../migrations/20260713042834_seed_kato_divisions.sql',
     org: 'kato',
   },
 ];
