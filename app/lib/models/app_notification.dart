@@ -41,6 +41,7 @@ class AppNotification {
         'club_join_request' => '가입 신청',
         'club_join_approved' => '가입 승인',
         'club_join_rejected' => '가입 거절',
+        'club_approval_request' => '클럽 승인 요청',
         'club_mention' => '멘션',
         'club_comment' => '댓글',
         'club_event_reminder' => '일정 리마인더',
