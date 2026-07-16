@@ -5,7 +5,7 @@ Detailed rules live under `docs/rules/` and should be loaded only when the task 
 
 ## 🚨 작업 시작 전 필독
 
-**모든 작업(사람·AI) 시작 전 [`docs/team/START-HERE.md`](docs/team/START-HERE.md)를 먼저 읽는다** — 역할(드론/시리야/백과장/kimabba)·레인(파일 충돌 방지)·2주 출시 로드맵·절대 주의사항. 매 세션 첫 행동.
+**모든 작업(사람·AI) 시작 전 [`docs/team/START-HERE.md`](docs/team/START-HERE.md)를 먼저 읽는다** — 역할(드론/시리/백과장/kimabba)·레인(파일 충돌 방지)·2주 출시 로드맵·절대 주의사항. 매 세션 첫 행동.
 
 ## Always-on rules
 
