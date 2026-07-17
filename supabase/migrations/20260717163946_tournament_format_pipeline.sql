@@ -133,3 +133,76 @@ begin
   from stamped s join latest_doc ld on ld.tid = s.id;
 end;
 $$;
+
+create or replace function public.format_pending_complete(
+  p_tid uuid, p_token uuid, p_document_id uuid, p_source_hash text,
+  p_regulation_fields jsonb, p_regulation_notes text[], p_regulation_body text,
+  p_prize text, p_format text, p_description text,
+  p_model text, p_flags jsonb, p_stage boolean
+) returns boolean language plpgsql security definer set search_path = pg_catalog, public as $$
+declare v_rows int;
+begin
+  -- stale-write 가드: 문서·해시가 여전히 최신이 아니면 재큐하고 반영 안 함.
+  if not exists (
+    select 1 from public.crawl_documents cd
+    where cd.id = p_document_id and cd.tournament_id = p_tid and cd.content_hash = p_source_hash
+  ) then
+    update public.tournaments
+       set format_status='pending', format_claim_token=null, claimed_at=null
+     where id = p_tid and format_claim_token = p_token and format_status='processing';
+    return false;
+  end if;
+
+  if p_stage then
+    -- 기존 published 검수 스테이징: 콘텐츠 미기록, staged에 보관, needs_review.
+    update public.tournaments t set
+      format_status = 'needs_review',
+      format_staged = jsonb_build_object(
+        'regulation_fields', coalesce(p_regulation_fields,'[]'::jsonb),
+        'regulation_notes', to_jsonb(coalesce(p_regulation_notes, array[]::text[])),
+        'regulation_body', p_regulation_body, 'prize', p_prize,
+        'format', p_format, 'description', p_description),
+      format_model = p_model, format_flags = p_flags,
+      format_source_hash = p_source_hash, format_claim_token = null, claimed_at = null
+    where t.id = p_tid and t.format_claim_token = p_token
+      and t.format_status = 'processing' and t.manual_description = false;
+  else
+    -- 신규/승인 유입: 콘텐츠 직접 반영, formatted.
+    update public.tournaments t set
+      regulation_fields = p_regulation_fields, regulation_notes = p_regulation_notes,
+      regulation_body = p_regulation_body, prize = p_prize, format = p_format,
+      description = p_description, format_status = 'formatted', formatted_at = now(),
+      format_model = p_model, format_flags = p_flags, format_source_hash = p_source_hash,
+      format_staged = null, format_claim_token = null, claimed_at = null
+    where t.id = p_tid and t.format_claim_token = p_token
+      and t.format_status = 'processing' and t.manual_description = false;
+  end if;
+  get diagnostics v_rows = row_count;
+  return v_rows > 0;
+end;
+$$;
+
+create or replace function public.format_pending_reject(
+  p_tid uuid, p_token uuid, p_flags jsonb, p_source_hash text
+) returns boolean language plpgsql security definer set search_path = pg_catalog, public as $$
+declare v_rows int;
+begin
+  update public.tournaments t set
+    format_status = 'needs_review', format_flags = p_flags,
+    format_source_hash = p_source_hash, format_claim_token = null, claimed_at = null
+  where t.id = p_tid and t.format_claim_token = p_token and t.format_status = 'processing';
+  get diagnostics v_rows = row_count;
+  return v_rows > 0;
+end;
+$$;
+
+create or replace function public.format_pending_fail(
+  p_tid uuid, p_token uuid
+) returns void language plpgsql security definer set search_path = pg_catalog, public as $$
+begin
+  update public.tournaments t
+     set format_status = case when t.format_attempts >= 3 then 'failed' else 'pending' end,
+         format_claim_token = null, claimed_at = null
+   where t.id = p_tid and t.format_claim_token = p_token and t.format_status = 'processing';
+end;
+$$;
