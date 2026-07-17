@@ -67,10 +67,14 @@ class AppShadows {
 }
 
 /// 종목 액센트 컬러 (테니스/풋살)
+///
+/// Active Bold 베이스라인(docs/design/active-bold-system.md): 테니스공 색을 따라
+/// 테니스=그린, 풋살=오렌지. (이전 매핑과 스왑됨.) 화면에서 종목색은 항상
+/// forSport()로만 참조하고 하드코딩하지 않는다.
 class AppSportColors {
   AppSportColors._();
-  static const Color tennis = Color(0xFFF97316);
-  static const Color futsal = Color(0xFF84CC16);
+  static const Color tennis = Color(0xFF84CC16); // 그린 (테니스공 색)
+  static const Color futsal = Color(0xFFF97316); // 오렌지
 
   static Color forSport(String sport) => sport == 'futsal' ? futsal : tennis;
 }
