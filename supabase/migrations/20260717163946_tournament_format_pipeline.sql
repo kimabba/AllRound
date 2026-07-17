@@ -22,3 +22,7 @@ alter table public.tournaments
     check (format_staged is null or jsonb_typeof(format_staged) = 'object'),
   add column if not exists embedding_input_revision bigint not null default 0
     constraint tournaments_embedding_input_revision_check check (embedding_input_revision >= 0);
+
+create index if not exists tournaments_format_pending_idx
+  on public.tournaments (created_at)
+  where format_status = 'pending';
