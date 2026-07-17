@@ -7,6 +7,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../utils/profile_clubs.dart';
 import '../../widgets/app_card.dart';
 import 'profile_settings_widgets.dart';
 import 'profile_sports_widgets.dart';
@@ -64,126 +65,204 @@ class MyClubsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final clubs = ref.watch(myClubsProvider);
 
     return clubs.when(
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
       data: (items) {
-        final managedClubs = items.where((club) => club.isOwner).toList();
-        if (managedClubs.isEmpty) return const SizedBox.shrink();
+        final groups = groupProfileClubs(items);
+        if (groups.managed.isEmpty && groups.joined.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SectionHeader(title: '관리 중인 클럽'),
-            const SizedBox(height: AppSpacing.md),
-            Column(
-              children: [
-                for (final club in managedClubs)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: AppCard(
-                      variant: AppCardVariant.elevated,
-                      borderRadius: BorderRadius.circular(16),
-                      padding: EdgeInsets.zero,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => context.push(
-                          '/clubs/${club.id}',
-                          extra: club,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          child: Row(children: [
-                            ProfileSportThumbnail(sport: club.sport),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    club.name,
-                                    style: tt.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  Text(
-                                    [
-                                      sportLabelFromString(club.sport),
-                                      if (club.region != null) club.region!,
-                                    ].join(' · '),
-                                    style: tt.bodySmall?.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.xs),
-                                  _ClubStatusBadge(status: club.status),
-                                  if (club.isRejected &&
-                                      club.statusReason != null &&
-                                      club.statusReason !=
-                                          'deleted_by_owner') ...[
-                                    const SizedBox(height: AppSpacing.xs),
-                                    Text(
-                                      '반려 사유: ${club.statusReason}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: tt.bodySmall?.copyWith(
-                                        color: cs.error,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                  if (club.isPending && club.isOwner) ...[
-                                    const SizedBox(height: AppSpacing.sm),
-                                    Wrap(
-                                      spacing: AppSpacing.xs,
-                                      children: [
-                                        OutlinedButton.icon(
-                                          onPressed: () => context.push(
-                                            '/clubs/${club.id}',
-                                            extra: club,
-                                          ),
-                                          icon: const Icon(
-                                            Icons.edit_outlined,
-                                            size: 16,
-                                          ),
-                                          label: const Text('수정'),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () => _deletePendingClub(
-                                            context,
-                                            ref,
-                                            club,
-                                          ),
-                                          icon: const Icon(
-                                            Icons.delete_outline_rounded,
-                                            size: 16,
-                                          ),
-                                          label: const Text('삭제'),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ]),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+            SectionHeader(
+              title: '내 클럽',
+              action: SectionActionButton(
+                label: '전체 보기',
+                onTap: () => context.go('/clubs'),
+              ),
             ),
+            const SizedBox(height: AppSpacing.md),
+            if (groups.managed.isNotEmpty) ...[
+              _ClubGroupLabel(label: '관리 중'),
+              const SizedBox(height: AppSpacing.xs),
+              for (final club in groups.managed)
+                _ProfileClubCard(
+                  club: club,
+                  onDeletePending: () => _deletePendingClub(
+                    context,
+                    ref,
+                    club,
+                  ),
+                ),
+            ],
+            if (groups.joined.isNotEmpty) ...[
+              if (groups.managed.isNotEmpty)
+                const SizedBox(height: AppSpacing.sm),
+              _ClubGroupLabel(label: '가입한 클럽'),
+              const SizedBox(height: AppSpacing.xs),
+              for (final club in groups.joined) _ProfileClubCard(club: club),
+            ],
           ],
         );
       },
+    );
+  }
+}
+
+class _ClubGroupLabel extends StatelessWidget {
+  const _ClubGroupLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+          ),
+    );
+  }
+}
+
+class _ProfileClubCard extends StatelessWidget {
+  const _ProfileClubCard({
+    required this.club,
+    this.onDeletePending,
+  });
+
+  final Club club;
+  final VoidCallback? onDeletePending;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
+        variant: AppCardVariant.elevated,
+        borderRadius: BorderRadius.circular(16),
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.push('/clubs/${club.id}', extra: club),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                ProfileSportThumbnail(sport: club.sport),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        club.name,
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        [
+                          sportLabelFromString(club.sport),
+                          if (club.region != null) club.region!,
+                          if (!club.isOwner) '멤버 ${club.memberCount}명',
+                        ].join(' · '),
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      if (club.isOwner)
+                        _ClubStatusBadge(status: club.status)
+                      else
+                        _ClubRoleBadge(isManager: club.myRole == 'manager'),
+                      if (club.isRejected &&
+                          club.statusReason != null &&
+                          club.statusReason != 'deleted_by_owner') ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '반려 사유: ${club.statusReason}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      if (club.isPending && club.isOwner) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.xs,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => context.push(
+                                '/clubs/${club.id}',
+                                extra: club,
+                              ),
+                              icon: const Icon(Icons.edit_outlined, size: 16),
+                              label: const Text('수정'),
+                            ),
+                            TextButton.icon(
+                              onPressed: onDeletePending,
+                              icon: const Icon(
+                                Icons.delete_outline_rounded,
+                                size: 16,
+                              ),
+                              label: const Text('삭제'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: cs.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClubRoleBadge extends StatelessWidget {
+  const _ClubRoleBadge({required this.isManager});
+
+  final bool isManager;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          isManager ? '운영진' : '멤버',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSecondaryContainer,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
     );
   }
 }

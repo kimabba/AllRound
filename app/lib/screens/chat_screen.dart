@@ -12,6 +12,7 @@ import '../state/chat_state.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../utils/chat_content.dart';
+import '../utils/chat_follow_up_suggestions.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 import '../widgets/allround_logo.dart';
@@ -208,6 +209,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.watch(chatProvider);
     final messages = chat.messages;
     final busy = chat.busy;
+    final activeSport = ref.watch(activeSportProvider);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -232,7 +234,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: messages.isEmpty
                   ? _EmptyHint(
                       onSend: sendText,
-                      sport: ref.watch(activeSportProvider),
+                      sport: activeSport,
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -243,15 +245,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         vertical: AppSpacing.md,
                       ),
                       itemCount: messages.length,
-                      itemBuilder: (_, i) => _MessageBubble(
-                        msg: messages[i],
-                        onCardAction: _sendWithEntity,
-                        onReport: !busy &&
-                                messages[i].role == 'assistant' &&
-                                messages[i].content.trim().isNotEmpty
-                            ? () => _reportAssistantMessage(messages[i])
-                            : null,
-                      ),
+                      itemBuilder: (_, i) {
+                        final message = messages[i];
+                        final showFollowUps = !busy &&
+                            i == messages.length - 1 &&
+                            message.role == 'assistant' &&
+                            message.content.trim().isNotEmpty;
+                        final previousUserMessage =
+                            i > 0 && messages[i - 1].role == 'user'
+                                ? messages[i - 1].content
+                                : '';
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _MessageBubble(
+                              msg: message,
+                              onCardAction: _sendWithEntity,
+                              onReport: !busy &&
+                                      message.role == 'assistant' &&
+                                      message.content.trim().isNotEmpty
+                                  ? () => _reportAssistantMessage(message)
+                                  : null,
+                            ),
+                            if (showFollowUps)
+                              _FollowUpQuestions(
+                                suggestions: chatFollowUpSuggestions(
+                                  previousUserMessage,
+                                  sport: activeSport,
+                                ),
+                                onSend: sendText,
+                              ),
+                          ],
+                        );
+                      },
                     ),
             ),
           ),
@@ -380,6 +407,55 @@ class _SuggestionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FollowUpQuestions extends StatelessWidget {
+  const _FollowUpQuestions({
+    required this.suggestions,
+    required this.onSend,
+  });
+
+  final List<ChatFollowUpSuggestion> suggestions;
+  final Future<void> Function(String) onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sm,
+        right: AppSpacing.xl,
+        bottom: AppSpacing.lg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '이어서 물어보기',
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final suggestion in suggestions)
+                ActionChip(
+                  avatar: const Icon(Icons.arrow_outward_rounded, size: 16),
+                  label: Text(suggestion.label),
+                  onPressed: () => unawaited(onSend(suggestion.message)),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
