@@ -206,3 +206,13 @@ begin
    where t.id = p_tid and t.format_claim_token = p_token and t.format_status = 'processing';
 end;
 $$;
+
+revoke execute on function public.format_pending_claim(int,int)   from public, anon, authenticated;
+revoke execute on function public.format_pending_complete(uuid,uuid,uuid,text,jsonb,text[],text,text,text,text,text,jsonb,boolean) from public, anon, authenticated;
+revoke execute on function public.format_pending_reject(uuid,uuid,jsonb,text)  from public, anon, authenticated;
+revoke execute on function public.format_pending_fail(uuid,uuid)   from public, anon, authenticated;
+
+grant execute on function public.format_pending_claim(int,int)   to service_role;
+grant execute on function public.format_pending_complete(uuid,uuid,uuid,text,jsonb,text[],text,text,text,text,text,jsonb,boolean) to service_role;
+grant execute on function public.format_pending_reject(uuid,uuid,jsonb,text)  to service_role;
+grant execute on function public.format_pending_fail(uuid,uuid)   to service_role;
