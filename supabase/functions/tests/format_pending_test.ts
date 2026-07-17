@@ -124,3 +124,33 @@ Deno.test('verifyAgainstSource: unusual=true면 flag', () => {
   }, 'src');
   assertEquals(r.ok, false);
 });
+
+Deno.test('verifyAgainstSource: 문의처(전화번호)는 원문에 없어도 flag 안 함 (공유 문의 섹션 크롤 누락 오탐 방지)', () => {
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '문의처', value: '010-9999-8888' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, true);
+});
+
+Deno.test('verifyAgainstSource: 입금계좌는 여전히 원문 대조 검증됨 (문의처 예외의 회귀 방지)', () => {
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '입금계좌', value: '국민 0030-2123-4567' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, false);
+});
