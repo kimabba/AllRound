@@ -74,3 +74,62 @@ drop trigger if exists tournaments_guard_format_columns on public.tournaments;
 create trigger tournaments_guard_format_columns
   before update on public.tournaments
   for each row execute function public.guard_tournament_format_columns();
+
+create or replace function public.format_pending_claim(
+  p_batch_size int default 4,
+  p_lease_minutes int default 15
+) returns table (
+  tournament_id uuid, title text, sport public.sport, source text,
+  claim_token uuid, document_id uuid, content_hash text,
+  status public.tournament_status, formatted_at timestamptz
+) language plpgsql security definer set search_path = pg_catalog, public as $$
+begin
+  -- (1) 만료 lease 회수: processing인데 claimed_at 초과 → attempts에 따라 pending/failed
+  update public.tournaments t
+     set format_status = case when t.format_attempts >= 3 then 'failed' else 'pending' end,
+         format_claim_token = null, claimed_at = null
+   where t.format_status = 'processing'
+     and t.claimed_at < now() - make_interval(mins => p_lease_minutes);
+
+  -- (2) pending 클레임 → processing 원자 전이
+  return query
+  with claimed as (
+    select t.id
+    from public.tournaments t
+    where t.format_status = 'pending'
+      and t.manual_description = false
+      and t.status <> 'draft'
+      and t.format_attempts < 3
+      and exists (select 1 from public.crawl_documents cd where cd.tournament_id = t.id)
+    order by t.created_at
+    limit p_batch_size
+    for update of t skip locked
+  ),
+  latest_doc as (
+    select c.id as tid, d.id as doc_id, d.content_hash as chash
+    from claimed c
+    join lateral (
+      select cd.id, cd.content_hash
+      from public.crawl_documents cd
+      where cd.tournament_id = c.id
+      order by cd.fetched_at desc, cd.id desc
+      limit 1
+    ) d on true
+  ),
+  stamped as (
+    update public.tournaments t
+       set format_status = 'processing',
+           format_attempts = t.format_attempts + 1,
+           format_claim_token = gen_random_uuid(),
+           claimed_at = now(),
+           format_document_id = ld.doc_id
+      from latest_doc ld
+     where t.id = ld.tid
+    returning t.id, t.title, t.sport, t.source, t.format_claim_token, t.format_document_id,
+              t.status, t.formatted_at
+  )
+  select s.id, s.title, s.sport, s.source, s.format_claim_token, s.format_document_id, ld.chash,
+         s.status, s.formatted_at
+  from stamped s join latest_doc ld on ld.tid = s.id;
+end;
+$$;
