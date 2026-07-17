@@ -216,3 +216,18 @@ grant execute on function public.format_pending_claim(int,int)   to service_role
 grant execute on function public.format_pending_complete(uuid,uuid,uuid,text,jsonb,text[],text,text,text,text,text,jsonb,boolean) to service_role;
 grant execute on function public.format_pending_reject(uuid,uuid,jsonb,text)  to service_role;
 grant execute on function public.format_pending_fail(uuid,uuid)   to service_role;
+
+-- 백필 (Plan1 Task7): 신규 도입된 format_status='pending' 기본값 중 파이프라인
+-- 대상이 아닌 행(manual_description=true 이거나 crawl_documents 없음)을 skipped로 정정.
+-- tournaments_guard_format_columns 트리거는 service_role/is_admin이 아니면 format_* 변경을
+-- 막으므로, 마이그레이션 적용 세션(role 무관, 소유자 권한)에서도 통과하도록 트리거를
+-- 잠시 disable/enable 한다.
+alter table public.tournaments disable trigger tournaments_guard_format_columns;
+
+update public.tournaments t
+   set format_status = 'skipped'
+ where t.format_status = 'pending'
+   and ( t.manual_description = true
+      or not exists (select 1 from public.crawl_documents cd where cd.tournament_id = t.id) );
+
+alter table public.tournaments enable trigger tournaments_guard_format_columns;
