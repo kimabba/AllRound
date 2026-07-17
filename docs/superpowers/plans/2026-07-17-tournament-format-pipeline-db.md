@@ -67,8 +67,8 @@ Expected: 성공. 이어서 확인 쿼리 —
 ```sql
 select column_name, data_type, is_nullable, column_default
 from information_schema.columns
-where table_name='tournaments' and column_name like 'format\_%' escape '\'
-   or column_name in ('claimed_at','embedding_input_revision')
+where table_name='tournaments'
+  and (column_name like 'format%' or column_name in ('claimed_at','embedding_input_revision'))
 order by column_name;
 ```
 Expected: 11개 컬럼 존재, `format_status` default `'pending'` not null, `format_attempts`/`embedding_input_revision` default 0 not null.
