@@ -132,3 +132,39 @@ export async function* streamChat(
   }
   yield { type: 'done', usage: capturedUsage };
 }
+
+export function parseStructuredResponse<T>(json: unknown): T {
+  const j = json as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+  if (!text) throw new Error('Gemini structured: empty response');
+  return JSON.parse(text) as T;
+}
+
+export async function generateStructured<T>(
+  prompt: string,
+  responseSchema: Record<string, unknown>,
+  opts: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number } = {},
+): Promise<T> {
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey()}`;
+  const body: Record<string, unknown> = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: opts.temperature ?? 0.1,
+      maxOutputTokens: opts.maxOutputTokens ?? 4096,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: 'application/json',
+      responseSchema,
+    },
+  };
+  if (opts.systemInstruction) {
+    body.systemInstruction = { parts: [{ text: opts.systemInstruction }] };
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  return parseStructuredResponse<T>(await res.json());
+}
