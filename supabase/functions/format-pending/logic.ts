@@ -59,10 +59,19 @@ export function verifyAgainstSource(
   if (typeof result.confidence === 'number' && result.confidence < 0.5) {
     flags.push({ code: 'low_confidence', field: '_model', masked: '' });
   }
-  const srcDigits = digitsOnly(sourceText);
+  // 원문의 개별 숫자 런(구분자 포함)들을 각각 digits-only로. 전체 concat 금지(오탐 방지).
+  const runs = [...sourceText.matchAll(/\d[\d,.\s-]*\d|\d/g)].map((m) =>
+    m[0].replace(/[^0-9]/g, '')
+  );
+  const seen = new Set<string>();
   for (const f of result.regulation_fields) {
     for (const tok of sensitiveTokens(f.value)) {
-      if (!srcDigits.includes(digitsOnly(tok))) {
+      const d = digitsOnly(tok);
+      if (d.length === 0) continue;
+      const key = `${f.label}|${d}`;
+      if (seen.has(key)) continue; // 중복 flag 방지(계좌/날짜 정규식 겹침)
+      seen.add(key);
+      if (!runs.some((r) => r.includes(d))) {
         flags.push({ code: 'not_in_source', field: f.label, masked: maskValue(tok) });
       }
     }

@@ -42,6 +42,40 @@ Deno.test('verifyAgainstSource: 원문에 없는 계좌/금액이면 flag', () =
   assert(!bad.flags[0].masked.includes('8888')); // 마스킹됨
 });
 
+Deno.test('verifyAgainstSource: 무관한 숫자들의 전체 concat과 우연히 일치하는 조작값도 flag (개별 런 매칭)', () => {
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '입금계좌', value: '국민 0030-2123-4567' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, false);
+  const flag = r.flags.find((f) => f.field === '입금계좌');
+  assert(flag !== undefined);
+  assert(!flag!.masked.includes('2123'));
+});
+
+Deno.test('verifyAgainstSource: 계좌/날짜 정규식이 겹쳐도 동일 필드에 중복 flag 없음', () => {
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '접수마감', value: '2099-12-31' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  const dupFlags = r.flags.filter((f) => f.code === 'not_in_source' && f.field === '접수마감');
+  assertEquals(dupFlags.length, 1);
+});
+
 Deno.test('verifyAgainstSource: unusual=true면 flag', () => {
   const r = verifyAgainstSource({
     regulation_fields: [],
