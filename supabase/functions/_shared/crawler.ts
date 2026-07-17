@@ -133,7 +133,7 @@ export async function upsertTournament(
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, manual_description',
+      'id, title, start_date, application_deadline, eligible_grades, region, manual_description, format_source_hash',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -172,6 +172,21 @@ export async function upsertTournament(
       updatePayload.eligible_grades = t.eligible_grades;
       updatePayload.division_label_local = t.division_label_local ?? null;
     }
+    // prize/format 도 regulation_* 와 동일 취지로 보존 처리: 파서가 미방출(undefined)이면
+    // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
+    if (t.prize !== undefined) updatePayload.prize = t.prize;
+    if (t.format !== undefined) updatePayload.format = t.format;
+    // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
+    // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
+    // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
+    if (rawHtml) {
+      const newHash = await sha256Hex(rawHtml);
+      if (existing.format_source_hash && existing.format_source_hash !== newHash) {
+        updatePayload.format_status = 'pending';
+        updatePayload.format_claim_token = null;
+        updatePayload.claimed_at = null;
+      }
+    }
     const { error } = await audit.supabase
       .from('tournaments')
       .update({
@@ -183,8 +198,6 @@ export async function upsertTournament(
         region_code: regionCode,
         location: t.location ?? null,
         entry_fee: t.entry_fee ?? null,
-        prize: t.prize ?? null,
-        format: t.format ?? null,
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
@@ -217,6 +230,7 @@ export async function upsertTournament(
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',
+      format_status: rawHtml ? 'pending' : 'skipped',
     })
     .select('id')
     .single();
