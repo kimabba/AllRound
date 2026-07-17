@@ -60,9 +60,7 @@ export function verifyAgainstSource(
     flags.push({ code: 'low_confidence', field: '_model', masked: '' });
   }
   // 원문의 개별 숫자 런(구분자 포함)들을 각각 digits-only로. 전체 concat 금지(오탐 방지).
-  const runs = [...sourceText.matchAll(/\d[\d,.\s-]*\d|\d/g)].map((m) =>
-    m[0].replace(/[^0-9]/g, '')
-  );
+  const runs = [...sourceText.matchAll(/\d[\d,.-]*\d|\d/g)].map((m) => m[0].replace(/[^0-9]/g, ''));
   const seen = new Set<string>();
   for (const f of result.regulation_fields) {
     for (const tok of sensitiveTokens(f.value)) {
