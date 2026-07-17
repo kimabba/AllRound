@@ -1,3 +1,31 @@
+/// 대회 요강 AI 정형화 처리 상태 (관리자 전용, 유저 노출 없음).
+enum FormatStatus {
+  pending,
+  processing,
+  formatted,
+  needsReview,
+  failed,
+  skipped;
+
+  static FormatStatus fromString(String? s) {
+    switch (s) {
+      case 'processing':
+        return FormatStatus.processing;
+      case 'formatted':
+        return FormatStatus.formatted;
+      case 'needs_review':
+        return FormatStatus.needsReview;
+      case 'failed':
+        return FormatStatus.failed;
+      case 'skipped':
+        return FormatStatus.skipped;
+      case 'pending':
+      default:
+        return FormatStatus.pending;
+    }
+  }
+}
+
 /// 대회 요강 정형 필드 한 줄 (라벨:값). 마이그레이션 073 의
 /// regulation_fields jsonb 배열 [{"label", "value"}] 한 요소에 대응한다.
 class RegulationField {
@@ -51,6 +79,8 @@ class Tournament {
   final List<String> regulationNotes;
   // 마이그레이션 074: 읽기 쉬운 완전 본문 (여러 줄, "\n" 보존)
   final String? regulationBody;
+  // AI 정형화 파이프라인 처리 상태 (관리자 전용)
+  final FormatStatus formatStatus;
 
   Tournament({
     required this.id,
@@ -81,6 +111,7 @@ class Tournament {
     this.regulationFields = const [],
     this.regulationNotes = const [],
     this.regulationBody,
+    this.formatStatus = FormatStatus.pending,
   });
 
   /// 접수 마감 여부 공용 판정. 상태칩·신청바·카드가 같은 기준을 쓰도록 단일화한다.
@@ -173,6 +204,7 @@ class Tournament {
       regulationFields: regulationFields,
       regulationNotes: regulationNotes,
       regulationBody: regulationBody,
+      formatStatus: FormatStatus.fromString(j['format_status'] as String?),
     );
   }
 }
