@@ -221,13 +221,41 @@ grant execute on function public.format_pending_fail(uuid,uuid)   to service_rol
 -- 대상이 아닌 행(manual_description=true 이거나 crawl_documents 없음)을 skipped로 정정.
 -- tournaments_guard_format_columns 트리거는 service_role/is_admin이 아니면 format_* 변경을
 -- 막으므로, 마이그레이션 적용 세션(role 무관, 소유자 권한)에서도 통과하도록 트리거를
--- 잠시 disable/enable 한다.
-alter table public.tournaments disable trigger tournaments_guard_format_columns;
+-- 잠시 disable/enable 한다. DO 블록 EXCEPTION으로 감싸 apply 도구의 트랜잭션 원자성이
+-- 불확실해도(Task7 리뷰어 캐벗) 중간 오류 시 트리거가 disabled로 남지 않도록 보장한다.
+do $$
+begin
+  alter table public.tournaments disable trigger tournaments_guard_format_columns;
 
-update public.tournaments t
-   set format_status = 'skipped'
- where t.format_status = 'pending'
-   and ( t.manual_description = true
-      or not exists (select 1 from public.crawl_documents cd where cd.tournament_id = t.id) );
+  update public.tournaments t
+     set format_status = 'skipped'
+   where t.format_status = 'pending'
+     and ( t.manual_description = true
+        or not exists (select 1 from public.crawl_documents cd where cd.tournament_id = t.id) );
 
-alter table public.tournaments enable trigger tournaments_guard_format_columns;
+  alter table public.tournaments enable trigger tournaments_guard_format_columns;
+exception when others then
+  alter table public.tournaments enable trigger tournaments_guard_format_columns;
+  raise;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ── 롤백 (역순, 콘텐츠 컬럼 불변) ──────────────────────────────
+-- drop function if exists public.format_pending_fail(uuid,uuid);
+-- drop function if exists public.format_pending_reject(uuid,uuid,jsonb,text);
+-- drop function if exists public.format_pending_complete(uuid,uuid,uuid,text,jsonb,text[],text,text,text,text,text,jsonb,boolean);
+-- drop function if exists public.format_pending_claim(int,int);
+-- drop trigger if exists tournaments_guard_format_columns on public.tournaments;
+-- drop function if exists public.guard_tournament_format_columns();
+-- -- invalidate_tournament_embedding 은 revision 3줄만 제거해 원복(위 정의 참고).
+-- drop index if exists public.tournaments_format_pending_idx;
+-- alter table public.tournaments
+--   drop column if exists format_status, drop column if exists format_attempts,
+--   drop column if exists format_claim_token, drop column if exists claimed_at,
+--   drop column if exists format_document_id, drop column if exists format_source_hash,
+--   drop column if exists format_model, drop column if exists formatted_at,
+--   drop column if exists format_flags, drop column if exists format_staged,
+--   drop column if exists embedding_input_revision;
+-- notify pgrst, 'reload schema';
