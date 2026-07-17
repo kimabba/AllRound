@@ -53,6 +53,11 @@ class _AdminSidebar extends ConsumerWidget {
   static const _items = [
     (path: '/admin', label: '대시보드', icon: Icons.dashboard_outlined),
     (path: '/admin/drafts', label: 'Draft 승인', icon: Icons.fact_check_outlined),
+    (
+      path: '/admin/format-review',
+      label: '요강 검수',
+      icon: Icons.rule_folder_outlined
+    ),
     (path: '/admin/sources', label: '크롤 소스', icon: Icons.rss_feed_outlined),
     (path: '/admin/clubs', label: '클럽 승인', icon: Icons.groups_outlined),
     (path: '/admin/kb', label: '지식베이스', icon: Icons.menu_book_outlined),

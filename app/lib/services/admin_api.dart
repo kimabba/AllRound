@@ -228,6 +228,31 @@ mixin AdminApi on ApiBase {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  // ── 요강 정형화 검수 ──────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> formatReviewQueue() async {
+    final rows = await supabase
+        .from('tournaments')
+        .select('id, title, source_url, format_staged, format_flags')
+        .eq('format_status', 'needs_review')
+        .not('format_staged', 'is', null)
+        .order('updated_at');
+    return List<Map<String, dynamic>>.from(rows)
+        .map((r) => Map<String, dynamic>.from(r as Map))
+        .toList();
+  }
+
+  Future<bool> applyStaged(String id) async {
+    final res = await supabase.rpc('format_apply_staged', params: {'p_tid': id});
+    return res == true;
+  }
+
+  Future<bool> rejectStaged(String id, String reason) async {
+    final res = await supabase
+        .rpc('format_reject_staged', params: {'p_tid': id, 'p_reason': reason});
+    return res == true;
+  }
+
   // ── Gemini 사용량 ─────────────────────────────────────────────
 
   /// [since] 이후 gemini_usage 를 kind·model 별로 집계 (요청수 + 토큰 합).
