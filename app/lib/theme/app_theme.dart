@@ -56,10 +56,10 @@ class AppTheme {
         style: TextButton.styleFrom(textStyle: tt.labelLarge),
       ),
 
-      // Chip
+      // Chip — 선택 = 테니스 그린(브랜드 액센트, tertiaryContainer)
       chipTheme: ChipThemeData(
         backgroundColor: cs.surfaceContainerHigh,
-        selectedColor: cs.secondaryContainer,
+        selectedColor: cs.tertiaryContainer,
         labelStyle: tt.labelMedium,
         side: BorderSide.none,
         shape: const StadiumBorder(),

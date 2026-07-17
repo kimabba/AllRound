@@ -526,14 +526,14 @@ class SimpleClubAvatar extends StatelessWidget {
     if (club.sport == 'tennis') {
       return const ClubLogoSpec(
         icon: Icons.sports_tennis_rounded,
-        background: Color(0xFFFFF0D8),
-        foreground: Color(0xFFFF7A1A),
+        background: Color(0xFFECFCCB), // 소프트 그린 (테니스=그린)
+        foreground: Color(0xFF65A30D),
       );
     }
     return const ClubLogoSpec(
       icon: Icons.sports_soccer_rounded,
-      background: Color(0xFFE8F6D6),
-      foreground: Color(0xFF7DCD18),
+      background: Color(0xFFFFEDD5), // 소프트 오렌지 (풋살=오렌지)
+      foreground: Color(0xFFEA580C),
     );
   }
 }

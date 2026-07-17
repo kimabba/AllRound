@@ -18,7 +18,11 @@
 | **풋살** | **`#F97316` (오렌지)** | 보조 종목색 |
 
 > ⚠️ **종목색은 기존 코드와 반대로 스왑됨** (이전: 테니스=오렌지/풋살=그린).
-> 앱 전역에서 종목색은 반드시 `AppSportColors.forSport()`만 사용 — 하드코딩 금지.
+>
+> **구현 관례 (중요):** 앱 전역이 `sport == 'tennis' ? cs.tertiary : cs.secondary`
+> 패턴을 씀. 따라서 ColorScheme에서 **`tertiary` = 테니스 그린 `#84CC16`,
+> `secondary` = 풋살 오렌지 `#F97316`**. 종목색은 이 롤 또는 `AppSportColors.forSport()`
+> 로만 참조 — 하드코딩 금지(발견 시 토큰으로 교체).
 
 ## 3. 타이포
 

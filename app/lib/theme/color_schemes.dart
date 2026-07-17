@@ -28,14 +28,16 @@ const ColorScheme appLightScheme = ColorScheme(
   onPrimary: Color(0xFFFAF7F2), // 크림
   primaryContainer: Color(0xFFECE6DA),
   onPrimaryContainer: Color(0xFF1A1613),
-  secondary: Color(0xFF84CC16), // 테니스 그린
-  onSecondary: Color(0xFF1A2E05),
-  secondaryContainer: Color(0xFFECFCCB),
-  onSecondaryContainer: Color(0xFF3F6212),
-  tertiary: Color(0xFFF97316), // 풋살 오렌지
-  onTertiary: Color(0xFFFFFFFF),
-  tertiaryContainer: Color(0xFFFFEDD5),
-  onTertiaryContainer: Color(0xFF9A3412),
+  // 앱 관례: sport=='tennis' ? cs.tertiary : cs.secondary.
+  // 따라서 tertiary = 테니스 그린, secondary = 풋살 오렌지.
+  secondary: Color(0xFFF97316), // 풋살 오렌지
+  onSecondary: Color(0xFFFFFFFF),
+  secondaryContainer: Color(0xFFFFEDD5),
+  onSecondaryContainer: Color(0xFF9A3412),
+  tertiary: Color(0xFF84CC16), // 테니스 그린
+  onTertiary: Color(0xFF1A2E05),
+  tertiaryContainer: Color(0xFFECFCCB),
+  onTertiaryContainer: Color(0xFF3F6212),
   error: Color(0xFFBA1A1A),
   onError: Color(0xFFFFFFFF),
   errorContainer: Color(0xFFFFDAD6),
