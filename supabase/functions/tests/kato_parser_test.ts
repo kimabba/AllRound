@@ -4,6 +4,7 @@
 
 import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
+  buildTournament,
   type KatoDetailFields,
   type KatoListItem,
   parseKatoDetail,
@@ -105,4 +106,35 @@ Deno.test('KATO 부서 매핑: span.parts 텍스트 → kato_* codes', () => {
   ];
   const { codes } = mapDivisionsByDict('혼합복식부, 챌린저부, 마스터스부, 국화부, 개나리부', dict);
   assertEquals(codes.sort(), ['kato_challenger', 'kato_gaenari', 'kato_gukhwa']);
+});
+
+Deno.test('buildTournament: description 미조립(undefined), 메타 필드는 유지', () => {
+  const item: KatoListItem = {
+    seq: '0289',
+    url: 'https://kato.kr/openGame/0289',
+    title: '제 6회 임사단배 전국동호인 테니스대회',
+    partsText: '개나리부, 국화부',
+    startDate: '2026-05-06',
+    endDate: '2026-07-13',
+    status: 'open',
+  };
+  const detail: KatoDetailFields = {
+    title: '제 6회 임사단배 전국동호인 테니스대회',
+    location: '공주시립실내테니스장',
+    organizer: '(사) 한국테니스발전협의회(KATO)',
+    entryFee: 64000,
+  };
+  const t = buildTournament(item, detail, [], '충남');
+
+  assertEquals(t.description, undefined);
+  // 메타 유지
+  assertEquals(t.title, '제 6회 임사단배 전국동호인 테니스대회');
+  assertEquals(t.start_date, '2026-05-06');
+  assertEquals(t.end_date, '2026-07-13');
+  assertEquals(t.region, '충남');
+  assertEquals(t.location, '공주시립실내테니스장');
+  assertEquals(t.eligible_grades, []);
+  assertEquals(t.organizer, '(사) 한국테니스발전협의회(KATO)');
+  assertEquals(t.entry_fee, 64000);
+  assertEquals(t.source_url, 'https://kato.kr/openGame/0289');
 });

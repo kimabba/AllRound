@@ -192,21 +192,15 @@ async function listingContentHash(items: KatoListItem[]): Promise<string> {
   return `W/"sha256:${hex}"`;
 }
 
-function buildTournament(
+export function buildTournament(
   item: KatoListItem,
   detail: KatoDetailFields,
   dict: DivisionDictRow[],
   region: string | null,
 ): CrawlerTournament {
   const { codes, label } = mapDivisionsByDict(item.partsText, dict);
-  const descParts: string[] = [];
-  if (item.partsText) descParts.push(`참가부서: ${item.partsText}`);
-  descParts.push(`대회일: ${item.startDate}${item.endDate ? ` ~ ${item.endDate}` : ''}`);
-  if (detail.location) descParts.push(`장소: ${detail.location}`);
-  if (detail.organizer) descParts.push(`주최: ${detail.organizer}`);
   return {
     title: detail.title,
-    description: descParts.join(' | ') || undefined,
     start_date: item.startDate,
     end_date: item.endDate ?? undefined,
     application_deadline: undefined, // KATO 미제공
