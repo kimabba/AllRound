@@ -13,6 +13,21 @@ import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/r
  */
 const BATCH_SIZE = 32;
 
+export interface TournamentSelectSpec {
+  columns: string;
+  onlyStatus: 'published';
+  excludeFormatStatus: ['pending', 'processing'];
+}
+
+export function buildTournamentSelect(): TournamentSelectSpec {
+  return {
+    columns:
+      'id, title, description, region, format, organizer, regulation_fields, regulation_body, embedding_input_revision',
+    onlyStatus: 'published',
+    excludeFormatStatus: ['pending', 'processing'],
+  };
+}
+
 interface PendingTournament {
   id: string;
   title: string;
@@ -24,6 +39,7 @@ interface PendingTournament {
   // regulation_fields 는 jsonb 라서 unknown 으로 받고 사용 시 narrow.
   regulation_fields: unknown;
   regulation_body: string | null;
+  embedding_input_revision: number;
 }
 
 interface PendingRule {
@@ -49,7 +65,7 @@ function ruleText(r: PendingRule): string {
   return `${r.title}\n${r.body}`.slice(0, 4000);
 }
 
-Deno.serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -66,17 +82,18 @@ Deno.serve(async (req) => {
 
   // ---- tournaments ----
   try {
-    const { data: pending } = await supabase
+    const sel = buildTournamentSelect();
+    const { data: rawPending } = await supabase
       .from('tournaments')
-      .select(
-        'id, title, description, region, format, organizer, regulation_fields, regulation_body',
-      )
+      .select(sel.columns)
       .is('embedding', null)
-      .eq('status', 'published')
+      .eq('status', sel.onlyStatus)
+      .not('format_status', 'in', '("pending","processing")')
       .limit(BATCH_SIZE);
+    const pending = rawPending as unknown as PendingTournament[] | null;
 
     if (pending && pending.length > 0) {
-      const texts = pending.map((t) => tournamentText(t as PendingTournament));
+      const texts = pending.map((t) => tournamentText(t));
       const embeddings = await embedBatch(texts);
       const now = new Date().toISOString();
       for (let i = 0; i < pending.length; i++) {
@@ -128,4 +145,8 @@ Deno.serve(async (req) => {
     return errorResponse('All embeddings failed', 500, result);
   }
   return jsonResponse(result);
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}
