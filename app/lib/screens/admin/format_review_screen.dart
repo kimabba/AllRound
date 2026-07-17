@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../state/providers.dart';
 
-/// 정형화 대기(needs_review + format_staged) 큐. 위젯 테스트에서 override 가능하도록
+/// 정형화 검수 대기(needs_review) 큐. staged 콘텐츠가 있는 행과 검증 실패로
+/// format_flags 만 있는 행을 모두 포함한다. 위젯 테스트에서 override 가능하도록
 /// public 으로 노출.
 final formatReviewQueueProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
@@ -41,9 +42,9 @@ class _ReviewCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final staged = (row['format_staged'] as Map?)?.cast<String, dynamic>() ?? {};
-    final fields = (staged['regulation_fields'] as List?) ?? [];
+    final stagedRaw = row['format_staged'] as Map?;
     final sourceUrl = row['source_url'] as String?;
+    final hasStaged = stagedRaw != null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -59,19 +60,10 @@ class _ReviewCard extends ConsumerWidget {
                 onPressed: () => launchUrl(Uri.parse(sourceUrl)),
               ),
             const SizedBox(height: 8),
-            ...fields.map((f) {
-              final m = (f as Map).cast<String, dynamic>();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('${m['label']}: ${m['value']}'),
-              );
-            }),
-            if (staged['description'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text('요약: ${staged['description']}',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ),
+            if (hasStaged)
+              ..._stagedContent(context, stagedRaw.cast<String, dynamic>())
+            else
+              ..._validationFailureContent(context),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -85,19 +77,87 @@ class _ReviewCard extends ConsumerWidget {
                   },
                   child: const Text('반려'),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () async {
-                    await ref.read(apiProvider).applyStaged(row['id'] as String);
-                    ref.invalidate(formatReviewQueueProvider);
-                  },
-                  child: const Text('승인'),
-                ),
+                if (hasStaged) ...[
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      await ref
+                          .read(apiProvider)
+                          .applyStaged(row['id'] as String);
+                      ref.invalidate(formatReviewQueueProvider);
+                    },
+                    child: const Text('승인'),
+                  ),
+                ],
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _stagedContent(BuildContext context, Map<String, dynamic> staged) {
+    final fields = (staged['regulation_fields'] as List?) ?? [];
+    return [
+      ...fields.map((f) {
+        final m = (f as Map).cast<String, dynamic>();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text('${m['label']}: ${m['value']}'),
+        );
+      }),
+      if (staged['description'] != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('요약: ${staged['description']}',
+              style: Theme.of(context).textTheme.bodySmall),
+        ),
+    ];
+  }
+
+  List<Widget> _validationFailureContent(BuildContext context) {
+    final flags = (row['format_flags'] as List?) ?? [];
+    return [
+      Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '검증 실패 — 자동 반영 불가, 수동 확인 필요',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            ...flags.map((f) {
+              final m = (f as Map).cast<String, dynamic>();
+              final field = m['field'];
+              final code = m['code'];
+              final masked = m['masked'];
+              final maskedSuffix =
+                  (masked != null && (masked as String).isNotEmpty)
+                      ? ' ($masked)'
+                      : '';
+              return Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '검증 실패: $field — $code$maskedSuffix',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    ];
   }
 }

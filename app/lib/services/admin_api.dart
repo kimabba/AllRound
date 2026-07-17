@@ -235,7 +235,6 @@ mixin AdminApi on ApiBase {
         .from('tournaments')
         .select('id, title, source_url, format_staged, format_flags')
         .eq('format_status', 'needs_review')
-        .not('format_staged', 'is', null)
         .order('updated_at');
     return List<Map<String, dynamic>>.from(rows)
         .map((r) => Map<String, dynamic>.from(r as Map))
