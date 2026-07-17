@@ -18,40 +18,43 @@ class AppPalette {
   static const Color border = Color(0xFFE2E8F0);
 }
 
-/// Light Color Scheme — Material You 12 토큰 + surfaceContainer 5단
+/// Light Color Scheme — Active Bold (크림 베이스).
+/// primary = 잉크(볼드 블랙 주요 버튼), secondary = 테니스 그린(브랜드 액센트),
+/// tertiary = 풋살 오렌지. surface = 크림, 카드 = 화이트.
+/// (docs/design/active-bold-system.md)
 const ColorScheme appLightScheme = ColorScheme(
   brightness: Brightness.light,
-  primary: AppPalette.primaryBlue,
-  onPrimary: Color(0xFFFFFFFF),
-  primaryContainer: AppPalette.primaryBlueTint,
-  onPrimaryContainer: AppPalette.primaryBlue,
-  secondary: AppPalette.futsalGreen,
-  onSecondary: Color(0xFFFFFFFF),
-  secondaryContainer: AppPalette.futsalGreenSoft,
-  onSecondaryContainer: AppPalette.futsalGreenDark,
-  tertiary: AppPalette.tennisOrange,
+  primary: Color(0xFF1A1613), // 잉크
+  onPrimary: Color(0xFFFAF7F2), // 크림
+  primaryContainer: Color(0xFFECE6DA),
+  onPrimaryContainer: Color(0xFF1A1613),
+  secondary: Color(0xFF84CC16), // 테니스 그린
+  onSecondary: Color(0xFF1A2E05),
+  secondaryContainer: Color(0xFFECFCCB),
+  onSecondaryContainer: Color(0xFF3F6212),
+  tertiary: Color(0xFFF97316), // 풋살 오렌지
   onTertiary: Color(0xFFFFFFFF),
-  tertiaryContainer: AppPalette.tennisOrangeSoft,
-  onTertiaryContainer: AppPalette.tennisOrangeDark,
+  tertiaryContainer: Color(0xFFFFEDD5),
+  onTertiaryContainer: Color(0xFF9A3412),
   error: Color(0xFFBA1A1A),
   onError: Color(0xFFFFFFFF),
   errorContainer: Color(0xFFFFDAD6),
   onErrorContainer: Color(0xFF410002),
-  surface: AppPalette.appBackground,
-  onSurface: AppPalette.text,
-  onSurfaceVariant: AppPalette.textMuted,
+  surface: Color(0xFFFAF7F2), // 크림
+  onSurface: Color(0xFF1A1613), // 잉크
+  onSurfaceVariant: Color(0xFF6E675B), // warm muted
   surfaceContainerLowest: Color(0xFFFFFFFF),
   surfaceContainerLow: Color(0xFFFFFFFF),
-  surfaceContainer: Color(0xFFF8FAFC),
-  surfaceContainerHigh: Color(0xFFF1F5F9),
-  surfaceContainerHighest: Color(0xFFE2E8F0),
-  outline: Color(0xFF94A3B8),
-  outlineVariant: AppPalette.border,
+  surfaceContainer: Color(0xFFF3EEE4),
+  surfaceContainerHigh: Color(0xFFEDE7DB),
+  surfaceContainerHighest: Color(0xFFE6E0D4),
+  outline: Color(0xFF938B7C),
+  outlineVariant: Color(0xFFE6E0D4),
   shadow: Color(0xFF000000),
   scrim: Color(0xFF000000),
-  inverseSurface: AppPalette.text,
-  onInverseSurface: Color(0xFFF8FAFC),
-  inversePrimary: AppPalette.primaryBlueSoft,
+  inverseSurface: Color(0xFF1A1613),
+  onInverseSurface: Color(0xFFFAF7F2),
+  inversePrimary: Color(0xFF84CC16),
 );
 
 /// Dark Color Scheme — 미드나잇 그린 (#101411), 풀블랙 X

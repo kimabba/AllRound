@@ -59,7 +59,7 @@ class AppTheme {
       // Chip
       chipTheme: ChipThemeData(
         backgroundColor: cs.surfaceContainerHigh,
-        selectedColor: cs.primaryContainer,
+        selectedColor: cs.secondaryContainer,
         labelStyle: tt.labelMedium,
         side: BorderSide.none,
         shape: const StadiumBorder(),
@@ -93,7 +93,7 @@ class AppTheme {
 
       // AppBar
       appBarTheme: AppBarTheme(
-        backgroundColor: cs.surfaceContainerLow,
+        backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -105,23 +105,23 @@ class AppTheme {
         ),
       ),
 
-      // NavigationBar
+      // NavigationBar — 활성 = 테니스 그린 (Active Bold)
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: cs.surfaceContainerLow,
-        indicatorColor: cs.primaryContainer,
+        indicatorColor: AppSportColors.tennis.withValues(alpha: 0.16),
         height: 72,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return tt.labelSmall?.copyWith(
-            color: selected ? cs.primary : cs.onSurfaceVariant,
+            color: selected ? AppSportColors.tennis : cs.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? cs.primary : cs.onSurfaceVariant,
-            size: 24,
+            color: selected ? AppSportColors.tennis : cs.onSurfaceVariant,
+            size: 26,
           );
         }),
         elevation: 0,

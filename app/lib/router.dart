@@ -208,11 +208,19 @@ class _MainShell extends ConsumerWidget {
   const _MainShell({required this.child});
   final Widget child;
 
-  static const _tabs = [
-    ('/', Icons.auto_awesome_outlined, '라운드 코치'),
-    ('/tournaments', Icons.emoji_events_outlined, '대회'),
-    ('/clubs', Icons.groups_outlined, '클럽'),
-    ('/more', Icons.grid_view_outlined, '더보기'),
+  // (path, 기본 아이콘, 선택 아이콘, 라벨)
+  // TODO(design): Phosphor duotone 으로 교체 예정 — phosphor_flutter 는
+  // Flutter 3.44(IconData final class)와 비호환이라 flutter_svg 벤더링으로 후속.
+  static const _tabs = <(String, IconData, IconData, String)>[
+    ('/', Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, '라운드 코치'),
+    (
+      '/tournaments',
+      Icons.emoji_events_outlined,
+      Icons.emoji_events_rounded,
+      '대회',
+    ),
+    ('/clubs', Icons.groups_outlined, Icons.groups_rounded, '클럽'),
+    ('/more', Icons.grid_view_outlined, Icons.grid_view_rounded, '더보기'),
   ];
 
   // 더보기 하위 경로는 더보기 탭이 선택된 것으로 표시
@@ -257,7 +265,7 @@ class _MainShell extends ConsumerWidget {
         children: [
           Positioned.fill(
             child: ColoredBox(
-              color: cs.surfaceContainerLowest,
+              color: cs.surface,
               child: child,
             ),
           ),
@@ -291,8 +299,8 @@ class _MainShell extends ConsumerWidget {
                       for (final t in _tabs)
                         NavigationDestination(
                           icon: Icon(t.$2),
-                          selectedIcon: Icon(_selectedIcon(t.$2)),
-                          label: t.$3,
+                          selectedIcon: Icon(t.$3),
+                          label: t.$4,
                         ),
                     ],
                   ),
@@ -302,15 +310,6 @@ class _MainShell extends ConsumerWidget {
     );
   }
 
-  IconData _selectedIcon(IconData icon) {
-    return switch (icon) {
-      Icons.auto_awesome_outlined => Icons.auto_awesome_rounded,
-      Icons.emoji_events_outlined => Icons.emoji_events_rounded,
-      Icons.groups_outlined => Icons.groups_rounded,
-      Icons.grid_view_outlined => Icons.grid_view_rounded,
-      _ => icon,
-    };
-  }
 }
 
 class _NotificationBell extends ConsumerWidget {
