@@ -25,44 +25,57 @@ class AppTheme {
 
       // Card
       cardTheme: CardThemeData(
-        color: cs.surfaceContainerLow,
+        color: cs.surfaceContainerLowest,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.card),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: cs.outlineVariant),
+        ),
         clipBehavior: Clip.antiAlias,
       ),
 
       // Buttons
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: tt.labelLarge,
+          elevation: 0,
+          disabledBackgroundColor: cs.surfaceContainerHighest,
+          disabledForegroundColor: cs.onSurfaceVariant,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: tt.labelLarge,
           side: BorderSide(color: cs.outlineVariant),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(textStyle: tt.labelLarge),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(44, 44),
+          textStyle: tt.labelLarge,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+        ),
       ),
 
-      // Chip — 선택 = 테니스 그린(브랜드 액센트, tertiaryContainer)
       chipTheme: ChipThemeData(
-        backgroundColor: cs.surfaceContainerHigh,
-        selectedColor: cs.tertiaryContainer,
+        backgroundColor: cs.surfaceContainerLow,
+        selectedColor: cs.primaryContainer,
         labelStyle: tt.labelMedium,
-        side: BorderSide.none,
-        shape: const StadiumBorder(),
+        side: BorderSide(color: cs.outlineVariant),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.xs,
@@ -72,22 +85,22 @@ class AppTheme {
       // Input
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: cs.surfaceContainerLow,
+        fillColor: cs.surfaceContainerLowest,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.md,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: cs.primary, width: 2),
+          borderSide: BorderSide(color: cs.primary, width: 1.5),
         ),
       ),
 
@@ -99,29 +112,29 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
+        toolbarHeight: 56,
         titleTextStyle: tt.titleLarge?.copyWith(
           color: cs.onSurface,
           fontWeight: FontWeight.w800,
         ),
       ),
 
-      // NavigationBar — 활성 = 테니스 그린 (Active Bold)
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: cs.surfaceContainerLow,
-        indicatorColor: AppSportColors.tennis.withValues(alpha: 0.16),
-        height: 72,
+        backgroundColor: cs.surface,
+        indicatorColor: Colors.transparent,
+        height: 64,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return tt.labelSmall?.copyWith(
-            color: selected ? AppSportColors.tennis : cs.onSurfaceVariant,
+            color: selected ? cs.onSurface : cs.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? AppSportColors.tennis : cs.onSurfaceVariant,
-            size: 26,
+            color: selected ? cs.primary : cs.onSurfaceVariant,
+            size: 23,
           );
         }),
         elevation: 0,
@@ -132,13 +145,58 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         backgroundColor: cs.inverseSurface,
         contentTextStyle: tt.bodyMedium?.copyWith(color: cs.onInverseSurface),
       ),
 
-      splashFactory: InkSparkle.splashFactory,
+      dividerTheme: DividerThemeData(
+        color: cs.outlineVariant,
+        thickness: 1,
+        space: 1,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+        showDragHandle: true,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: cs.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: cs.outlineVariant,
+        indicatorColor: cs.primary,
+        indicatorSize: TabBarIndicatorSize.label,
+        labelColor: cs.onSurface,
+        unselectedLabelColor: cs.onSurfaceVariant,
+        labelStyle: tt.labelLarge,
+        unselectedLabelStyle: tt.labelLarge,
+      ),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        minTileHeight: 52,
+        iconColor: cs.onSurfaceVariant,
+        textColor: cs.onSurface,
+      ),
+
+      splashFactory: InkRipple.splashFactory,
     );
   }
 }

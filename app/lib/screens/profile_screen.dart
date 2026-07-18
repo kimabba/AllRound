@@ -160,7 +160,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               title: Text(
                 '알림 설정',
@@ -281,6 +281,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
             onAvatarTap: _showProfilePhotoSheet,
+            onMoreTap: () => context.push('/more'),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -311,6 +312,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   data: (orgs) => orgs.isEmpty
                       ? const SizedBox.shrink()
                       : TennisOrgsSection(orgs: orgs),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                ProfileServiceSection(
+                  onRulesTap: () => context.push('/rules'),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppearanceSection(),

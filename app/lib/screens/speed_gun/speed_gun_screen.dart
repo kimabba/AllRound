@@ -58,8 +58,10 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
         _meta = meta;
         _step = _Step.picked;
       });
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      setState(
+        () => _error = '비디오를 불러오지 못했습니다. 파일 권한과 형식을 확인해 주세요.',
+      );
     }
   }
 
@@ -78,8 +80,10 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
         _calibration = result;
         _step = _Step.calibrated;
       });
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      setState(
+        () => _error = '영상의 첫 화면을 불러오지 못했습니다. 다른 영상을 선택해 주세요.',
+      );
     }
   }
 
@@ -125,8 +129,10 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
         _result = result;
         _step = _Step.done;
       });
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      setState(
+        () => _error = '속도 분석을 완료하지 못했습니다. 촬영 안내를 확인하고 다시 시도해 주세요.',
+      );
       await _videoSvc.cleanup();
     }
   }
@@ -143,29 +149,32 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 설명
+            Text('영상으로 공 속도를 확인하세요', style: tt.headlineSmall),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '코트 전체가 보이는 측면 영상을 사용하면 더 정확합니다. 240fps 촬영을 권장해요.',
+              style: tt.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             AppCard(
-              variant: AppCardVariant.outlined,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              variant: AppCardVariant.filled,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.speed_rounded, color: cs.primary),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text('비디오 속도 분석', style: tt.titleMedium),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    '240fps 영상을 선택하면 공의 속도를 자동으로 측정합니다.\n'
-                    '측면 촬영 · 코트 전체가 보이는 앵글 권장',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  Icon(Icons.lock_outline_rounded, size: 18, color: cs.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      '선택한 영상은 기기 안에서 분석되며 서버에 업로드하지 않습니다.',
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xxl),
 
             // Step 1 — 비디오 선택
             _StepCard(
@@ -256,7 +265,8 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
                 variant: AppCardVariant.outlined,
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
+                    Icon(Icons.error_outline_rounded,
+                        color: cs.error, size: 18),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -327,6 +337,7 @@ class _StepCard extends StatelessWidget {
     return Opacity(
       opacity: disabled ? 0.5 : 1.0,
       child: AppCard(
+        variant: AppCardVariant.outlined,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -337,7 +348,7 @@ class _StepCard extends StatelessWidget {
                   height: 28,
                   decoration: BoxDecoration(
                     color: badgeColor,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Center(
                     child: done
@@ -377,7 +388,7 @@ class _InfoChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: cs.primaryContainer,
-        borderRadius: AppRadius.pill,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

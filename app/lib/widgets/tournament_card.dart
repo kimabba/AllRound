@@ -35,125 +35,129 @@ class TournamentCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
     final deadlineText = _deadlineText();
-    final brightness = Theme.of(context).brightness;
-    const radius = AppRadius.card;
+    final date = tournament.startDate;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        child: Ink(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: BoxConstraints(minHeight: compact ? 86 : 104),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: radius,
-            border: Border.all(color: cs.outlineVariant),
-            boxShadow: AppShadows.cardFor(brightness),
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
           ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (seq != null) ...[
-                        Container(
-                          width: 20,
-                          height: 20,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '$seq',
-                            style: tt.labelSmall?.copyWith(
-                              color: cs.onPrimary,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                      ],
-                      _StatusChip(
-                        label: status.label,
-                        foreground: status.foreground,
-                        background: status.background,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 54,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '대회',
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w800,
                       ),
-                      if (isMyGrade) ...[
-                        const SizedBox(width: AppSpacing.xs),
-                        _StatusChip(
-                          label: '내 등급',
-                          foreground: cs.primary,
-                          background: cs.primaryContainer,
-                        ),
-                      ],
-                      const Spacer(),
-                      if (onFavoriteToggle != null)
-                        // 36px 히트영역 확보 — 아이콘만 노출하던 22px 탭타깃 개선.
-                        SizedBox.square(
-                          dimension: 36,
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            iconSize: 22,
-                            visualDensity: VisualDensity.compact,
-                            tooltip: isFavorite ? '관심 해제' : '관심 대회 저장',
-                            onPressed: () {
-                              HapticFeedback.lightImpact();
-                              onFavoriteToggle!();
-                            },
-                            icon: Icon(
-                              isFavorite
-                                  ? Icons.bookmark_rounded
-                                  : Icons.bookmark_outline_rounded,
-                              color: isFavorite
-                                  ? cs.primary
-                                  : cs.onSurfaceVariant,
-                            ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('dd').format(date),
+                      style: tt.headlineLarge?.copyWith(
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text('${date.month}월', style: tt.labelSmall),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 60, color: cs.outlineVariant),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      tournament.title,
+                      style: tt.titleMedium,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      _locationText().isEmpty ? _dateText() : _locationText(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        Text(
+                          status.label,
+                          style: tt.labelSmall?.copyWith(
+                            color: status.foreground,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    tournament.title,
-                    style: tt.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      height: 1.3,
-                    ),
-                    maxLines: compact ? 1 : 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _InfoLine(
-                    icon: Icons.event_rounded,
-                    label: '대회',
-                    value: _dateText(),
-                  ),
-                  if (deadlineText != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    _InfoLine(
-                      icon: Icons.timer_rounded,
-                      label: '신청',
-                      value: deadlineText,
-                    ),
-                  ],
-                  if (_locationText().isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    _InfoLine(
-                      icon: Icons.place_rounded,
-                      label: '장소',
-                      value: _locationText(),
+                        if (deadlineText != null) ...[
+                          Text(
+                            '신청',
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            deadlineText,
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (isMyGrade)
+                          Text(
+                            '내 등급',
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
+              if (onFavoriteToggle != null)
+                SizedBox.square(
+                  dimension: 44,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 21,
+                    tooltip: isFavorite ? '관심 해제' : '관심 대회 저장',
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      onFavoriteToggle!();
+                    },
+                    icon: Icon(
+                      isFavorite
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_outline_rounded,
+                      color: isFavorite ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -190,7 +194,6 @@ class TournamentCard extends StatelessWidget {
       return _StatusBadgeData(
         label: _statusLabel(tournament.status),
         foreground: cs.onSurfaceVariant,
-        background: cs.surfaceContainerHighest,
       );
     }
     final deadline = tournament.applicationDeadline;
@@ -203,14 +206,12 @@ class TournamentCard extends StatelessWidget {
         return _StatusBadgeData(
           label: '마감',
           foreground: cs.onSurfaceVariant,
-          background: cs.surfaceContainerHighest,
         );
       }
       if (daysLeft <= 3) {
         return _StatusBadgeData(
           label: '마감임박',
           foreground: cs.error,
-          background: cs.errorContainer,
         );
       }
     }
@@ -223,7 +224,6 @@ class TournamentCard extends StatelessWidget {
       return _StatusBadgeData(
         label: '마감',
         foreground: cs.onSurfaceVariant,
-        background: cs.surfaceContainerHighest,
       );
     }
     return _StatusBadgeData(
@@ -231,9 +231,6 @@ class TournamentCard extends StatelessWidget {
       foreground: tournament.sport == 'tennis'
           ? cs.onTertiaryContainer
           : cs.onSecondaryContainer,
-      background: tournament.sport == 'tennis'
-          ? cs.tertiaryContainer
-          : cs.secondaryContainer,
     );
   }
 
@@ -248,102 +245,12 @@ class TournamentCard extends StatelessWidget {
   }
 }
 
-/// 라벨이 붙은 정보 한 줄: [아이콘] [라벨칩] 값.
-/// "대회 / 신청"을 명시 라벨로 구분해 날짜 혼동을 없앤다. 값이 길면 ellipsis.
-class _InfoLine extends StatelessWidget {
-  const _InfoLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: cs.onSurfaceVariant),
-        const SizedBox(width: AppSpacing.xs),
-        // 라벨: 작은 캡슐로 "무엇에 대한 날짜인지" 즉시 인지시킨다.
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 1,
-          ),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppRadius.xs),
-          ),
-          child: Text(
-            label,
-            style: tt.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            value,
-            style: tt.bodySmall?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final String label;
-  final Color foreground;
-  final Color background;
-  const _StatusChip({
-    required this.label,
-    required this.foreground,
-    required this.background,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 3,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
 class _StatusBadgeData {
   const _StatusBadgeData({
     required this.label,
     required this.foreground,
-    required this.background,
   });
 
   final String label;
   final Color foreground;
-  final Color background;
 }

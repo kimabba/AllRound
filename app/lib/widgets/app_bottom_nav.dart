@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/tokens.dart';
+
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
@@ -12,42 +14,70 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: currentIndex,
-      onDestinationSelected: onChanged,
-      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: '홈',
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    const labels = ['오늘', '대회', '클럽', '코치', 'MY'];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.98),
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              for (var index = 0; index < labels.length; index++)
+                Expanded(
+                  child: Semantics(
+                    selected: currentIndex == index,
+                    button: true,
+                    label: '${labels[index]} 탭',
+                    child: InkWell(
+                      onTap: () => onChanged(index),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Positioned(
+                            top: 7,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              curve: Curves.easeOut,
+                              width: currentIndex == index ? 20 : 0,
+                              height: 2,
+                              decoration: BoxDecoration(
+                                color: cs.primary,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.xs,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              labels[index],
+                              style: tt.labelSmall?.copyWith(
+                                color: currentIndex == index
+                                    ? cs.onSurface
+                                    : cs.onSurfaceVariant,
+                                fontWeight: currentIndex == index
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.emoji_events_outlined),
-          selectedIcon: Icon(Icons.emoji_events_rounded),
-          label: '대회',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.groups_outlined),
-          selectedIcon: Icon(Icons.groups_rounded),
-          label: '클럽',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.menu_book_outlined),
-          selectedIcon: Icon(Icons.menu_book_rounded),
-          label: '룰북',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.chat_bubble_outline),
-          selectedIcon: Icon(Icons.chat_bubble_rounded),
-          label: '챗봇',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: '내정보',
-        ),
-      ],
+      ),
     );
   }
 }

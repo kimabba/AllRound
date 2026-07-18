@@ -17,7 +17,6 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_chip.dart';
 import '../../widgets/app_toast.dart';
-import '../../widgets/allround_logo.dart';
 
 const _profileAvatarPrefsKey = 'profile.avatar.base64';
 // 지역 선택지는 grade_labels.dart 의 regionCodes(표준 17개 광역시도) 정본을 그대로 쓴다.
@@ -449,7 +448,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } catch (e) {
       final msg = e.toString().contains('MINOR_NOT_ALLOWED')
           ? '만 $kMinSignupAge세 이상만 가입할 수 있습니다.'
-          : e.toString();
+          : '프로필을 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
       setState(() => _error = msg);
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -492,7 +491,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -503,9 +502,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
+                  AppSpacing.xl,
                   AppSpacing.md,
-                  AppSpacing.lg,
+                  AppSpacing.xl,
                   AppSpacing.huge,
                 ),
                 children: [
@@ -551,15 +550,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               decoration: BoxDecoration(
                 color: cs.surface,
                 border: Border(top: BorderSide(color: cs.outlineVariant)),
-                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
               ),
               child: SafeArea(
                 top: false,
                 child: AppPrimaryButton(
                   label: _step == 2 ? '시작하기' : '다음',
-                  icon: _step == 2
-                      ? Icons.check_rounded
-                      : Icons.arrow_forward_rounded,
                   onPressed: _canAdvance && !_busy
                       ? () {
                           if (_step < 2) {
@@ -586,50 +581,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _OnboardingHeroPanel(
-          title: '내 운동 생활을\n가볍게 시작해요',
-          subtitle: '닉네임과 활동 조건만 정하면 대회, 클럽, 룰북을 맞춤으로 볼 수 있어요.',
-          icon: Icons.sports_soccer_rounded,
+        Text(
+          '내 운동 생활을\n가볍게 시작해요',
+          style: tt.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            height: 1.18,
+          ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        AppCard(
-          variant: AppCardVariant.elevated,
-          borderRadius: BorderRadius.circular(24),
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '프로필 설정',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '실명은 대회·클럽 신청에, 닉네임은 앱 활동에 사용돼요.',
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Center(
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '기본 정보만 입력하면 대회와 클럽을 내 조건에 맞춰 볼 수 있어요.',
+          style: tt.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '프로필 설정',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '실명은 대회·클럽 신청에, 닉네임은 앱 활동에 사용돼요.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Semantics(
+              button: true,
+              label: '프로필 사진 선택',
+              child: Align(
+                alignment: Alignment.centerLeft,
                 child: GestureDetector(
                   onTap: _showProfilePhotoSheet,
                   child: Stack(
                     children: [
                       Container(
-                        width: 108,
-                        height: 108,
+                        width: 72,
+                        height: 72,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              cs.primaryContainer,
-                              cs.secondaryContainer,
-                            ],
-                          ),
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
                           border: Border.all(
                             color: cs.primary.withValues(alpha: 0.16),
-                            width: 5,
+                            width: 1,
                           ),
                           image: _avatarBytes == null
                               ? null
@@ -641,7 +639,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         child: _avatarBytes == null
                             ? Icon(
                                 Icons.person_rounded,
-                                size: 54,
+                                size: 34,
                                 color: cs.primary,
                               )
                             : null,
@@ -650,20 +648,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         right: 2,
                         bottom: 2,
                         child: Container(
-                          width: 34,
-                          height: 34,
+                          width: 28,
+                          height: 28,
                           decoration: BoxDecoration(
                             color: cs.primary,
-                            shape: BoxShape.circle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                             border: Border.all(color: cs.surface, width: 3),
-                            boxShadow: AppShadows.cardFor(
-                              Theme.of(context).brightness,
-                            ),
                           ),
                           child: Icon(
                             Icons.camera_alt_rounded,
                             color: cs.onPrimary,
-                            size: 17,
+                            size: 14,
                           ),
                         ),
                       ),
@@ -671,82 +666,82 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              TextField(
-                controller: _realName,
-                maxLength: 20,
-                onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _realName,
+              maxLength: 20,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: '이름 (실명)',
+                hintText: '대회·클럽 신청에 사용돼요',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _nickname,
+              maxLength: 10,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: '닉네임 (선택)',
+                hintText: '앱 활동에 표시돼요',
+                prefixIcon: Icon(Icons.badge_outlined),
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InkWell(
+              onTap: _pickBirthDate,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: '이름 (실명)',
-                  hintText: '대회·클럽 신청에 사용돼요',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
-                  counterText: '',
+                  labelText: '생년월일',
+                  prefixIcon: Icon(Icons.cake_outlined),
+                ),
+                child: Text(
+                  _birthDate == null
+                      ? '생년월일을 선택하세요'
+                      : _formatBirthDate(_birthDate!),
+                  style: _birthDate == null
+                      ? tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)
+                      : tt.bodyLarge,
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _nickname,
-                maxLength: 10,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  labelText: '닉네임 (선택)',
-                  hintText: '앱 활동에 표시돼요',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                  counterText: '',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              InkWell(
-                onTap: _pickBirthDate,
-                borderRadius: BorderRadius.circular(12),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: '생년월일',
-                    prefixIcon: Icon(Icons.cake_outlined),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                onTap: _showProfilePhotoSheet,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
                   ),
-                  child: Text(
-                    _birthDate == null
-                        ? '생년월일을 선택하세요'
-                        : _formatBirthDate(_birthDate!),
-                    style: _birthDate == null
-                        ? tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)
-                        : tt.bodyLarge,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Material(
-                color: cs.primaryContainer.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: _showProfilePhotoSheet,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_a_photo_rounded, color: cs.primary),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            '카메라 촬영 또는 앨범에서 사진 선택',
-                            style: tt.labelLarge?.copyWith(
-                              color: cs.primary,
-                              fontWeight: FontWeight.w900,
-                            ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_a_photo_rounded, color: cs.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          '카메라 촬영 또는 앨범에서 사진 선택',
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
-                        Icon(Icons.chevron_right_rounded, color: cs.primary),
-                      ],
-                    ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: cs.primary),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -769,12 +764,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _SportHintCard(
-          icon: Icons.location_on_rounded,
-          title: '지역 기반 추천',
-          description: '선택한 권역은 대회·클럽 추천과 기본 필터에 사용됩니다.',
-        ),
-        const SizedBox(height: AppSpacing.lg),
         GridView.count(
           crossAxisCount: 3,
           mainAxisSpacing: AppSpacing.sm,
@@ -811,12 +800,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           '${_regionCode == null ? '' : '${regionLabel(_regionCode!)}에서 '}활동할 종목과 경력을 선택하세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _SportHintCard(
-          icon: Icons.auto_awesome_rounded,
-          title: '맞춤 추천 준비',
-          description: '선택한 종목과 등급으로 대회, 클럽, 룰북 추천을 정리합니다.',
-        ),
       ],
     );
   }
@@ -829,8 +812,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final accent = AppSportColors.forSport(sportToString(sport));
 
     return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(16),
+      variant: AppCardVariant.outlined,
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -841,7 +824,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 height: 48,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Icon(
                   sport == Sport.tennis
@@ -1053,70 +1036,32 @@ class _StepProgress extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     const labels = ['프로필', '지역', '종목'];
 
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < 3; index++) ...[
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: index == current
-                      ? cs.primaryContainer
-                      : Colors.transparent,
-                  borderRadius: AppRadius.pill,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 18,
-                      height: 18,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color:
-                            index <= current ? cs.primary : cs.outlineVariant,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${index + 1}',
-                        style: tt.labelSmall?.copyWith(
-                          color: index <= current ? cs.onPrimary : cs.onSurface,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Flexible(
-                      child: Text(
-                        labels[index],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.labelMedium?.copyWith(
-                          color: index == current
-                              ? cs.onPrimaryContainer
-                              : cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (var index = 0; index < labels.length; index++)
+              Expanded(
+                child: Text(
+                  '${index + 1}  ${labels[index]}',
+                  textAlign: TextAlign.center,
+                  style: tt.labelMedium?.copyWith(
+                    color: index == current ? cs.primary : cs.onSurfaceVariant,
+                    fontWeight:
+                        index == current ? FontWeight.w900 : FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            if (index < 2) const SizedBox(width: AppSpacing.xs),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        LinearProgressIndicator(
+          value: (current + 1) / labels.length,
+          minHeight: 2,
+          color: cs.primary,
+          backgroundColor: cs.outlineVariant,
+        ),
+      ],
     );
   }
 }
@@ -1132,7 +1077,6 @@ class _OnboardingTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final titles = ['프로필 설정', '활동 지역', '종목·경력'];
 
@@ -1143,7 +1087,6 @@ class _OnboardingTopBar extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.sm,
       ),
-      color: cs.surfaceContainerLowest,
       child: Row(
         children: [
           IconButton(
@@ -1153,11 +1096,6 @@ class _OnboardingTopBar extends StatelessWidget {
                 : Icons.arrow_back_rounded),
             tooltip: onBack == null ? '닫기' : '이전',
           ),
-          const SizedBox(width: AppSpacing.sm),
-          const AllRoundLogo(fontSize: 18),
-          const SizedBox(width: AppSpacing.sm),
-          Container(width: 1, height: 18, color: cs.outlineVariant),
-          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               titles[step],
@@ -1166,148 +1104,10 @@ class _OnboardingTopBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OnboardingHeroPanel extends StatelessWidget {
-  const _OnboardingHeroPanel({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary,
-            const Color(0xFF1E40AF),
-            AppSportColors.futsal,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppShadows.elevatedFor(Theme.of(context).brightness),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -18,
-            top: -18,
-            child: Icon(
-              Icons.sports_tennis_rounded,
-              size: 112,
-              color: Colors.white.withValues(alpha: 0.16),
-            ),
-          ),
-          Positioned(
-            right: 54,
-            top: 40,
-            child: Icon(
-              Icons.sports_soccer_rounded,
-              size: 72,
-              color: Colors.white.withValues(alpha: 0.12),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                ),
-                child: Icon(icon, color: Colors.white, size: 30),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                title,
-                style: tt.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  height: 1.22,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                subtitle,
-                style: tt.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.88),
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SportHintCard extends StatelessWidget {
-  const _SportHintCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(16),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: cs.onPrimaryContainer),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
+          Text(
+            '${step + 1}/3',
+            style: tt.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1337,9 +1137,9 @@ class _PhotoSheetAction extends StatelessWidget {
 
     return Material(
       color: color.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -1353,7 +1153,7 @@ class _PhotoSheetAction extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Icon(icon, color: color),
               ),
@@ -1394,9 +1194,9 @@ class _RegionOption extends StatelessWidget {
 
     return Material(
       color: selected ? cs.primary : cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         onTap: onTap,
         child: Center(
           child: Text(

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
 import '../theme/tokens.dart';
-import '../widgets/allround_logo.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -86,7 +85,7 @@ class MoreScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '더보기')),
+      appBar: AppBar(title: const Text('전체 메뉴')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
@@ -143,29 +142,21 @@ class _MenuSection extends StatelessWidget {
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.md),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: AppRadius.hero,
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                _MenuRow(item: items[i]),
-                if (i < items.length - 1)
-                  Divider(
-                    height: 1,
-                    indent: 74,
-                    endIndent: AppSpacing.lg,
-                    color: cs.outlineVariant.withValues(alpha: 0.55),
-                  ),
-              ],
+        Divider(height: 1, color: cs.outlineVariant),
+        Column(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              _MenuRow(item: items[i]),
+              if (i < items.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 52,
+                  color: cs.outlineVariant,
+                ),
             ],
-          ),
+          ],
         ),
+        Divider(height: 1, color: cs.outlineVariant),
       ],
     );
   }
@@ -185,7 +176,6 @@ class _MenuRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: AppRadius.hero,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -193,14 +183,9 @@ class _MenuRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.14),
-                  borderRadius: AppRadius.card,
-                ),
-                child: Icon(item.icon, color: item.color, size: 24),
+              SizedBox(
+                width: 36,
+                child: Icon(item.icon, color: item.color, size: 22),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -247,45 +232,31 @@ class _LegalSection extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: AppRadius.hero,
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              ListTile(
-                onTap: items[i].onTap,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                ),
-                title: Text(
-                  items[i].label,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                trailing: Icon(
-                  Icons.open_in_new_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              if (i < items.length - 1)
-                Divider(
-                  height: 1,
-                  indent: AppSpacing.lg,
-                  endIndent: AppSpacing.lg,
-                  color: cs.outlineVariant.withValues(alpha: 0.5),
-                ),
-            ],
-          ],
-        ),
-      ),
+    return Column(
+      children: [
+        Divider(height: 1, color: cs.outlineVariant),
+        for (var i = 0; i < items.length; i++) ...[
+          ListTile(
+            onTap: items[i].onTap,
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              items[i].label,
+              style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            trailing: Icon(
+              Icons.open_in_new_rounded,
+              size: 18,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          if (i < items.length - 1)
+            Divider(
+              height: 1,
+              color: cs.outlineVariant,
+            ),
+        ],
+        Divider(height: 1, color: cs.outlineVariant),
+      ],
     );
   }
 }

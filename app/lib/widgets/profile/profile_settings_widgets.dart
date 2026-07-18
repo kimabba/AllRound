@@ -7,6 +7,31 @@ import '../../state/theme_provider.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_card.dart';
 
+class ProfileServiceSection extends StatelessWidget {
+  const ProfileServiceSection({super.key, required this.onRulesTap});
+
+  final VoidCallback onRulesTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: '도움말'),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          child: ActionRow(
+            icon: Icons.menu_book_outlined,
+            label: '룰북',
+            subtitle: '테니스와 풋살 규칙 확인',
+            onTap: onRulesTap,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // 화면 설정 섹션 (다크모드 토글)
 // ────────────────────────────────────────────────────────────

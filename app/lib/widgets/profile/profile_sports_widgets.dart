@@ -131,8 +131,8 @@ class SportCard extends StatelessWidget {
     final accentColor = isTennis ? cs.tertiary : cs.secondary;
 
     return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(16),
+      variant: AppCardVariant.outlined,
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Row(
         children: [
           ProfileSportThumbnail(sport: sport.sport),

@@ -16,6 +16,7 @@ import '../../theme/tokens.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
@@ -67,6 +68,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   void _initTab() {
     _monthlyFee = club.monthlyFee;
     _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
+    if (AppConfig.userDesignPreview) return;
     if (club.isMember) {
       _reload();
     } else {
@@ -129,6 +131,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   }
 
   Future<void> _refreshClub() async {
+    if (AppConfig.userDesignPreview) return;
     final clubId = _club?.id ?? widget.clubId;
     if (clubId == null) return;
     try {
@@ -645,64 +648,55 @@ class _Header extends StatelessWidget {
         color: cs.surface,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: AppCard(
-        variant: AppCardVariant.outlined,
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ClubLogo(club: club, size: 80),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ClubLogo(club: club, size: 80),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          _MetaChip(
-                            icon: isTennis
-                                ? Icons.sports_tennis_rounded
-                                : Icons.sports_soccer_rounded,
-                            label: sportLabelFromString(club.sport),
-                            color: accent,
-                          ),
-                          if (club.region != null && club.region!.isNotEmpty)
-                            _MetaChip(
-                              icon: Icons.place_outlined,
-                              label: club.region!,
-                            ),
-                          _MetaChip(
-                            icon: Icons.groups_rounded,
-                            label: '${club.memberCount}명',
-                          ),
-                        ],
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    _MetaChip(
+                      icon: isTennis
+                          ? Icons.sports_tennis_rounded
+                          : Icons.sports_soccer_rounded,
+                      label: sportLabelFromString(club.sport),
+                      color: accent,
+                    ),
+                    if (club.region != null && club.region!.isNotEmpty)
+                      _MetaChip(
+                        icon: Icons.place_outlined,
+                        label: club.region!,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        club.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          height: 1.12,
-                        ),
-                      ),
-                      if (club.isMember) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        _RolePill(club: club),
-                      ],
-                    ],
+                    _MetaChip(
+                      icon: Icons.groups_rounded,
+                      label: '${club.memberCount}명',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  club.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
                   ),
                 ),
+                if (club.isMember) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _RolePill(club: club),
+                ],
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -770,7 +764,7 @@ class _MetaChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: (color ?? cs.primary)
             .withValues(alpha: color == null ? 0.08 : 0.14),
-        borderRadius: AppRadius.pill,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -805,7 +799,7 @@ class _RolePill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: cs.primaryContainer,
-        borderRadius: AppRadius.pill,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         label,
@@ -1095,7 +1089,7 @@ class _ClubIntroPhotoStrip extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Image.network(
               urls[index],
@@ -1127,7 +1121,7 @@ class _InfoChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: AppRadius.pill,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1159,13 +1153,13 @@ class _RoleLabelChip extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: cs.secondaryContainer,
-        borderRadius: AppRadius.pill,
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: cs.onSecondaryContainer,
+              color: cs.onPrimaryContainer,
               fontWeight: FontWeight.w900,
             ),
       ),
@@ -1185,38 +1179,10 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Center(
-      child: AppCard(
-        variant: AppCardVariant.outlined,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: Icon(icon, color: cs.onPrimaryContainer),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyState(
+      icon: icon,
+      title: title,
+      description: message,
     );
   }
 }
@@ -1459,7 +1425,7 @@ class _ClubManagementTab extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         AppCard(
-          variant: AppCardVariant.elevated,
+          variant: AppCardVariant.outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2705,7 +2671,7 @@ class _EventCardState extends ConsumerState<_EventCard> {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: AppCard(
-        variant: AppCardVariant.elevated,
+        variant: AppCardVariant.outlined,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4328,9 +4294,6 @@ class _PostRow extends StatelessWidget {
           color: background,
           borderRadius: AppRadius.card,
           border: Border.all(color: borderColor),
-          boxShadow: Theme.of(context).brightness == Brightness.light
-              ? AppShadows.card
-              : null,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

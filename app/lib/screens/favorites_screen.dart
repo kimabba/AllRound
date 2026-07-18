@@ -10,7 +10,6 @@ import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_toast.dart';
-import '../widgets/allround_logo.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/tournament_card.dart';
 
@@ -41,7 +40,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: '관심'),
+        title: const Text('관심 목록'),
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -129,7 +128,12 @@ class _TournamentList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xxxl,
+      ),
       itemCount: tournaments.length,
       itemBuilder: (_, index) {
         final tournament = tournaments[index];
@@ -199,7 +203,12 @@ class _ClubList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xxxl,
+      ),
       itemCount: clubs.length,
       itemBuilder: (_, index) {
         final club = clubs[index];
@@ -239,7 +248,7 @@ class _FavoriteClubCard extends StatelessWidget {
     ].whereType<String>().join(' · ');
 
     return AppCard(
-      variant: AppCardVariant.elevated,
+      variant: AppCardVariant.outlined,
       onTap: onTap,
       child: Row(
         children: [
