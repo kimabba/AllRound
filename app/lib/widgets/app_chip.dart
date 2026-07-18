@@ -24,11 +24,9 @@ class AppChip extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final Color bg = selected
         ? (selectedColor ?? cs.primaryContainer)
-        : cs.surfaceContainerHigh;
+        : cs.surfaceContainerLow;
     final Color fg = selected
-        ? (selectedColor != null
-            ? cs.onSurface
-            : cs.onPrimaryContainer)
+        ? (selectedColor != null ? cs.onSurface : cs.onPrimaryContainer)
         : cs.onSurfaceVariant;
 
     return AnimatedContainer(
@@ -36,10 +34,13 @@ class AppChip extends StatelessWidget {
       curve: AppCurves.standard,
       child: Material(
         color: bg,
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          side: BorderSide(color: cs.outlineVariant),
+        ),
         child: InkWell(
           onTap: onTap,
-          customBorder: const StadiumBorder(),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,

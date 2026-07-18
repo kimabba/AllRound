@@ -1,0 +1,1074 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>올라운드 디자인 샘플</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #eef0f3;
+      --screen: #fcfcfb;
+      --surface: #ffffff;
+      --ink: #161616;
+      --muted: #6f7176;
+      --quiet: #9a9ca1;
+      --line: #e5e6e8;
+      --line-strong: #d5d7da;
+      --accent: #3156d8;
+      --accent-soft: #edf1ff;
+      --radius-control: 7px;
+      --radius-panel: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Apple SD Gothic Neo", "Pretendard", "Helvetica Neue", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--canvas);
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100dvh;
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button {
+      color: inherit;
+      font: inherit;
+    }
+
+    button:focus-visible {
+      outline: 3px solid rgba(49, 86, 216, 0.25);
+      outline-offset: 2px;
+    }
+
+    .page-header {
+      width: min(1160px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 44px 0 28px;
+      border-bottom: 1px solid rgba(22, 22, 22, 0.14);
+    }
+
+    .page-kicker {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+    }
+
+    .page-header h1 {
+      max-width: 700px;
+      margin: 0;
+      font-size: clamp(32px, 4vw, 52px);
+      font-weight: 760;
+      letter-spacing: -0.045em;
+      line-height: 1.02;
+    }
+
+    .page-summary {
+      max-width: 650px;
+      margin: 16px 0 0;
+      color: #55575c;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .recipe {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      width: min(1160px, calc(100% - 48px));
+      margin: 0 auto;
+      border-bottom: 1px solid rgba(22, 22, 22, 0.14);
+    }
+
+    .recipe div {
+      min-height: 84px;
+      padding: 20px 20px 18px 0;
+      border-right: 1px solid rgba(22, 22, 22, 0.14);
+    }
+
+    .recipe div:not(:first-child) {
+      padding-left: 20px;
+    }
+
+    .recipe div:last-child {
+      border-right: 0;
+    }
+
+    .recipe strong,
+    .recipe span {
+      display: block;
+    }
+
+    .recipe strong {
+      margin-bottom: 5px;
+      font-size: 13px;
+    }
+
+    .recipe span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: repeat(3, 352px);
+      justify-content: center;
+      gap: 34px;
+      padding: 46px 24px 64px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+    }
+
+    .concept {
+      width: 352px;
+      scroll-snap-align: center;
+    }
+
+    .concept-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      min-height: 42px;
+      margin: 0;
+    }
+
+    .concept-label strong {
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .concept-label span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .phone {
+      position: relative;
+      width: 352px;
+      height: 742px;
+      overflow: hidden;
+      border: 1px solid #cacdd2;
+      border-radius: 42px;
+      background: var(--screen);
+      box-shadow: 0 18px 48px rgba(28, 33, 43, 0.07);
+    }
+
+    .phone::before {
+      position: absolute;
+      z-index: 5;
+      top: 10px;
+      left: 50%;
+      width: 74px;
+      height: 22px;
+      border-radius: 14px;
+      background: #171717;
+      content: "";
+      transform: translateX(-50%);
+    }
+
+    .screen {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: 42px;
+      background: var(--screen);
+    }
+
+    .app-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 50px;
+      padding: 0 20px;
+    }
+
+    .wordmark {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.045em;
+    }
+
+    .text-action,
+    .back-action {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .text-action {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      text-align: right;
+    }
+
+    .back-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 650;
+      text-align: left;
+    }
+
+    .back-arrow {
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .screen-main {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .screen-main::-webkit-scrollbar {
+      display: none;
+    }
+
+    .intro {
+      padding: 19px 20px 20px;
+    }
+
+    .date-context {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .intro h2,
+    .detail-hero h2,
+    .club-hero h2 {
+      margin: 0;
+      font-weight: 760;
+      letter-spacing: -0.045em;
+    }
+
+    .intro h2 {
+      max-width: 270px;
+      font-size: 32px;
+      line-height: 1.08;
+    }
+
+    .intro p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .segment {
+      display: flex;
+      gap: 23px;
+      height: 45px;
+      margin: 0 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .segment button {
+      position: relative;
+      min-width: 44px;
+      padding: 0;
+      border: 0;
+      color: var(--quiet);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 680;
+      cursor: pointer;
+    }
+
+    .segment button[aria-selected="true"] {
+      color: var(--ink);
+    }
+
+    .segment button[aria-selected="true"]::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      background: var(--accent);
+      content: "";
+    }
+
+    .list-section {
+      padding: 5px 20px 20px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+      margin: 0;
+      font-size: 13px;
+      font-weight: 730;
+    }
+
+    .section-heading span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 560;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: 61px 1fr;
+      width: 100%;
+      min-height: 94px;
+      padding: 14px 0;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .event-row:active,
+    .primary-button:active,
+    .secondary-button:active,
+    .bottom-nav button:active {
+      transform: scale(0.985);
+    }
+
+    .event-date {
+      border-right: 1px solid var(--line);
+    }
+
+    .event-date strong,
+    .event-date span {
+      display: block;
+    }
+
+    .event-date strong {
+      font-size: 30px;
+      font-weight: 760;
+      letter-spacing: -0.05em;
+      line-height: 1;
+    }
+
+    .event-date span {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .event-copy {
+      padding-left: 15px;
+    }
+
+    .event-copy strong,
+    .event-copy span,
+    .event-copy em {
+      display: block;
+    }
+
+    .event-copy strong {
+      overflow: hidden;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 720;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .event-copy span {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .event-copy em {
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 720;
+    }
+
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      min-height: 72px;
+      padding: 8px 10px 14px;
+      border-top: 1px solid var(--line);
+      background: rgba(252, 252, 251, 0.98);
+    }
+
+    .bottom-nav button {
+      position: relative;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 16px 1px 0;
+      border: 0;
+      color: var(--quiet);
+      background: transparent;
+      font-size: 10px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .bottom-nav button[aria-current="page"] {
+      color: var(--ink);
+      font-weight: 760;
+    }
+
+    .bottom-nav button[aria-current="page"]::before {
+      position: absolute;
+      top: 7px;
+      left: 50%;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      content: "";
+      transform: translateX(-50%);
+    }
+
+    .detail-hero,
+    .club-hero {
+      padding: 19px 20px 28px;
+    }
+
+    .category {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .detail-hero h2 {
+      max-width: 305px;
+      font-size: 31px;
+      line-height: 1.12;
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-line strong {
+      color: var(--accent);
+      font-weight: 760;
+    }
+
+    .fact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin: 0 20px;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .fact {
+      min-height: 80px;
+      padding: 15px 9px 15px 0;
+    }
+
+    .fact:nth-child(odd) {
+      border-right: 1px solid var(--line);
+    }
+
+    .fact:nth-child(even) {
+      padding-left: 14px;
+    }
+
+    .fact:nth-child(-n + 2) {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .fact span,
+    .fact strong {
+      display: block;
+    }
+
+    .fact span {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .fact strong {
+      font-size: 13px;
+      font-weight: 690;
+      line-height: 1.4;
+    }
+
+    .body-copy {
+      padding: 28px 20px 32px;
+    }
+
+    .body-copy h3,
+    .club-section h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 740;
+      letter-spacing: -0.02em;
+    }
+
+    .body-copy p {
+      margin: 0;
+      color: #595b60;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .action-bar {
+      padding: 12px 20px 18px;
+      border-top: 1px solid var(--line);
+      background: rgba(252, 252, 251, 0.98);
+    }
+
+    .primary-button,
+    .secondary-button {
+      min-height: 48px;
+      border-radius: var(--radius-control);
+      font-size: 14px;
+      font-weight: 740;
+      cursor: pointer;
+    }
+
+    .primary-button {
+      width: 100%;
+      border: 1px solid var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+    }
+
+    .secondary-button {
+      padding: 0 17px;
+      border: 1px solid var(--line-strong);
+      color: var(--ink);
+      background: var(--surface);
+    }
+
+    .club-hero {
+      padding-bottom: 19px;
+    }
+
+    .club-hero h2 {
+      max-width: 290px;
+      font-size: 30px;
+      line-height: 1.1;
+    }
+
+    .club-meta {
+      margin: 11px 0 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .club-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin: 0 20px;
+      padding: 17px 0;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .club-stats div {
+      padding: 0 12px;
+      border-right: 1px solid var(--line);
+    }
+
+    .club-stats div:first-child {
+      padding-left: 0;
+    }
+
+    .club-stats div:last-child {
+      border-right: 0;
+    }
+
+    .club-stats strong,
+    .club-stats span {
+      display: block;
+    }
+
+    .club-stats strong {
+      margin-bottom: 5px;
+      font-size: 22px;
+      font-weight: 760;
+      letter-spacing: -0.04em;
+    }
+
+    .club-stats span {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .club-tabs {
+      margin-top: 20px;
+    }
+
+    .club-section {
+      padding: 23px 20px 8px;
+    }
+
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 50px 1fr auto;
+      align-items: center;
+      min-height: 74px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .schedule-row time {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .schedule-row strong,
+    .schedule-row span {
+      display: block;
+    }
+
+    .schedule-row strong {
+      font-size: 13px;
+      font-weight: 710;
+    }
+
+    .schedule-row span {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .schedule-row b {
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 620;
+    }
+
+    .notice {
+      margin: 18px 20px 24px;
+      padding: 16px 0;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .notice strong,
+    .notice span {
+      display: block;
+    }
+
+    .notice strong {
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    .notice span {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .sheet {
+      position: absolute;
+      z-index: 10;
+      inset: 0;
+      display: flex;
+      align-items: flex-end;
+      visibility: hidden;
+      background: rgba(15, 17, 21, 0.18);
+      opacity: 0;
+      transition: opacity 180ms ease, visibility 180ms ease;
+    }
+
+    .sheet[data-open="true"] {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .sheet-panel {
+      width: 100%;
+      padding: 26px 20px 28px;
+      border-top: 1px solid var(--line-strong);
+      border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+      background: var(--surface);
+      transform: translateY(18px);
+      transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sheet[data-open="true"] .sheet-panel {
+      transform: translateY(0);
+    }
+
+    .sheet-panel h3 {
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: -0.035em;
+    }
+
+    .sheet-panel p {
+      margin: 9px 0 19px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .sheet-actions {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 8px;
+    }
+
+    .sheet-actions .secondary-button {
+      width: 100%;
+    }
+
+    .toast {
+      position: absolute;
+      z-index: 20;
+      right: 18px;
+      bottom: 92px;
+      left: 18px;
+      padding: 13px 15px;
+      border: 1px solid #2a2a2a;
+      border-radius: var(--radius-control);
+      color: #ffffff;
+      background: #1a1a1a;
+      font-size: 12px;
+      font-weight: 650;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .toast[data-show="true"] {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1160px) {
+      .stage {
+        justify-content: start;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page-header,
+      .recipe {
+        width: calc(100% - 32px);
+      }
+
+      .page-header {
+        padding-top: 30px;
+      }
+
+      .recipe {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .recipe div:nth-child(2) {
+        border-right: 0;
+      }
+
+      .recipe div:nth-child(n + 3) {
+        border-top: 1px solid rgba(22, 22, 22, 0.14);
+      }
+
+      .recipe div:nth-child(3) {
+        padding-left: 0;
+      }
+
+      .stage {
+        grid-template-columns: repeat(3, 326px);
+        gap: 22px;
+        padding: 34px 16px 48px;
+      }
+
+      .concept,
+      .phone {
+        width: 326px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <p class="page-kicker">ALLROUND DESIGN STUDY</p>
+    <h1>스포츠 정보가 먼저 보이는 디자인</h1>
+    <p class="page-summary">장식은 줄이고 날짜, 장소, 신청 상태를 가장 빠르게 읽도록 구성했습니다. 세 화면의 버튼과 탭을 직접 눌러볼 수 있습니다.</p>
+  </header>
+
+  <section class="recipe" aria-label="디자인 구성 원칙">
+    <div><strong>PureForm</strong><span>평면 구조와 코발트 한 색</span></div>
+    <div><strong>Nike</strong><span>크고 빠른 숫자와 스포츠 타이포</span></div>
+    <div><strong>TouchFlow</strong><span>최소 44px 조작 영역</span></div>
+    <div><strong>Cal.com</strong><span>날짜와 일정의 명확한 흐름</span></div>
+  </section>
+
+  <main class="stage">
+    <section class="concept" aria-labelledby="home-label">
+      <p class="concept-label" id="home-label"><strong>홈과 대회 탐색</strong><span>목록 우선</span></p>
+      <div class="phone">
+        <div class="screen">
+          <div class="app-bar">
+            <strong class="wordmark">올라운드</strong>
+            <button class="text-action" type="button" data-toast="검색은 다음 단계에서 연결합니다">검색</button>
+          </div>
+
+          <div class="screen-main">
+            <section class="intro">
+              <p class="date-context">7월 18일 토요일</p>
+              <h2>이번 주, 어디서 뛸까요?</h2>
+              <p>신청 가능한 대회를 날짜순으로 확인하세요.</p>
+            </section>
+
+            <div class="segment" role="tablist" aria-label="대회 필터">
+              <button type="button" role="tab" aria-selected="true">추천</button>
+              <button type="button" role="tab" aria-selected="false">이번 주</button>
+              <button type="button" role="tab" aria-selected="false">전체</button>
+            </div>
+
+            <section class="list-section">
+              <h3 class="section-heading">다가오는 대회 <span>서울 기준</span></h3>
+
+              <button class="event-row" type="button" data-toast="서울 오픈 테니스를 선택했습니다">
+                <span class="event-date"><strong>25</strong><span>7월</span></span>
+                <span class="event-copy"><strong>서울 오픈 테니스</strong><span>올림픽공원 테니스장</span><em>접수 마감 D-3</em></span>
+              </button>
+
+              <button class="event-row" type="button" data-toast="전국 동호인 테니스대회를 선택했습니다">
+                <span class="event-date"><strong>02</strong><span>8월</span></span>
+                <span class="event-copy"><strong>전국 동호인 테니스대회</strong><span>송파구 종합운동장</span><em>접수 중</em></span>
+              </button>
+
+              <button class="event-row" type="button" data-toast="서울 풋살 챔피언십을 선택했습니다">
+                <span class="event-date"><strong>09</strong><span>8월</span></span>
+                <span class="event-copy"><strong>서울 풋살 챔피언십</strong><span>마포 난지 풋살장</span><em>팀 모집 중</em></span>
+              </button>
+            </section>
+          </div>
+
+          <nav class="bottom-nav" aria-label="주요 메뉴">
+            <button type="button" aria-current="page">홈</button>
+            <button type="button">대회</button>
+            <button type="button">클럽</button>
+            <button type="button">룰북</button>
+            <button type="button">MY</button>
+          </nav>
+        </div>
+        <div class="toast" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="concept" aria-labelledby="detail-label">
+      <p class="concept-label" id="detail-label"><strong>대회 상세</strong><span>결정 정보 우선</span></p>
+      <div class="phone">
+        <div class="screen">
+          <div class="app-bar">
+            <button class="back-action" type="button" data-toast="대회 목록으로 이동합니다"><span class="back-arrow">‹</span> 대회</button>
+            <button class="text-action" type="button" data-toast="대회 링크를 복사했습니다">공유</button>
+          </div>
+
+          <div class="screen-main">
+            <section class="detail-hero">
+              <p class="category">테니스</p>
+              <h2>2026 전국 동호인 테니스대회</h2>
+              <p class="status-line"><strong>접수 중</strong><span>7월 21일 마감</span></p>
+            </section>
+
+            <section class="fact-grid" aria-label="대회 주요 정보">
+              <div class="fact"><span>일정</span><strong>8월 2일<br>오전 9시</strong></div>
+              <div class="fact"><span>장소</span><strong>송파구<br>종합운동장</strong></div>
+              <div class="fact"><span>부문</span><strong>남자 복식<br>오픈부</strong></div>
+              <div class="fact"><span>참가비</span><strong>팀당<br>60,000원</strong></div>
+            </section>
+
+            <section class="body-copy">
+              <h3>참가 안내</h3>
+              <p>경기 시작 30분 전까지 등록을 마쳐야 합니다. 조 편성과 코트 배정은 대회 전날 알림으로 안내합니다.</p>
+            </section>
+
+            <section class="body-copy">
+              <h3>참가 자격</h3>
+              <p>만 19세 이상 동호인이 참가할 수 있습니다. 선수 출신자는 대회 규정의 출전 제한을 확인해 주세요.</p>
+            </section>
+          </div>
+
+          <div class="action-bar">
+            <button class="primary-button" type="button" data-open-sheet="tournament-sheet">참가 신청</button>
+          </div>
+        </div>
+
+        <div class="sheet" id="tournament-sheet" data-open="false" role="dialog" aria-modal="true" aria-labelledby="tournament-sheet-title">
+          <div class="sheet-panel">
+            <h3 id="tournament-sheet-title">참가 신청</h3>
+            <p>선수 정보와 참가 부문을 확인한 뒤 신청을 완료합니다.</p>
+            <div class="sheet-actions">
+              <button class="secondary-button" type="button" data-close-sheet>취소</button>
+              <button class="primary-button" type="button" data-confirm="신청 단계로 이동합니다">계속</button>
+            </div>
+          </div>
+        </div>
+        <div class="toast" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="concept" aria-labelledby="club-label">
+      <p class="concept-label" id="club-label"><strong>클럽 상세</strong><span>활동과 일정 우선</span></p>
+      <div class="phone">
+        <div class="screen">
+          <div class="app-bar">
+            <button class="back-action" type="button" data-toast="클럽 목록으로 이동합니다"><span class="back-arrow">‹</span> 클럽</button>
+            <button class="text-action" type="button" data-toast="클럽 메뉴를 엽니다">관리</button>
+          </div>
+
+          <div class="screen-main">
+            <section class="club-hero">
+              <p class="category">서울 마포구</p>
+              <h2>한강 테니스 클럽</h2>
+              <p class="club-meta">매주 화요일과 토요일 정기 모임<br>초급부터 중급까지 함께 운동합니다.</p>
+              <button class="secondary-button" type="button" data-open-sheet="club-sheet">가입 문의</button>
+            </section>
+
+            <section class="club-stats" aria-label="클럽 활동 정보">
+              <div><strong>38</strong><span>회원</span></div>
+              <div><strong>2</strong><span>주간 모임</span></div>
+              <div><strong>4.8</strong><span>활동 평점</span></div>
+            </section>
+
+            <div class="segment club-tabs" role="tablist" aria-label="클럽 정보">
+              <button type="button" role="tab" aria-selected="true">일정</button>
+              <button type="button" role="tab" aria-selected="false">소식</button>
+              <button type="button" role="tab" aria-selected="false">멤버</button>
+            </div>
+
+            <section class="club-section">
+              <h3>다음 일정</h3>
+              <div class="schedule-row"><time>7.21</time><div><strong>화요 야간 게임</strong><span>망원 테니스장, 오후 8시</span></div><b>8자리</b></div>
+              <div class="schedule-row"><time>7.25</time><div><strong>토요 정기 모임</strong><span>난지 테니스장, 오전 9시</span></div><b>4자리</b></div>
+            </section>
+
+            <section class="notice">
+              <strong>여름 리그 참가자를 모집합니다</strong>
+              <span>7월 24일까지 클럽 운영진에게 참가 의사를 알려 주세요.</span>
+            </section>
+          </div>
+
+          <nav class="bottom-nav" aria-label="주요 메뉴">
+            <button type="button">홈</button>
+            <button type="button">대회</button>
+            <button type="button" aria-current="page">클럽</button>
+            <button type="button">룰북</button>
+            <button type="button">MY</button>
+          </nav>
+        </div>
+
+        <div class="sheet" id="club-sheet" data-open="false" role="dialog" aria-modal="true" aria-labelledby="club-sheet-title">
+          <div class="sheet-panel">
+            <h3 id="club-sheet-title">가입 문의</h3>
+            <p>운영진에게 기본 프로필과 운동 경력을 전달합니다.</p>
+            <div class="sheet-actions">
+              <button class="secondary-button" type="button" data-close-sheet>취소</button>
+              <button class="primary-button" type="button" data-confirm="문의 작성 화면으로 이동합니다">문의 작성</button>
+            </div>
+          </div>
+        </div>
+        <div class="toast" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const showToast = (phone, message) => {
+      const toast = phone.querySelector('.toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.dataset.show = 'true';
+      window.setTimeout(() => {
+        toast.dataset.show = 'false';
+      }, 1600);
+    };
+
+    document.querySelectorAll('.segment').forEach((segment) => {
+      segment.addEventListener('click', (event) => {
+        const button = event.target.closest('[role="tab"]');
+        if (!button) return;
+        segment.querySelectorAll('[role="tab"]').forEach((tab) => {
+          tab.setAttribute('aria-selected', String(tab === button));
+        });
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      const toastTrigger = event.target.closest('[data-toast]');
+      if (toastTrigger) {
+        const phone = toastTrigger.closest('.phone');
+        if (phone) showToast(phone, toastTrigger.dataset.toast);
+      }
+
+      const openTrigger = event.target.closest('[data-open-sheet]');
+      if (openTrigger) {
+        const sheet = document.getElementById(openTrigger.dataset.openSheet);
+        if (sheet) sheet.dataset.open = 'true';
+      }
+
+      const closeTrigger = event.target.closest('[data-close-sheet]');
+      if (closeTrigger) {
+        const sheet = closeTrigger.closest('.sheet');
+        if (sheet) sheet.dataset.open = 'false';
+      }
+
+      const confirmTrigger = event.target.closest('[data-confirm]');
+      if (confirmTrigger) {
+        const phone = confirmTrigger.closest('.phone');
+        const sheet = confirmTrigger.closest('.sheet');
+        if (sheet) sheet.dataset.open = 'false';
+        if (phone) showToast(phone, confirmTrigger.dataset.confirm);
+      }
+
+      const sheetBackdrop = event.target.classList.contains('sheet') ? event.target : null;
+      if (sheetBackdrop) sheetBackdrop.dataset.open = 'false';
+    });
+
+    document.querySelectorAll('.bottom-nav').forEach((nav) => {
+      nav.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        nav.querySelectorAll('button').forEach((item) => item.removeAttribute('aria-current'));
+        button.setAttribute('aria-current', 'page');
+      });
+    });
+  </script>
+</body>
+</html>

@@ -86,11 +86,11 @@ class MyClubsSection extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: AppCard(
-                      variant: AppCardVariant.elevated,
-                      borderRadius: BorderRadius.circular(16),
+                      variant: AppCardVariant.outlined,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                       padding: EdgeInsets.zero,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         onTap: () => context.push(
                           '/clubs/${club.id}',
                           extra: club,
@@ -300,8 +300,8 @@ class MyTournamentRecordsSection extends ConsumerWidget {
                   preview: true,
                 )
               : AppCard(
-                  variant: AppCardVariant.elevated,
-                  borderRadius: BorderRadius.circular(16),
+                  variant: AppCardVariant.outlined,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Text(
                     '대회 기록을 불러오지 못했습니다.',
                     style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
@@ -309,8 +309,8 @@ class MyTournamentRecordsSection extends ConsumerWidget {
                 ),
           data: (items) => items.isEmpty
               ? AppCard(
-                  variant: AppCardVariant.elevated,
-                  borderRadius: BorderRadius.circular(16),
+                  variant: AppCardVariant.outlined,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: TournamentRecordEmptyContent(cs: cs, tt: tt),
                 )
               : TournamentRecordsList(tournaments: items),
@@ -345,22 +345,22 @@ class TournamentRecordsList extends StatelessWidget {
               vertical: AppSpacing.sm,
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFEDD5),
+              color: cs.primaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.visibility_rounded,
                   size: 18,
-                  color: Color(0xFFEA580C),
+                  color: cs.primary,
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: Text(
                     '백엔드 연결 전 디자인 미리보기 기록입니다.',
                     style: tt.labelMedium?.copyWith(
-                      color: const Color(0xFF9A3412),
+                      color: cs.onPrimaryContainer,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -386,11 +386,11 @@ class TournamentRecordsList extends StatelessWidget {
                   onTap: preview
                       ? null
                       : () => context.push('/tournaments/${tournament.id}'),
-                  variant: AppCardVariant.elevated,
-                  borderRadius: BorderRadius.circular(16),
+                  variant: AppCardVariant.outlined,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   padding: EdgeInsets.zero,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

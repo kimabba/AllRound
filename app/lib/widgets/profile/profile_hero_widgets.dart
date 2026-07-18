@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/tournament.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
-import '../../widgets/app_card.dart';
 
 // ────────────────────────────────────────────────────────────
 // Hero SliverAppBar
@@ -21,6 +20,7 @@ class ProfileHeroSliver extends StatelessWidget {
   final AsyncValue<List<UserTennisOrg>> tennisOrgs;
   final Uint8List? avatarBytes;
   final VoidCallback onAvatarTap;
+  final VoidCallback onMoreTap;
 
   const ProfileHeroSliver({
     super.key,
@@ -32,6 +32,7 @@ class ProfileHeroSliver extends StatelessWidget {
     required this.tennisOrgs,
     required this.avatarBytes,
     required this.onAvatarTap,
+    required this.onMoreTap,
   });
 
   @override
@@ -40,37 +41,38 @@ class ProfileHeroSliver extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return SliverAppBar(
-      expandedHeight: 306,
+      expandedHeight: 286,
       pinned: true,
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: cs.surface,
+      foregroundColor: cs.onSurface,
       title: Text(
         'MY',
         style: tt.titleLarge?.copyWith(
-          color: cs.onPrimary,
-          fontWeight: FontWeight.w900,
+          color: cs.onSurface,
+          fontWeight: FontWeight.w800,
         ),
       ),
+      actions: [
+        IconButton(
+          tooltip: '전체 메뉴',
+          onPressed: onMoreTap,
+          icon: const Icon(Icons.settings_outlined),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+      ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [cs.primary, const Color(0xFF3B5BDB), cs.secondary],
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                kToolbarHeight + AppSpacing.md,
-                AppSpacing.lg,
-                112,
-              ),
-              child: ProfileHeaderContent(
+        background: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            kToolbarHeight + AppSpacing.xxl,
+            AppSpacing.xl,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ProfileHeaderContent(
                 initial: initial,
                 title: title,
                 subtitle: subtitle,
@@ -79,14 +81,10 @@ class ProfileHeroSliver extends StatelessWidget {
                 avatarBytes: avatarBytes,
                 onAvatarTap: onAvatarTap,
               ),
-            ),
-            Positioned(
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              bottom: AppSpacing.lg,
-              child: StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.xl),
+              StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
+            ],
+          ),
         ),
       ),
     );
@@ -130,17 +128,27 @@ class ProfileHeaderContent extends StatelessWidget {
           onTap: onAvatarTap,
           child: Stack(
             children: [
-              CircleAvatar(
-                radius: 42,
-                backgroundColor: cs.onPrimary.withValues(alpha: 0.2),
-                backgroundImage:
-                    avatarBytes == null ? null : MemoryImage(avatarBytes!),
+              Container(
+                width: 72,
+                height: 72,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  image: avatarBytes == null
+                      ? null
+                      : DecorationImage(
+                          image: MemoryImage(avatarBytes!),
+                          fit: BoxFit.cover,
+                        ),
+                ),
+                alignment: Alignment.center,
                 child: avatarBytes == null
                     ? Text(
                         initial,
                         style: tt.headlineMedium?.copyWith(
-                          color: cs.onPrimary,
-                          fontWeight: FontWeight.w900,
+                          color: cs.primary,
+                          fontWeight: FontWeight.w800,
                         ),
                       )
                     : null,
@@ -152,13 +160,13 @@ class ProfileHeaderContent extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: cs.onPrimary,
-                    shape: BoxShape.circle,
-                    boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+                    color: cs.surface,
+                    border: Border.all(color: cs.outlineVariant),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Icon(
                     Icons.camera_alt_rounded,
-                    color: cs.primary,
+                    color: cs.onSurfaceVariant,
                     size: 15,
                   ),
                 ),
@@ -175,8 +183,8 @@ class ProfileHeaderContent extends StatelessWidget {
               Text(
                 title.isEmpty ? '사용자' : title,
                 style: tt.titleLarge?.copyWith(
-                  color: cs.onPrimary,
-                  fontWeight: FontWeight.w900,
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w800,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -186,7 +194,7 @@ class ProfileHeaderContent extends StatelessWidget {
                 Text(
                   subtitle,
                   style: tt.bodySmall?.copyWith(
-                    color: cs.onPrimary.withValues(alpha: 0.82),
+                    color: cs.onSurfaceVariant,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -197,7 +205,7 @@ class ProfileHeaderContent extends StatelessWidget {
                 Text(
                   infoLine!,
                   style: tt.bodySmall?.copyWith(
-                    color: cs.onPrimary.withValues(alpha: 0.82),
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                   ),
                   maxLines: 1,
@@ -243,15 +251,15 @@ class HeroChip extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: cs.onPrimary.withValues(alpha: 0.18),
-        borderRadius: AppRadius.pill,
-        border: Border.all(color: cs.onPrimary.withValues(alpha: 0.18)),
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Text(
         label,
         style: tt.labelSmall?.copyWith(
-          color: cs.onPrimary,
-          fontWeight: FontWeight.w800,
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -279,36 +287,42 @@ class StatsGrid extends StatelessWidget {
       orElse: () => null,
     );
 
-    return Row(
-      children: [
-        Expanded(
-          child: StatCard(
-            icon: Icons.sports_score_rounded,
-            value: '$sportCount',
-            label: '등록 종목',
-            color: Theme.of(context).colorScheme.secondary,
-          ),
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
         ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: StatCard(
-            icon: Icons.emoji_events_rounded,
-            value: '$orgCount',
-            label: '소속 협회',
-            color: Theme.of(context).colorScheme.tertiary,
-          ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: StatCard(
+                value: '$sportCount',
+                label: '등록 종목',
+              ),
+            ),
+            VerticalDivider(width: 1, color: cs.outlineVariant),
+            Expanded(
+              child: StatCard(
+                value: '$orgCount',
+                label: '소속 협회',
+              ),
+            ),
+            VerticalDivider(width: 1, color: cs.outlineVariant),
+            Expanded(
+              child: StatCard(
+                value: primary == null ? '-' : sportLabelFromString(primary),
+                label: '기본 필터',
+                compact: true,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: StatCard(
-            icon: Icons.tune_rounded,
-            value: primary == null ? '-' : sportLabelFromString(primary),
-            label: '기본 필터',
-            color: Theme.of(context).colorScheme.primary,
-            compact: true,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -316,17 +330,13 @@ class StatsGrid extends StatelessWidget {
 class StatCard extends StatelessWidget {
   const StatCard({
     super.key,
-    required this.icon,
     required this.value,
     required this.label,
-    required this.color,
     this.compact = false,
   });
 
-  final IconData icon;
   final String value;
   final String label;
-  final Color color;
   final bool compact;
 
   @override
@@ -334,22 +344,15 @@ class StatCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(16),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.md,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: AppSpacing.sm),
           Text(
             value,
             style: (compact ? tt.labelLarge : tt.titleLarge)?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.w900,
+              color: cs.onSurface,
+              fontWeight: FontWeight.w800,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -359,7 +362,7 @@ class StatCard extends StatelessWidget {
             label,
             style: tt.labelSmall?.copyWith(
               color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

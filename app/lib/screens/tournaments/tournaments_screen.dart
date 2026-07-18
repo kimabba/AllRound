@@ -13,7 +13,6 @@ import '../../utils/recent_tournaments.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
-import '../../widgets/allround_logo.dart';
 import '../../widgets/tournament_card.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
@@ -197,7 +196,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: '대회 · 모집'),
+        title: const Text('대회'),
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),
@@ -213,8 +212,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            color: cs.surfaceContainerLow,
+          Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               AppSpacing.sm,
@@ -673,7 +671,7 @@ class _TournamentCalendarListView extends StatelessWidget {
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
+        horizontal: AppSpacing.xl,
         vertical: AppSpacing.md,
       ),
       itemCount: 1 + visible.length,
@@ -801,11 +799,10 @@ class _TournamentMonthCalendar extends StatelessWidget {
         AppSpacing.lg,
       ),
       decoration: BoxDecoration(
-        // 다크모드에서도 카드 표면이 유지되도록 surface 토큰 사용 (Colors.white 금지).
-        color: cs.surfaceContainerLow,
-        borderRadius: AppRadius.hero,
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
-        boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
       ),
       child: Column(
         children: [
@@ -920,9 +917,11 @@ class _CalendarMonthButton extends StatelessWidget {
         iconSize: 24,
         color: cs.onSurface,
         style: IconButton.styleFrom(
-          backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+          backgroundColor: Colors.transparent,
           padding: EdgeInsets.zero,
-          shape: const CircleBorder(),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
         ),
       ),
     );

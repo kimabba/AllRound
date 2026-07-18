@@ -19,6 +19,7 @@ import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/friend_schedule_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
@@ -30,11 +31,13 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
-import 'theme/tokens.dart';
+import 'widgets/app_bottom_nav.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: kIsWeb && AppConfig.userDesignPreview
+        ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
+        : '/',
     refreshListenable: GoRouterRefreshStream(ref),
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
@@ -55,7 +58,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (userDesignPreview && !loc.startsWith('/admin')) {
-        if (loc == '/login') return '/';
         return null;
       }
 
@@ -101,7 +103,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, __) => const ChatScreen()),
+          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
           GoRoute(
             path: '/tournaments',
             builder: (_, __) => const TournamentsScreen(),
@@ -208,35 +211,35 @@ class _MainShell extends ConsumerWidget {
   const _MainShell({required this.child});
   final Widget child;
 
-  static const _tabs = [
-    ('/', Icons.auto_awesome_outlined, '라운드 코치'),
-    ('/tournaments', Icons.emoji_events_outlined, '대회'),
-    ('/clubs', Icons.groups_outlined, '클럽'),
-    ('/more', Icons.grid_view_outlined, '더보기'),
+  static const _tabs = <String>[
+    '/',
+    '/tournaments',
+    '/clubs',
+    '/chat',
+    '/profile',
   ];
 
-  // 더보기 하위 경로는 더보기 탭이 선택된 것으로 표시
-  static const _moreSubPaths = [
+  static const _profileSubPaths = [
     '/more',
     '/speed-gun',
-    '/rules',
     '/profile',
     '/notifications',
     '/favorites',
     '/friend-schedule',
     '/blocked-users',
+    '/rules',
   ];
 
   int _indexOf(String location) {
     for (var i = 0; i < _tabs.length; i++) {
-      if (_tabs[i].$1 == '/more') {
-        if (_moreSubPaths.any(
+      if (_tabs[i] == '/profile') {
+        if (_profileSubPaths.any(
           (p) => location == p || (location.startsWith(p) && p != '/'),
         )) {
           return i;
         }
-      } else if (location == _tabs[i].$1 ||
-          (location.startsWith(_tabs[i].$1) && _tabs[i].$1 != '/')) {
+      } else if (location == _tabs[i] ||
+          (location.startsWith(_tabs[i]) && _tabs[i] != '/')) {
         return i;
       }
     }
@@ -246,98 +249,17 @@ class _MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final currentPath =
-        GoRouter.of(context).routeInformationProvider.value.uri.path;
     final idx = _indexOf(loc);
-    final cs = Theme.of(context).colorScheme;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: cs.surfaceContainerLowest,
-              child: child,
-            ),
-          ),
-          if (currentPath != '/notifications')
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              right: 12,
-              child: const _NotificationBell(),
-            ),
-        ],
-      ),
+      body: child,
       bottomNavigationBar: keyboardVisible
           ? null
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                border: Border(top: BorderSide(color: cs.outlineVariant)),
-                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-                  child: NavigationBar(
-                    selectedIndex: idx,
-                    onDestinationSelected: (i) => context.go(_tabs[i].$1),
-                    labelBehavior:
-                        NavigationDestinationLabelBehavior.alwaysShow,
-                    height: 66,
-                    destinations: [
-                      for (final t in _tabs)
-                        NavigationDestination(
-                          icon: Icon(t.$2),
-                          selectedIcon: Icon(_selectedIcon(t.$2)),
-                          label: t.$3,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+          : AppBottomNav(
+              currentIndex: idx,
+              onChanged: (index) => context.go(_tabs[index]),
             ),
-    );
-  }
-
-  IconData _selectedIcon(IconData icon) {
-    return switch (icon) {
-      Icons.auto_awesome_outlined => Icons.auto_awesome_rounded,
-      Icons.emoji_events_outlined => Icons.emoji_events_rounded,
-      Icons.groups_outlined => Icons.groups_rounded,
-      Icons.grid_view_outlined => Icons.grid_view_rounded,
-      _ => icon,
-    };
-  }
-}
-
-class _NotificationBell extends ConsumerWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
-
-    return Material(
-      color: cs.surface.withValues(alpha: 0.96),
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: Badge(
-        isLabelVisible: unread > 0,
-        label: Text(unread > 99 ? '99+' : '$unread'),
-        child: IconButton(
-          tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
-          onPressed: () => context.push('/notifications'),
-          icon: Icon(
-            unread > 0
-                ? Icons.notifications_rounded
-                : Icons.notifications_none_rounded,
-          ),
-        ),
-      ),
     );
   }
 }

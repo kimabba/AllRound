@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// M3 shape scale
+/// PureForm Sports shape scale.
+///
+/// 화면의 정보 밀도를 높이고 장식적인 라운드를 줄인다. 큰 pill 은 필터와
+/// 상태처럼 의미가 있는 경우에만 사용한다.
 class AppRadius {
   AppRadius._();
-  static const double xs = 4;
-  static const double sm = 8;
-  static const double md = 12;
-  static const double lg = 16; // 카드
-  static const double xl = 20; // hero
-  static const double xxl = 28; // sheet
+  static const double xs = 3;
+  static const double sm = 6;
+  static const double md = 8;
+  static const double lg = 10;
+  static const double xl = 12;
+  static const double xxl = 16;
   static const double full = 999; // pill
 
   static const BorderRadius card = BorderRadius.all(Radius.circular(lg));
@@ -25,52 +28,43 @@ class AppSpacing {
   static const double xs = 4;
   static const double sm = 8;
   static const double md = 12;
-  static const double lg = 16; // 화면 좌우 기본 패딩
+  static const double lg = 16;
   static const double xl = 20;
   static const double xxl = 24;
   static const double xxxl = 32;
   static const double huge = 40;
 
   static const EdgeInsets screen = EdgeInsets.symmetric(
-    horizontal: lg,
+    horizontal: xl,
     vertical: md,
   );
   static const EdgeInsets cardInner = EdgeInsets.all(lg);
   static const EdgeInsets listGap = EdgeInsets.symmetric(vertical: sm);
 }
 
-/// 다층 그림자 — Card는 elevation 0, BoxShadow로 직접 표현
-/// 다크모드는 거의 보이지 않으므로 surface 단계로 깊이 표현 (null 반환)
+/// 그림자는 오버레이에만 사용한다. 일반 카드의 깊이는 선과 여백으로 표현한다.
 class AppShadows {
   AppShadows._();
 
-  static const List<BoxShadow> card = [
-    BoxShadow(color: Color(0x0A0F172A), blurRadius: 1, offset: Offset(0, 1)),
-    BoxShadow(color: Color(0x0F0F172A), blurRadius: 24, offset: Offset(0, 4)),
-  ];
+  static const List<BoxShadow> card = [];
 
-  static const List<BoxShadow> elevated = [
-    BoxShadow(color: Color(0x0A0F172A), blurRadius: 2, offset: Offset(0, 2)),
-    BoxShadow(color: Color(0x140F172A), blurRadius: 24, offset: Offset(0, 8)),
-  ];
+  static const List<BoxShadow> elevated = [];
 
   static const List<BoxShadow> overlay = [
-    BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 4)),
-    BoxShadow(color: Color(0x29000000), blurRadius: 24, offset: Offset(0, 12)),
+    BoxShadow(color: Color(0x0F1E2A44), blurRadius: 32, offset: Offset(0, 12)),
   ];
 
-  static List<BoxShadow>? cardFor(Brightness b) =>
-      b == Brightness.light ? card : null;
+  static List<BoxShadow>? cardFor(Brightness b) => null;
 
-  static List<BoxShadow>? elevatedFor(Brightness b) =>
-      b == Brightness.light ? elevated : null;
+  static List<BoxShadow>? elevatedFor(Brightness b) => null;
 }
 
-/// 종목 액센트 컬러 (테니스/풋살)
+/// 종목은 색이 아니라 레이블과 정보 구조로 구분한다.
+/// 전 화면의 액센트를 하나로 잠가 시각적 소음을 줄인다.
 class AppSportColors {
   AppSportColors._();
-  static const Color tennis = Color(0xFFF97316);
-  static const Color futsal = Color(0xFF84CC16);
+  static const Color tennis = Color(0xFF3156D8);
+  static const Color futsal = Color(0xFF3156D8);
 
   static Color forSport(String sport) => sport == 'futsal' ? futsal : tennis;
 }

@@ -12,16 +12,23 @@
 | `app/lib/models/tournament.dart` | Tournament, Club, Region, UserSport, UserTennisOrg 등 |
 | `app/lib/utils/grade_labels.dart` | 부서코드·등급 레이블 + 테니스 협회 정의 |
 
-## 내비게이션 (바텀탭 4개)
+## 내비게이션 (바텀탭 5개)
 
 | 탭 | 경로 | 화면 |
 |---|---|---|
-| 채팅 | `/` | ChatScreen |
+| 오늘 | `/` | HomeScreen |
 | 대회 | `/tournaments` | TournamentsScreen |
 | 클럽 | `/clubs` | ClubsScreen |
-| 더보기 | `/more` | MoreScreen |
+| 코치 | `/chat` | ChatScreen |
+| MY | `/profile` | ProfileScreen |
 
-더보기 하위: `/speed-gun`, `/rules`, `/profile`, `/admin`
+독립 화면: `/rules`, `/notifications`, `/favorites`, `/friend-schedule`, `/blocked-users`, `/more`
+
+`/more`에서 MY, 관심 목록, 차단 관리, 룰북, 이용약관, 개인정보 처리방침으로 진입한다. `/speed-gun`은 모바일 실험 경로로 유지되며 현재 기본 메뉴에는 노출하지 않는다. 웹 어드민은 `/admin` 하위의 별도 셸을 사용한다.
+
+## 사용자 디자인 프리뷰
+
+`USER_DESIGN_PREVIEW=true`로 웹 앱을 실행하면 인증 없이 사용자 라우트를 점검할 수 있다. 앱 본문은 최대 390px 모바일 폭으로 표시되고 주소의 사용자 경로를 시작 라우트로 사용한다. 홈·대회·클럽·룰북과 주요 MY 보조 화면에는 로컬 프리뷰 데이터가 제공된다. 이 플래그는 릴리스 빌드에서 허용되지 않는다.
 
 ## 종목 스왑 (dev 기능)
 - `_MainShell` 상단에 테니스↔풋살 SegmentedButton

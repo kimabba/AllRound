@@ -14,7 +14,6 @@ import '../theme/tokens.dart';
 import '../widgets/moderation/ugc_moderation_widgets.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
-import '../widgets/allround_logo.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -233,7 +232,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: '라운드 코치'),
+        title: const Text('라운드 코치'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -318,20 +317,21 @@ class _EmptyHint extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xxl),
           Text(
-            '무엇이든 물어보세요',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            '궁금한 운동 정보를\n바로 물어보세요',
+            style: tt.headlineLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '대회 · 규칙 · 구장 · 클럽 정보를\n코치처럼 쉽게 알려드릴게요',
+            '대회, 규칙, 구장, 클럽 정보를 찾아 답합니다.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.5,
             ),
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
           ),
           const SizedBox(height: AppSpacing.xl),
           for (final (icon, label, msg) in _suggestions) ...[
@@ -359,32 +359,40 @@ class _SuggestionCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
+            vertical: AppSpacing.lg,
           ),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: cs.onSurfaceVariant),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  label,
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: cs.outlineVariant),
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: cs.onSurfaceVariant,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Row(
+                children: [
+                  Icon(icon, size: 20, color: cs.onSurfaceVariant),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style:
+                          tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -412,9 +420,8 @@ class _InputBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
+          color: cs.surface,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
-          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
         ),
         child: Row(
           children: [
@@ -506,15 +513,8 @@ class _MessageBubble extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isUser ? cs.primary : cs.surfaceContainerLow,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(isUser ? 18 : AppRadius.xs),
-                bottomRight: Radius.circular(isUser ? AppRadius.xs : 18),
-              ),
-              boxShadow: isUser
-                  ? null
-                  : AppShadows.cardFor(Theme.of(context).brightness),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: isUser ? null : Border.all(color: cs.outlineVariant),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

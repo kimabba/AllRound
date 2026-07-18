@@ -25,19 +25,17 @@ class SpeedResultScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.xl),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [cs.primary, cs.primaryContainer],
-                ),
-                borderRadius: AppRadius.hero,
+                color: cs.surfaceContainerLowest,
+                border: Border.all(color: cs.outlineVariant),
+                borderRadius: AppRadius.card,
               ),
               child: Column(
                 children: [
                   Text(
                     '최고 속도',
                     style: tt.labelLarge?.copyWith(
-                      color: cs.onPrimary.withValues(alpha: 0.8),
+                      color: cs.primary,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -50,15 +48,17 @@ class SpeedResultScreen extends StatelessWidget {
                         result.peakSpeedKmh.toStringAsFixed(1),
                         style: TextStyle(
                           fontSize: 64,
-                          fontWeight: FontWeight.w700,
-                          color: cs.onPrimary,
+                          fontWeight: FontWeight.w800,
+                          color: cs.onSurface,
                           height: 1,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         'km/h',
-                        style: tt.titleLarge?.copyWith(color: cs.onPrimary),
+                        style: tt.titleLarge?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -76,13 +76,17 @@ class SpeedResultScreen extends StatelessWidget {
                     label: '평균 속도',
                     value: '${result.avgSpeedKmh.toStringAsFixed(1)} km/h',
                   ),
-                  Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  Divider(
+                      height: 1,
+                      color: cs.outlineVariant.withValues(alpha: 0.5)),
                   _StatRow(
                     icon: Icons.videocam_rounded,
                     label: '촬영 프레임레이트',
                     value: '${result.fps.toStringAsFixed(0)} fps',
                   ),
-                  Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
+                  Divider(
+                      height: 1,
+                      color: cs.outlineVariant.withValues(alpha: 0.5)),
                   _StatRow(
                     icon: Icons.sports_tennis_rounded,
                     label: '감지된 프레임',
@@ -131,8 +135,7 @@ class SpeedResultScreen extends StatelessWidget {
                     child: Text(
                       'MVP 버전 정확도: ±15~30% (레이더건 대비). '
                       '측면 카메라 각도·240fps 영상 권장.',
-                      style: tt.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ),
                 ],
@@ -150,7 +153,8 @@ class _StatRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _StatRow({required this.icon, required this.label, required this.value});
+  const _StatRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -219,8 +223,9 @@ class _TrajectoryPainter extends CustomPainter {
     for (var i = 1; i < trajectory.length; i++) {
       final prev = toScreen(trajectory[i - 1]);
       final cur = toScreen(trajectory[i]);
-      final speedRatio =
-          peakSpeed > 0 ? (trajectory[i].speedKmh / peakSpeed).clamp(0.0, 1.0) : 0.0;
+      final speedRatio = peakSpeed > 0
+          ? (trajectory[i].speedKmh / peakSpeed).clamp(0.0, 1.0)
+          : 0.0;
 
       final paint = Paint()
         ..strokeWidth = 3

@@ -41,7 +41,7 @@ class TeamRecruitingBoard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
@@ -77,7 +77,7 @@ class TeamRecruitingBoard extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(color: cs.outlineVariant),
               ),
               child: Text(
@@ -122,14 +122,13 @@ class TeamRecruitingPostCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final isFutsal = post.sport == 'futsal';
     final accent = post.isClosed ? cs.outline : cs.primary;
-    final chipColor = post.isClosed
-        ? cs.surfaceContainerHighest
-        : (isFutsal ? const Color(0xFFE6F7C7) : const Color(0xFFE8EEFF));
+    final chipColor =
+        post.isClosed ? cs.surfaceContainerHighest : cs.primaryContainer;
 
     return AppCard(
       onTap: onTap,
       padding: const EdgeInsets.all(AppSpacing.md),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       variant: AppCardVariant.outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,13 +245,13 @@ class RecruitingStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: isClosed ? cs.surfaceContainerHighest : const Color(0xFFE6F7C7),
-        borderRadius: BorderRadius.circular(999),
+        color: isClosed ? cs.surfaceContainerHighest : cs.primaryContainer,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
         isClosed ? '마감' : '모집중',
         style: TextStyle(
-          color: isClosed ? cs.onSurfaceVariant : const Color(0xFF4F8F00),
+          color: isClosed ? cs.onSurfaceVariant : cs.onPrimaryContainer,
           fontSize: 12,
           fontWeight: FontWeight.w900,
         ),
@@ -538,8 +537,8 @@ class _RecruitingFallbackBadge extends StatelessWidget {
       width: 58,
       height: 58,
       decoration: BoxDecoration(
-        color: isFutsal ? const Color(0xFFE6F7C7) : const Color(0xFFE8EEFF),
-        borderRadius: BorderRadius.circular(16),
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Icon(
         isFutsal ? Icons.sports_soccer_rounded : Icons.sports_tennis_rounded,
@@ -568,7 +567,6 @@ class _RecruitingDetailSection extends StatelessWidget {
         color: isLight ? Colors.white : cs.surfaceContainerLow,
         borderRadius: AppRadius.card,
         border: Border.all(color: cs.outlineVariant),
-        boxShadow: isLight ? AppShadows.card : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -791,8 +789,8 @@ class _TeamRecruitingDraftSheetState
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEAF7F1),
-                      borderRadius: BorderRadius.circular(16),
+                      color: cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Icon(
                       Icons.person_add_alt_1_rounded,
@@ -1099,12 +1097,12 @@ class _ManagedClubSelectorField extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(color: cs.outlineVariant),
             ),
             child: Row(
@@ -1226,14 +1224,14 @@ class _ManagedClubOptionTile extends StatelessWidget {
 
     return InkWell(
       onTap: () => Navigator.pop(context, club),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: selected
               ? cs.primaryContainer.withValues(alpha: 0.34)
               : cs.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(
             color: selected ? cs.primary : cs.outlineVariant,
           ),
@@ -1336,7 +1334,7 @@ class CountStepper extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
@@ -1427,7 +1425,7 @@ class RecruitingSection extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
       ),
       child: Column(
@@ -1459,13 +1457,13 @@ class OptionalPhotoPicker extends StatelessWidget {
           context,
         ).showSnackBar(const SnackBar(content: Text('사진 선택 UI 미리보기입니다.')));
       },
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: cs.outlineVariant,
             style: BorderStyle.solid,
@@ -1478,7 +1476,7 @@ class OptionalPhotoPicker extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 color: cs.primaryContainer.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(Icons.add_photo_alternate_rounded, color: cs.primary),
             ),

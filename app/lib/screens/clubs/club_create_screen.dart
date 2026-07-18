@@ -1158,7 +1158,7 @@ class _IntroPhotoThumb extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Image.memory(image.bytes, fit: BoxFit.cover),
         ),
@@ -1207,12 +1207,12 @@ class _LogoPickerCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: cs.outlineVariant),
         ),
         child: Row(
@@ -1223,7 +1223,7 @@ class _LogoPickerCard extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: logoBytes == null
                   ? Icon(Icons.add_photo_alternate_rounded,
@@ -1353,7 +1353,7 @@ class _RegionPickerSheet extends StatelessWidget {
                     : const Icon(Icons.chevron_right_rounded),
                 tileColor: cs.surface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

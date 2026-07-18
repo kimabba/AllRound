@@ -58,7 +58,7 @@ class SimplePanel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.5),
         ),
@@ -96,26 +96,24 @@ class SimpleActionCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outlineVariant),
-          // 다크모드에서는 그림자 대신 surface 단계로 깊이 표현.
-          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
+          border: Border(
+            top: BorderSide(color: cs.outline),
+            bottom: BorderSide(color: cs.outline),
+          ),
         ),
         child: Row(
           children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(18),
+            SizedBox(
+              width: 36,
+              height: 44,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Icon(icon, color: cs.primary, size: 22),
               ),
-              child: Icon(icon, color: cs.primary),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
