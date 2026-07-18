@@ -70,9 +70,13 @@ class _ReviewCard extends ConsumerWidget {
               children: [
                 TextButton(
                   onPressed: () async {
-                    await ref
+                    final ok = await ref
                         .read(apiProvider)
                         .rejectStaged(row['id'] as String, '검수 반려');
+                    if (!context.mounted) return;
+                    _notify(context, ok,
+                        okMsg: '반려 처리됨',
+                        failMsg: '반려 실패 — 이미 처리됐거나 검증실패 행일 수 있음');
                     ref.invalidate(formatReviewQueueProvider);
                   },
                   child: const Text('반려'),
@@ -84,9 +88,13 @@ class _ReviewCard extends ConsumerWidget {
                       minimumSize: const Size(88, 44),
                     ),
                     onPressed: () async {
-                      await ref
+                      final ok = await ref
                           .read(apiProvider)
                           .applyStaged(row['id'] as String);
+                      if (!context.mounted) return;
+                      _notify(context, ok,
+                          okMsg: '승인 반영됨',
+                          failMsg: '승인 실패 — 이미 처리됐거나 반영할 내용 없음');
                       ref.invalidate(formatReviewQueueProvider);
                     },
                     child: const Text('승인'),
@@ -97,6 +105,13 @@ class _ReviewCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _notify(BuildContext context, bool ok,
+      {required String okMsg, required String failMsg}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? okMsg : failMsg)),
     );
   }
 
