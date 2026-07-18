@@ -6,6 +6,7 @@ import 'package:flutter/material.dart'
     show FlutterError, FlutterErrorDetails, NavigationBar;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -97,6 +98,9 @@ Future<void> _selectMainNavigation(
   final previousErrorHandler = FlutterError.onError;
   FlutterError.onError = errors.add;
   try {
+    // web-server와 macOS integration_test 모두 NavigationDestination의 global
+    // 좌표가 test root 밖으로 계산될 수 있다. 메뉴는 콜백→router→고정 screen key
+    // 연결을 검증하고, 로그인·가입 폼은 별도 단계에서 실제 pointer tap을 수행한다.
     navigationBar.onDestinationSelected?.call(index);
     await tester.pump(const Duration(milliseconds: 500));
   } finally {
@@ -112,7 +116,7 @@ Future<void> _selectMainNavigation(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('일반 회원이 로그인하고 주요 메뉴를 이동한다', (tester) async {
+  testWidgets('일반 회원이 로그인하고 주요 화면으로 라우팅한다', (tester) async {
     await _launchSignedOutApp(tester);
     await _login(tester, email: 'qa-member@allround.invalid');
 
@@ -124,22 +128,28 @@ void main() {
       find.byKey(AllRoundE2EKeys.navTournaments),
       1,
     );
-    await _waitFor(tester, find.text('대회 · 모집'));
+    await _waitFor(tester, find.byKey(AllRoundE2EKeys.tournamentsScreen));
 
     await _selectMainNavigation(
       tester,
       find.byKey(AllRoundE2EKeys.navClubs),
       2,
     );
-    await _waitFor(tester, find.text('클럽'));
+    await _waitFor(tester, find.byKey(AllRoundE2EKeys.clubsScreen));
 
     await _selectMainNavigation(
       tester,
       find.byKey(AllRoundE2EKeys.navMore),
       3,
     );
-    await _waitFor(tester, find.text('더보기'));
+    await _waitFor(tester, find.byKey(AllRoundE2EKeys.moreScreen));
     expect(find.text('어드민'), findsNothing);
+
+    if (kIsWeb) {
+      tester.element(find.byKey(AllRoundE2EKeys.moreScreen)).go('/admin');
+      await _waitFor(tester, find.byKey(AllRoundE2EKeys.homeScreen));
+      expect(find.byKey(AllRoundE2EKeys.adminScreen), findsNothing);
+    }
   });
 
   testWidgets('미완성 계정의 앱과 웹 라우팅 차이를 지킨다', (tester) async {
@@ -187,7 +197,7 @@ void main() {
       );
       await _waitFor(tester, find.text('어드민'));
       await tester.tap(find.text('어드민'));
-      await _waitFor(tester, find.text('관리자'));
+      await _waitFor(tester, find.byKey(AllRoundE2EKeys.adminScreen));
     });
   }
 }

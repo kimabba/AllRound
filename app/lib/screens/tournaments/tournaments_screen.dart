@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
@@ -196,6 +197,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         : const <String>{};
 
     return Scaffold(
+      key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '대회 · 모집'),
         actions: [

@@ -19,22 +19,36 @@ if ($child_pid == 0) {
 
 sub stop_child_group {
   my ($signal) = @_;
-  kill $signal, -$child_pid;
+  my $child_reaped = 0;
+
+  my $group_alive = sub {
+    return kill 0, -$child_pid;
+  };
+  my $reap_child = sub {
+    return if $child_reaped;
+    my $finished = waitpid($child_pid, WNOHANG);
+    $child_reaped = 1 if $finished == $child_pid || $finished == -1;
+  };
+
+  kill $signal, -$child_pid if $group_alive->();
 
   for (1 .. 50) {
-    my $finished = waitpid($child_pid, WNOHANG);
-    return if $finished == $child_pid;
+    $reap_child->();
+    last if !$group_alive->();
     sleep 0.1;
   }
 
-  kill 'KILL', -$child_pid;
-  waitpid($child_pid, 0);
+  # 직접 child가 먼저 끝나도 같은 process group의 손자 프로세스가 남을 수 있다.
+  # grace period 뒤 group 전체가 살아 있으면 반드시 KILL한다.
+  if ($group_alive->()) {
+    kill 'KILL', -$child_pid;
+  }
+  waitpid($child_pid, 0) if !$child_reaped;
 }
 
-my $timed_out = 0;
 $SIG{ALRM} = sub {
-  $timed_out = 1;
   stop_child_group('TERM');
+  exit 124;
 };
 $SIG{INT} = sub {
   stop_child_group('INT');
@@ -50,6 +64,5 @@ waitpid($child_pid, 0);
 my $status = $?;
 alarm 0;
 
-exit 124 if $timed_out;
 exit 128 + ($status & 127) if $status & 127;
 exit $status >> 8;

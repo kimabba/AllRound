@@ -6,9 +6,27 @@ SUPABASE_BIN="${SUPABASE_BIN:-supabase}"
 DEVICE="chrome"
 DRIVER_PID=""
 DRIVER_LOG=""
+DRIVER_PORT=""
 
 usage() {
   echo "사용법: scripts/qa/run_flutter_e2e.sh [--device <flutter-device-id>]"
+}
+
+choose_open_port() {
+  perl -MIO::Socket::INET -e '
+    my $socket = IO::Socket::INET->new(
+      LocalAddr => "127.0.0.1",
+      LocalPort => 0,
+      Listen => 1,
+      ReuseAddr => 0,
+    ) or die "open port failed: $!\n";
+    print $socket->sockport;
+  '
+}
+
+redact_runtime_output() {
+  sed -E \
+    's#(ws|http)://(127\.0\.0\.1|localhost):[0-9]+/[^[:space:]]+#<redacted-local-debug-uri>#g'
 }
 
 while (( $# > 0 )); do
@@ -73,16 +91,25 @@ unset anon_key
 if [[ "$DEVICE" == "chrome" ]]; then
   chromedriver_bin="${CHROMEDRIVER_BIN:-}"
   if [[ -z "$chromedriver_bin" ]]; then
+    chrome_bin='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    if [[ ! -x "$chrome_bin" ]]; then
+      echo "Google Chrome 실행 파일을 찾을 수 없습니다." >&2
+      exit 1
+    fi
     chrome_version="$(
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --version \
-        | awk '{print $3}'
+      "$chrome_bin" --version 2>/dev/null | awk '{print $3}' || true
     )"
+    if [[ -z "$chrome_version" ]]; then
+      echo "Google Chrome 버전을 확인할 수 없습니다." >&2
+      exit 1
+    fi
     chrome_major="${chrome_version%%.*}"
     chromedriver_bin="$(
       rg --files "$ROOT/chromedriver" 2>/dev/null \
         | rg "/mac[^/]*-${chrome_major}\.[^/]*/.*/chromedriver$" \
         | sort \
-        | tail -n 1
+        | tail -n 1 \
+        || true
     )"
   fi
 
@@ -92,20 +119,32 @@ if [[ "$DEVICE" == "chrome" ]]; then
     exit 1
   fi
 
+  DRIVER_PORT="$(choose_open_port)" || {
+    echo "사용 가능한 ChromeDriver 포트를 선택하지 못했습니다." >&2
+    exit 1
+  }
+  if [[ ! "$DRIVER_PORT" =~ ^[0-9]+$ ]]; then
+    echo "ChromeDriver 포트 값이 올바르지 않습니다." >&2
+    exit 1
+  fi
+
   DRIVER_LOG="$(mktemp "${TMPDIR:-/tmp}/allround-chromedriver.XXXXXX")"
-  "$chromedriver_bin" --port=4444 > "$DRIVER_LOG" 2>&1 &
+  "$chromedriver_bin" --port="$DRIVER_PORT" > "$DRIVER_LOG" 2>&1 &
   DRIVER_PID=$!
 
   driver_ready=false
   for _ in {1..50}; do
+    if ! kill -0 "$DRIVER_PID" 2>/dev/null; then
+      break
+    fi
     if curl --fail --silent --max-time 1 \
-      http://127.0.0.1:4444/status >/dev/null 2>&1; then
+      "http://127.0.0.1:$DRIVER_PORT/status" >/dev/null 2>&1; then
       driver_ready=true
       break
     fi
     sleep 0.1
   done
-  if ! $driver_ready; then
+  if ! $driver_ready || ! kill -0 "$DRIVER_PID" 2>/dev/null; then
     echo "ChromeDriver가 제한 시간 안에 시작되지 않았습니다." >&2
     sed -n '1,120p' "$DRIVER_LOG" >&2
     exit 1
@@ -117,16 +156,18 @@ if [[ "$DEVICE" == "chrome" ]]; then
       --driver=test_driver/integration_test.dart \
       --target=integration_test/auth_navigation_test.dart \
       --device-id=web-server \
-      --driver-port=4444 \
+      --driver-port="$DRIVER_PORT" \
       --headless \
       --timeout=300 \
-      --dart-define-from-file="$runtime_config"
+      --dart-define-from-file="$runtime_config" \
+      2>&1 | redact_runtime_output
   )
 else
   (
     cd app
     flutter test integration_test/auth_navigation_test.dart \
       -d "$DEVICE" \
-      --dart-define-from-file="$runtime_config"
+      --dart-define-from-file="$runtime_config" \
+      2>&1 | redact_runtime_output
   )
 fi

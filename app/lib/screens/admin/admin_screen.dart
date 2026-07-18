@@ -7,6 +7,7 @@ import '../../models/admin.dart';
 import '../../models/crawl_source.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
@@ -663,6 +664,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: AllRoundE2EKeys.adminScreen,
       appBar: AppBar(
         leading: IconButton(
           tooltip: '뒤로가기',

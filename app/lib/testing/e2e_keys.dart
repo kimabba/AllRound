@@ -14,6 +14,10 @@ class AllRoundE2EKeys {
 
   static const onboardingScreen = Key('e2e-onboarding-screen');
   static const homeScreen = Key('e2e-home-screen');
+  static const tournamentsScreen = Key('e2e-tournaments-screen');
+  static const clubsScreen = Key('e2e-clubs-screen');
+  static const moreScreen = Key('e2e-more-screen');
+  static const adminScreen = Key('e2e-admin-screen');
 
   static const navCoach = Key('e2e-nav-coach');
   static const navTournaments = Key('e2e-nav-tournaments');

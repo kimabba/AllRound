@@ -8,13 +8,17 @@ export interface AuthedUser {
   isAdmin: boolean;
 }
 
+type UserAuthResult =
+  | { user: AuthedUser; supabase: SupabaseClient }
+  | { error: Response };
+
 /**
  * Authorization 헤더의 JWT 를 검증하고 public.users 의 role 을 합쳐 반환.
  * 인증 실패 시 Response 를 반환하므로 호출 측에서 분기한다.
  */
 export async function requireUser(
   req: Request,
-): Promise<{ user: AuthedUser; supabase: SupabaseClient } | { error: Response }> {
+): Promise<UserAuthResult> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
     return { error: errorResponse('Missing Authorization header', 401) };
@@ -40,6 +44,36 @@ export async function requireUser(
       isAdmin: profile?.role === 'admin',
     },
   };
+}
+
+/**
+ * 현재 JWT 사용자의 만 14세 이상 생년월일 저장 여부를 DB 기준으로 확인한다.
+ * 호출자는 userClient를 넘겨 auth.uid()가 정책과 같은 사용자로 평가되게 한다.
+ */
+export async function requireVerifiedAge(
+  supabase: SupabaseClient,
+): Promise<Response | null> {
+  const { data, error } = await supabase.rpc('has_verified_signup_age');
+  if (error) {
+    return errorResponse('Age verification unavailable', 500);
+  }
+  const verified: unknown = data;
+  if (verified !== true) {
+    return errorResponse(
+      'AGE_VERIFICATION_REQUIRED: 만 14세 이상 생년월일 등록이 필요합니다.',
+      403,
+    );
+  }
+  return null;
+}
+
+/** 인증과 서버 연령 검증을 함께 요구하는 쓰기·비용 발생 endpoint용 guard. */
+export async function requireVerifiedUser(req: Request): Promise<UserAuthResult> {
+  const result = await requireUser(req);
+  if ('error' in result) return result;
+  const ageError = await requireVerifiedAge(result.supabase);
+  if (ageError) return { error: ageError };
+  return result;
 }
 
 export async function requireAdmin(req: Request) {

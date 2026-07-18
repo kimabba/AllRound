@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/allround_logo.dart';
 
@@ -86,6 +87,7 @@ class MoreScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
+      key: AllRoundE2EKeys.moreScreen,
       appBar: AppBar(title: const BrandedAppBarTitle(title: '더보기')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(

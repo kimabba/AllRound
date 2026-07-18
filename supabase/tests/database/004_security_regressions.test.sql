@@ -3,7 +3,27 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(11);
+SELECT plan(13);
+
+SELECT is(
+  (SELECT count(*)
+   FROM pg_policies
+   WHERE schemaname = 'public'
+     AND tablename = 'clubs'
+     AND policyname = 'clubs_insert'),
+  0::bigint,
+  '기존 DB 업그레이드 뒤에도 클럽 직접 INSERT 정책이 남지 않는다'
+);
+
+SELECT is(
+  (SELECT count(*)
+   FROM pg_policies
+   WHERE schemaname = 'public'
+     AND tablename = 'club_join_requests'
+     AND policyname = 'club_join_requests_insert'),
+  0::bigint,
+  '기존 DB 업그레이드 뒤에도 가입 신청 직접 INSERT 정책이 남지 않는다'
+);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000005', true);
