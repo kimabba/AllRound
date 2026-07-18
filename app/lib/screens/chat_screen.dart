@@ -10,6 +10,7 @@ import '../models/moderation.dart';
 import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/moderation/ugc_moderation_widgets.dart';
 import '../widgets/chat_club_card.dart';
@@ -232,6 +233,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final busy = chat.busy;
 
     return Scaffold(
+      key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
         title: const BrandedAppBarTitle(title: '라운드 코치'),
         actions: [

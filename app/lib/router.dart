@@ -30,6 +30,7 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
+import 'testing/e2e_keys.dart';
 import 'theme/tokens.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -209,10 +210,15 @@ class _MainShell extends ConsumerWidget {
   final Widget child;
 
   static const _tabs = [
-    ('/', Icons.auto_awesome_outlined, '라운드 코치'),
-    ('/tournaments', Icons.emoji_events_outlined, '대회'),
-    ('/clubs', Icons.groups_outlined, '클럽'),
-    ('/more', Icons.grid_view_outlined, '더보기'),
+    ('/', Icons.auto_awesome_outlined, '라운드 코치', AllRoundE2EKeys.navCoach),
+    (
+      '/tournaments',
+      Icons.emoji_events_outlined,
+      '대회',
+      AllRoundE2EKeys.navTournaments,
+    ),
+    ('/clubs', Icons.groups_outlined, '클럽', AllRoundE2EKeys.navClubs),
+    ('/more', Icons.grid_view_outlined, '더보기', AllRoundE2EKeys.navMore),
   ];
 
   // 더보기 하위 경로는 더보기 탭이 선택된 것으로 표시
@@ -290,6 +296,7 @@ class _MainShell extends ConsumerWidget {
                     destinations: [
                       for (final t in _tabs)
                         NavigationDestination(
+                          key: t.$4,
                           icon: Icon(t.$2),
                           selectedIcon: Icon(_selectedIcon(t.$2)),
                           label: t.$3,

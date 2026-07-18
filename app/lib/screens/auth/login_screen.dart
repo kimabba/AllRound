@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 
 const Color _primaryBlue = Color(0xFF1E3A8A);
@@ -291,6 +292,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _SheetAuthField(
+                      fieldKey: AllRoundE2EKeys.emailField,
                       controller: _email,
                       icon: Icons.email_outlined,
                       label: '이메일',
@@ -300,6 +302,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _SheetAuthField(
+                      fieldKey: AllRoundE2EKeys.passwordField,
                       controller: _password,
                       icon: Icons.lock_outline_rounded,
                       label: '비밀번호',
@@ -316,6 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     if (_signUp) ...[
                       const SizedBox(height: AppSpacing.md),
                       _SheetAuthField(
+                        fieldKey: AllRoundE2EKeys.passwordConfirmField,
                         controller: _passwordConfirm,
                         icon: Icons.verified_user_outlined,
                         label: '비밀번호 확인',
@@ -356,6 +360,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     FilledButton(
+                      key: AllRoundE2EKeys.authSubmitButton,
                       onPressed: _busy
                           ? null
                           : () => _emailAuth(
@@ -377,6 +382,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     TextButton(
+                      key: AllRoundE2EKeys.authModeToggle,
                       onPressed: _busy
                           ? null
                           : () {
@@ -406,6 +412,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final showTestShortcuts = kDebugMode;
 
     return Scaffold(
+      key: AllRoundE2EKeys.loginScreen,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -493,6 +500,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       TextButton(
+                        key: AllRoundE2EKeys.emailFlowButton,
                         onPressed: _busy ? null : _showEmailAuthSheet,
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
@@ -844,6 +852,7 @@ class _MarketingConsentRow extends StatelessWidget {
 
 class _SheetAuthField extends StatelessWidget {
   const _SheetAuthField({
+    this.fieldKey,
     required this.controller,
     required this.icon,
     required this.label,
@@ -854,6 +863,7 @@ class _SheetAuthField extends StatelessWidget {
     this.onSubmitted,
   });
 
+  final Key? fieldKey;
   final TextEditingController controller;
   final IconData icon;
   final String label;
@@ -866,6 +876,7 @@ class _SheetAuthField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: fieldKey,
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: textInputAction,

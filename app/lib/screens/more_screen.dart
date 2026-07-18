@@ -255,35 +255,40 @@ class _LegalSection extends StatelessWidget {
           color: cs.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              ListTile(
-                onTap: items[i].onTap,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadius.hero,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                ListTile(
+                  onTap: items[i].onTap,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  title: Text(
+                    items[i].label,
+                    style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: Icon(
+                    Icons.open_in_new_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
                 ),
-                title: Text(
-                  items[i].label,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                trailing: Icon(
-                  Icons.open_in_new_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              if (i < items.length - 1)
-                Divider(
-                  height: 1,
-                  indent: AppSpacing.lg,
-                  endIndent: AppSpacing.lg,
-                  color: cs.outlineVariant.withValues(alpha: 0.5),
-                ),
+                if (i < items.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: AppSpacing.lg,
+                    endIndent: AppSpacing.lg,
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
+                  ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

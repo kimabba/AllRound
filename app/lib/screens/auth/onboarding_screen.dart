@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/age.dart';
 import '../../utils/grade_labels.dart';
@@ -492,6 +493,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.onboardingScreen,
       backgroundColor: cs.surfaceContainerLow,
       body: SafeArea(
         child: Column(

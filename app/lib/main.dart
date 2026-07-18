@@ -17,8 +17,14 @@ import 'theme/app_theme.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/allround_logo.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+bool _allRoundServicesInitialized = false;
+
+/// 실제 앱과 integration_test가 같은 초기화 경로를 사용한다.
+/// 테스트는 자신의 binding을 먼저 만들기 때문에 여기서 binding을 생성하지 않는다.
+Future<void> initializeAllRoundServices({
+  FlutterAuthClientOptions authOptions = const FlutterAuthClientOptions(),
+}) async {
+  if (_allRoundServicesInitialized) return;
   AppConfig.assertConfigured();
 
   await initializeDateFormatting('ko');
@@ -26,6 +32,7 @@ Future<void> main() async {
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
+    authOptions: authOptions,
   );
 
   // 인증 후 FCM 등록 + 부서 카탈로그 DB 로드 (실패해도 앱 진입 허용)
@@ -39,6 +46,13 @@ Future<void> main() async {
       DivisionCatalog.instance.load(Supabase.instance.client);
     }
   });
+
+  _allRoundServicesInitialized = true;
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAllRoundServices();
 
   runApp(const ProviderScope(child: MatchUpApp()));
 }
