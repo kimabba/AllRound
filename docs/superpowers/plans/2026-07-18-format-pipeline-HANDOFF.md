@@ -48,7 +48,7 @@
    - `_shared/crawler/parsers/`가 CI lint glob 미포함 (latent)
    - 계좌 검증 오탐(§3): 완화는 금지(test:79 금융 할루시 방어와 충돌). 정밀화하려면 "하이픈 없는 순수 공백 그룹만 병합 + includes→equals" 같은 별도 파싱 필요 — 복잡·리스크 있어 보류. 대안은 어드민 UI에서 오탐 성격 flag를 눈에 띄게 표시해 검수 부담↓.
    - staged `regulation_notes: []` → `array_agg`→NULL 정규화 (`format_apply_staged`)
-   - `format_flags` 어드민 UI 상세 표시, apply/reject 반환값 미체크
+   - ~~`format_flags` 어드민 UI 상세 표시~~ ✅ code 한국어화(`2f0a2d2`). apply/reject 반환값 미체크는 남음.
    - regulation_* jsonb vs 별도 테이블, crawl_documents raw_html 보존정책, closed 임베딩 정책
 
 ## 6. 재확인/운영 명령
