@@ -70,6 +70,11 @@ void main() {
                     'field': '참가비',
                     'masked': '3*,000원',
                   },
+                  {
+                    'code': 'unusual',
+                    'field': '_model',
+                    'masked': '',
+                  },
                 ],
               },
             ],
@@ -81,7 +86,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('검증 실패 대회'), findsOneWidget);
-    expect(find.textContaining('검증 실패: 참가비 — not_in_source'), findsOneWidget);
+    // raw code 대신 한국어 라벨을 노출한다.
+    expect(find.textContaining('검증 실패: 참가비 — 원문에서 확인 안 됨'), findsOneWidget);
+    // _model 플래그는 필드명을 숨기고 라벨만 표시한다.
+    expect(find.textContaining('검증 실패: 모델이 특이 요강으로 표시'), findsOneWidget);
+    expect(find.textContaining('_model'), findsNothing);
+    expect(find.textContaining('not_in_source'), findsNothing);
     expect(find.text('반려'), findsOneWidget);
     expect(find.text('승인'), findsNothing);
   });
