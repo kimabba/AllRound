@@ -43,7 +43,7 @@
 2. ~~**재큐 14건 재정형화 확인**~~ — ✅ 완료(needs_review 35→49). 문의처 과탐 재발 없음. 단 계좌/한글금액 오탐 4건 신규(§3 참조, Commander가 검증 유지 결정 — 어드민 검수로 처리).
 3. **어드민 검수** — `/admin/format-review`에서 staged 35건 원문 대조 승인. 승인 시 `format_apply_staged`로 콘텐츠 반영.
 4. **Follow-up (JY-137, 출시 후 DB 재점검)**:
-   - 정형화 프롬프트에 **입금계좌 필수 필드** 명시 + 상금 구체화 (`format-pending/index.ts` buildPrompt) → 재정형화
+   - ~~정형화 프롬프트에 **입금계좌 필수 필드** 명시 + 상금 구체화~~ ✅ 프롬프트 수정(`8eb4cde`). **배포+재정형화 남음**: 머지 후 `supabase functions deploy format-pending` → 재큐(오탐 4건 또는 전체 needs_review). 주의: 프롬프트 변경이므로 재큐하면 staged 갈아엎어짐(어드민 미승인 상태라 손해 없음). 오탐 4건은 검증 매칭 오탐이라 재정형화로 해소 보장 안 됨.
    - `CONTACT_LABEL` 라벨 확장(모델이 "안내" 등으로 라벨하면 우회) — `logic.ts`
    - `_shared/crawler/parsers/`가 CI lint glob 미포함 (latent)
    - 계좌 검증 오탐(§3): 완화는 금지(test:79 금융 할루시 방어와 충돌). 정밀화하려면 "하이픈 없는 순수 공백 그룹만 병합 + includes→equals" 같은 별도 파싱 필요 — 복잡·리스크 있어 보류. 대안은 어드민 UI에서 오탐 성격 flag를 눈에 띄게 표시해 검수 부담↓.
