@@ -61,9 +61,9 @@ bash scripts/harness/check_secrets.sh
 cd app && flutter analyze && flutter test
 
 cd supabase/functions
-deno fmt --check */index.ts _shared/*.ts tests/*.ts
-deno lint --config deno.json */index.ts _shared/*.ts tests/*.ts
-deno check --config deno.json */index.ts _shared/*.ts tests/*.ts
+deno fmt --check */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+deno lint --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+deno check --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
 deno test --config deno.json --allow-env --allow-read tests
 ```
 
