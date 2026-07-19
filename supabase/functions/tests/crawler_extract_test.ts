@@ -139,7 +139,46 @@ Deno.test('gnuboard fetchDetail: description/regulation_*/prize/format 미방출
     assertEquals(t!.region, '광주');
     assertEquals(t!.organizer, '광주테니스협회');
     assertEquals(t!.entry_fee, 30000);
+    assertEquals(t!.location, '광주시민테니스장');
     assertEquals(t!.source_url, 'https://gjtennis.kr/sub5_2_2_view.php?sid=1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const FOOTER_ONLY_VENUE_FIXTURE = `
+<html><body>
+<div class="docContWrap">
+  <h3>제35회 순천시장배 전국동호인테니스대회</h3>
+  <table>
+    <tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+    <tr><td>부서추후공지</td><td>2026년 9월 7일 ~ 2026년 9월 16일 18시 까지</td><td>2026년 9월 19일</td></tr>
+  </table>
+  <div class="write_contest"><p>.</p></div>
+</div>
+<div class="footer">
+  <span>주소_ 광주광역시 남구 화산로 30 진월국제테니스장 지하1층</span>
+</div>
+</body></html>
+`;
+
+Deno.test('gnuboard fetchDetail: 푸터 협회 주소를 대회 장소로 사용하지 않는다', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() =>
+      Promise.resolve(new Response(FOOTER_ONLY_VENUE_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=118',
+      '광주',
+      '힌트제목',
+      [],
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(result.tournament.location, undefined);
+    assertEquals(result.tournament.eligible_grades, []);
+    assertEquals(result.tournament.division_label_local, '부서추후공지');
+    assertEquals(result.tournament.clear_eligible_grades, true);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -138,6 +138,21 @@ Deno.test('UPDATE preserves eligible_grades when division unmapped (codes=[])', 
   assert(!('division_label_local' in p), 'division_label_local must be omitted when unmapped');
 });
 
+Deno.test('UPDATE clears eligible_grades when source explicitly says division pending', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  const result = await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    eligible_grades: [],
+    division_label_local: '부서추후공지',
+    clear_eligible_grades: true,
+  });
+  assertEquals(result, 'updated');
+  const p = captured[0].payload;
+  assertEquals(p.eligible_grades, []);
+  assertEquals(p.division_label_local, '부서추후공지');
+});
+
 Deno.test('UPDATE sets eligible_grades when division mapped (codes non-empty)', async () => {
   const captured: CapturedUpdate[] = [];
   const audit = makeAudit(captured);

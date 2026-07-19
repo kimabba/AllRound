@@ -13,6 +13,9 @@ export interface CrawlerTournament {
   location?: string;
   eligible_grades: string[]; // ['gj_m_gold','gj_m_general',...]
   division_label_local?: string; // '골드부 · 일반부' — UI 표시용
+  // 원문이 "부서추후공지"처럼 명시적으로 미정 상태를 알릴 때만 기존 부서를
+  // 의도적으로 비운다. 단순 파싱 실패의 빈 배열과 구분해 데이터 손실을 막는다.
+  clear_eligible_grades?: boolean;
   entry_fee?: number;
   prize?: string;
   format?: string;
@@ -168,7 +171,7 @@ export async function upsertTournament(
     //   사이트 레이아웃 변형 등 일시적 미매칭이 이미 published 된 대회를
     //   등급검색/매칭에서 조용히 제외시키는 것을 막는다. 신규 미매칭은
     //   insert 가 status='draft' 로 들어가 검수에서 보정(결정 A).
-    if (t.eligible_grades.length > 0) {
+    if (t.eligible_grades.length > 0 || t.clear_eligible_grades === true) {
       updatePayload.eligible_grades = t.eligible_grades;
       updatePayload.division_label_local = t.division_label_local ?? null;
     }

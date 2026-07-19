@@ -163,17 +163,23 @@ export async function fetchDetail(
   const title = (h3El?.textContent ?? '').replace(/\s+/g, ' ').trim() || titleHint;
   if (!title) return { rawHtml: html, tournament: null };
 
-  // 노이즈 태그 제거 후 body 텍스트 추출
+  // 노이즈 태그 제거 후 대회 콘텐츠 영역의 텍스트만 추출한다. 광주 협회
+  // 페이지의 푸터는 <footer>가 아니라 <div class="footer">라서, body 전체를
+  // 읽으면 협회 사무실 주소의 "진월국제테니스장"을 대회 장소로 오인한다.
   const bodyEl = dom.querySelector('body');
   if (bodyEl) {
     const noiseNodes = bodyEl.querySelectorAll(
-      'script, style, nav, header, footer, aside, .gnb, .lnb, .snb',
+      'script, style, nav, header, footer, aside, .footer, .gnb, .lnb, .snb',
     );
     for (const node of noiseNodes) {
       node.parentNode?.removeChild(node);
     }
   }
-  const bodyText = (dom.querySelector('body')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const contentRoot = dom.querySelector('.docContWrap') ??
+    dom.querySelector('#bo_v') ??
+    dom.querySelector('main') ??
+    dom.querySelector('body');
+  const bodyText = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
   // ── 테이블 기반 날짜 추출 (신청기간 / 경기일시 컬럼 구분) ──
   // 테이블 헤더: 참가부서 | 신청기간 | 경기일시 | ...
@@ -229,19 +235,18 @@ export async function fetchDetail(
     `${title} ${bodyText}`,
     dict,
   );
+  const hasExplicitUnknownDivision = /부서\s*(?:추후\s*공지|미정|확인\s*필요)/.test(bodyText);
 
   const deadline = tableDeadline ?? extractApplicationDeadline(bodyText) ?? undefined;
 
   // ── 참가비 추출 ──
   // "참가비팀당 34,000원" / "참가비 팀당 30,000원" / "참가비인당 15,000원"
   let entryFee: number | undefined;
-  let entryFeeUnit: 'per_team' | 'per_person' = 'per_team';
   const feeMatch = bodyText.match(/참가비\s*(?:[:：]\s*)?(?:(팀당|인당)\s*)?([0-9,]+)\s*원/);
   if (feeMatch) {
     const amount = Number(feeMatch[2].replace(/,/g, ''));
     if (amount > 0 && amount < 1_000_000) {
       entryFee = amount;
-      if (feeMatch[1] === '인당') entryFeeUnit = 'per_person';
     }
   }
 
@@ -266,7 +271,8 @@ export async function fetchDetail(
     region,
     location,
     eligible_grades: gradeCodes,
-    division_label_local: divisionLabel,
+    division_label_local: hasExplicitUnknownDivision ? '부서추후공지' : divisionLabel,
+    clear_eligible_grades: hasExplicitUnknownDivision || undefined,
     source_url: detailUrl,
     organizer,
     entry_fee: entryFee,
