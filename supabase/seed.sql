@@ -9,7 +9,9 @@ declare
   v_uid uuid := gen_random_uuid();
 begin
   -- 이미 존재하면 건너뜀
-  if exists (select 1 from auth.users where email = 'ssfak@naver.com') then
+  if exists (
+    select 1 from auth.users where email = 'local-admin@allround.invalid'
+  ) then
     return;
   end if;
 
@@ -27,11 +29,11 @@ begin
     '00000000-0000-0000-0000-000000000000',
     v_uid,
     'authenticated', 'authenticated',
-    'ssfak@naver.com',
-    crypt('pass1234', gen_salt('bf')),
+    'local-admin@allround.invalid',
+    crypt('QaLocal-Only-2026!', gen_salt('bf')),
     now(), now(), now(),
     '{"provider":"email","providers":["email"]}',
-    '{"display_name":"ssfak"}',
+    '{"display_name":"Local QA Admin"}',
     false,
     '', '',
     '', '', ''
@@ -39,7 +41,9 @@ begin
 
   -- 관리자 권한 부여 (seed 컨텍스트는 auth session 없으므로 트리거 임시 비활성화)
   alter table public.users disable trigger users_prevent_role_self_update;
-  update public.users set role = 'admin' where email = 'ssfak@naver.com';
+  update public.users
+  set role = 'admin'
+  where email = 'local-admin@allround.invalid';
   alter table public.users enable trigger users_prevent_role_self_update;
 end;
 $$;
