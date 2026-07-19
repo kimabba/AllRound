@@ -22,6 +22,7 @@ import { DOMParser } from 'deno-dom';
 import { type CrawlerTournament, upsertTournament } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
+import { parseKatoRegulation } from './kato_regulation.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
 const COMMON_HEADERS: Record<string, string> = {
@@ -30,6 +31,9 @@ const COMMON_HEADERS: Record<string, string> = {
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
 };
 const DETAIL_CAP = 30;
+// 파서 결과 의미가 바뀌면 revision을 올린다. 원문 목록이 그대로여도 새 파서로
+// 상세를 한 번 다시 읽게 해 기존 대회의 누락 데이터를 복구한다.
+const KATO_PARSER_REVISION = '2026-07-regulation-v2';
 
 // deno-dom 요소를 최소 인터페이스로 좁혀 쓰기 위한 캐스트 헬퍼.
 type El = {
@@ -145,7 +149,14 @@ function labelValue(dom: El, normalizedLabel: string): string | undefined {
 // 장소 값 뒤에 붙는 부서주석(▣/◈/▶/* 이후)은 잘라 위치만 남긴다.
 function cleanVenue(v: string | undefined): string | undefined {
   if (!v) return undefined;
-  const cut = v.split(/[▣◈▶*]/)[0].trim();
+  const trimmed = v.trim();
+  const beforeMarker = trimmed.split(/[▣◈▶*]/)[0].trim();
+  if (beforeMarker) return beforeMarker;
+
+  // 일부 KATO 공고(예: openGame/0299)는 값 자체가 ▣로 시작한다.
+  // 이 경우 첫 안내 구간에서 "국화부:" 같은 부서 접두어만 제거해 fallback 장소로 쓴다.
+  const firstClause = trimmed.replace(/^[▣◈▶*]\s*/, '').split(/[▣◈▶*]/)[0].trim();
+  const cut = firstClause.replace(/^.+?부\s*:\s*/, '').trim();
   return cut || undefined;
 }
 
@@ -159,7 +170,9 @@ export function parseKatoDetail(html: string, titleHint: string): KatoDetailFiel
   const title = groupTitle || titleHint;
   if (!title) return null;
 
-  const location = cleanVenue(labelValue(root, '장소'));
+  // 참가신청 탭에는 부서별 실제 경기장이 있다. 우선 이를 요약해 사용하고,
+  // 구형 공고처럼 해당 표가 없을 때만 기존 장 소 라벨을 fallback으로 쓴다.
+  const location = parseKatoRegulation(html)?.location ?? cleanVenue(labelValue(root, '장소'));
   const organizer = labelValue(root, '주최');
 
   let entryFee: number | undefined;
@@ -180,11 +193,12 @@ export function parseKatoDetail(html: string, titleHint: string): KatoDetailFiel
 async function listingContentHash(items: KatoListItem[]): Promise<string> {
   // 날짜범위·부서목록도 해시에 포함 — 이 값이 바뀌면(seq/title/status 동일해도)
   // start_date/end_date/eligible_grades 가 stale 해지므로 no_change 로 넘기면 안 된다.
-  const stable = items
-    .map((it) =>
+  const stable = [
+    `parser:${KATO_PARSER_REVISION}`,
+    ...items.map((it) =>
       `${it.seq}|${it.title}|${it.status}|${it.startDate}|${it.endDate ?? ''}|${it.partsText}`
-    )
-    .sort().join('\n');
+    ).sort(),
+  ].join('\n');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(stable));
   const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join(
     '',
@@ -192,21 +206,15 @@ async function listingContentHash(items: KatoListItem[]): Promise<string> {
   return `W/"sha256:${hex}"`;
 }
 
-function buildTournament(
+export function buildTournament(
   item: KatoListItem,
   detail: KatoDetailFields,
   dict: DivisionDictRow[],
   region: string | null,
 ): CrawlerTournament {
   const { codes, label } = mapDivisionsByDict(item.partsText, dict);
-  const descParts: string[] = [];
-  if (item.partsText) descParts.push(`참가부서: ${item.partsText}`);
-  descParts.push(`대회일: ${item.startDate}${item.endDate ? ` ~ ${item.endDate}` : ''}`);
-  if (detail.location) descParts.push(`장소: ${detail.location}`);
-  if (detail.organizer) descParts.push(`주최: ${detail.organizer}`);
   return {
     title: detail.title,
-    description: descParts.join(' | ') || undefined,
     start_date: item.startDate,
     end_date: item.endDate ?? undefined,
     application_deadline: undefined, // KATO 미제공

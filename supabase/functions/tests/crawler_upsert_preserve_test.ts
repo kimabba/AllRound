@@ -22,7 +22,9 @@ const EXISTING_ROW: Row = {
   application_deadline: null,
   eligible_grades: [],
   region: '전남',
+  location: null,
   manual_description: false,
+  format_source_hash: null,
 };
 
 interface CapturedUpdate {
@@ -33,9 +35,14 @@ interface CapturedUpdate {
  * upsertTournament 가 호출하는 체인만 구현한 최소 fake.
  *   - from('tournaments').select(...).eq().eq().maybeSingle() → 기존 행
  *   - from('tournaments').update(payload).eq() → payload 캡처
- * 그 외 호출은 테스트 시나리오(rawHtml 미전달)에서 발생하지 않는다.
+ *   - from('crawl_documents').upsert(...) → rawHtml 전달 시 saveRawDocument 가 타는 경로
+ *     (existing.id 가 있으므로 tournament_id 조회 select 는 발생하지 않는다)
+ * existingRow 를 인자로 받아 format_source_hash 등을 케이스별로 바꿀 수 있다.
  */
-function makeFakeClient(captured: CapturedUpdate[]): AuditHandle['supabase'] {
+function makeFakeClient(
+  captured: CapturedUpdate[],
+  existingRow: Row = EXISTING_ROW,
+): AuditHandle['supabase'] {
   const updateBuilder = (payload: Row) => ({
     eq: (_col: string, _val: unknown) => {
       captured.push({ payload });
@@ -45,26 +52,33 @@ function makeFakeClient(captured: CapturedUpdate[]): AuditHandle['supabase'] {
   const selectBuilder = () => ({
     eq: (_c: string, _v: unknown) => ({
       eq: (_c2: string, _v2: unknown) => ({
-        maybeSingle: () => Promise.resolve({ data: EXISTING_ROW, error: null }),
+        maybeSingle: () => Promise.resolve({ data: existingRow, error: null }),
       }),
     }),
   });
   const fake = {
-    from: (_table: string) => ({
-      select: (_cols: string) => selectBuilder(),
-      update: (payload: Row) => updateBuilder(payload),
-    }),
+    from: (table: string) => {
+      if (table === 'crawl_documents') {
+        return {
+          upsert: (_payload: Row, _opts?: unknown) => Promise.resolve({ data: null, error: null }),
+        };
+      }
+      return {
+        select: (_cols: string) => selectBuilder(),
+        update: (payload: Row) => updateBuilder(payload),
+      };
+    },
   };
   // upsertTournament 는 SupabaseClient 의 from() 만 사용한다. 최소 fake 를
   // 해당 인터페이스로 좁혀 전달(unknown 경계 후 단언).
   return fake as unknown as AuditHandle['supabase'];
 }
 
-function makeAudit(captured: CapturedUpdate[]): AuditHandle {
+function makeAudit(captured: CapturedUpdate[], existingRow: Row = EXISTING_ROW): AuditHandle {
   return {
     id: 'audit-1',
     source: 'jntennis',
-    supabase: makeFakeClient(captured),
+    supabase: makeFakeClient(captured, existingRow),
     fetched: 0,
     inserted: 0,
     updated: 0,
@@ -124,6 +138,21 @@ Deno.test('UPDATE preserves eligible_grades when division unmapped (codes=[])', 
   assert(!('division_label_local' in p), 'division_label_local must be omitted when unmapped');
 });
 
+Deno.test('UPDATE clears eligible_grades when source explicitly says division pending', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  const result = await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    eligible_grades: [],
+    division_label_local: '부서추후공지',
+    clear_eligible_grades: true,
+  });
+  assertEquals(result, 'updated');
+  const p = captured[0].payload;
+  assertEquals(p.eligible_grades, []);
+  assertEquals(p.division_label_local, '부서추후공지');
+});
+
 Deno.test('UPDATE sets eligible_grades when division mapped (codes non-empty)', async () => {
   const captured: CapturedUpdate[] = [];
   const audit = makeAudit(captured);
@@ -153,4 +182,61 @@ Deno.test('UPDATE clears regulation_* with defined empty array / empty string', 
   assertEquals(p.regulation_fields, []);
   assertEquals(p.regulation_notes, []);
   assertEquals(p.regulation_body, '');
+});
+
+Deno.test('upsert: 파서가 prize/format 미방출(undefined)이면 기존 값 보존', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, format_source_hash: 'oldhash' });
+  const t: CrawlerTournament = {
+    title: '기존 대회',
+    start_date: '2026-07-04',
+    eligible_grades: [],
+    source_url: 'https://x/1',
+    // description/prize/format/regulation_* 미설정(undefined) — 파서가 요강 방출 안 함
+  };
+  await upsertTournament(audit, 'tennis', t); // rawHtml 미전달
+  const p = captured[0].payload;
+  assert(!('prize' in p), 'prize를 payload에 넣지 않아야 함');
+  assert(!('format' in p), 'format를 payload에 넣지 않아야 함');
+  assert(!('description' in p), 'description 미방출 시 payload 제외');
+});
+
+Deno.test('upsert: 재크롤로 content_hash 바뀌면 format_status=pending 재설정', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, format_source_hash: 'oldhash' });
+  const t: CrawlerTournament = {
+    title: '기존 대회',
+    start_date: '2026-07-04',
+    eligible_grades: [],
+    source_url: 'https://x/1',
+  };
+  await upsertTournament(audit, 'tennis', t, '<html>바뀐 원문</html>');
+  const p = captured[0].payload;
+  assertEquals(p.format_status, 'pending');
+  assertEquals(p.format_claim_token, null);
+  assertEquals(p.claimed_at, null);
+});
+
+Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정형화 대기', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, {
+    ...EXISTING_ROW,
+    location: null,
+    format_source_hash: null,
+  });
+  await upsertTournament(
+    audit,
+    'tennis',
+    {
+      ...BASE_TOURNAMENT,
+      location: '공주시립테니스코트 외 3곳',
+    },
+    '<html>동일한 원문</html>',
+  );
+
+  const p = captured[0].payload;
+  assertEquals(p.location, '공주시립테니스코트 외 3곳');
+  assertEquals(p.format_status, 'pending');
+  assertEquals(p.format_claim_token, null);
+  assertEquals(p.claimed_at, null);
 });

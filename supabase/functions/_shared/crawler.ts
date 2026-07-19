@@ -13,6 +13,9 @@ export interface CrawlerTournament {
   location?: string;
   eligible_grades: string[]; // ['gj_m_gold','gj_m_general',...]
   division_label_local?: string; // '골드부 · 일반부' — UI 표시용
+  // 원문이 "부서추후공지"처럼 명시적으로 미정 상태를 알릴 때만 기존 부서를
+  // 의도적으로 비운다. 단순 파싱 실패의 빈 배열과 구분해 데이터 손실을 막는다.
+  clear_eligible_grades?: boolean;
   entry_fee?: number;
   prize?: string;
   format?: string;
@@ -133,7 +136,7 @@ export async function upsertTournament(
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, manual_description',
+      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -168,9 +171,30 @@ export async function upsertTournament(
     //   사이트 레이아웃 변형 등 일시적 미매칭이 이미 published 된 대회를
     //   등급검색/매칭에서 조용히 제외시키는 것을 막는다. 신규 미매칭은
     //   insert 가 status='draft' 로 들어가 검수에서 보정(결정 A).
-    if (t.eligible_grades.length > 0) {
+    if (t.eligible_grades.length > 0 || t.clear_eligible_grades === true) {
       updatePayload.eligible_grades = t.eligible_grades;
       updatePayload.division_label_local = t.division_label_local ?? null;
+    }
+    // prize/format 도 regulation_* 와 동일 취지로 보존 처리: 파서가 미방출(undefined)이면
+    // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
+    if (t.prize !== undefined) updatePayload.prize = t.prize;
+    if (t.format !== undefined) updatePayload.format = t.format;
+    // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
+    // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
+    // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
+    if (rawHtml) {
+      const newHash = await sha256Hex(rawHtml);
+      // 원문이 같아도 파서 개선으로 장소 추출값이 달라질 수 있다. 이런 경우 기존
+      // format_staged를 그대로 두지 않고 새 파서 결과로 다시 정형화한다.
+      const parserLocationChanged = existing.location !== (t.location ?? null);
+      if (
+        (existing.format_source_hash && existing.format_source_hash !== newHash) ||
+        parserLocationChanged
+      ) {
+        updatePayload.format_status = 'pending';
+        updatePayload.format_claim_token = null;
+        updatePayload.claimed_at = null;
+      }
     }
     const { error } = await audit.supabase
       .from('tournaments')
@@ -183,8 +207,6 @@ export async function upsertTournament(
         region_code: regionCode,
         location: t.location ?? null,
         entry_fee: t.entry_fee ?? null,
-        prize: t.prize ?? null,
-        format: t.format ?? null,
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
@@ -217,6 +239,7 @@ export async function upsertTournament(
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',
+      format_status: rawHtml ? 'pending' : 'skipped',
     })
     .select('id')
     .single();

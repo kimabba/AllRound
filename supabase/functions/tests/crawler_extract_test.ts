@@ -17,6 +17,7 @@ import {
   extractRegulationNotes,
   extractVenue,
 } from '../_shared/crawler.ts';
+import { fetchDetail } from '../_shared/crawler/parsers/gnuboard_sub5_5_contest.ts';
 
 Deno.test('extractDate parses Korean format first', () => {
   const text = '경기일시 : 2026년 4월 5일(일) 09시~ ...';
@@ -88,6 +89,99 @@ Deno.test('extractVenue prefers labeled location', () => {
 
 Deno.test('extractVenue returns null when no facility name', () => {
   assertEquals(extractVenue('참가비 입금 안내 function accounting_price_ser()'), null);
+});
+
+// =============================================================================
+// gnuboard 파서 — 요강/description 미방출 (JY-137: LLM 정형화로 이관)
+//
+// description/prize/format/regulation_* 는 파서가 더 이상 조립하지 않는다.
+// 메타(title/start_date/application_deadline/region/organizer/entry_fee/
+// source_url)는 기존과 동일하게 추출되어야 한다.
+// =============================================================================
+
+const DETAIL_FIXTURE = `
+<html><body>
+<h3>제10회 테스트배 테니스대회</h3>
+<table>
+  <tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+  <tr><td>남자일반부</td><td>2026년 5월 1일 ~ 2026년 5월 15일 18시 까지</td><td>2026년 5월 30일</td></tr>
+</table>
+<p>일시 2026년 5월 30일 경기장 광주시민테니스장 에서 진행</p>
+<p>주최 : 광주테니스협회</p>
+<p>참가비 팀당 30,000원</p>
+</body></html>
+`;
+
+Deno.test('gnuboard fetchDetail: description/regulation_*/prize/format 미방출, 메타 유지', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() => Promise.resolve(new Response(DETAIL_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=1',
+      '광주',
+      '힌트제목',
+      [],
+    );
+    assert(result, 'fetchDetail should return a result');
+    const t = result!.tournament;
+    assert(t, 'tournament should be parsed');
+    assertEquals(t!.description, undefined);
+    assertEquals(t!.regulation_fields, undefined);
+    assertEquals(t!.regulation_notes, undefined);
+    assertEquals(t!.regulation_body, undefined);
+    assertEquals(t!.prize, undefined);
+    assertEquals(t!.format, undefined);
+    // 메타는 유지 검증
+    assertEquals(t!.title, '제10회 테스트배 테니스대회');
+    assertEquals(t!.start_date, '2026-05-30');
+    assertEquals(t!.application_deadline, '2026-05-15');
+    assertEquals(t!.region, '광주');
+    assertEquals(t!.organizer, '광주테니스협회');
+    assertEquals(t!.entry_fee, 30000);
+    assertEquals(t!.location, '광주시민테니스장');
+    assertEquals(t!.source_url, 'https://gjtennis.kr/sub5_2_2_view.php?sid=1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const FOOTER_ONLY_VENUE_FIXTURE = `
+<html><body>
+<div class="docContWrap">
+  <h3>제35회 순천시장배 전국동호인테니스대회</h3>
+  <table>
+    <tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+    <tr><td>부서추후공지</td><td>2026년 9월 7일 ~ 2026년 9월 16일 18시 까지</td><td>2026년 9월 19일</td></tr>
+  </table>
+  <div class="write_contest"><p>.</p></div>
+</div>
+<div class="footer">
+  <span>주소_ 광주광역시 남구 화산로 30 진월국제테니스장 지하1층</span>
+</div>
+</body></html>
+`;
+
+Deno.test('gnuboard fetchDetail: 푸터 협회 주소를 대회 장소로 사용하지 않는다', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() =>
+      Promise.resolve(new Response(FOOTER_ONLY_VENUE_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=118',
+      '광주',
+      '힌트제목',
+      [],
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(result.tournament.location, undefined);
+    assertEquals(result.tournament.eligible_grades, []);
+    assertEquals(result.tournament.division_label_local, '부서추후공지');
+    assertEquals(result.tournament.clear_eligible_grades, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 // =============================================================================
