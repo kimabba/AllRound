@@ -20,6 +20,7 @@ import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
+import 'club_inquiry_screen.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
@@ -512,6 +513,15 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   onCancelJoin: _cancelJoinRequest,
                   onRetryJoinStatus: _loadMyJoinRequest,
                   onLeave: _leave,
+                  onInquiry: () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ClubInquiryConversationScreen(
+                        clubId: club.id,
+                        clubName: club.name,
+                      ),
+                    ),
+                  ),
                 ),
                 isMember
                     ? _MembersTab(
@@ -839,6 +849,7 @@ class _IntroTab extends StatelessWidget {
   final VoidCallback onCancelJoin;
   final VoidCallback onRetryJoinStatus;
   final VoidCallback onLeave;
+  final VoidCallback onInquiry;
   const _IntroTab({
     required this.club,
     required this.monthlyFee,
@@ -850,6 +861,7 @@ class _IntroTab extends StatelessWidget {
     required this.onCancelJoin,
     required this.onRetryJoinStatus,
     required this.onLeave,
+    required this.onInquiry,
   });
 
   @override
@@ -968,6 +980,17 @@ class _IntroTab extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.xl),
+        if (!club.isMember && club.isApproved) ...[
+          OutlinedButton.icon(
+            onPressed: onInquiry,
+            icon: const Icon(Icons.forum_outlined),
+            label: const Text('가입 전 1:1 문의'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(AppSizes.control),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         if (!club.isMember && joinRequestLoading)
           FilledButton.icon(
             onPressed: null,
@@ -1486,6 +1509,47 @@ class _ClubManagementTab extends ConsumerWidget {
                   color: cs.onSurfaceVariant,
                   height: 1.45,
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          variant: AppCardVariant.outlined,
+          child: Row(
+            children: [
+              Icon(Icons.mark_chat_unread_outlined, color: cs.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '가입 전 문의',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '클럽장·매니저가 함께 답변하는 운영진 문의함',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.tonal(
+                onPressed: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ClubInquiryInboxScreen(
+                      clubId: club.id,
+                      clubName: club.name,
+                    ),
+                  ),
+                ),
+                child: const Text('문의함'),
               ),
             ],
           ),
