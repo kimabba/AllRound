@@ -133,7 +133,7 @@ export async function upsertTournament(
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, manual_description, format_source_hash',
+      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -181,7 +181,13 @@ export async function upsertTournament(
     // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
     if (rawHtml) {
       const newHash = await sha256Hex(rawHtml);
-      if (existing.format_source_hash && existing.format_source_hash !== newHash) {
+      // 원문이 같아도 파서 개선으로 장소 추출값이 달라질 수 있다. 이런 경우 기존
+      // format_staged를 그대로 두지 않고 새 파서 결과로 다시 정형화한다.
+      const parserLocationChanged = existing.location !== (t.location ?? null);
+      if (
+        (existing.format_source_hash && existing.format_source_hash !== newHash) ||
+        parserLocationChanged
+      ) {
         updatePayload.format_status = 'pending';
         updatePayload.format_claim_token = null;
         updatePayload.claimed_at = null;

@@ -3,11 +3,13 @@ import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { GEMINI_MODEL, generateStructured } from '../_shared/gemini.ts';
 import { capRegulationBody, normalizeRegulationFields } from '../_shared/regulation.ts';
+import { isKatoSource, parseKatoRegulation } from '../_shared/crawler/parsers/kato_regulation.ts';
 import { extractPlainText, type RegulationResult, verifyAgainstSource } from './logic.ts';
 
 const BATCH_SIZE = 4;
 const LEASE_MINUTES = 15;
 const SOURCE_MAX = 12000; // Gemini 입력 상한
+const SOURCE_VERIFY_MAX = 50000; // 결정적 파서 값의 원문 대조 상한
 const BODY_MAX = 2500; // regulation_body 저장 상한(077 계약)
 
 const RESPONSE_SCHEMA = {
@@ -81,13 +83,61 @@ Deno.serve(async (req) => {
         result.failed++;
         continue;
       }
-      const sourceText = extractPlainText(doc.raw_html as string, SOURCE_MAX);
+      const rawHtml = doc.raw_html as string;
+      const sourceText = extractPlainText(rawHtml, SOURCE_MAX);
+      const katoRegulation = isKatoSource(c.source) ? parseKatoRegulation(rawHtml) : null;
+      const verificationText = katoRegulation
+        ? extractPlainText(rawHtml, SOURCE_VERIFY_MAX)
+        : sourceText;
+
+      // KATO의 날짜·장소·계좌·금액은 AI 요약 전에 원본 표에서 전부 확인한다.
+      // 핵심 섹션이 하나라도 빠지면 불완전한 내용을 스테이징하지 않고 검수로 보낸다.
+      if (isKatoSource(c.source)) {
+        const coverageFlags = katoRegulation
+          ? katoRegulation.coverage.missingSections.map((section) => ({
+            code: 'kato_missing_section',
+            field: section,
+            masked: '',
+          }))
+          : [{ code: 'kato_parse_failed', field: '_all', masked: '' }];
+        if (
+          katoRegulation &&
+          katoRegulation.coverage.expectedDivisionCount !==
+            katoRegulation.coverage.parsedDivisionCount
+        ) {
+          coverageFlags.push({
+            code: 'kato_division_coverage',
+            field: '부서별 장소',
+            masked:
+              `${katoRegulation.coverage.parsedDivisionCount}/${katoRegulation.coverage.expectedDivisionCount}`,
+          });
+        }
+        if (!katoRegulation || coverageFlags.length > 0) {
+          await supabase.rpc('format_pending_reject', {
+            p_tid: c.tournament_id,
+            p_token: c.claim_token,
+            p_flags: coverageFlags,
+            p_source_hash: c.content_hash,
+          });
+          result.needs_review++;
+          continue;
+        }
+      }
+
       const parsed = await generateStructured<RegulationResult>(
         buildPrompt(c.title, sourceText),
         RESPONSE_SCHEMA,
       );
-      const fields = normalizeRegulationFields(parsed.regulation_fields);
-      const verdict = verifyAgainstSource(parsed, sourceText);
+      const effective: RegulationResult = katoRegulation
+        ? {
+          ...parsed,
+          regulation_fields: katoRegulation.fields,
+          regulation_notes: katoRegulation.notes,
+          prize: katoRegulation.prize ?? parsed.prize,
+        }
+        : parsed;
+      const fields = normalizeRegulationFields(effective.regulation_fields);
+      const verdict = verifyAgainstSource(effective, verificationText);
 
       if (fields.length === 0 || !verdict.ok) {
         await supabase.rpc('format_pending_reject', {
@@ -110,11 +160,11 @@ Deno.serve(async (req) => {
         p_document_id: c.document_id,
         p_source_hash: c.content_hash,
         p_regulation_fields: fields,
-        p_regulation_notes: parsed.regulation_notes ?? [],
-        p_regulation_body: capRegulationBody(parsed.regulation_body, BODY_MAX) || null,
-        p_prize: parsed.prize || null,
-        p_format: parsed.format || null,
-        p_description: parsed.description || null,
+        p_regulation_notes: effective.regulation_notes ?? [],
+        p_regulation_body: capRegulationBody(effective.regulation_body, BODY_MAX) || null,
+        p_prize: effective.prize || null,
+        p_format: effective.format || null,
+        p_description: effective.description || null,
         p_model: GEMINI_MODEL,
         p_flags: verdict.flags.length ? verdict.flags : null,
         p_stage: stage,

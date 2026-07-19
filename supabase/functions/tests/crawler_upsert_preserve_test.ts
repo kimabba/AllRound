@@ -22,6 +22,7 @@ const EXISTING_ROW: Row = {
   application_deadline: null,
   eligible_grades: [],
   region: '전남',
+  location: null,
   manual_description: false,
   format_source_hash: null,
 };
@@ -196,6 +197,30 @@ Deno.test('upsert: 재크롤로 content_hash 바뀌면 format_status=pending 재
   };
   await upsertTournament(audit, 'tennis', t, '<html>바뀐 원문</html>');
   const p = captured[0].payload;
+  assertEquals(p.format_status, 'pending');
+  assertEquals(p.format_claim_token, null);
+  assertEquals(p.claimed_at, null);
+});
+
+Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정형화 대기', async () => {
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, {
+    ...EXISTING_ROW,
+    location: null,
+    format_source_hash: null,
+  });
+  await upsertTournament(
+    audit,
+    'tennis',
+    {
+      ...BASE_TOURNAMENT,
+      location: '공주시립테니스코트 외 3곳',
+    },
+    '<html>동일한 원문</html>',
+  );
+
+  const p = captured[0].payload;
+  assertEquals(p.location, '공주시립테니스코트 외 3곳');
   assertEquals(p.format_status, 'pending');
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
