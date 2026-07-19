@@ -7,6 +7,7 @@ import 'config.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
+import 'screens/admin/format_review_screen.dart';
 import 'screens/admin/moderation_screen.dart';
 import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -170,6 +171,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/drafts',
             builder: (_, __) => const AdminScreen(initialTab: 1),
+          ),
+          GoRoute(
+            path: '/admin/format-review',
+            builder: (_, __) => const FormatReviewScreen(),
           ),
           GoRoute(
             path: '/admin/sources',
