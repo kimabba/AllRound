@@ -354,7 +354,7 @@ Deno.serve(async (req) => {
       .from('clubs')
       .update({ monthly_fee: fee })
       .eq('id', clubId)
-      .in('status', ['approved', 'rejected'])
+      .in('status', ['pending', 'approved', 'rejected'])
       .select('id')
       .maybeSingle();
     if (error) return errorResponse(error.message, 500);
