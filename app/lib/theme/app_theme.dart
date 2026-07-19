@@ -38,7 +38,7 @@ class AppTheme {
       // Buttons
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size.fromHeight(AppSizes.control),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
@@ -50,7 +50,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size.fromHeight(AppSizes.control),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
@@ -60,7 +60,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          minimumSize: const Size(44, 44),
+          minimumSize: const Size.square(AppSizes.touchTarget),
           textStyle: tt.labelLarge,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -112,7 +112,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        toolbarHeight: 56,
+        toolbarHeight: AppSizes.appBar,
         titleTextStyle: tt.titleLarge?.copyWith(
           color: cs.onSurface,
           fontWeight: FontWeight.w800,
@@ -122,7 +122,7 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: cs.surface,
         indicatorColor: Colors.transparent,
-        height: 64,
+        height: AppSizes.bottomNavigation,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return tt.labelSmall?.copyWith(
@@ -191,7 +191,7 @@ class AppTheme {
       ),
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        minTileHeight: 52,
+        minTileHeight: AppSizes.listRow,
         iconColor: cs.onSurfaceVariant,
         textColor: cs.onSurface,
       ),

@@ -7,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
+import '../../utils/age.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _passwordConfirm = TextEditingController();
+  DateTime? _signupBirthDate;
   bool _signUp = false;
   bool _busy = false;
   bool _marketingConsent = false;
@@ -66,6 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       set(() => _error = '비밀번호가 서로 일치하지 않습니다.');
       return;
     }
+    if (_signUp && _signupBirthDate == null) {
+      set(() => _error = '계정 생성 전에 생년월일을 확인해 주세요.');
+      return;
+    }
 
     set(() {
       _busy = true;
@@ -78,6 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           email: email,
           password: password,
           data: {
+            'birth_date': _formatBirthDateForAuth(_signupBirthDate!),
             'marketing_consent': _marketingConsent,
             if (_marketingConsent)
               'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
@@ -176,6 +184,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (m.contains('weak password') || m.contains('password should')) {
       return '비밀번호가 너무 약합니다. 더 복잡하게 설정해 주세요.';
     }
+    if (m.contains('birth_date_required')) {
+      return '계정 생성 전에 생년월일을 확인해 주세요.';
+    }
+    if (m.contains('invalid_birth_date')) {
+      return '올바른 생년월일을 입력해 주세요.';
+    }
+    if (m.contains('minor_not_allowed')) {
+      return '만 $kMinSignupAge세 이상만 가입할 수 있습니다.';
+    }
+    if (m.contains('google_signup_disabled')) {
+      return '신규 가입은 이메일로 진행해 주세요.';
+    }
     if (m.contains('signups not allowed') || m.contains('disabled')) {
       return '현재 회원가입이 제한되어 있습니다.';
     }
@@ -191,7 +211,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
       _password.clear();
       _passwordConfirm.clear();
+      _signupBirthDate = null;
     });
+  }
+
+  String _formatBirthDateForAuth(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  String _formatBirthDateForDisplay(DateTime date) =>
+      '${date.year}년 ${date.month.toString().padLeft(2, '0')}월 '
+      '${date.day.toString().padLeft(2, '0')}일';
+
+  DateTime _safeAnniversary(DateTime now, int yearsAgo) {
+    final targetYear = now.year - yearsAgo;
+    final lastDay = DateTime(targetYear, now.month + 1, 0).day;
+    final targetDay = now.day > lastDay ? lastDay : now.day;
+    return DateTime(targetYear, now.month, targetDay);
+  }
+
+  Future<void> _pickSignupBirthDate({required VoidCallback onChanged}) async {
+    final now = DateTime.now();
+    final latestEligible = _safeAnniversary(now, kMinSignupAge);
+    final initial = _signupBirthDate ?? _safeAnniversary(now, 20);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: latestEligible,
+      helpText: '가입 생년월일 선택',
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _signupBirthDate = picked);
+    onChanged();
   }
 
   Future<void> _openEmailFlow({
@@ -245,6 +298,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _openGoogleExistingLogin() async {
+    final existingAccount = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Google 로그인 안내'),
+        content: const Text(
+          'Google은 기존 AllRound 계정 로그인만 지원합니다. '
+          '처음 가입한다면 이메일로 생년월일을 먼저 확인해 주세요.',
+        ),
+        actions: [
+          TextButton(
+            key: AllRoundE2EKeys.googleEmailSignupAction,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('이메일로 신규 가입'),
+          ),
+          FilledButton(
+            key: AllRoundE2EKeys.googleExistingLoginConfirm,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('기존 계정 로그인'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || existingAccount == null) return;
+    if (existingAccount) {
+      await _googleSignIn();
+    } else {
+      await _openEmailFlow(signUp: true);
+    }
+  }
+
   Future<void> _showEmailAuthSheet() async {
     setState(() => _error = null);
     await showModalBottomSheet<void>(
@@ -264,126 +348,147 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   AppSpacing.lg,
                   MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: cs.outlineVariant,
-                          borderRadius: AppRadius.pill,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: cs.outlineVariant,
+                            borderRadius: AppRadius.pill,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      _signUp ? '회원가입' : '이메일로 로그인',
-                      style: tt.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        _signUp ? '회원가입' : '이메일로 로그인',
+                        style: tt.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _SheetAuthField(
-                      controller: _email,
-                      icon: Icons.email_outlined,
-                      label: '이메일',
-                      hintText: 'test@example.com',
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _SheetAuthField(
-                      controller: _password,
-                      icon: Icons.lock_outline_rounded,
-                      label: '비밀번호',
-                      hintText: _signUp ? '6자 이상 입력' : null,
-                      obscureText: true,
-                      textInputAction:
-                          _signUp ? TextInputAction.next : TextInputAction.done,
-                      onSubmitted: (_) => _busy
-                          ? null
-                          : _emailAuth(
-                              onChanged: () => setSheetState(() {}),
-                            ),
-                    ),
-                    if (_signUp) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _SheetAuthField(
+                        fieldKey: AllRoundE2EKeys.emailField,
+                        controller: _email,
+                        icon: Icons.email_outlined,
+                        label: '이메일',
+                        hintText: 'test@example.com',
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       _SheetAuthField(
-                        controller: _passwordConfirm,
-                        icon: Icons.verified_user_outlined,
-                        label: '비밀번호 확인',
-                        hintText: '비밀번호를 한 번 더 입력',
+                        fieldKey: AllRoundE2EKeys.passwordField,
+                        controller: _password,
+                        icon: Icons.lock_outline_rounded,
+                        label: '비밀번호',
+                        hintText: _signUp ? '6자 이상 입력' : null,
                         obscureText: true,
-                        textInputAction: TextInputAction.done,
+                        textInputAction: _signUp
+                            ? TextInputAction.next
+                            : TextInputAction.done,
                         onSubmitted: (_) => _busy
                             ? null
                             : _emailAuth(
                                 onChanged: () => setSheetState(() {}),
                               ),
                       ),
-                    ],
-                    // 비밀번호 재설정은 kr.allround.app:// 딥링크로 앱을 여는
-                    // 흐름이라 모바일 전용. 웹(admin)에선 링크가 앱을 못 열고
-                    // 튕기므로 버튼을 숨긴다(admin 은 구글 로그인 권장). !kIsWeb.
-                    if (!_signUp && !kIsWeb)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
+                      if (_signUp) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        _SheetAuthField(
+                          fieldKey: AllRoundE2EKeys.passwordConfirmField,
+                          controller: _passwordConfirm,
+                          icon: Icons.verified_user_outlined,
+                          label: '비밀번호 확인',
+                          hintText: '비밀번호를 한 번 더 입력',
+                          obscureText: true,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _busy
+                              ? null
+                              : _emailAuth(
+                                  onChanged: () => setSheetState(() {}),
+                                ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _SignupBirthDateField(
+                          key: AllRoundE2EKeys.signupBirthDate,
+                          value: _signupBirthDate == null
+                              ? null
+                              : _formatBirthDateForDisplay(_signupBirthDate!),
                           onPressed: _busy
                               ? null
-                              : () => _forgotPassword(
+                              : () => _pickSignupBirthDate(
                                     onChanged: () => setSheetState(() {}),
                                   ),
-                          child: const Text('비밀번호를 잊으셨나요?'),
                         ),
+                      ],
+                      // 비밀번호 재설정은 kr.allround.app:// 딥링크로 앱을 여는
+                      // 흐름이라 모바일 전용. 웹(admin)에선 링크가 앱을 못 열고
+                      // 튕기므로 버튼을 숨긴다(admin 은 구글 로그인 권장). !kIsWeb.
+                      if (!_signUp && !kIsWeb)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _forgotPassword(
+                                      onChanged: () => setSheetState(() {}),
+                                    ),
+                            child: const Text('비밀번호를 잊으셨나요?'),
+                          ),
+                        ),
+                      if (_error != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          _error!,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.lg),
+                      FilledButton(
+                        key: AllRoundE2EKeys.authSubmitButton,
+                        onPressed: _busy
+                            ? null
+                            : () => _emailAuth(
+                                  onChanged: () => setSheetState(() {}),
+                                ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(AppSizes.control),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(_signUp ? '회원가입 시작하기' : '로그인'),
                       ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        _error!,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.error,
-                          fontWeight: FontWeight.w700,
+                      const SizedBox(height: AppSpacing.sm),
+                      TextButton(
+                        key: AllRoundE2EKeys.authModeToggle,
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                _setMode(signUp: !_signUp);
+                                setSheetState(() {});
+                              },
+                        child: Text(
+                          _signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기',
                         ),
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.lg),
-                    FilledButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _emailAuth(
-                                onChanged: () => setSheetState(() {}),
-                              ),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                      ),
-                      child: _busy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(_signUp ? '회원가입 시작하기' : '로그인'),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              _setMode(signUp: !_signUp);
-                              setSheetState(() {});
-                            },
-                      child: Text(
-                        _signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기',
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -403,6 +508,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final showTestShortcuts = kDebugMode;
 
     return Scaffold(
+      key: AllRoundE2EKeys.loginScreen,
       backgroundColor: cs.surface,
       body: SafeArea(
         child: LayoutBuilder(
@@ -462,12 +568,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                       const SizedBox(height: AppSpacing.xl),
                       _SocialButton(
-                        onPressed: _busy ? null : _googleSignIn,
+                        key: AllRoundE2EKeys.googleExistingLoginButton,
+                        onPressed: _busy ? null : _openGoogleExistingLogin,
                         icon: Icons.account_circle_outlined,
-                        label: '구글로 계속하기',
+                        label: 'Google 기존 회원 로그인',
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       FilledButton(
+                        key: AllRoundE2EKeys.emailFlowButton,
                         onPressed: _busy ? null : _showEmailAuthSheet,
                         child: const Text('이메일로 계속하기'),
                       ),
@@ -669,7 +777,7 @@ class _TestLoginItem extends StatelessWidget {
             TextButton(
               onPressed: busy ? null : onSecondaryPressed,
               style: TextButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
+                minimumSize: const Size.fromHeight(AppSizes.touchTarget),
               ),
               child: Text(
                 secondaryLabel!,
@@ -736,12 +844,14 @@ class _MarketingConsentRow extends StatelessWidget {
               onChanged: onChanged,
               side: BorderSide(color: cs.outline, width: 1.4),
             ),
-            Text(
-              '마케팅 정보 수신 동의 (선택)',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                  ),
+            Expanded(
+              child: Text(
+                '마케팅 정보 수신 동의 (선택)',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
             ),
           ],
         ),
@@ -750,8 +860,68 @@ class _MarketingConsentRow extends StatelessWidget {
   }
 }
 
+class _SignupBirthDateField extends StatelessWidget {
+  const _SignupBirthDateField({
+    super.key,
+    required this.value,
+    required this.onPressed,
+  });
+
+  final String? value;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(AppSizes.control),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        alignment: Alignment.centerLeft,
+        side: BorderSide(color: cs.outlineVariant),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cake_outlined, color: cs.onSurfaceVariant),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value ?? '생년월일 선택',
+                  style: tt.bodyLarge?.copyWith(
+                    color: value == null ? cs.onSurfaceVariant : cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '만 $kMinSignupAge세 이상인지 계정 생성 전에 확인합니다.',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
 class _SheetAuthField extends StatelessWidget {
   const _SheetAuthField({
+    this.fieldKey,
     required this.controller,
     required this.icon,
     required this.label,
@@ -762,6 +932,7 @@ class _SheetAuthField extends StatelessWidget {
     this.onSubmitted,
   });
 
+  final Key? fieldKey;
   final TextEditingController controller;
   final IconData icon;
   final String label;
@@ -774,6 +945,7 @@ class _SheetAuthField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: fieldKey,
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
@@ -790,6 +962,7 @@ class _SheetAuthField extends StatelessWidget {
 
 class _SocialButton extends StatelessWidget {
   const _SocialButton({
+    super.key,
     required this.onPressed,
     required this.icon,
     required this.label,
@@ -801,15 +974,26 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
+    return FilledButton.tonal(
       onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(label),
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(54),
+        minimumSize: const Size.fromHeight(AppSizes.control),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       ),
     );
   }

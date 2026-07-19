@@ -1278,7 +1278,9 @@ class _SheetActionRow extends StatelessWidget {
         label,
         style: TextStyle(color: color, fontWeight: FontWeight.w700),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
       tileColor: cs.surfaceContainerLow,
       onTap: onTap,
     );

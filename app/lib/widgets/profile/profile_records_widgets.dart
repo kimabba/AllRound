@@ -237,7 +237,7 @@ class MyClubEmptyContent extends StatelessWidget {
           height: 54,
           decoration: BoxDecoration(
             color: cs.secondaryContainer,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.xl),
           ),
           child: Icon(
             Icons.groups_rounded,
@@ -334,6 +334,8 @@ class TournamentRecordsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final accessibleHeight = 174.0 + ((textScale - 1).clamp(0.0, 2.0) * 64.0);
 
     return Column(
       children: [
@@ -371,7 +373,7 @@ class TournamentRecordsList extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
         ],
         SizedBox(
-          height: 174,
+          height: accessibleHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: tournaments.length,
@@ -565,7 +567,7 @@ class TournamentRecordEmptyContent extends StatelessWidget {
           height: 54,
           decoration: BoxDecoration(
             color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.xl),
           ),
           child: Icon(
             Icons.emoji_events_rounded,

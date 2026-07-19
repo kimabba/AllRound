@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config.dart';
 import '../models/moderation.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_skeleton_card.dart';
 
 class BlockedUsersScreen extends ConsumerStatefulWidget {
   const BlockedUsersScreen({super.key});
@@ -65,12 +67,13 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Scaffold(
+      key: AllRoundE2EKeys.blockedUsersScreen,
       appBar: AppBar(title: const Text('차단 관리')),
       body: FutureBuilder<List<BlockedUser>>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const _BlockedUsersLoadingState();
           }
           if (snapshot.hasError) {
             return AppEmptyState(
@@ -83,40 +86,105 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
           }
           final users = snapshot.data ?? const [];
           if (users.isEmpty) {
-            return const AppEmptyState(
-              icon: Icons.person_off_outlined,
-              title: '차단한 사용자가 없습니다',
-              description: '차단한 사용자는 내 클럽 활동과 게시글에서 숨겨집니다.',
+            return const KeyedSubtree(
+              key: AllRoundE2EKeys.blockedUsersReady,
+              child: AppEmptyState(
+                icon: Icons.person_off_outlined,
+                title: '차단한 사용자가 없습니다',
+                description: '차단한 사용자는 내 클럽 활동과 게시글에서 숨겨집니다.',
+              ),
             );
           }
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              AppSpacing.sm,
-              AppSpacing.xl,
-              AppSpacing.xxxl,
-            ),
-            children: [
-              Text(
-                '차단한 사용자는 내 콘텐츠에 댓글을 남기거나 클럽 활동을 볼 수 없습니다.',
-                style: tt.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.5,
-                ),
+          return KeyedSubtree(
+            key: AllRoundE2EKeys.blockedUsersReady,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.sm,
+                AppSpacing.xl,
+                AppSpacing.xxxl,
               ),
-              const SizedBox(height: AppSpacing.xl),
-              for (var index = 0; index < users.length; index++) ...[
-                _BlockedUserRow(
-                  user: users[index],
-                  busy: _busyUserIds.contains(users[index].userId),
-                  onUnblock: () => _unblock(users[index]),
+              children: [
+                Text(
+                  '차단한 사용자는 내 콘텐츠에 댓글을 남기거나 클럽 활동을 볼 수 없습니다.',
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.5,
+                  ),
                 ),
-                if (index != users.length - 1)
-                  Divider(height: 1, color: cs.outlineVariant),
+                const SizedBox(height: AppSpacing.xl),
+                for (var index = 0; index < users.length; index++) ...[
+                  _BlockedUserRow(
+                    user: users[index],
+                    busy: _busyUserIds.contains(users[index].userId),
+                    onUnblock: () => _unblock(users[index]),
+                  ),
+                  if (index != users.length - 1)
+                    Divider(height: 1, color: cs.outlineVariant),
+                ],
               ],
-            ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _BlockedUsersLoadingState extends StatelessWidget {
+  const _BlockedUsersLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        itemCount: 4,
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: cs.outlineVariant,
+        ),
+        itemBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 128,
+                      height: 14,
+                      color: cs.surfaceContainerHighest,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      width: 92,
+                      height: 10,
+                      color: cs.surfaceContainerHighest,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 
@@ -134,7 +134,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   FilledButton(
                     onPressed: _busy ? null : _submit,
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
+                      minimumSize: const Size.fromHeight(AppSizes.control),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
@@ -155,7 +155,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                         ? null
                         : () async {
                             try {
-                              await ref.read(supabaseProvider).auth.signOut();
+                              await signOutSecurely(
+                                ref.read(supabaseProvider),
+                              );
                             } catch (_) {
                               if (mounted) {
                                 setState(

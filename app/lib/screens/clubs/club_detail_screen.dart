@@ -12,7 +12,9 @@ import '../../models/club_post.dart';
 import '../../models/moderation.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
@@ -429,11 +431,15 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
         club.createdBy != null && club.createdBy != currentUserId;
 
     return Scaffold(
+      key: AllRoundE2EKeys.clubDetailScreen,
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         title: Text(club.name),
         actions: [
           IconButton(
+            key: isFavorite
+                ? AllRoundE2EKeys.clubFavoriteSaved
+                : AllRoundE2EKeys.clubFavoriteUnsaved,
             tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
             onPressed: () => _toggleFavorite(isFavorite),
             icon: Icon(
@@ -470,15 +476,24 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
             color: cs.surface,
             child: TabBar(
               controller: _tab!,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+              ),
               labelStyle: tt.labelLarge?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
               tabs: [
-                const Tab(text: '소개'),
-                const Tab(text: '멤버'),
-                const Tab(text: '일정'),
-                const Tab(text: '게시판'),
-                if (_canManageClub) const Tab(text: '관리'),
+                const Tab(key: AllRoundE2EKeys.clubIntroTab, text: '소개'),
+                const Tab(key: AllRoundE2EKeys.clubMembersTab, text: '멤버'),
+                const Tab(key: AllRoundE2EKeys.clubEventsTab, text: '일정'),
+                const Tab(key: AllRoundE2EKeys.clubPostsTab, text: '게시판'),
+                if (_canManageClub)
+                  const Tab(
+                    key: AllRoundE2EKeys.clubManagementTab,
+                    text: '관리',
+                  ),
               ],
             ),
           ),
@@ -852,16 +867,20 @@ class _IntroTab extends StatelessWidget {
         (club.genderPreference != null && club.genderPreference!.isNotEmpty);
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xxxl,
+      ),
       children: [
-        AppCard(
-          variant: AppCardVariant.outlined,
+        _ClubFlatSection(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '클럽 소개',
-                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
@@ -884,14 +903,13 @@ class _IntroTab extends StatelessWidget {
         ),
         if (hasActivityInfo) ...[
           const SizedBox(height: AppSpacing.md),
-          AppCard(
-            variant: AppCardVariant.outlined,
+          _ClubFlatSection(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '활동 정보',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
@@ -922,14 +940,13 @@ class _IntroTab extends StatelessWidget {
         ],
         if (hasContactInfo) ...[
           const SizedBox(height: AppSpacing.md),
-          AppCard(
-            variant: AppCardVariant.outlined,
+          _ClubFlatSection(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '연락 및 위치',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 if (club.address != null && club.address!.isNotEmpty)
@@ -961,7 +978,7 @@ class _IntroTab extends StatelessWidget {
             ),
             label: const Text('가입 신청 상태 확인 중'),
             style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
           )
         else if (!club.isMember && joinRequestLoadFailed)
@@ -970,11 +987,12 @@ class _IntroTab extends StatelessWidget {
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('가입 신청 상태 다시 확인'),
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
           )
         else if (!club.isMember && joinRequest?.isPending == true) ...[
           FilledButton.tonalIcon(
+            key: AllRoundE2EKeys.clubJoinPendingAction,
             onPressed: inFlight ? null : onCancelJoin,
             icon: inFlight
                 ? const SizedBox(
@@ -985,7 +1003,7 @@ class _IntroTab extends StatelessWidget {
                 : const Icon(Icons.hourglass_top_rounded),
             label: const Text('가입 승인 대기 중 · 취소하기'),
             style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
           ),
           if (joinRequest?.createdAt != null)
@@ -999,6 +1017,7 @@ class _IntroTab extends StatelessWidget {
             ),
         ] else if (!club.isMember)
           FilledButton.icon(
+            key: AllRoundE2EKeys.clubJoinAvailableAction,
             onPressed: inFlight ? null : onJoin,
             icon: inFlight
                 ? const SizedBox(
@@ -1009,7 +1028,7 @@ class _IntroTab extends StatelessWidget {
                 : const Icon(Icons.person_add_rounded),
             label: const Text('가입 신청'),
             style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
           )
         else if (!club.isOwner)
@@ -1019,7 +1038,7 @@ class _IntroTab extends StatelessWidget {
             label: const Text('탈퇴'),
             style: OutlinedButton.styleFrom(
               foregroundColor: cs.error,
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
           ),
         if (club.isMember)
@@ -1058,6 +1077,28 @@ class _IntroTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ClubFlatSection extends StatelessWidget {
+  const _ClubFlatSection({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final outline = Theme.of(context).colorScheme.outlineVariant;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: outline),
+          bottom: BorderSide(color: outline),
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -1422,15 +1463,20 @@ class _ClubManagementTab extends ConsumerWidget {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      key: AllRoundE2EKeys.clubManagementContent,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xxxl,
+      ),
       children: [
-        AppCard(
-          variant: AppCardVariant.outlined,
+        _ClubFlatSection(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('운영 권한',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 club.isOwner
@@ -1580,8 +1626,7 @@ class _JoinRequestManageCardState
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return _ClubFlatSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1592,7 +1637,7 @@ class _JoinRequestManageCardState
               Expanded(
                 child: Text(
                   '가입 신청 관리',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               IconButton(
@@ -1828,15 +1873,24 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
     if (picked.isEmpty) return;
 
     final next = <_PendingPostImage>[];
-    for (final file in picked.take(remaining)) {
-      final extension = _postImageExtension(file.name);
-      next.add(
-        _PendingPostImage(
-          bytes: await file.readAsBytes(),
-          extension: extension,
-          contentType: _postImageContentType(extension),
-        ),
-      );
+    try {
+      for (final file in picked.take(remaining)) {
+        final image = await prepareClubImage(file);
+        next.add(
+          _PendingPostImage(
+            bytes: image.bytes,
+            extension: image.extension,
+            contentType: image.contentType,
+          ),
+        );
+      }
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
     }
     if (!mounted) return;
     setState(() => _newImages.addAll(next));
@@ -1892,8 +1946,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return _ClubFlatSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1904,7 +1957,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
               Expanded(
                 child: Text(
                   '소개 관리',
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               Text(
@@ -1959,13 +2012,13 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
                 if (_canAddImage)
                   InkWell(
                     onTap: _pickImages,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
                     child: Container(
                       width: 92,
                       height: 92,
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.xl),
                         border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Icon(
@@ -2034,7 +2087,7 @@ class _ClubIntroManageThumb extends StatelessWidget {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           child: child,
         ),
         Positioned(
@@ -2154,13 +2207,12 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return _ClubFlatSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('회비 관리',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _controller,
@@ -2203,13 +2255,12 @@ class _MemberRoleManageCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return _ClubFlatSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('멤버 권한 관리',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           FutureBuilder<List<ClubMember>>(
             future: future,
@@ -2469,13 +2520,12 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    return AppCard(
-      variant: AppCardVariant.outlined,
+    return _ClubFlatSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('클럽 삭제',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '삭제하면 일반 목록과 검색에서 내려갑니다. 이 작업은 클럽장만 실행할 수 있습니다.',
@@ -3131,7 +3181,7 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
           FilledButton(
             onPressed: _busy ? null : _submit,
             style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
+              minimumSize: const Size.fromHeight(AppSizes.control),
             ),
             child: _busy
                 ? const SizedBox(
@@ -3774,7 +3824,7 @@ class _PostWriteEntry extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: cs.primaryContainer.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.xl),
             ),
             child: Icon(Icons.edit_note_rounded, color: cs.primary),
           ),
@@ -3906,15 +3956,24 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
     if (picked.isEmpty) return;
 
     final next = <_PendingPostImage>[];
-    for (final file in picked.take(5 - _images.length)) {
-      final extension = _postImageExtension(file.name);
-      next.add(
-        _PendingPostImage(
-          bytes: await file.readAsBytes(),
-          extension: extension,
-          contentType: _postImageContentType(extension),
-        ),
-      );
+    try {
+      for (final file in picked.take(5 - _images.length)) {
+        final image = await prepareClubImage(file);
+        next.add(
+          _PendingPostImage(
+            bytes: image.bytes,
+            extension: image.extension,
+            contentType: image.contentType,
+          ),
+        );
+      }
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
     }
     if (!mounted) return;
     setState(() => _images.addAll(next));
@@ -4151,13 +4210,13 @@ class _PostPhotoPicker extends StatelessWidget {
                 if (canAdd)
                   InkWell(
                     onTap: onAdd,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
                     child: Container(
                       width: 86,
                       height: 86,
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.xl),
                         border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Icon(
@@ -4189,7 +4248,7 @@ class _PostPhotoThumb extends StatelessWidget {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           child: Image.memory(
             image.bytes,
             width: 86,
@@ -4404,7 +4463,7 @@ class _PostImagePreview extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final firstUrl = urls.first;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Stack(
         children: [
           AspectRatio(
@@ -4490,21 +4549,6 @@ class _PostMetaChip extends StatelessWidget {
       ),
     );
   }
-}
-
-String _postImageExtension(String name) {
-  final lower = name.toLowerCase();
-  if (lower.endsWith('.png')) return 'png';
-  if (lower.endsWith('.webp')) return 'webp';
-  return 'jpg';
-}
-
-String _postImageContentType(String extension) {
-  return switch (extension) {
-    'png' => 'image/png',
-    'webp' => 'image/webp',
-    _ => 'image/jpeg',
-  };
 }
 
 String _fmtDateTime(DateTime dt) {

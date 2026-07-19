@@ -14,11 +14,11 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
+import 'models/chat_entry_context.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
-import 'screens/friend_schedule_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
@@ -32,6 +32,7 @@ import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
 import 'widgets/app_bottom_nav.dart';
+import 'widgets/global_chat_dock.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -104,7 +105,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-          GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
+          GoRoute(
+            path: '/chat',
+            builder: (_, state) {
+              final extra = state.extra;
+              return ChatScreen(
+                entryContext: extra is ChatEntryContext ? extra : null,
+              );
+            },
+          ),
           GoRoute(
             path: '/tournaments',
             builder: (_, __) => const TournamentsScreen(),
@@ -126,12 +135,27 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => const FavoritesScreen(),
           ),
           GoRoute(
-            path: '/friend-schedule',
-            builder: (_, __) => const FriendScheduleScreen(),
-          ),
-          GoRoute(
             path: '/blocked-users',
             builder: (_, __) => const BlockedUsersScreen(),
+          ),
+          GoRoute(
+            path: '/tournaments/submit',
+            builder: (_, __) => const TournamentSubmitScreen(),
+          ),
+          GoRoute(
+            path: '/clubs/:id',
+            builder: (_, state) {
+              final club = state.extra as Club?;
+              return club != null
+                  ? ClubDetailScreen(club: club)
+                  : ClubDetailScreen(clubId: state.pathParameters['id']!);
+            },
+          ),
+          GoRoute(
+            path: '/tournaments/:id',
+            builder: (_, state) => TournamentDetailScreen(
+              tournamentId: state.pathParameters['id']!,
+            ),
           ),
         ],
       ),
@@ -175,25 +199,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-
-      GoRoute(
-        path: '/tournaments/submit',
-        builder: (_, __) => const TournamentSubmitScreen(),
-      ),
-      GoRoute(
-        path: '/clubs/:id',
-        builder: (_, state) {
-          final club = state.extra as Club?;
-          return club != null
-              ? ClubDetailScreen(club: club)
-              : ClubDetailScreen(clubId: state.pathParameters['id']!);
-        },
-      ),
-      GoRoute(
-        path: '/tournaments/:id',
-        builder: (_, state) =>
-            TournamentDetailScreen(tournamentId: state.pathParameters['id']!),
-      ),
     ],
   );
 });
@@ -209,13 +214,13 @@ class GoRouterRefreshStream extends ChangeNotifier {
 
 class _MainShell extends ConsumerWidget {
   const _MainShell({required this.child});
+
   final Widget child;
 
   static const _tabs = <String>[
     '/',
     '/tournaments',
     '/clubs',
-    '/chat',
     '/profile',
   ];
 
@@ -225,7 +230,6 @@ class _MainShell extends ConsumerWidget {
     '/profile',
     '/notifications',
     '/favorites',
-    '/friend-schedule',
     '/blocked-users',
     '/rules',
   ];
@@ -248,17 +252,26 @@ class _MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final loc = GoRouterState.of(context).matchedLocation;
-    final idx = _indexOf(loc);
+    final currentPath =
+        GoRouter.of(context).routeInformationProvider.value.uri.path;
+    final idx = _indexOf(currentPath);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final isFullChat = currentPath == '/chat';
+    final showChatDock = !isFullChat && !currentPath.startsWith('/speed-gun');
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: keyboardVisible
+      bottomNavigationBar: keyboardVisible || isFullChat
           ? null
-          : AppBottomNav(
-              currentIndex: idx,
-              onChanged: (index) => context.go(_tabs[index]),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showChatDock) GlobalChatDock(location: currentPath),
+                AppBottomNav(
+                  currentIndex: idx,
+                  onChanged: (index) => context.go(_tabs[index]),
+                ),
+              ],
             ),
     );
   }

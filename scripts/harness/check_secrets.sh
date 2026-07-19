@@ -30,6 +30,9 @@ patterns = {
     'OpenAI-style key': re.compile(r'sk-[A-Za-z0-9]{32,}'),
     'Google API key': re.compile(r'AIza[0-9A-Za-z_-]{30,}'),
     'Supabase JWT': re.compile(r'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'),
+    'Supabase secret key': re.compile(r'sb_secret_[A-Za-z0-9_-]{16,}'),
+    'PEM private key': re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+    'Service account JSON': re.compile(r'"type"\s*:\s*"service_account"'),
 }
 allow_placeholder_words = ('example', 'placeholder', '<', '...', 'YOUR_', 'REPLACE_ME')
 findings: list[str] = []

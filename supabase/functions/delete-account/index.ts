@@ -12,7 +12,32 @@
  */
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
+import { parseOwnedPublicObjects, publicMediaBucketIds } from '../_shared/account_deletion.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+async function deletePublicMedia(
+  client: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await client.rpc('public_storage_paths_owned_by', {
+    p_user_id: userId,
+  });
+  if (error) throw new Error('Public storage inventory failed');
+
+  const ownedObjects = parseOwnedPublicObjects(data);
+  for (const bucketId of publicMediaBucketIds()) {
+    const names = ownedObjects
+      .filter((object) => object.bucketId === bucketId)
+      .map((object) => object.objectName);
+    for (let offset = 0; offset < names.length; offset += 100) {
+      const { error: removeError } = await client.storage
+        .from(bucketId)
+        .remove(names.slice(offset, offset + 100));
+      if (removeError) throw new Error('Public storage removal failed');
+    }
+  }
+}
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -30,13 +55,26 @@ Deno.serve(async (req) => {
     p_user_id: user.id,
   });
   if (dataErr) {
-    return errorResponse(`account data deletion failed: ${dataErr.message}`, 500);
+    console.error('delete_account_data failed', { code: dataErr.code });
+    return errorResponse('account deletion failed', 500);
   }
 
-  // 2) auth 계정 삭제(로그인 제거)
+  // 2) 공개 UGC 사진 삭제. 신고 증거는 private bucket에서 법적 보존 정책에
+  // 따라 별도 관리하며 여기서 일괄 삭제하지 않는다.
+  try {
+    await deletePublicMedia(svc, user.id);
+  } catch (error) {
+    console.error('public storage deletion failed', {
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
+    return errorResponse('account deletion failed', 500);
+  }
+
+  // 3) auth 계정 삭제(로그인 제거)
   const { error: authErr } = await svc.auth.admin.deleteUser(user.id);
   if (authErr) {
-    return errorResponse(`auth account deletion failed: ${authErr.message}`, 500);
+    console.error('auth account deletion failed', { status: authErr.status });
+    return errorResponse('account deletion failed', 500);
   }
 
   return jsonResponse({ deleted: true });

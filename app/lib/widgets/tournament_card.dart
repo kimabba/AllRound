@@ -140,7 +140,7 @@ class TournamentCard extends StatelessWidget {
               ),
               if (onFavoriteToggle != null)
                 SizedBox.square(
-                  dimension: 44,
+                  dimension: AppSizes.touchTarget,
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     iconSize: 21,

@@ -6,6 +6,7 @@ import '../config.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/club_sort.dart';
@@ -393,6 +394,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
+      key: AllRoundE2EKeys.clubsScreen,
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,

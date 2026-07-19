@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
-import '../../widgets/app_card.dart';
 
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
@@ -123,11 +123,34 @@ class _TournamentSubmitScreenState
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.tournamentSubmitScreen,
       appBar: AppBar(title: const Text('대회 정보 제보')),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.md,
+          AppSpacing.xl,
+          AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: AppPrimaryButton(
+          label: '제보하기',
+          loading: _busy,
+          onPressed: _submit,
+        ),
+      ),
       body: Form(
         key: _form,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.xxxl,
+          ),
           children: [
             Text('알고 있는 대회를 알려주세요', style: tt.headlineSmall),
             const SizedBox(height: AppSpacing.sm),
@@ -139,8 +162,14 @@ class _TournamentSubmitScreenState
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            AppCard(
-              variant: AppCardVariant.filled,
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: cs.outlineVariant),
+                  bottom: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -207,33 +236,23 @@ class _TournamentSubmitScreenState
             // 날짜 선택
             _Label('시작일 *'),
             const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              onTap: _pickDate,
-              variant: AppCardVariant.outlined,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              style: OutlinedButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                minimumSize: const Size.fromHeight(AppSizes.control),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 18,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Text(
-                    _startDate == null
-                        ? '날짜를 선택하세요'
-                        : DateFormat(
-                            'yyyy년 M월 d일 (E)',
-                            'ko',
-                          ).format(_startDate!),
-                    style: tt.bodyMedium?.copyWith(
-                      color: _startDate == null ? cs.onSurfaceVariant : null,
-                    ),
-                  ),
-                ],
+              icon: const Icon(Icons.calendar_today_rounded, size: 18),
+              label: Text(
+                _startDate == null
+                    ? '날짜를 선택하세요'
+                    : DateFormat(
+                        'yyyy년 M월 d일 (E)',
+                        'ko',
+                      ).format(_startDate!),
+                style: tt.bodyMedium?.copyWith(
+                  color: _startDate == null ? cs.onSurfaceVariant : null,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -338,8 +357,14 @@ class _TournamentSubmitScreenState
 
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
-              AppCard(
-                variant: AppCardVariant.outlined,
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: cs.error),
+                    bottom: BorderSide(color: cs.error),
+                  ),
+                ),
                 child: Row(
                   children: [
                     Icon(
@@ -358,12 +383,6 @@ class _TournamentSubmitScreenState
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.xl),
-            AppPrimaryButton(
-              label: '제보하기',
-              loading: _busy,
-              onPressed: _submit,
-            ),
             const SizedBox(height: AppSpacing.xxxl),
           ],
         ),

@@ -5,10 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../config.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
-import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_skeleton_card.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/tournament_card.dart';
@@ -39,6 +40,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: AllRoundE2EKeys.favoritesScreen,
       appBar: AppBar(
         title: const Text('관심 목록'),
         bottom: TabBar(
@@ -66,7 +68,10 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (AppConfig.userDesignPreview) {
-      return _TournamentList(tournaments: _previewFavoriteTournaments);
+      return KeyedSubtree(
+        key: AllRoundE2EKeys.favoritesReady,
+        child: _TournamentList(tournaments: _previewFavoriteTournaments),
+      );
     }
 
     final tournaments = ref.watch(myFavoriteTournamentsProvider);
@@ -75,34 +80,42 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
     return tournaments.when(
       data: (items) {
         if (items.isEmpty) {
-          return const AppEmptyState(
-            icon: Icons.bookmark_border_rounded,
-            title: '스크랩한 대회가 없습니다',
-            description: '대회 목록에서 북마크를 누르면 이곳에 모입니다.',
+          return const KeyedSubtree(
+            key: AllRoundE2EKeys.favoritesReady,
+            child: AppEmptyState(
+              icon: Icons.bookmark_border_rounded,
+              title: '스크랩한 대회가 없습니다',
+              description: '대회 목록에서 북마크를 누르면 이곳에 모입니다.',
+            ),
           );
         }
-        return _TournamentList(
-          tournaments: items,
-          favoriteIds: favoriteIds,
-          onFavoriteToggle: (tournament) async {
-            try {
-              await ref.read(apiProvider).toggleFavorite(tournament.id, false);
-              ref.invalidate(favoriteIdsProvider);
-              ref.invalidate(myFavoriteTournamentsProvider);
-              ref.invalidate(myTournamentRecordsProvider);
-            } catch (_) {
-              if (context.mounted) {
-                AppToast.show(
-                  context,
-                  '관심 해제에 실패했어요. 잠시 후 다시 시도해 주세요.',
-                  kind: AppToastKind.error,
-                );
+        return KeyedSubtree(
+          key: AllRoundE2EKeys.favoritesReady,
+          child: _TournamentList(
+            tournaments: items,
+            favoriteIds: favoriteIds,
+            onFavoriteToggle: (tournament) async {
+              try {
+                await ref
+                    .read(apiProvider)
+                    .toggleFavorite(tournament.id, false);
+                ref.invalidate(favoriteIdsProvider);
+                ref.invalidate(myFavoriteTournamentsProvider);
+                ref.invalidate(myTournamentRecordsProvider);
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(
+                    context,
+                    '관심 해제에 실패했어요. 잠시 후 다시 시도해 주세요.',
+                    kind: AppToastKind.error,
+                  );
+                }
               }
-            }
-          },
+            },
+          ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _FavoriteLoadingList(),
       error: (_, __) => AppEmptyState(
         icon: Icons.error_outline_rounded,
         title: '관심 대회를 불러오지 못했습니다',
@@ -182,7 +195,7 @@ class _FavoriteClubsTab extends ConsumerWidget {
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _FavoriteLoadingList(),
       error: (_, __) => AppEmptyState(
         icon: Icons.error_outline_rounded,
         title: '관심 클럽을 불러오지 못했습니다',
@@ -202,36 +215,38 @@ class _ClubList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
+    final cs = Theme.of(context).colorScheme;
+    return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
-        AppSpacing.lg,
+        AppSpacing.sm,
         AppSpacing.xl,
         AppSpacing.xxxl,
       ),
       itemCount: clubs.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: cs.outlineVariant,
+      ),
       itemBuilder: (_, index) {
         final club = clubs[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _FavoriteClubCard(
-            club: club,
-            onTap: () => context.push('/clubs/${club.id}', extra: club),
-            onFavoriteToggle:
-                onFavoriteToggle == null ? null : () => onFavoriteToggle!(club),
-          ),
+        return _FavoriteClubRow(
+          club: club,
+          onTap: () => context.push('/clubs/${club.id}', extra: club),
+          onFavoriteToggle:
+              onFavoriteToggle == null ? null : () => onFavoriteToggle!(club),
         );
       },
     );
   }
 }
 
-class _FavoriteClubCard extends StatelessWidget {
+class _FavoriteClubRow extends StatelessWidget {
   final Club club;
   final VoidCallback onTap;
   final VoidCallback? onFavoriteToggle;
 
-  const _FavoriteClubCard({
+  const _FavoriteClubRow({
     required this.club,
     required this.onTap,
     this.onFavoriteToggle,
@@ -247,47 +262,121 @@ class _FavoriteClubCard extends StatelessWidget {
       if (club.memberCount > 0) '${club.memberCount}명',
     ].whereType<String>().join(' · ');
 
-    return AppCard(
-      variant: AppCardVariant.outlined,
-      onTap: onTap,
-      child: Row(
-        children: [
-          SimpleClubAvatar(club: club, size: 56),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.listRow),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Row(
               children: [
-                Text(
-                  club.name,
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                SimpleClubAvatar(club: club, size: 56),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        club.name,
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (meta.isNotEmpty)
+                        Text(
+                          meta,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      if (club.description != null &&
+                          club.description!.isNotEmpty)
+                        Text(
+                          club.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                if (meta.isNotEmpty)
-                  Text(
-                    meta,
-                    style: tt.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                SizedBox(
+                  width: AppSizes.touchTarget,
+                  height: AppSizes.touchTarget,
+                  child: IconButton(
+                    tooltip: '관심 해제',
+                    onPressed: onFavoriteToggle,
+                    icon: const Icon(Icons.bookmark_rounded),
+                    color: cs.primary,
                   ),
-                if (club.description != null && club.description!.isNotEmpty)
-                  Text(
-                    club.description!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tt.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
+                ),
               ],
             ),
           ),
-          IconButton(
-            tooltip: '관심 해제',
-            onPressed: onFavoriteToggle,
-            icon: const Icon(Icons.bookmark_rounded),
-            color: cs.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteLoadingList extends StatelessWidget {
+  const _FavoriteLoadingList();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.sm,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        itemCount: 4,
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: cs.outlineVariant,
+        ),
+        itemBuilder: (_, __) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 156,
+                      height: 15,
+                      color: cs.surfaceContainerHighest,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      width: 112,
+                      height: 11,
+                      color: cs.surfaceContainerHighest,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

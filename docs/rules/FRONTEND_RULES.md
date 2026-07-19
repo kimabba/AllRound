@@ -28,6 +28,9 @@ Load this when touching `app/`, Flutter screens, routing, Riverpod state, API cl
 
 ## UI/UX rules
 
+- 사용자 UI를 만들거나 수정하기 전에 현재 디자인 기준인
+  [`docs/design/pureform-sports-system.md`](../design/pureform-sports-system.md)를 읽고
+  색·타이포·간격·공통 컴포넌트·상태·검증 규칙을 따른다.
 - Keep grade and sport labels consistent with `DOMAIN_RULES.md`.
 - Expose loading, empty, error, and retry states for network screens.
 - User-facing errors should be actionable; do not show only raw exceptions.

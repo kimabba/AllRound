@@ -5,18 +5,31 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/chat_entry_context.dart';
 import '../models/chat_ui.dart';
 import '../models/moderation.dart';
 import '../services/api.dart';
 import '../state/chat_state.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/moderation/ugc_moderation_widgets.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  const ChatScreen({
+    super.key,
+    this.embedded = false,
+    this.scrollController,
+    this.entryContext,
+    this.onExpand,
+  });
+
+  final bool embedded;
+  final ScrollController? scrollController;
+  final ChatEntryContext? entryContext;
+  final ValueChanged<ChatEntryContext?>? onExpand;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -26,14 +39,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   static const _firstByteTimeout = Duration(seconds: 15);
 
   final _ctrl = TextEditingController();
-  final _scroll = ScrollController();
+  late final ScrollController _ownedScroll;
   StreamSubscription<ChatStreamEvent>? _streamSub;
+  late bool _attachEntryContext;
+
+  ScrollController get _scroll => widget.scrollController ?? _ownedScroll;
+
+  Map<String, String>? get _selectedEntryEntity {
+    final entryContext = widget.entryContext;
+    if (!_attachEntryContext || entryContext == null) return null;
+    if (!entryContext.canAttachEntity) return null;
+    return {
+      'type': entryContext.entityType!,
+      'id': entryContext.entityId!,
+    };
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ownedScroll = ScrollController();
+    _attachEntryContext = widget.entryContext?.attachEntityByDefault ?? false;
+    final entryDraft = widget.entryContext?.initialMessage ?? '';
+    _ctrl.text =
+        entryDraft.isNotEmpty ? entryDraft : ref.read(chatProvider).draft;
+    _ctrl.addListener(_syncDraft);
+  }
 
   @override
   void dispose() {
     _streamSub?.cancel();
+    _ctrl.removeListener(_syncDraft);
     _ctrl.dispose();
-    _scroll.dispose();
+    _ownedScroll.dispose();
     super.dispose();
   }
 
@@ -41,6 +79,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _streamSub?.cancel();
     _streamSub = null;
     ref.read(chatProvider).finishStreaming();
+  }
+
+  void _syncDraft() {
+    ref.read(chatProvider).setDraft(_ctrl.text);
+  }
+
+  void _resetConversation() {
+    _ctrl.clear();
+    ref.read(chatProvider).reset();
   }
 
   Future<void> _send() async {
@@ -60,6 +107,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         message: text,
         conversationId: chat.conversationId,
         activeSport: ref.read(activeSportProvider),
+        selectedEntity: _selectedEntryEntity,
       ),
       assistantIdx,
     );
@@ -230,57 +278,278 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messages = chat.messages;
     final busy = chat.busy;
 
+    final chatBody = Column(
+      children: [
+        if (widget.embedded)
+          _EmbeddedChatHeader(
+            hasMessages: messages.isNotEmpty,
+            busy: busy,
+            onReset: _resetConversation,
+            onExpand: () {
+              ref.read(chatProvider).setDraft(_ctrl.text);
+              final expandedContext = widget.entryContext?.copyWith(
+                attachEntityByDefault: _attachEntryContext,
+                initialMessage: _ctrl.text,
+              );
+              widget.onExpand?.call(expandedContext);
+            },
+          ),
+        if (widget.entryContext?.canAttachEntity ?? false)
+          _EntityContextToggle(
+            key: AllRoundE2EKeys.chatContextToggle,
+            stateKey: _attachEntryContext
+                ? AllRoundE2EKeys.chatContextAttached
+                : AllRoundE2EKeys.chatContextDetached,
+            label: widget.entryContext!.screenLabel,
+            selected: _attachEntryContext,
+            onChanged: (selected) {
+              setState(() => _attachEntryContext = selected);
+            },
+          ),
+        Expanded(
+          child: messages.isEmpty
+              ? _EmptyHint(
+                  onSend: sendText,
+                  sport: ref.watch(activeSportProvider),
+                  scrollController: widget.embedded ? _scroll : null,
+                  suggestions: widget.entryContext?.suggestions,
+                )
+              : ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  itemCount: messages.length,
+                  itemBuilder: (_, i) {
+                    final message = messages[i];
+                    return _MessageBubble(
+                      msg: message,
+                      announce: !busy &&
+                          i == messages.length - 1 &&
+                          message.role == 'assistant',
+                      onCardAction: _sendWithEntity,
+                      onRefine: _sendWithRefine,
+                      onReport: !busy &&
+                              message.role == 'assistant' &&
+                              message.content.trim().isNotEmpty
+                          ? () => _reportAssistantMessage(message)
+                          : null,
+                    );
+                  },
+                ),
+        ),
+        if (busy)
+          LinearProgressIndicator(
+            color: cs.primary,
+            backgroundColor: cs.surfaceContainerLow,
+          ),
+        _InputBar(
+          controller: _ctrl,
+          busy: busy,
+          onSend: _send,
+          onStop: _stopStreaming,
+        ),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Material(
+        key: AllRoundE2EKeys.embeddedChatSheet,
+        color: cs.surface,
+        child: chatBody,
+      );
+    }
+
     return Scaffold(
+      key: AllRoundE2EKeys.fullChatScreen,
       appBar: AppBar(
-        title: const Text('라운드 코치'),
+        title: const Text('AI에게 물어보기'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
-              onPressed: busy ? null : () => ref.read(chatProvider).reset(),
+              onPressed: busy ? null : _resetConversation,
               icon: const Icon(Icons.add_comment_outlined),
               tooltip: '새 대화',
             ),
         ],
       ),
-      body: Column(
+      body: chatBody,
+    );
+  }
+}
+
+class _EmbeddedChatHeader extends StatelessWidget {
+  const _EmbeddedChatHeader({
+    required this.hasMessages,
+    required this.busy,
+    required this.onReset,
+    required this.onExpand,
+  });
+
+  final bool hasMessages;
+  final bool busy;
+  final VoidCallback onReset;
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: Column(
         children: [
-          Expanded(
-            child: messages.isEmpty
-                ? _EmptyHint(
-                    onSend: sendText,
-                    sport: ref.watch(activeSportProvider),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
-                    ),
-                    itemCount: messages.length,
-                    itemBuilder: (_, i) => _MessageBubble(
-                      msg: messages[i],
-                      onCardAction: _sendWithEntity,
-                      onRefine: _sendWithRefine,
-                      onReport: !busy &&
-                              messages[i].role == 'assistant' &&
-                              messages[i].content.trim().isNotEmpty
-                          ? () => _reportAssistantMessage(messages[i])
-                          : null,
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            width: 36,
+            height: 3,
+            decoration: BoxDecoration(
+              color: cs.outlineVariant,
+              borderRadius: BorderRadius.circular(AppRadius.full),
+            ),
+          ),
+          SizedBox(
+            height: 49,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'AI에게 물어보기',
+                      style:
+                          tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
-          ),
-          if (busy)
-            LinearProgressIndicator(
-              color: cs.primary,
-              backgroundColor: cs.surfaceContainerLow,
+                  if (hasMessages)
+                    _ChatHeaderAction(
+                      onPressed: busy ? null : onReset,
+                      icon: Icons.add_comment_outlined,
+                      tooltip: '새 대화',
+                    ),
+                  _ChatHeaderAction(
+                    key: AllRoundE2EKeys.chatExpandButton,
+                    onPressed: onExpand,
+                    icon: Icons.open_in_full_rounded,
+                    tooltip: '전체 화면으로 열기',
+                  ),
+                ],
+              ),
             ),
-          _InputBar(
-            controller: _ctrl,
-            busy: busy,
-            onSend: _send,
-            onStop: _stopStreaming,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ChatHeaderAction extends StatelessWidget {
+  const _ChatHeaderAction({
+    super.key,
+    required this.onPressed,
+    required this.icon,
+    required this.tooltip,
+  });
+
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: AppSizes.touchTarget,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 22),
+        tooltip: tooltip,
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EntityContextToggle extends StatelessWidget {
+  const _EntityContextToggle({
+    super.key,
+    required this.stateKey,
+    required this.label,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final Key stateKey;
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      toggled: selected,
+      label: '$label 연결',
+      value: selected ? '연결됨' : '연결 안 됨',
+      hint: '공개된 정보만 질문에 함께 사용합니다.',
+      onTap: () => onChanged(!selected),
+      child: ExcludeSemantics(
+        child: Material(
+          color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+          child: InkWell(
+            onTap: () => onChanged(!selected),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? Icons.link_rounded : Icons.link_off_rounded,
+                    size: 18,
+                    color: selected ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$label 연결',
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '공개된 정보만 질문에 함께 사용합니다.',
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Checkbox(
+                    key: stateKey,
+                    value: selected,
+                    onChanged: (value) => onChanged(value ?? false),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -290,19 +559,35 @@ class _EmptyHint extends StatelessWidget {
   final Future<void> Function(String) onSend;
   // 활성 종목(풋살/테니스)에 맞춰 예시 질문을 바꾼다.
   final String? sport;
-  const _EmptyHint({required this.onSend, this.sport});
+  final ScrollController? scrollController;
+  final List<ChatPromptSuggestion>? suggestions;
+  const _EmptyHint({
+    required this.onSend,
+    this.sport,
+    this.scrollController,
+    this.suggestions,
+  });
 
-  List<(IconData, String, String)> get _suggestions {
+  List<(String, String)> get _suggestions {
+    final contextualSuggestions = suggestions;
+    if (contextualSuggestions != null && contextualSuggestions.isNotEmpty) {
+      return contextualSuggestions
+          .map(
+            (suggestion) => (
+              suggestion.label,
+              suggestion.message,
+            ),
+          )
+          .toList(growable: false);
+    }
     final isFutsal = sport == 'futsal';
     final label = isFutsal ? '풋살' : '테니스';
-    final ruleIcon =
-        isFutsal ? Icons.sports_soccer_outlined : Icons.sports_tennis_outlined;
     final ruleMsg = isFutsal ? '풋살 경기 규칙 알려줘' : '테니스 복식 규칙 알려줘';
     return [
-      (Icons.emoji_events_outlined, '이번 달 대회', '이번 달 대회 일정 알려줘'),
-      (Icons.article_outlined, '대회 신청', '대회 신청 방법 알려줘'),
-      (Icons.groups_outlined, '클럽 찾기', '$label 클럽 추천해줘'),
-      (ruleIcon, '$label 규칙', ruleMsg),
+      ('이번 달 대회', '이번 달 대회 일정 알려줘'),
+      ('대회 신청', '대회 신청 방법 알려줘'),
+      ('클럽 찾기', '$label 클럽 추천해줘'),
+      ('$label 규칙', ruleMsg),
     ];
   }
 
@@ -311,20 +596,22 @@ class _EmptyHint extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
-        vertical: AppSpacing.lg,
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.xxl,
+        AppSpacing.xl,
+        AppSpacing.xl,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: AppSpacing.xxl),
           Text(
             '궁금한 운동 정보를\n바로 물어보세요',
-            style: tt.headlineLarge?.copyWith(fontWeight: FontWeight.w800),
+            style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             '대회, 규칙, 구장, 클럽 정보를 찾아 답합니다.',
             style: tt.bodyMedium?.copyWith(
@@ -333,15 +620,12 @@ class _EmptyHint extends StatelessWidget {
             ),
             textAlign: TextAlign.left,
           ),
-          const SizedBox(height: AppSpacing.xl),
-          for (final (icon, label, msg) in _suggestions) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          for (final (label, msg) in _suggestions)
             _SuggestionCard(
-              icon: icon,
               label: label,
               onTap: () => onSend(msg),
             ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
         ],
       ),
     );
@@ -349,10 +633,9 @@ class _EmptyHint extends StatelessWidget {
 }
 
 class _SuggestionCard extends StatelessWidget {
-  final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  const _SuggestionCard({required this.icon, required this.label, this.onTap});
+  const _SuggestionCard({required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -362,37 +645,29 @@ class _SuggestionCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.lg,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: cs.outlineVariant),
+            ),
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: cs.outlineVariant),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: Row(
-                children: [
-                  Icon(icon, size: 20, color: cs.onSurfaceVariant),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style:
-                          tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ],
+              const SizedBox(width: AppSpacing.md),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -415,64 +690,105 @@ class _InputBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    const inputBorderRadius = AppRadius.card;
     return SafeArea(
+      top: false,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          10,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
         decoration: BoxDecoration(
           color: cs.surface,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: '메시지를 입력하세요',
-                  filled: true,
-                  fillColor: cs.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: inputBorderRadius,
-                    borderSide: BorderSide(color: cs.outlineVariant),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: inputBorderRadius,
-                    borderSide: BorderSide(color: cs.outlineVariant),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: inputBorderRadius,
-                    borderSide: BorderSide(color: cs.primary, width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
-                  ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: 48,
+                  maxHeight: AppSizes.chatComposerMax,
                 ),
-                textInputAction: TextInputAction.send,
-                maxLines: 4,
-                onSubmitted: (_) => onSend(),
+                child: TextField(
+                  key: AllRoundE2EKeys.chatInput,
+                  controller: controller,
+                  decoration: InputDecoration(
+                    hintText: '메시지를 입력하세요',
+                    fillColor: cs.surfaceContainerLowest,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.md,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.send,
+                  minLines: 1,
+                  maxLines: 4,
+                  onSubmitted: (_) => onSend(),
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            busy
-                ? IconButton.filled(
-                    onPressed: onStop,
-                    icon: const Icon(Icons.stop_rounded),
-                    style: IconButton.styleFrom(
-                      backgroundColor: cs.error,
-                      foregroundColor: cs.onError,
-                    ),
-                  )
-                : IconButton.filled(
-                    onPressed: onSend,
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                    style: IconButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                    ),
-                  ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                final canSend = value.text.trim().isNotEmpty;
+                return _ChatComposerAction(
+                  onPressed: busy ? onStop : (canSend ? onSend : null),
+                  icon: busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
+                  tooltip: busy ? '응답 중지' : '메시지 보내기',
+                  backgroundColor: busy ? cs.error : cs.primary,
+                  foregroundColor: busy ? cs.onError : cs.onPrimary,
+                  disabledBackgroundColor: cs.surfaceContainerHighest,
+                  disabledForegroundColor: cs.onSurfaceVariant,
+                );
+              },
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatComposerAction extends StatelessWidget {
+  const _ChatComposerAction({
+    required this.onPressed,
+    required this.icon,
+    required this.tooltip,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.disabledBackgroundColor,
+    required this.disabledForegroundColor,
+  });
+
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String tooltip;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Color disabledBackgroundColor;
+  final Color disabledForegroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: AppSizes.touchTarget,
+      child: IconButton.filled(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
+        tooltip: tooltip,
+        style: IconButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          disabledBackgroundColor: disabledBackgroundColor,
+          disabledForegroundColor: disabledForegroundColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
         ),
       ),
     );
@@ -482,11 +798,13 @@ class _InputBar extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.msg,
+    required this.announce,
     required this.onCardAction,
     required this.onRefine,
     required this.onReport,
   });
   final ChatMessage msg;
+  final bool announce;
   final void Function(String message, String entityType, String entityId)
       onCardAction;
   final void Function(String label, Map<String, dynamic> refine) onRefine;
@@ -497,122 +815,137 @@ class _MessageBubble extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isUser = msg.role == 'user';
+    final visibleContent = isUser
+        ? (msg.content.isEmpty ? '…' : msg.content)
+        : _cleanAssistantContent(msg.content);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Align(
-        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78,
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
+    return Semantics(
+      container: true,
+      liveRegion: announce,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+        child: Align(
+          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.78,
             ),
-            decoration: BoxDecoration(
-              color: isUser ? cs.primary : cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: isUser ? null : Border.all(color: cs.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                isUser
-                    ? SelectableText(
-                        msg.content.isEmpty ? '…' : msg.content,
-                        style: tt.bodyMedium?.copyWith(
-                          color: cs.onPrimary,
-                          height: 1.5,
-                        ),
-                      )
-                    : MarkdownBody(
-                        data: _cleanAssistantContent(msg.content),
-                        selectable: true,
-                        styleSheet: MarkdownStyleSheet(
-                          p: tt.bodyMedium?.copyWith(
-                            color: cs.onSurface,
-                            height: 1.5,
-                          ),
-                          h3: tt.titleSmall?.copyWith(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          listBullet:
-                              tt.bodyMedium?.copyWith(color: cs.onSurface),
-                          strong: tt.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
-                // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
-                if (msg.citations.isNotEmpty &&
-                    !msg.uiBlocks.any((b) =>
-                        b.tournamentItems.isNotEmpty ||
-                        b.clubItems.isNotEmpty)) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Divider(
-                    color: cs.outlineVariant.withValues(alpha: 0.5),
-                    height: 1,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  for (final c in msg.citations.take(8))
-                    _CitationRow(citation: c),
-                ],
-                if (msg.uiBlocks.isNotEmpty)
-                  for (final block in msg.uiBlocks) ...[
-                    for (final item in block.tournamentItems)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.sm),
-                        child: ChatTournamentCard(
-                          item: item,
-                          onAction: (message, entityId) =>
-                              onCardAction(message, 'tournament', entityId),
-                        ),
-                      ),
-                    for (final item in block.clubItems)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.sm),
-                        child: ChatClubCard(
-                          item: item,
-                          onAction: (message, entityId) =>
-                              onCardAction(message, 'club', entityId),
-                        ),
-                      ),
-                    if (block.refineChip != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.sm),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: ActionChip(
-                            avatar: const Icon(
-                              Icons.filter_alt_outlined,
-                              size: 18,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                color: isUser ? cs.primary : cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: isUser ? null : Border.all(color: cs.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    key: !isUser && announce
+                        ? AllRoundE2EKeys.latestAssistantMessage
+                        : null,
+                    label: '${isUser ? '사용자 메시지' : 'AI 답변'}, $visibleContent',
+                    child: ExcludeSemantics(
+                      child: isUser
+                          ? SelectableText(
+                              visibleContent,
+                              style: tt.bodyMedium?.copyWith(
+                                color: cs.onPrimary,
+                                height: 1.5,
+                              ),
+                            )
+                          : MarkdownBody(
+                              data: visibleContent,
+                              selectable: true,
+                              styleSheet: MarkdownStyleSheet(
+                                p: tt.bodyMedium?.copyWith(
+                                  color: cs.onSurface,
+                                  height: 1.5,
+                                ),
+                                h3: tt.titleSmall?.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                listBullet: tt.bodyMedium
+                                    ?.copyWith(color: cs.onSurface),
+                                strong: tt.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.onSurface,
+                                ),
+                              ),
                             ),
-                            label: Text(block.refineChip!.label),
-                            onPressed: () => onRefine(
-                              block.refineChip!.label,
-                              block.refineChip!.refine,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                if (onReport != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: onReport,
-                      icon: const Icon(Icons.flag_outlined, size: 16),
-                      label: const Text('AI 답변 신고'),
                     ),
                   ),
+                  // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
+                  // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
+                  if (msg.citations.isNotEmpty &&
+                      !msg.uiBlocks.any((b) =>
+                          b.tournamentItems.isNotEmpty ||
+                          b.clubItems.isNotEmpty)) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Divider(
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                      height: 1,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (final c in msg.citations.take(8))
+                      _CitationRow(citation: c),
+                  ],
+                  if (msg.uiBlocks.isNotEmpty)
+                    for (final block in msg.uiBlocks) ...[
+                      for (final item in block.tournamentItems)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: ChatTournamentCard(
+                            item: item,
+                            onAction: (message, entityId) =>
+                                onCardAction(message, 'tournament', entityId),
+                          ),
+                        ),
+                      for (final item in block.clubItems)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: ChatClubCard(
+                            item: item,
+                            onAction: (message, entityId) =>
+                                onCardAction(message, 'club', entityId),
+                          ),
+                        ),
+                      if (block.refineChip != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: ActionChip(
+                              avatar: const Icon(
+                                Icons.filter_alt_outlined,
+                                size: 18,
+                              ),
+                              label: Text(block.refineChip!.label),
+                              onPressed: () => onRefine(
+                                block.refineChip!.label,
+                                block.refineChip!.refine,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  if (onReport != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: onReport,
+                        icon: const Icon(Icons.flag_outlined, size: 16),
+                        label: const Text('AI 답변 신고'),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -647,35 +980,46 @@ class _CitationRow extends StatelessWidget {
         '';
     final url = citation['url'] as String?;
     final isWeb = citation['type'] == 'web';
+    void openCitation() {
+      if (url == null) return;
+      unawaited(
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      );
+    }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: GestureDetector(
-        onTap: url != null
-            ? () => launchUrl(
-                  Uri.parse(url),
-                  mode: LaunchMode.externalApplication,
-                )
-            : null,
-        child: Row(
-          children: [
-            Icon(
-              isWeb ? Icons.link_rounded : Icons.storage_rounded,
-              size: 12,
-              color: cs.primary,
+    return Semantics(
+      link: url != null,
+      label: url != null ? '출처 링크, $title' : '출처, $title',
+      onTap: url != null ? openCitation : null,
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: url != null ? openCitation : null,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSizes.touchTarget,
             ),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Text(
-                title,
-                style: tt.labelSmall?.copyWith(
-                  color: url != null ? cs.primary : cs.onSurfaceVariant,
-                  decoration: url != null ? TextDecoration.underline : null,
+            child: Row(
+              children: [
+                Icon(
+                  isWeb ? Icons.link_rounded : Icons.storage_rounded,
+                  size: 12,
+                  color: cs.primary,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: tt.labelSmall?.copyWith(
+                      color: url != null ? cs.primary : cs.onSurfaceVariant,
+                      decoration: url != null ? TextDecoration.underline : null,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

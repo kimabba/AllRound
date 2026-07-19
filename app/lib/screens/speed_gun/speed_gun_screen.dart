@@ -145,7 +145,12 @@ class _SpeedGunScreenState extends State<SpeedGunScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('스피드건')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

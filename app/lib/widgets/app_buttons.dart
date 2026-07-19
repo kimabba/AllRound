@@ -37,7 +37,14 @@ class AppPrimaryButton extends StatelessWidget {
                   Icon(icon, size: 18),
                   const SizedBox(width: AppSpacing.sm),
                 ],
-                Text(label),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ],
             ),
     );
@@ -70,7 +77,14 @@ class AppSecondaryButton extends StatelessWidget {
             Icon(icon, size: 18),
             const SizedBox(width: AppSpacing.sm),
           ],
-          Text(label),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ],
       ),
     );
@@ -101,7 +115,14 @@ class AppGhostButton extends StatelessWidget {
             Icon(icon, size: 18),
             const SizedBox(width: AppSpacing.sm),
           ],
-          Text(label),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ],
       ),
     );

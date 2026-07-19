@@ -39,6 +39,7 @@ app/flutter_01.png
 
 # Artifacts
 artifacts/
+chromedriver/
 
 # macOS
 .DS_Store

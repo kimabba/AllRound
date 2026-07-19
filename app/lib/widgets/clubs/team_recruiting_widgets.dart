@@ -144,7 +144,7 @@ class TeamRecruitingPostCard extends StatelessWidget {
                     height: 42,
                     decoration: BoxDecoration(
                       color: chipColor,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
                     ),
                     child: Icon(
                       isFutsal

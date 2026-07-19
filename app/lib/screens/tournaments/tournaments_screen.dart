@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../config.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/active_filters.dart';
 import '../../utils/grade_labels.dart';
@@ -16,7 +17,10 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/tournament_card.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
-  const TournamentsScreen({super.key});
+  const TournamentsScreen({super.key, this.previewTournaments});
+
+  /// Deterministic data hook for responsive widget tests only.
+  final List<Tournament>? previewTournaments;
 
   @override
   ConsumerState<TournamentsScreen> createState() => _TournamentsScreenState();
@@ -84,7 +88,15 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       _loading = true;
       _error = null;
     });
-    final api = ref.read(apiProvider);
+    final injectedPreview = widget.previewTournaments;
+    if (injectedPreview != null) {
+      setState(() {
+        _results = injectedPreview;
+        _usingPreviewData = true;
+        _loading = false;
+      });
+      return;
+    }
     if (!kReleaseMode && AppConfig.apiBaseUrl.contains('127.0.0.1')) {
       setState(() {
         _results = _previewTournaments(ref.read(activeSportProvider));
@@ -93,6 +105,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       });
       return;
     }
+
+    final api = ref.read(apiProvider);
 
     List<Tournament> res;
     try {
@@ -195,6 +209,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         : const <String>{};
 
     return Scaffold(
+      key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
         title: const Text('대회'),
         actions: [
@@ -660,6 +675,7 @@ class _TournamentCalendarListView extends StatelessWidget {
     Widget card(Tournament tournament, int seq) {
       final isFavorite = favoriteIds.contains(tournament.id);
       return TournamentCard(
+        key: AllRoundE2EKeys.tournamentCard(tournament.id),
         tournament: tournament,
         isFavorite: isFavorite,
         isMyGrade: myGradeIds.contains(tournament.id),
@@ -793,9 +809,9 @@ class _TournamentMonthCalendar extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
+        0,
         AppSpacing.md,
-        AppSpacing.lg,
+        0,
         AppSpacing.lg,
       ),
       decoration: BoxDecoration(
@@ -809,6 +825,7 @@ class _TournamentMonthCalendar extends StatelessWidget {
           Row(
             children: [
               _CalendarMonthButton(
+                tooltip: '이전 달',
                 onPressed: () => onMonthChanged(
                   DateTime(focusedMonth.year, focusedMonth.month - 1),
                 ),
@@ -826,6 +843,7 @@ class _TournamentMonthCalendar extends StatelessWidget {
                 ),
               ),
               _CalendarMonthButton(
+                tooltip: '다음 달',
                 onPressed: () => onMonthChanged(
                   DateTime(focusedMonth.year, focusedMonth.month + 1),
                 ),
@@ -834,59 +852,89 @@ class _TournamentMonthCalendar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              for (final day in const ['일', '월', '화', '수', '목', '금', '토'])
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      day,
-                      style: tt.labelSmall?.copyWith(
-                        color: day == '일'
-                            ? cs.error
-                            : day == '토'
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w900,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const minimumGridWidth = AppSizes.touchTarget * 7;
+              final gridWidth = constraints.maxWidth < minimumGridWidth
+                  ? minimumGridWidth
+                  : constraints.maxWidth;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: gridWidth,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          for (final day in const [
+                            '일',
+                            '월',
+                            '화',
+                            '수',
+                            '목',
+                            '금',
+                            '토',
+                          ])
+                            Expanded(
+                              child: Center(
+                                child: Text(
+                                  day,
+                                  style: tt.labelSmall?.copyWith(
+                                    color: day == '일'
+                                        ? cs.error
+                                        : day == '토'
+                                            ? cs.primary
+                                            : cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.xs),
+                      for (var row = 0; row < rowCount; row++)
+                        Builder(
+                          builder: (context) {
+                            final weekDates = [
+                              for (var col = 0; col < 7; col++)
+                                _dateForCell(
+                                  focusedMonth,
+                                  leadingEmptyCells,
+                                  row * 7 + col,
+                                ),
+                            ];
+                            final bands =
+                                bandFlagsForWeek(weekDates, tournaments);
+                            return Row(
+                              children: List.generate(7, (col) {
+                                final cellDate = weekDates[col];
+                                final band = bands[col];
+                                return Expanded(
+                                  child: _CalendarDayCell(
+                                    date: cellDate,
+                                    today: today,
+                                    selectedDate: selectedDate,
+                                    count: _tournamentCountOnDate(
+                                      cellDate,
+                                      tournaments,
+                                    ),
+                                    hasBand: band.hasBand,
+                                    isBandStart: band.isBandStart,
+                                    isBandEnd: band.isBandEnd,
+                                    onTap: onDateSelected,
+                                  ),
+                                );
+                              }),
+                            );
+                          },
+                        ),
+                    ],
                   ),
                 ),
-            ],
+              );
+            },
           ),
-          const SizedBox(height: AppSpacing.xs),
-          for (var row = 0; row < rowCount; row++)
-            Builder(
-              builder: (context) {
-                final weekDates = [
-                  for (var col = 0; col < 7; col++)
-                    _dateForCell(
-                      focusedMonth,
-                      leadingEmptyCells,
-                      row * 7 + col,
-                    ),
-                ];
-                final bands = bandFlagsForWeek(weekDates, tournaments);
-                return Row(
-                  children: List.generate(7, (col) {
-                    final cellDate = weekDates[col];
-                    final band = bands[col];
-                    return Expanded(
-                      child: _CalendarDayCell(
-                        date: cellDate,
-                        today: today,
-                        selectedDate: selectedDate,
-                        count: _tournamentCountOnDate(cellDate, tournaments),
-                        hasBand: band.hasBand,
-                        isBandStart: band.isBandStart,
-                        isBandEnd: band.isBandEnd,
-                        onTap: onDateSelected,
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
         ],
       ),
     );
@@ -901,17 +949,23 @@ class _TournamentMonthCalendar extends StatelessWidget {
 }
 
 class _CalendarMonthButton extends StatelessWidget {
+  final String tooltip;
   final VoidCallback onPressed;
   final Widget icon;
 
-  const _CalendarMonthButton({required this.onPressed, required this.icon});
+  const _CalendarMonthButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox.square(
-      dimension: 36,
+      dimension: AppSizes.touchTarget,
       child: IconButton(
+        tooltip: tooltip,
         onPressed: onPressed,
         icon: icon,
         iconSize: 24,
@@ -957,7 +1011,7 @@ class _CalendarDayCell extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final currentDate = date;
     if (currentDate == null) {
-      return const SizedBox(height: 46);
+      return const SizedBox(height: AppSizes.touchTarget);
     }
 
     final isSelected =
@@ -966,9 +1020,9 @@ class _CalendarDayCell extends StatelessWidget {
 
     return InkWell(
       onTap: () => onTap(currentDate),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: SizedBox(
-        height: 46,
+        height: AppSizes.touchTarget,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -981,21 +1035,25 @@ class _CalendarDayCell extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cs.primary.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.horizontal(
-                    left: isBandStart ? const Radius.circular(15) : Radius.zero,
-                    right: isBandEnd ? const Radius.circular(15) : Radius.zero,
+                    left: isBandStart
+                        ? const Radius.circular(AppRadius.xxl)
+                        : Radius.zero,
+                    right: isBandEnd
+                        ? const Radius.circular(AppRadius.xxl)
+                        : Radius.zero,
                   ),
                 ),
               ),
             Center(
               child: SizedBox.square(
-                dimension: 40,
+                dimension: AppSizes.touchTarget,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      width: isSelected ? 34 : 30,
-                      height: isSelected ? 34 : 30,
+                      width: isSelected ? 40 : 36,
+                      height: isSelected ? 40 : 36,
                       decoration: BoxDecoration(
                         color: isSelected ? cs.primary : Colors.transparent,
                         shape: BoxShape.circle,
@@ -1632,11 +1690,11 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                           filled: true,
                           fillColor: cs.surface,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             borderSide: BorderSide(color: cs.outlineVariant),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             borderSide: BorderSide(color: cs.outlineVariant),
                           ),
                           contentPadding: const EdgeInsets.symmetric(

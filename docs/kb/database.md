@@ -11,6 +11,12 @@ Project ref: `bsjdgwmveokanclqwtvx`
 | email | text | |
 | display_name | text? | |
 | role | user_role | 'user' \| 'admin' |
+| birth_date | date? | 이메일 가입 시 Auth Hook 검증 후 트리거가 즉시 저장 |
+
+### 가입 전 Auth 경계
+- `before_user_created_allround(event jsonb)` — 이메일 생년월일 누락·형식 오류·만 14세 미만을 `auth.users` INSERT 전에 거부
+- 신규 Google identity는 검증된 생년월일 전달 경로가 마련될 때까지 거부하며 기존 Google identity 로그인은 유지
+- 함수 실행권한은 `supabase_auth_admin`에만 부여하고 앱의 `anon`/`authenticated` 역할에는 부여하지 않음
 
 ### user_sports
 사용자 종목·등급 등록 (복수 가능)

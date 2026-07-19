@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/recent_tournaments.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
@@ -28,6 +30,9 @@ class _TournamentDetailScreenState
   Tournament? _t;
   bool _loading = true;
   String? _error;
+
+  bool get _isPreviewTournament =>
+      !kReleaseMode && widget.tournamentId.startsWith('preview-');
 
   @override
   void initState() {
@@ -46,8 +51,7 @@ class _TournamentDetailScreenState
   }
 
   Future<void> _load() async {
-    if (AppConfig.userDesignPreview &&
-        widget.tournamentId.startsWith('preview-')) {
+    if (_isPreviewTournament) {
       setState(() {
         _t = _previewTournamentById(widget.tournamentId);
         _loading = false;
@@ -95,15 +99,18 @@ class _TournamentDetailScreenState
     final isFav = (favorites.valueOrNull ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview = AppConfig.userDesignPreview &&
-        widget.tournamentId.startsWith('preview-');
+    final isPreview = _isPreviewTournament;
 
     return Scaffold(
+      key: AllRoundE2EKeys.tournamentDetailScreen,
       appBar: AppBar(
         title: const Text('대회'),
         actions: [
           if (_t != null && !isPreview)
             IconButton(
+              key: isFav
+                  ? AllRoundE2EKeys.tournamentFavoriteSaved
+                  : AllRoundE2EKeys.tournamentFavoriteUnsaved,
               icon: Icon(
                 isFav ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
                 color: isFav ? cs.primary : null,
@@ -140,12 +147,56 @@ class _TournamentDetailScreenState
           ? null
           : _TournamentApplyBar(tournament: _t!, isPreview: isPreview),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _TournamentDetailLoadingState()
           : _error != null
               ? _TournamentDetailError(message: _error!, onRetry: _load)
               : _t == null
-                  ? const Center(child: Text('대회 정보 없음'))
+                  ? const AppEmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: '대회 정보가 없습니다',
+                      description: '대회 목록에서 다른 대회를 확인해 주세요.',
+                    )
                   : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+    );
+  }
+}
+
+class _TournamentDetailLoadingState extends StatelessWidget {
+  const _TournamentDetailLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          Container(height: 28, color: cs.surfaceContainerHighest),
+          const SizedBox(height: AppSpacing.sm),
+          FractionallySizedBox(
+            widthFactor: 0.68,
+            alignment: Alignment.centerLeft,
+            child: Container(height: 16, color: cs.surfaceContainerHighest),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          for (var index = 0; index < 5; index++) ...[
+            Container(
+              height: AppSizes.listRow,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -715,7 +766,7 @@ class _TournamentDetailError extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               '대회 정보를 불러오지 못했어요',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -758,8 +809,13 @@ class _AccordionSection extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant),
+            bottom: BorderSide(color: cs.outlineVariant),
+          ),
+        ),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
           tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
