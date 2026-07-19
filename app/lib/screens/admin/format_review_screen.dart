@@ -80,6 +80,9 @@ class _ReviewCard extends ConsumerWidget {
                 if (hasStaged) ...[
                   const SizedBox(width: 8),
                   FilledButton(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(88, 44),
+                    ),
                     onPressed: () async {
                       await ref
                           .read(apiProvider)
