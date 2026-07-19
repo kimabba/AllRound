@@ -42,6 +42,22 @@ class AppSpacing {
   static const EdgeInsets listGap = EdgeInsets.symmetric(vertical: sm);
 }
 
+/// PureForm Sports component size contract.
+///
+/// Fixed interactive regions use these values so the app keeps the same
+/// rhythm across screens and remains testable at small viewport sizes.
+class AppSizes {
+  AppSizes._();
+
+  static const double touchTarget = 48;
+  static const double control = 48;
+  static const double appBar = 56;
+  static const double listRow = 56;
+  static const double globalChatDock = 60;
+  static const double bottomNavigation = 64;
+  static const double chatComposerMax = 104;
+}
+
 /// 그림자는 오버레이에만 사용한다. 일반 카드의 깊이는 선과 여백으로 표현한다.
 class AppShadows {
   AppShadows._();

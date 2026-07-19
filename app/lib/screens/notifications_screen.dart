@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../config.dart';
 import '../models/app_notification.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_empty_state.dart';
 
@@ -78,6 +79,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.notificationsScreen,
       appBar: AppBar(
         title: const Text('알림'),
         actions: [
@@ -105,120 +107,126 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
           final notifications = snapshot.data ?? const [];
           if (notifications.isEmpty) {
-            return const AppEmptyState(
-              icon: Icons.notifications_none_rounded,
-              title: '새 알림이 없습니다',
-              description: '대회 마감, 가입 신청과 클럽 공지를 여기에서 확인할 수 있어요.',
+            return const KeyedSubtree(
+              key: AllRoundE2EKeys.notificationsReady,
+              child: AppEmptyState(
+                icon: Icons.notifications_none_rounded,
+                title: '새 알림이 없습니다',
+                description: '대회 마감, 가입 신청과 클럽 공지를 여기에서 확인할 수 있어요.',
+              ),
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.sm,
-                AppSpacing.xl,
-                AppSpacing.xxxl,
-              ),
-              itemCount: notifications.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                color: cs.outlineVariant,
-              ),
-              itemBuilder: (context, index) {
-                final item = notifications[index];
-                return Material(
-                  color: item.isRead ? cs.surface : cs.primaryContainer,
-                  child: InkWell(
-                    onTap: () => _openNotification(item),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.lg,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: item.isRead
-                                  ? cs.surfaceContainerHighest
-                                  : cs.primary,
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.md,
+          return KeyedSubtree(
+            key: AllRoundE2EKeys.notificationsReady,
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.sm,
+                  AppSpacing.xl,
+                  AppSpacing.xxxl,
+                ),
+                itemCount: notifications.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: cs.outlineVariant,
+                ),
+                itemBuilder: (context, index) {
+                  final item = notifications[index];
+                  return Material(
+                    color: item.isRead ? cs.surface : cs.primaryContainer,
+                    child: InkWell(
+                      onTap: () => _openNotification(item),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.lg,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: item.isRead
+                                    ? cs.surfaceContainerHighest
+                                    : cs.primary,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              child: Icon(
+                                _iconFor(item.type),
+                                size: 20,
+                                color: item.isRead
+                                    ? cs.onSurfaceVariant
+                                    : cs.onPrimary,
                               ),
                             ),
-                            child: Icon(
-                              _iconFor(item.type),
-                              size: 20,
-                              color: item.isRead
-                                  ? cs.onSurfaceVariant
-                                  : cs.onPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        item.title,
-                                        style: tt.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w900,
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.title,
+                                          style: tt.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    if (!item.isRead)
-                                      Container(
-                                        width: 7,
-                                        height: 7,
-                                        decoration: BoxDecoration(
-                                          color: cs.primary,
-                                          shape: BoxShape.circle,
+                                      if (!item.isRead)
+                                        Container(
+                                          width: 7,
+                                          height: 7,
+                                          decoration: BoxDecoration(
+                                            color: cs.primary,
+                                            shape: BoxShape.circle,
+                                          ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  item.typeLabel,
-                                  style: tt.labelMedium?.copyWith(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w800,
+                                    ],
                                   ),
-                                ),
-                                if (item.body != null &&
-                                    item.body!.trim().isNotEmpty) ...[
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
-                                    item.body!,
-                                    style: tt.bodyMedium?.copyWith(
+                                    item.typeLabel,
+                                    style: tt.labelMedium?.copyWith(
+                                      color: cs.primary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (item.body != null &&
+                                      item.body!.trim().isNotEmpty) ...[
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Text(
+                                      item.body!,
+                                      style: tt.bodyMedium?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                        height: 1.45,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    _formatNotificationDate(item.createdAt),
+                                    style: tt.labelSmall?.copyWith(
                                       color: cs.onSurfaceVariant,
-                                      height: 1.45,
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  _formatNotificationDate(item.createdAt),
-                                  style: tt.labelSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           );
         },

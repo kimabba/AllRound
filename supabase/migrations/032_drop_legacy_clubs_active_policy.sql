@@ -10,3 +10,15 @@
 --
 -- 레거시 정책을 제거하여 clubs_select 만 유효하게 한다.
 drop policy if exists clubs_authenticated_read on public.clubs;
+
+-- 031은 정책 전환을 설명하지만 실제 CREATE POLICY 문이 누락되어 있었다.
+-- fresh reset에서도 승인된 클럽과 본인 생성 클럽을 읽을 수 있도록 명시적으로 생성한다.
+-- 클럽 생성/수정은 UGC 제재를 검사하는 Edge Function(service role)만 사용한다.
+drop policy if exists clubs_select on public.clubs;
+create policy clubs_select on public.clubs
+  for select to authenticated
+  using (
+    status = 'approved'
+    or created_by = (select auth.uid())
+    or public.is_admin()
+  );

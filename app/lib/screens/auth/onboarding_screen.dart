@@ -9,16 +9,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config.dart';
 import '../../models/tournament.dart';
+import '../../services/local_user_preferences.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/age.dart';
+import '../../utils/club_image_upload.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_chip.dart';
 import '../../widgets/app_toast.dart';
 
-const _profileAvatarPrefsKey = 'profile.avatar.base64';
 // 지역 선택지는 grade_labels.dart 의 regionCodes(표준 17개 광역시도) 정본을 그대로 쓴다.
 // code=label 1:1 이므로 별도 choices 목록이나 displayLabel 이중 상태가 필요 없다.
 
@@ -58,6 +60,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _profilePhotoReady = false;
   bool _sportsTouched = false;
 
+  String? get _profileAvatarPrefsKey {
+    final userId = ref.read(currentUserProvider)?.id;
+    return userId == null ? null : profileAvatarKeyForUser(userId);
+  }
+
   Sport? get _firstRegisteredSport {
     for (final sport in Sport.values) {
       if (_selectedGrade[sport] != null) return sport;
@@ -91,6 +98,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       lastDate: now,
       helpText: '생년월일 선택',
     );
+    if (!mounted) return;
     if (picked != null) {
       final underage = isUnderMinSignupAge(picked, now);
       setState(() {
@@ -107,13 +115,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _prepareProfilePhoto() async {
     if (_profilePhotoReady) return;
     _profilePhotoReady = true;
+    final avatarKey = _profileAvatarPrefsKey;
     final prefs = await SharedPreferences.getInstance();
-    final avatarBase64 = prefs.getString(_profileAvatarPrefsKey);
+    await removeLegacyUnscopedProfileAvatar(prefs);
+    final avatarBase64 = avatarKey == null ? null : prefs.getString(avatarKey);
     if (!mounted || avatarBase64 == null || avatarBase64.isEmpty) return;
     setState(() => _avatarBytes = base64Decode(avatarBase64));
   }
 
   Future<void> _pickProfilePhoto(ImageSource source) async {
+    final avatarKey = _profileAvatarPrefsKey;
+    if (avatarKey == null) return;
     final picked = await ImagePicker().pickImage(
       source: source,
       maxWidth: 512,
@@ -122,16 +134,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
     if (picked == null) return;
 
-    final bytes = await picked.readAsBytes();
+    final PreparedClubImage image;
+    try {
+      image = await prepareClubImage(picked);
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_profileAvatarPrefsKey, base64Encode(bytes));
+    await prefs.setString(avatarKey, base64Encode(image.bytes));
     if (!mounted) return;
-    setState(() => _avatarBytes = bytes);
+    setState(() => _avatarBytes = image.bytes);
   }
 
   Future<void> _removeProfilePhoto() async {
+    final avatarKey = _profileAvatarPrefsKey;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_profileAvatarPrefsKey);
+    if (avatarKey != null) await prefs.remove(avatarKey);
     if (!mounted) return;
     setState(() => _avatarBytes = null);
   }
@@ -491,6 +514,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.onboardingScreen,
       backgroundColor: cs.surface,
       body: SafeArea(
         child: Column(
@@ -554,6 +578,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: SafeArea(
                 top: false,
                 child: AppPrimaryButton(
+                  key: AllRoundE2EKeys.onboardingPrimaryAction,
                   label: _step == 2 ? '시작하기' : '다음',
                   onPressed: _canAdvance && !_busy
                       ? () {
@@ -669,6 +694,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             TextField(
+              key: AllRoundE2EKeys.onboardingNameField,
               controller: _realName,
               maxLength: 20,
               onChanged: (_) => setState(() {}),
@@ -681,6 +707,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
+              key: AllRoundE2EKeys.onboardingNicknameField,
               controller: _nickname,
               maxLength: 10,
               onChanged: (_) => setState(() {}),
@@ -693,6 +720,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: AppSpacing.md),
             InkWell(
+              key: AllRoundE2EKeys.onboardingBirthDate,
               onTap: _pickBirthDate,
               borderRadius: BorderRadius.circular(AppRadius.sm),
               child: InputDecorator(
@@ -774,6 +802,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             for (final code in regionCodes)
               _RegionOption(
+                key: AllRoundE2EKeys.onboardingRegion(code),
                 label: regionLabel(code),
                 selected: _regionCode == code,
                 onTap: () => setState(() => _regionCode = code),
@@ -877,6 +906,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               for (final g in grades)
                 AppChip(
+                  key: AllRoundE2EKeys.onboardingGrade(
+                    sportToString(sport),
+                    g,
+                  ),
                   label: gradeLabel(g),
                   selected: selected == g,
                   leadingIcon: selected == g ? Icons.check_rounded : null,
@@ -1178,6 +1211,7 @@ class _PhotoSheetAction extends StatelessWidget {
 
 class _RegionOption extends StatelessWidget {
   const _RegionOption({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

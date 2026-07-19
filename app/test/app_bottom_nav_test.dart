@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('오늘·대회·클럽·코치·MY 탭을 표시한다', (tester) async {
+  testWidgets('오늘·대회·클럽·MY 탭을 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,13 +15,14 @@ void main() {
       ),
     );
 
-    for (final label in ['오늘', '대회', '클럽', '코치', 'MY']) {
+    for (final label in ['오늘', '대회', '클럽', 'MY']) {
       expect(find.text(label), findsOneWidget);
     }
+    expect(find.text('코치'), findsNothing);
     expect(find.text('룰북'), findsNothing);
   });
 
-  testWidgets('코치 탭은 네 번째 인덱스를 전달한다', (tester) async {
+  testWidgets('MY 탭은 네 번째 인덱스를 전달한다', (tester) async {
     int? selectedIndex;
     await tester.pumpWidget(
       MaterialApp(
@@ -34,7 +35,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('코치'));
+    await tester.tap(find.text('MY'));
     expect(selectedIndex, 3);
   });
 }

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../config.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_empty_state.dart';
 
@@ -55,6 +56,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
         title: Text(
           '올라운드',
@@ -94,20 +96,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                0,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: _HomeQuickActions(
-                  onCoachTap: () => context.go('/chat'),
-                  onFavoritesTap: () => context.push('/favorites'),
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
                 AppSpacing.xxxl,
                 AppSpacing.xl,
                 0,
@@ -136,7 +124,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               )
             else
               tournaments.when(
-                loading: () => const _HomeTournamentSkeleton(),
+                loading: () => const _HomeTournamentSkeleton(
+                  key: AllRoundE2EKeys.homeLoadingState,
+                ),
                 error: (_, __) => SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.xl,
@@ -146,6 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   sliver: SliverToBoxAdapter(
                     child: AppEmptyState(
+                      key: AllRoundE2EKeys.homeErrorState,
                       icon: Icons.refresh_rounded,
                       title: '대회를 불러오지 못했습니다',
                       description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
@@ -166,6 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       sliver: SliverToBoxAdapter(
                         child: AppEmptyState(
+                          key: AllRoundE2EKeys.homeEmptyState,
                           icon: Icons.calendar_month_outlined,
                           title: '예정된 대회가 없습니다',
                           description: '필터를 바꾸거나 전체 대회에서 찾아보세요.',
@@ -176,6 +168,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     );
                   }
                   return _TournamentListSliver(
+                    key: AllRoundE2EKeys.homeTournamentList,
                     tournaments: visible,
                     onTap: (item) => context.push('/tournaments/${item.id}'),
                   );
@@ -234,39 +227,6 @@ class _HomeIntro extends StatelessWidget {
   }
 }
 
-class _HomeQuickActions extends StatelessWidget {
-  const _HomeQuickActions({
-    required this.onCoachTap,
-    required this.onFavoritesTap,
-  });
-
-  final VoidCallback onCoachTap;
-  final VoidCallback onFavoritesTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onCoachTap,
-            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-            label: const Text('AI에게 묻기'),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onFavoritesTap,
-            icon: const Icon(Icons.bookmark_border_rounded, size: 18),
-            label: const Text('관심 보기'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _HomeSectionHeader extends StatelessWidget {
   const _HomeSectionHeader({
     required this.title,
@@ -301,26 +261,32 @@ class _HomeFilterTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 45,
+      height: AppSizes.touchTarget,
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         children: [
-          _FilterTab(
-            label: '추천',
-            selected: selected == _HomeTournamentFilter.recommended,
-            onTap: () => onSelected(_HomeTournamentFilter.recommended),
+          Expanded(
+            child: _FilterTab(
+              label: '추천',
+              selected: selected == _HomeTournamentFilter.recommended,
+              onTap: () => onSelected(_HomeTournamentFilter.recommended),
+            ),
           ),
-          _FilterTab(
-            label: '이번 주',
-            selected: selected == _HomeTournamentFilter.thisWeek,
-            onTap: () => onSelected(_HomeTournamentFilter.thisWeek),
+          Expanded(
+            child: _FilterTab(
+              label: '이번 주',
+              selected: selected == _HomeTournamentFilter.thisWeek,
+              onTap: () => onSelected(_HomeTournamentFilter.thisWeek),
+            ),
           ),
-          _FilterTab(
-            label: '전체',
-            selected: selected == _HomeTournamentFilter.all,
-            onTap: () => onSelected(_HomeTournamentFilter.all),
+          Expanded(
+            child: _FilterTab(
+              label: '전체',
+              selected: selected == _HomeTournamentFilter.all,
+              onTap: () => onSelected(_HomeTournamentFilter.all),
+            ),
           ),
         ],
       ),
@@ -343,28 +309,27 @@ class _FilterTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.xl),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 44),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? cs.primary : Colors.transparent,
-                width: 2,
-              ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.xs),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 44),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? cs.primary : Colors.transparent,
+              width: 2,
             ),
           ),
-          child: Text(
-            label,
-            style: tt.labelLarge?.copyWith(
-              color: selected ? cs.onSurface : cs.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            ),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: tt.labelLarge?.copyWith(
+            color: selected ? cs.onSurface : cs.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           ),
         ),
       ),
@@ -374,6 +339,7 @@ class _FilterTab extends StatelessWidget {
 
 class _TournamentListSliver extends StatelessWidget {
   const _TournamentListSliver({
+    super.key,
     required this.tournaments,
     required this.onTap,
   });
@@ -501,7 +467,7 @@ class _HomeTournamentRow extends StatelessWidget {
 }
 
 class _HomeTournamentSkeleton extends StatelessWidget {
-  const _HomeTournamentSkeleton();
+  const _HomeTournamentSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {

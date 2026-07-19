@@ -12,17 +12,22 @@
 | `app/lib/models/tournament.dart` | Tournament, Club, Region, UserSport, UserTennisOrg 등 |
 | `app/lib/utils/grade_labels.dart` | 부서코드·등급 레이블 + 테니스 협회 정의 |
 
-## 내비게이션 (바텀탭 5개)
+## 내비게이션 (바텀탭 4개 + 전역 AI)
 
 | 탭 | 경로 | 화면 |
 |---|---|---|
 | 오늘 | `/` | HomeScreen |
 | 대회 | `/tournaments` | TournamentsScreen |
 | 클럽 | `/clubs` | ClubsScreen |
-| 코치 | `/chat` | ChatScreen |
 | MY | `/profile` | ProfileScreen |
 
-독립 화면: `/rules`, `/notifications`, `/favorites`, `/friend-schedule`, `/blocked-users`, `/more`
+일반 사용자 화면에서는 바텀탭 위에 `AI에게 물어보기` 진입창을 표시한다. 진입창은 `GlobalChatDock`이 현재 경로에 맞는 추천 질문을 구성하고, `ChatScreen(embedded: true)`를 절반 높이 바텀시트로 연다. `/chat`은 바텀시트의 전체 화면 확장 경로로 유지한다. 대회·클럽 엔티티 ID는 사용자가 연결 토글을 켠 경우에만 `selectedEntity`로 전송한다.
+
+독립 화면: `/rules`, `/notifications`, `/favorites`, `/blocked-users`, `/more`
+
+실제 계정별 일정 데이터가 없는 친구 일정 콘셉트는 출시 라우트에서 제외하고
+반응형 위젯 프리뷰로만 보존한다. 통합 캘린더 범위가 승인된 뒤 서버 권한 경계와
+함께 다시 연결한다.
 
 `/more`에서 MY, 관심 목록, 차단 관리, 룰북, 이용약관, 개인정보 처리방침으로 진입한다. `/speed-gun`은 모바일 실험 경로로 유지되며 현재 기본 메뉴에는 노출하지 않는다. 웹 어드민은 `/admin` 하위의 별도 셸을 사용한다.
 
@@ -79,6 +84,9 @@
 - `crawlAuditLogs()`, `crawlSources()`, `runCrawlSource()`
 
 ## 로그인 흐름
-1. 이메일/비밀번호 또는 Google OAuth
-2. (개발용) Dev 어드민 로그인: dev-auth Edge Function → magic link 토큰 → verifyOTP
-3. 로그인 후 user_sports 미등록이면 `/onboarding`으로 리다이렉트
+1. 이메일 신규 가입은 생년월일을 먼저 선택하고 `birth_date` metadata와 함께 요청
+2. Before User Created Auth Hook이 누락·잘못된 날짜·만 14세 미만을 `auth.users` 생성 전에 거부
+3. Google은 기존 AllRound 계정 로그인만 허용하고, 신규 사용자는 이메일 가입으로 안내
+4. 가입 트리거가 검증된 생년월일을 `public.users.birth_date`에 즉시 저장
+5. 로그인 후 user_sports 미등록이면 `/onboarding`으로 리다이렉트
+6. (개발용) Dev 어드민 로그인: dev-auth Edge Function → magic link 토큰 → verifyOTP

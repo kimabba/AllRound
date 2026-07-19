@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config.dart';
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 
 class AdminShell extends ConsumerWidget {
@@ -155,8 +156,7 @@ class _AdminSidebar extends ConsumerWidget {
                     icon: const Icon(Icons.logout, size: 16),
                     label: const Text('로그아웃'),
                     onPressed: () async {
-                      await Supabase.instance.client.auth
-                          .signOut(scope: SignOutScope.global);
+                      await signOutSecurely(Supabase.instance.client);
                     },
                   ),
                 ],

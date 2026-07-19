@@ -8,7 +8,21 @@ import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
+import '../utils/storage_object_name.dart';
 import 'api_base.dart';
+
+String _verifiedImageExtension(String extension, String contentType) {
+  final normalized = extension.toLowerCase().replaceAll('jpeg', 'jpg');
+  final expectedContentType = switch (normalized) {
+    'jpg' => 'image/jpeg',
+    'png' => 'image/png',
+    _ => null,
+  };
+  if (expectedContentType == null || contentType != expectedContentType) {
+    throw const FormatException('Invalid sanitized image format');
+  }
+  return normalized;
+}
 
 /// 클럽 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
 mixin ClubApi on ApiBase {
@@ -113,16 +127,15 @@ mixin ClubApi on ApiBase {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
 
-    final safeExt = extension.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-    final ext = safeExt.isEmpty ? 'jpg' : safeExt.toLowerCase();
-    final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final ext = _verifiedImageExtension(extension, contentType);
+    final path = newOpaqueImageObjectName(ext);
 
     await supabase.storage.from('club-logos').uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(
             contentType: contentType,
-            upsert: true,
+            upsert: false,
           ),
         );
     return supabase.storage.from('club-logos').getPublicUrl(path);
@@ -136,16 +149,15 @@ mixin ClubApi on ApiBase {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
 
-    final safeExt = extension.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-    final ext = safeExt.isEmpty ? 'jpg' : safeExt.toLowerCase();
-    final path = '$userId/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    final ext = _verifiedImageExtension(extension, contentType);
+    final path = newOpaqueImageObjectName(ext);
 
     await supabase.storage.from('club-intro-images').uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(
             contentType: contentType,
-            upsert: true,
+            upsert: false,
           ),
         );
     return supabase.storage.from('club-intro-images').getPublicUrl(path);
@@ -609,12 +621,15 @@ mixin ClubApi on ApiBase {
     required String extension,
     required String contentType,
   }) async {
-    final userId = supabase.auth.currentUser!.id;
-    final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+    if (supabase.auth.currentUser == null) {
+      throw StateError('Not authenticated');
+    }
+    final ext = _verifiedImageExtension(extension, contentType);
+    final path = newOpaqueImageObjectName(ext);
     await supabase.storage.from('club-posts').uploadBinary(
           path,
           bytes,
-          fileOptions: FileOptions(contentType: contentType, upsert: true),
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
         );
     return supabase.storage.from('club-posts').getPublicUrl(path);
   }

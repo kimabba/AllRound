@@ -6,7 +6,7 @@
 - **Backend:** Supabase Edge Functions (Deno)
 - **DB:** Supabase PostgreSQL + pgvector + pg_cron + pg_net
 - **AI:** Gemini API (gemini-2.0-flash) + Search Grounding + gemini-embedding-001 (768d RAG)
-- **Auth:** Supabase Auth (email/Google, Kakao 예정)
+- **Auth:** Supabase Auth (가입 전 14+ 검증 이메일, 기존 계정 Google 로그인, Kakao 예정)
 - **Push:** Firebase Cloud Messaging
 - **Streaming:** SSE (챗봇 응답)
 

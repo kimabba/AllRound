@@ -57,10 +57,11 @@ ALTER POLICY users_self_read ON users
 
 ALTER POLICY users_self_update ON users
   USING ((SELECT auth.uid()) = id)
-  WITH CHECK (
-    ((SELECT auth.uid()) = id)
-    AND (role = (SELECT u.role FROM users u WHERE u.id = (SELECT auth.uid())))
-  );
+  WITH CHECK ((SELECT auth.uid()) = id);
+
+-- role 자가 변경은 users_prevent_role_self_update 트리거가 차단한다. users를 정책
+-- 내부에서 다시 SELECT하면 081이 제거한 무한 재귀(42P17)를 timestamp 순서상 다시
+-- 도입하므로 소유권 검사만 유지한다.
 
 -- user_sports
 ALTER POLICY user_sports_self_read ON user_sports
@@ -124,8 +125,30 @@ ALTER POLICY notifications_self_update ON notifications
 ALTER POLICY clubs_select ON clubs
   USING (status = 'approved' OR created_by = (SELECT auth.uid()) OR is_admin());
 
-ALTER POLICY clubs_insert ON clubs
-  WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND created_by = (SELECT auth.uid()));
+-- 일부 운영 이력에는 client INSERT 정책이 있었지만 fresh migration chain에는 없다.
+-- 현재 생성은 UGC 제재를 검사하는 clubs-create Edge Function만 허용하므로 새 정책을
+-- 만들지 않는다. 과거 정책이 존재하는 DB에서만 initplan 최적화를 적용한다.
+DO $policy$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'clubs'
+      AND policyname = 'clubs_insert'
+  ) THEN
+    EXECUTE $sql$
+      ALTER POLICY clubs_insert ON public.clubs
+        WITH CHECK (
+          (SELECT auth.uid()) IS NOT NULL
+          AND created_by = (SELECT auth.uid())
+        )
+    $sql$;
+  ELSE
+    RAISE NOTICE 'clubs_insert policy absent; direct client insert remains denied';
+  END IF;
+END;
+$policy$;
 
 ALTER POLICY clubs_update ON clubs
   USING (is_admin() OR created_by = (SELECT auth.uid()));
@@ -138,8 +161,29 @@ ALTER POLICY club_members_update ON club_members
   USING (is_admin() OR user_id = (SELECT auth.uid()));
 
 -- club_join_requests
-ALTER POLICY club_join_requests_insert ON club_join_requests
-  WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND user_id = (SELECT auth.uid()));
+-- 가입 신청도 clubs-join Edge Function에서 제재·중복·상태를 검증한다. 과거 직접
+-- INSERT 정책이 있는 DB만 최적화하고, fresh reset에는 우회 정책을 추가하지 않는다.
+DO $policy$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'club_join_requests'
+      AND policyname = 'club_join_requests_insert'
+  ) THEN
+    EXECUTE $sql$
+      ALTER POLICY club_join_requests_insert ON public.club_join_requests
+        WITH CHECK (
+          (SELECT auth.uid()) IS NOT NULL
+          AND user_id = (SELECT auth.uid())
+        )
+    $sql$;
+  ELSE
+    RAISE NOTICE 'club_join_requests_insert policy absent; direct client insert remains denied';
+  END IF;
+END;
+$policy$;
 
 ALTER POLICY club_join_requests_select ON club_join_requests
   USING (user_id = (SELECT auth.uid()) OR is_admin() OR is_club_manager(club_id));

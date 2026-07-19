@@ -17,7 +17,12 @@ class ChatMessage {
 class ChatNotifier extends ChangeNotifier {
   final List<ChatMessage> messages = [];
   String? conversationId;
+  String draft = '';
   bool busy = false;
+
+  void setDraft(String text) {
+    draft = text;
+  }
 
   void addUserMessage(String text) {
     messages.add(ChatMessage(role: 'user', content: text));
@@ -61,6 +66,7 @@ class ChatNotifier extends ChangeNotifier {
   void reset() {
     messages.clear();
     conversationId = null;
+    draft = '';
     busy = false;
     notifyListeners();
   }

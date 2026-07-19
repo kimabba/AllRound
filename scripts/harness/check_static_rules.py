@@ -93,12 +93,41 @@ def check_no_shell_background_wrappers_in_harness() -> None:
     print("✓ harness script is foreground/CI-friendly")
 
 
+def check_pureform_literal_contracts() -> None:
+    roots = [ROOT / "app/lib/screens", ROOT / "app/lib/widgets"]
+    excluded_parts = {"admin"}
+    excluded_names = {"speed_gun_screen_web.dart"}
+    forbidden = [
+        re.compile(r"BorderRadius\.circular\((?:13|14|15|18|20|24|28|32)\)"),
+        re.compile(r"Size\.fromHeight\((?:44|50|52|54|56)\)"),
+        re.compile(r"fixedSize:\s*const\s+Size\.square\((?:40|44)\)"),
+    ]
+    violations: list[str] = []
+    for root in roots:
+        for path in root.rglob("*.dart"):
+            if excluded_parts.intersection(path.parts) or path.name in excluded_names:
+                continue
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if any(pattern.search(line) for pattern in forbidden):
+                    relative = path.relative_to(ROOT)
+                    violations.append(f"{relative}:{line_number}: {line.strip()}")
+    if violations:
+        fail(
+            "Pureform literal contract drift; use AppRadius/AppSizes tokens:\n"
+            + "\n".join(violations)
+        )
+    print("✓ Pureform radius and fixed-control literals use shared tokens")
+
+
 def main() -> int:
     check_root_file_lengths()
     check_required_rule_docs()
     check_agents_rule_links()
     check_github_templates()
     check_no_shell_background_wrappers_in_harness()
+    check_pureform_literal_contracts()
     print("✅ static repository rules passed")
     return 0
 
