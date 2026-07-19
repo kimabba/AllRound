@@ -24,9 +24,6 @@ import {
   type CrawlerTournament,
   extractApplicationDeadline,
   extractDate,
-  extractRegulationBody,
-  extractRegulationFields,
-  extractRegulationNotes,
   extractVenue,
   saveRawDocument,
   upsertTournament,
@@ -147,7 +144,7 @@ async function listingContentHash(items: BoardItem[]): Promise<string> {
 //     · 접수기간: "2026년 4월 27일 ~ 2026년 5월 05일 18시 까지"
 //     · 대회일:   "2026년 5월 09일"
 // =============================================================================
-async function fetchDetail(
+export async function fetchDetail(
   detailUrl: string,
   region: string,
   titleHint: string,
@@ -166,30 +163,23 @@ async function fetchDetail(
   const title = (h3El?.textContent ?? '').replace(/\s+/g, ' ').trim() || titleHint;
   if (!title) return { rawHtml: html, tournament: null };
 
-  // 노이즈 태그 제거 후 body 텍스트 추출
+  // 노이즈 태그 제거 후 대회 콘텐츠 영역의 텍스트만 추출한다. 광주 협회
+  // 페이지의 푸터는 <footer>가 아니라 <div class="footer">라서, body 전체를
+  // 읽으면 협회 사무실 주소의 "진월국제테니스장"을 대회 장소로 오인한다.
   const bodyEl = dom.querySelector('body');
   if (bodyEl) {
     const noiseNodes = bodyEl.querySelectorAll(
-      'script, style, nav, header, footer, aside, .gnb, .lnb, .snb',
+      'script, style, nav, header, footer, aside, .footer, .gnb, .lnb, .snb',
     );
     for (const node of noiseNodes) {
       node.parentNode?.removeChild(node);
     }
   }
-  const bodyText = (dom.querySelector('body')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-
-  // ── 대회 요강 정형화 추출 (추가 기능 — 기존 추출 로직과 독립) ──
-  // 노이즈(script/style/nav 등) 제거 후이지만 본문 <table> 은 보존된 상태에서
-  // 라벨:값 표를 직접 구조화한다. 두 헬퍼 모두 textContent / querySelectorAll 만
-  // 사용하므로 deno-dom Document 를 그대로 넘길 수 있다.
-  // extractRegulationNotes 는 <p> 요소 경계를 노트 경계로 써서, bodyText 평문
-  // split 에서 발생하던 표/상금표 run-on 오염을 방지한다 (dom 전달이 핵심).
-  const regulationFields = extractRegulationFields(dom);
-  const regulationNotes = extractRegulationNotes(dom);
-  // 완전 본문: 콘텐츠표 행 구조를 살려 fields/notes/배너 제외분(시상내역/참가자격/
-  // 경기일정+입금계좌/접수마감/경기방식 등)을 줄바꿈 본문으로 재구성. title 을
-  // 넘겨 배너 행(대회명) 제외에 사용한다.
-  const regulationBody = extractRegulationBody(dom, title);
+  const contentRoot = dom.querySelector('.docContWrap') ??
+    dom.querySelector('#bo_v') ??
+    dom.querySelector('main') ??
+    dom.querySelector('body');
+  const bodyText = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
   // ── 테이블 기반 날짜 추출 (신청기간 / 경기일시 컬럼 구분) ──
   // 테이블 헤더: 참가부서 | 신청기간 | 경기일시 | ...
@@ -245,19 +235,18 @@ async function fetchDetail(
     `${title} ${bodyText}`,
     dict,
   );
+  const hasExplicitUnknownDivision = /부서\s*(?:추후\s*공지|미정|확인\s*필요)/.test(bodyText);
 
   const deadline = tableDeadline ?? extractApplicationDeadline(bodyText) ?? undefined;
 
   // ── 참가비 추출 ──
   // "참가비팀당 34,000원" / "참가비 팀당 30,000원" / "참가비인당 15,000원"
   let entryFee: number | undefined;
-  let entryFeeUnit: 'per_team' | 'per_person' = 'per_team';
   const feeMatch = bodyText.match(/참가비\s*(?:[:：]\s*)?(?:(팀당|인당)\s*)?([0-9,]+)\s*원/);
   if (feeMatch) {
     const amount = Number(feeMatch[2].replace(/,/g, ''));
     if (amount > 0 && amount < 1_000_000) {
       entryFee = amount;
-      if (feeMatch[1] === '인당') entryFeeUnit = 'per_person';
     }
   }
 
@@ -274,70 +263,19 @@ async function fetchDetail(
     organizer = region ? `${region}테니스협회` : undefined;
   }
 
-  // ── 본문 정리 (보일러플레이트 최소 제거, 규정/경기방식 보존) ──
-  let rawBody = bodyText;
-
-  // 하단 푸터만 제거
-  for (const marker of ['개인정보 취급방침', 'COPYRIGHT', '홈페이지바로가기']) {
-    const idx = rawBody.indexOf(marker);
-    if (idx > 0) rawBody = rawBody.substring(0, idx);
-  }
-
-  // 사이트 네비/메뉴/폼 테이블 잔해만 제거 (규정·경기방식은 보존)
-  rawBody = rawBody
-    .replace(/참가부서\s+신청기간\s+경기일시\s+현재신청팀\s+신청목록\s+신청하기\s+입금내역/g, '')
-    .replace(/참가비\s+입금\s*×[^『」]*?(?=『|제\d+회|$)/g, '')
-    .replace(/입금대기중을\s+클릭하여[^.]*바랍니다\.?/g, '')
-    .replace(/\[신청대기\]/g, '').replace(/\[신청마감\]/g, '').replace(/\[신청중\]/g, '')
-    .replace(/\[참가불가\]/g, '').replace(/\[참가신청\]/g, '')
-    .replace(/목록보기/g, '').replace(/참가신청/g, '')
-    // 사이트 네비/메뉴 잔해
-    .replace(/선수회원신청\s*×?\s*대회일정[^『」]*?(?:테니스협회)/g, '')
-    .replace(/일상속\s*힐링운동[^『」]*?(?:테니스협회)/g, '')
-    .replace(/전문체육과\s*동호인이\s*함께하는/g, '')
-    .replace(/대회일정\s+대회그룹\s+대회일정\s+대진표관리\s+대회결과\s+대회공지사항/g, '')
-    .replace(/대회일정\s+HOME\s*>[^>]*>\s*대회일정[^『」]*?대회공지사항/g, '')
-    .replace(/부서추후공지/g, '')
-    .replace(/\s{3,}/g, '\n')
-    .trim();
-
-  // 공고 시작점 탐색 — "『SPORTS" 또는 "제N회" 이전은 네비 잔해이므로 제거
-  const contentStart = rawBody.search(/[『「]|제\d+회/);
-  if (contentStart > 50) {
-    rawBody = rawBody.substring(contentStart);
-  }
-
-  // description: 메타 + 본문 (2000자 — 규정/경기방식까지 포함)
-  const descParts: string[] = [];
-  if (divisionLabel) descParts.push(`참가부서: ${divisionLabel}`);
-  if (deadline) descParts.push(`신청마감: ${deadline}`);
-  descParts.push(`대회일: ${startDate}`);
-  if (region) descParts.push(`지역: ${region}`);
-  const metaLine = descParts.join(' | ');
-
-  const MAX_DESC_BODY = 2000;
-  const trimmedBody = rawBody.length > MAX_DESC_BODY
-    ? rawBody.slice(0, MAX_DESC_BODY).replace(/\s+\S*$/, '').trimEnd() + ' …'
-    : rawBody;
-  const contentBody = trimmedBody.length > metaLine.length + 50 ? trimmedBody : '';
-  const description = contentBody ? `${metaLine}\n\n${contentBody}` : metaLine;
-
   const location = extractVenue(bodyText) ?? undefined;
   const tournament: CrawlerTournament = {
     title,
-    description: description || undefined,
     start_date: startDate,
     application_deadline: deadline,
     region,
     location,
     eligible_grades: gradeCodes,
-    division_label_local: divisionLabel,
+    division_label_local: hasExplicitUnknownDivision ? '부서추후공지' : divisionLabel,
+    clear_eligible_grades: hasExplicitUnknownDivision || undefined,
     source_url: detailUrl,
     organizer,
     entry_fee: entryFee,
-    regulation_fields: regulationFields.length > 0 ? regulationFields : undefined,
-    regulation_notes: regulationNotes.length > 0 ? regulationNotes : undefined,
-    regulation_body: regulationBody ?? undefined,
   };
   return { rawHtml: html, tournament };
 }

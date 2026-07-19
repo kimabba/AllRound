@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../models/admin.dart';
 import '../models/crawl_source.dart';
+import '../models/format_review.dart';
 import '../models/tournament.dart';
 import 'api_base.dart';
 
@@ -69,11 +70,7 @@ mixin AdminApi on ApiBase {
     required bool approve,
     String? reason,
   }) async {
-    await reviewClubs(
-      [clubId],
-      approve: approve,
-      reason: reason,
-    );
+    await reviewClubs([clubId], approve: approve, reason: reason);
   }
 
   Future<int> reviewClubs(
@@ -194,8 +191,11 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row =
-          await supabase.from('crawl_sources').select().eq('id', id).single();
+      final row = await supabase
+          .from('crawl_sources')
+          .select()
+          .eq('id', id)
+          .single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase
@@ -226,6 +226,46 @@ mixin AdminApi on ApiBase {
     );
     check(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ── 요강 정형화 검수 ──────────────────────────────────────────
+
+  Future<List<FormatReviewItem>> formatReviewQueue() async {
+    final rows = await supabase
+        .from('tournaments')
+        .select(
+          'id, title, source_url, format_source_hash, format_staged, '
+          'format_flags',
+        )
+        .eq('format_status', 'needs_review')
+        .order('updated_at');
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(FormatReviewItem.fromJson).toList();
+  }
+
+  Future<bool> applyStaged(FormatReviewItem item) async {
+    final res = await supabase.rpc(
+      'format_apply_staged',
+      params: {'p_tid': item.id, 'p_expected_source_hash': item.sourceHash},
+    );
+    return res == true;
+  }
+
+  Future<bool> rejectStaged(FormatReviewItem item, String reason) async {
+    final trimmedReason = reason.trim();
+    if (trimmedReason.isEmpty) {
+      throw ArgumentError('rejection reason required');
+    }
+    final res = await supabase.rpc(
+      'format_reject_staged',
+      params: {
+        'p_tid': item.id,
+        'p_expected_source_hash': item.sourceHash,
+        'p_reason': trimmedReason,
+      },
+    );
+    return res == true;
   }
 
   // ── Gemini 사용량 ─────────────────────────────────────────────

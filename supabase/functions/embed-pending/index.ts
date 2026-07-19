@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -13,6 +14,21 @@ import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/r
  */
 const BATCH_SIZE = 32;
 
+export interface TournamentSelectSpec {
+  columns: string;
+  onlyStatus: 'published';
+  excludeFormatStatus: ['pending', 'processing'];
+}
+
+export function buildTournamentSelect(): TournamentSelectSpec {
+  return {
+    columns:
+      'id, title, description, region, format, organizer, regulation_fields, regulation_body, embedding_input_revision',
+    onlyStatus: 'published',
+    excludeFormatStatus: ['pending', 'processing'],
+  };
+}
+
 interface PendingTournament {
   id: string;
   title: string;
@@ -24,6 +40,7 @@ interface PendingTournament {
   // regulation_fields 는 jsonb 라서 unknown 으로 받고 사용 시 narrow.
   regulation_fields: unknown;
   regulation_body: string | null;
+  embedding_input_revision: number;
 }
 
 interface PendingRule {
@@ -49,7 +66,42 @@ function ruleText(r: PendingRule): string {
   return `${r.title}\n${r.body}`.slice(0, 4000);
 }
 
-Deno.serve(async (req) => {
+type EmbedFn = (texts: string[]) => Promise<number[][]>;
+
+export async function runTournamentEmbedding(
+  supabase: SupabaseClient,
+  embed: EmbedFn,
+): Promise<{ processed: number; skipped: number; errors: string[] }> {
+  const out = { processed: 0, skipped: 0, errors: [] as string[] };
+  const sel = buildTournamentSelect();
+  const { data: pending } = await supabase
+    .from('tournaments')
+    .select(sel.columns)
+    .is('embedding', null)
+    .eq('status', sel.onlyStatus)
+    .not('format_status', 'in', '("pending","processing")')
+    .limit(BATCH_SIZE);
+  if (!pending || pending.length === 0) return out;
+
+  const rows = pending as unknown as PendingTournament[];
+  const texts = rows.map((t) => tournamentText(t));
+  const embeddings = await embed(texts);
+  const now = new Date().toISOString();
+  for (let i = 0; i < rows.length; i++) {
+    const { data, error } = await supabase
+      .from('tournaments')
+      .update({ embedding: toVectorLiteral(embeddings[i]), embedding_updated_at: now })
+      .eq('id', rows[i].id)
+      .eq('embedding_input_revision', rows[i].embedding_input_revision) // optimistic: 그새 바뀌면 0행
+      .select('id');
+    if (error) out.errors.push(`tournament ${rows[i].id}: ${error.message}`);
+    else if (!data || data.length === 0) out.skipped++; // revision 변경 → 다음 사이클 재생성
+    else out.processed++;
+  }
+  return out;
+}
+
+async function handler(req: Request): Promise<Response> {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -66,31 +118,9 @@ Deno.serve(async (req) => {
 
   // ---- tournaments ----
   try {
-    const { data: pending } = await supabase
-      .from('tournaments')
-      .select(
-        'id, title, description, region, format, organizer, regulation_fields, regulation_body',
-      )
-      .is('embedding', null)
-      .eq('status', 'published')
-      .limit(BATCH_SIZE);
-
-    if (pending && pending.length > 0) {
-      const texts = pending.map((t) => tournamentText(t as PendingTournament));
-      const embeddings = await embedBatch(texts);
-      const now = new Date().toISOString();
-      for (let i = 0; i < pending.length; i++) {
-        const { error } = await supabase
-          .from('tournaments')
-          .update({
-            embedding: toVectorLiteral(embeddings[i]),
-            embedding_updated_at: now,
-          })
-          .eq('id', pending[i].id);
-        if (error) result.errors.push(`tournament ${pending[i].id}: ${error.message}`);
-        else result.tournaments_processed++;
-      }
-    }
+    const r = await runTournamentEmbedding(supabase, embedBatch);
+    result.tournaments_processed += r.processed;
+    result.errors.push(...r.errors);
   } catch (e) {
     result.errors.push(`tournaments batch: ${(e as Error).message}`);
   }
@@ -128,4 +158,8 @@ Deno.serve(async (req) => {
     return errorResponse('All embeddings failed', 500, result);
   }
   return jsonResponse(result);
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}

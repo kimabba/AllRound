@@ -45,7 +45,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno fmt --check */index.ts _shared/*.ts tests/*.ts
-      - run: deno lint --config deno.json */index.ts _shared/*.ts tests/*.ts
-      - run: deno check --config deno.json */index.ts _shared/*.ts tests/*.ts
+      - run: deno fmt --check */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+      - run: deno lint --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+      - run: deno check --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
       - run: deno test --config deno.json --allow-env --allow-read tests
