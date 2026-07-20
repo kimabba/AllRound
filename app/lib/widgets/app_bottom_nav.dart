@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
+/// 볼보이 원이 냅 상단 경계선 위로 떠오르는 높이.
+/// 냅 전체 높이에 포함시켜 돌출부까지 hit-test 되게 한다(보이는 곳 = 눌리는 곳).
+const double bottomNavDialProtrusion = 14;
+const double _dialSlotWidth = AppSizes.touchTarget + 16;
+
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  /// 가운데 AI 버튼 탭 콜백. null이면 버튼 숨김(스피드건 등 채팅 미지원 화면).
+  /// 가운데 볼보이 버튼 탭 콜백. null이면 버튼 숨김(스피드건 등 채팅 미지원 화면).
   final VoidCallback? onChatTap;
 
-  /// AI 버튼 접근성 hint (예: '대회 화면에서 채팅 열기').
+  /// 볼보이 버튼 접근성 hint (예: '대회 화면에서 채팅 열기').
   final String? chatHint;
 
   const AppBottomNav({
@@ -85,7 +90,7 @@ class AppBottomNav extends StatelessWidget {
       );
     }
 
-    return DecoratedBox(
+    final bar = DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: 0.98),
         border: Border(top: BorderSide(color: cs.outlineVariant)),
@@ -98,8 +103,8 @@ class AppBottomNav extends StatelessWidget {
             children: [
               tab(0),
               tab(1),
-              if (onChatTap != null)
-                _ChatDialButton(onTap: onChatTap!, hint: chatHint),
+              // 가운데 자리는 오버레이 버튼이 차지 — 폭만 비워둔다.
+              if (onChatTap != null) const SizedBox(width: _dialSlotWidth),
               tab(2),
               tab(3),
             ],
@@ -107,10 +112,23 @@ class AppBottomNav extends StatelessWidget {
         ),
       ),
     );
+
+    if (onChatTap == null) return bar;
+
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: bottomNavDialProtrusion),
+          child: bar,
+        ),
+        _ChatDialButton(onTap: onChatTap!, hint: chatHint),
+      ],
+    );
   }
 }
 
-/// 냅 중앙의 원형 AI 진입 버튼 — 메인 기능 강조.
+/// 냅 중앙의 원형 볼보이 진입 버튼 — 메인 기능 강조.
 /// ponytail: 실제 회전 다이얼 대신 눌림 스케일만. 반응 좋으면 모션 확장.
 class _ChatDialButton extends StatefulWidget {
   const _ChatDialButton({required this.onTap, this.hint});
@@ -129,9 +147,8 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
-      // 좌우 탭과 시각 균형: 터치 타깃 48 보장, 원은 그보다 살짝 큼.
-      width: AppSizes.touchTarget + 16,
-      height: AppSizes.bottomNavigation,
+      width: _dialSlotWidth,
+      height: bottomNavDialProtrusion + AppSizes.bottomNavigation,
       child: Semantics(
         key: AllRoundE2EKeys.globalChatDock,
         button: true,
@@ -148,36 +165,31 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
               widget.onTap();
             },
             child: Stack(
-              clipBehavior: Clip.none,
               alignment: Alignment.topCenter,
               children: [
-                // 원이 냅 상단 경계선 위로 떠올라 메인 기능임을 강조.
-                Positioned(
-                  top: -14,
-                  child: AnimatedScale(
-                    scale: _pressed ? 0.9 : 1,
-                    duration: const Duration(milliseconds: 110),
-                    curve: Curves.easeOut,
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: cs.surface, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.primary.withValues(alpha: 0.45),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        size: 24,
-                        color: cs.onPrimary,
-                      ),
+                AnimatedScale(
+                  scale: _pressed ? 0.9 : 1,
+                  duration: const Duration(milliseconds: 110),
+                  curve: Curves.easeOut,
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cs.surface, width: 4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.45),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 24,
+                      color: cs.onPrimary,
                     ),
                   ),
                 ),
