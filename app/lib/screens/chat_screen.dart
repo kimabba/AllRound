@@ -309,10 +309,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         Expanded(
           child: messages.isEmpty
               ? _EmptyHint(
-                  onSend: sendText,
-                  sport: ref.watch(activeSportProvider),
                   scrollController: widget.embedded ? _scroll : null,
-                  suggestions: widget.entryContext?.suggestions,
                 )
               : ListView.builder(
                   controller: _scroll,
@@ -558,40 +555,8 @@ class _EntityContextToggle extends StatelessWidget {
 }
 
 class _EmptyHint extends StatelessWidget {
-  final Future<void> Function(String) onSend;
-  // 활성 종목(풋살/테니스)에 맞춰 예시 질문을 바꾼다.
-  final String? sport;
   final ScrollController? scrollController;
-  final List<ChatPromptSuggestion>? suggestions;
-  const _EmptyHint({
-    required this.onSend,
-    this.sport,
-    this.scrollController,
-    this.suggestions,
-  });
-
-  List<(String, String)> get _suggestions {
-    final contextualSuggestions = suggestions;
-    if (contextualSuggestions != null && contextualSuggestions.isNotEmpty) {
-      return contextualSuggestions
-          .map(
-            (suggestion) => (
-              suggestion.label,
-              suggestion.message,
-            ),
-          )
-          .toList(growable: false);
-    }
-    final isFutsal = sport == 'futsal';
-    final label = isFutsal ? '풋살' : '테니스';
-    final ruleMsg = isFutsal ? '풋살 경기 규칙 알려줘' : '테니스 복식 규칙 알려줘';
-    return [
-      ('이번 달 대회', '이번 달 대회 일정 알려줘'),
-      ('대회 신청', '대회 신청 방법 알려줘'),
-      ('클럽 찾기', '$label 클럽 추천해줘'),
-      ('$label 규칙', ruleMsg),
-    ];
-  }
+  const _EmptyHint({this.scrollController});
 
   @override
   Widget build(BuildContext context) {
@@ -610,68 +575,20 @@ class _EmptyHint extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '궁금한 운동 정보를\n바로 물어보세요',
+            '볼보이에게\n그냥 물어보세요',
             style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '대회, 규칙, 구장, 클럽 정보를 찾아 답합니다.',
+            '어느 메뉴에 있는지 몰라도 괜찮아요.\n'
+            '대회, 클럽, 구장, 규칙 — 궁금한 걸 말하면 볼보이가 찾아다 드려요.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.5,
             ),
             textAlign: TextAlign.left,
           ),
-          const SizedBox(height: AppSpacing.xxl),
-          for (final (label, msg) in _suggestions)
-            _SuggestionCard(
-              label: label,
-              onTap: () => onSend(msg),
-            ),
         ],
-      ),
-    );
-  }
-}
-
-class _SuggestionCard extends StatelessWidget {
-  final String label;
-  final VoidCallback? onTap;
-  const _SuggestionCard({required this.label, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 56),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: cs.outlineVariant),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: cs.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

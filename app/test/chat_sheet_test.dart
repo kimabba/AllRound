@@ -68,8 +68,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('현재 대회 연결'), findsOneWidget);
-    expect(find.text('참가 가능 여부'), findsOneWidget);
-    expect(find.text('신청 준비 정리'), findsOneWidget);
+    // 추천 칩 없이 바로 질문하는 빈 화면 (볼보이 안내 문구)
+    expect(find.textContaining('그냥 물어보세요'), findsOneWidget);
 
     final sendButtonFinder = find.widgetWithIcon(
       IconButton,

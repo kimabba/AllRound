@@ -1,14 +1,6 @@
-class ChatPromptSuggestion {
-  const ChatPromptSuggestion({required this.label, required this.message});
-
-  final String label;
-  final String message;
-}
-
 class ChatEntryContext {
   const ChatEntryContext({
     required this.screenLabel,
-    required this.suggestions,
     this.entityType,
     this.entityId,
     this.attachEntityByDefault = false,
@@ -16,7 +8,6 @@ class ChatEntryContext {
   });
 
   final String screenLabel;
-  final List<ChatPromptSuggestion> suggestions;
   final String? entityType;
   final String? entityId;
   final bool attachEntityByDefault;
@@ -30,7 +21,6 @@ class ChatEntryContext {
   }) {
     return ChatEntryContext(
       screenLabel: screenLabel,
-      suggestions: suggestions,
       entityType: entityType,
       entityId: entityId,
       attachEntityByDefault:
