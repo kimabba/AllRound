@@ -403,10 +403,18 @@ class _ValidationFailure extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               ...flags.map((flag) {
                 final masked = flag.masked == null ? '' : ' (${flag.masked})';
+                // raw code를 어드민이 읽을 한국어 라벨로. 미매핑 code는 원문 노출(안전한 fallback).
+                final label = _flagLabels[flag.code] ?? flag.code;
+                // _model/_all 은 특정 필드가 아니라 모델·전체 수준 플래그 → 필드명 숨김.
+                final isMetaField =
+                    flag.field == '_model' || flag.field == '_all';
+                final text = isMetaField
+                    ? '$label$masked'
+                    : '${flag.field} · $label$masked';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                   child: Text(
-                    '${flag.field} · ${flag.code}$masked',
+                    text,
                     style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onErrorContainer,
                     ),
@@ -513,3 +521,12 @@ class _ButtonProgress extends StatelessWidget {
 }
 
 enum _ReviewOperation { approve, reject }
+
+// format-pending 검증 flag code → 어드민용 한국어 라벨.
+// 계좌/한글금액 not_in_source 는 오탐이 잦음(원문 표기 다양성) → HANDOFF §3 참조.
+const _flagLabels = <String, String>{
+  'not_in_source': '원문에서 확인 안 됨',
+  'unusual': '모델이 특이 요강으로 표시',
+  'low_confidence': '모델 신뢰도 낮음',
+  'empty_fields': '추출된 필드 없음',
+};

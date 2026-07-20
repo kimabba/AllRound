@@ -22,11 +22,13 @@
 4. **임베딩** (`embed-pending/index.ts`): `embedding_input_revision` optimistic write, 미정형 제외. **재배포됨.**
 5. **어드민 UI + 앱** (`tournament.dart` FormatStatus, `format_review_screen.dart`, `admin_api.dart`, router/shell): `/admin/format-review` 검수 화면(staged 승인/반려 + 검증실패 flags 표시).
 
-## 3. 프로덕션 상태 (project `bsjdgwmveokanclqwtvx`, 2026-07-18 기준)
+## 3. 프로덕션 상태 (project `bsjdgwmveokanclqwtvx`, 2026-07-18 갱신)
 
-- `format_status`: needs_review 35(전부 staged) / pending 15(재큐 14 + draft 성남배 1) / skipped 31
+- `format_status`: needs_review 49(staged 45 + 검증실패 4) / pending 1(draft 성남배) / skipped 31
+  - 재큐 14건 cron 처리 완료(35→49). pending 15→1.
 - cron: job 9 `format-pending` (`2-59/5`), job 1 `embed-pending` (`*/5`) 활성
 - **품질 검증 완료**: staged 5건 원문 대조 → 할루시 0건, 어드민 승인 가능 수준(계좌 누락·상금 뭉뚱그림만 약점)
+- **검증실패 4건 = 전부 오탐(원문 대조 확인, 할루시 아님)**: 빛고을배 계좌 `141 – 107 - 340024`(en-dash+공백)·어등산 `351 1309 4178 03`(공백)를 검증 런매칭이 원문에서 못 찾음 + 빛고을배 참가비 한글 `5만4천원`→모델 `54,000` 정규화. unusual 2건(북구·대한체육회장기)은 모델 자기신고. **Commander 결정(2026-07-18): 검증 완화 안 함**(공백 이으면 test:79 조작값 탐지 뚫림 = 금융 할루시 놓침 위험) → review-first + 어드민 검수로 처리.
 
 ## 4. 안전장치 (검증됨)
 
@@ -38,14 +40,15 @@
 
 1. **PR #244 머지** (kimabba) — CI 5체크 + Codex 리뷰 후. `gh pr merge --admin` 금지, 정상 머지.
    - ⚠️ **Base 주의**: 이 브랜치는 main 미머지 **design 커밋 3개**(`fbeff5f`/`59b684f`/`dbfa853`, 종목색·테마, 본 작업 무관) 위에 있음 → PR diff에 포함. 먼저 main 반영할지 함께 머지할지 판단 필요.
-2. **재큐 14건 재정형화 확인** — 다음 cron 후 `select format_status,count(*) from tournaments group by 1` 로 needs_review(staged)로 잘 갔는지, 문의처 과탐 재발 안 하는지 확인.
+2. ~~**재큐 14건 재정형화 확인**~~ — ✅ 완료(needs_review 35→49). 문의처 과탐 재발 없음. 단 계좌/한글금액 오탐 4건 신규(§3 참조, Commander가 검증 유지 결정 — 어드민 검수로 처리).
 3. **어드민 검수** — `/admin/format-review`에서 staged 35건 원문 대조 승인. 승인 시 `format_apply_staged`로 콘텐츠 반영.
 4. **Follow-up (JY-137, 출시 후 DB 재점검)**:
-   - 정형화 프롬프트에 **입금계좌 필수 필드** 명시 + 상금 구체화 (`format-pending/index.ts` buildPrompt) → 재정형화
+   - ~~정형화 프롬프트에 **입금계좌 필수 필드** 명시 + 상금 구체화~~ ✅ 프롬프트 수정(`8eb4cde`). **배포+재정형화 남음**: 머지 후 `supabase functions deploy format-pending` → 재큐(오탐 4건 또는 전체 needs_review). 주의: 프롬프트 변경이므로 재큐하면 staged 갈아엎어짐(어드민 미승인 상태라 손해 없음). 오탐 4건은 검증 매칭 오탐이라 재정형화로 해소 보장 안 됨.
    - `CONTACT_LABEL` 라벨 확장(모델이 "안내" 등으로 라벨하면 우회) — `logic.ts`
    - `_shared/crawler/parsers/`가 CI lint glob 미포함 (latent)
+   - 계좌 검증 오탐(§3): 완화는 금지(test:79 금융 할루시 방어와 충돌). 정밀화하려면 "하이픈 없는 순수 공백 그룹만 병합 + includes→equals" 같은 별도 파싱 필요 — 복잡·리스크 있어 보류. 대안은 어드민 UI에서 오탐 성격 flag를 눈에 띄게 표시해 검수 부담↓.
    - staged `regulation_notes: []` → `array_agg`→NULL 정규화 (`format_apply_staged`)
-   - `format_flags` 어드민 UI 상세 표시, apply/reject 반환값 미체크
+   - ~~`format_flags` 어드민 UI 상세 표시~~ ✅ code 한국어화(`2f0a2d2`). apply/reject 반환값 미체크는 남음.
    - regulation_* jsonb vs 별도 테이블, crawl_documents raw_html 보존정책, closed 임베딩 정책
 
 ## 6. 재확인/운영 명령
