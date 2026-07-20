@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 enum ClubImageFormat {
@@ -85,11 +86,7 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
   }
 
   if (format != ClubImageFormat.heif) {
-    return PreparedClubImage(
-      bytes: originalBytes,
-      extension: format.extension,
-      contentType: format.contentType,
-    );
+    return prepareClubImageBytes(originalBytes);
   }
 
   if (defaultTargetPlatform != TargetPlatform.iOS) {
@@ -106,11 +103,7 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
     if (converted == null || converted.isEmpty) {
       throw const ClubImagePreparationException('iPhone 사진 변환에 실패했습니다.');
     }
-    return PreparedClubImage(
-      bytes: converted,
-      extension: ClubImageFormat.jpeg.extension,
-      contentType: ClubImageFormat.jpeg.contentType,
-    );
+    return prepareClubImageBytes(converted);
   } on PlatformException {
     throw const ClubImagePreparationException(
       'iPhone 사진 변환에 실패했습니다. 다른 사진으로 다시 시도해주세요.',
@@ -120,4 +113,64 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
       'iPhone 사진 변환 기능을 불러오지 못했습니다. 앱을 다시 실행해주세요.',
     );
   }
+}
+
+/// Decodes and re-encodes an upload image before it leaves the device.
+///
+/// ImagePicker resizing is not a privacy boundary: camera model, capture time,
+/// GPS coordinates, comments, and color profiles can remain in EXIF/ancillary
+/// metadata. Re-encoding pixel data after baking orientation removes those
+/// fields while keeping PNG transparency. WebP is normalized to PNG because
+/// the image package intentionally has no WebP encoder.
+PreparedClubImage prepareClubImageBytes(
+  Uint8List originalBytes, {
+  int jpegQuality = 86,
+}) {
+  final format = detectClubImageFormat(originalBytes);
+  if (format == null || format == ClubImageFormat.heif) {
+    throw const ClubImagePreparationException(
+      '지원하지 않는 사진 형식입니다. JPG, PNG 또는 WebP 사진을 선택해주세요.',
+    );
+  }
+
+  final img.Image? decoded;
+  try {
+    decoded = img.decodeImage(originalBytes);
+  } on RangeError {
+    throw const ClubImagePreparationException(
+      '사진을 안전하게 처리하지 못했습니다. 다른 사진으로 다시 시도해주세요.',
+    );
+  } on FormatException {
+    throw const ClubImagePreparationException(
+      '사진을 안전하게 처리하지 못했습니다. 다른 사진으로 다시 시도해주세요.',
+    );
+  }
+  if (decoded == null) {
+    throw const ClubImagePreparationException(
+      '사진을 안전하게 처리하지 못했습니다. 다른 사진으로 다시 시도해주세요.',
+    );
+  }
+
+  final baked = img.bakeOrientation(decoded);
+  final clean = img.Image.from(baked, noAnimation: true)
+    ..exif = img.ExifData()
+    ..iccProfile = null
+    ..textData = null;
+
+  if (format == ClubImageFormat.jpeg) {
+    return PreparedClubImage(
+      bytes: img.encodeJpg(
+        clean,
+        quality: jpegQuality.clamp(1, 100).toInt(),
+      ),
+      extension: ClubImageFormat.jpeg.extension,
+      contentType: ClubImageFormat.jpeg.contentType,
+    );
+  }
+
+  return PreparedClubImage(
+    bytes: img.encodePng(clean),
+    extension: ClubImageFormat.png.extension,
+    contentType: ClubImageFormat.png.contentType,
+  );
 }

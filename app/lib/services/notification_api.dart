@@ -6,12 +6,15 @@ mixin NotificationApi on ApiBase {
   Future<void> registerDeviceToken(String token, String platform) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-    await supabase.from('device_tokens').upsert({
-      'user_id': userId,
-      'token': token,
-      'platform': platform,
-      'enabled': true,
+    await supabase.rpc('bind_my_device_token', params: {
+      'p_token': token,
+      'p_platform': platform,
     });
+  }
+
+  Future<void> unregisterDeviceTokens() async {
+    if (supabase.auth.currentUser == null) return;
+    await supabase.rpc('unbind_my_device_tokens');
   }
 
   Future<List<AppNotification>> myNotifications({int limit = 50}) async {
@@ -30,9 +33,7 @@ mixin NotificationApi on ApiBase {
   }
 
   Future<void> markNotificationRead(String id) async {
-    await supabase
-        .from('notifications')
-        .update({'is_read': true}).eq('id', id);
+    await supabase.from('notifications').update({'is_read': true}).eq('id', id);
   }
 
   Future<void> markAllNotificationsRead() async {

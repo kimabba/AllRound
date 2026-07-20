@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
-import '../../widgets/app_card.dart';
 
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
@@ -97,8 +97,10 @@ class _TournamentSubmitScreenState
         ).showSnackBar(const SnackBar(content: Text('제보 완료. 관리자 승인 후 노출됩니다.')));
         context.pop();
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      setState(
+        () => _error = '제보를 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.',
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -121,14 +123,53 @@ class _TournamentSubmitScreenState
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('대회 제보')),
+      key: AllRoundE2EKeys.tournamentSubmitScreen,
+      appBar: AppBar(title: const Text('대회 정보 제보')),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.md,
+          AppSpacing.xl,
+          AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: AppPrimaryButton(
+          label: '제보하기',
+          loading: _busy,
+          onPressed: _submit,
+        ),
+      ),
       body: Form(
         key: _form,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.xxxl,
+          ),
           children: [
-            AppCard(
-              variant: AppCardVariant.outlined,
+            Text('알고 있는 대회를 알려주세요', style: tt.headlineSmall),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '공식 공고를 확인한 뒤 등록합니다. 필수 정보만 입력해도 괜찮아요.',
+              style: tt.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: cs.outlineVariant),
+                  bottom: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -146,7 +187,10 @@ class _TournamentSubmitScreenState
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.xxl),
+
+            const _SectionTitle('기본 정보'),
+            const SizedBox(height: AppSpacing.md),
 
             // 종목 선택
             _Label('종목 *'),
@@ -184,38 +228,31 @@ class _TournamentSubmitScreenState
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(controller: _organizer, decoration: _inputDeco('주최')),
+            const SizedBox(height: AppSpacing.xxl),
+
+            const _SectionTitle('장소 및 일정'),
             const SizedBox(height: AppSpacing.md),
 
             // 날짜 선택
             _Label('시작일 *'),
             const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              onTap: _pickDate,
-              variant: AppCardVariant.outlined,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              style: OutlinedButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                minimumSize: const Size.fromHeight(AppSizes.control),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 18,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Text(
-                    _startDate == null
-                        ? '날짜를 선택하세요'
-                        : DateFormat(
-                            'yyyy년 M월 d일 (E)',
-                            'ko',
-                          ).format(_startDate!),
-                    style: tt.bodyMedium?.copyWith(
-                      color: _startDate == null ? cs.onSurfaceVariant : null,
-                    ),
-                  ),
-                ],
+              icon: const Icon(Icons.calendar_today_rounded, size: 18),
+              label: Text(
+                _startDate == null
+                    ? '날짜를 선택하세요'
+                    : DateFormat(
+                        'yyyy년 M월 d일 (E)',
+                        'ko',
+                      ).format(_startDate!),
+                style: tt.bodyMedium?.copyWith(
+                  color: _startDate == null ? cs.onSurfaceVariant : null,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -229,7 +266,10 @@ class _TournamentSubmitScreenState
               controller: _location,
               decoration: _inputDeco('상세 장소'),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.xxl),
+
+            const _SectionTitle('참가 조건'),
+            const SizedBox(height: AppSpacing.md),
 
             // 테니스: 협회 선택 → 부서 선택 / 풋살: 등급 선택
             if (_sport == Sport.tennis) ...[
@@ -290,7 +330,10 @@ class _TournamentSubmitScreenState
                 ],
               ),
             ],
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.xxl),
+
+            const _SectionTitle('추가 정보'),
+            const SizedBox(height: AppSpacing.md),
 
             TextFormField(
               controller: _description,
@@ -314,8 +357,14 @@ class _TournamentSubmitScreenState
 
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
-              AppCard(
-                variant: AppCardVariant.outlined,
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: cs.error),
+                    bottom: BorderSide(color: cs.error),
+                  ),
+                ),
                 child: Row(
                   children: [
                     Icon(
@@ -334,11 +383,6 @@ class _TournamentSubmitScreenState
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.xl),
-            AppPrimaryButton(
-              label: _busy ? '제보 중...' : '제보하기',
-              onPressed: _busy ? null : _submit,
-            ),
             const SizedBox(height: AppSpacing.xxxl),
           ],
         ),
@@ -347,13 +391,13 @@ class _TournamentSubmitScreenState
   }
 
   InputDecoration _inputDeco(String label) => InputDecoration(
-    labelText: label,
-    border: OutlineInputBorder(borderRadius: AppRadius.card),
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
-      vertical: AppSpacing.md,
-    ),
-  );
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: AppRadius.card),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+      );
 
   String? _optionalHttpUrlValidator(String? value) {
     final trimmed = value?.trim() ?? '';
@@ -381,5 +425,16 @@ class _Label extends StatelessWidget {
       text,
       style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
     );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: Theme.of(context).textTheme.titleMedium);
   }
 }

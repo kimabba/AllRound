@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
 class FriendScheduleScreen extends StatefulWidget {
-  const FriendScheduleScreen({super.key});
+  const FriendScheduleScreen({super.key, this.initialDate});
+
+  final DateTime? initialDate;
 
   @override
   State<FriendScheduleScreen> createState() => _FriendScheduleScreenState();
@@ -137,7 +140,7 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = widget.initialDate ?? DateTime.now();
     _today = DateTime(now.year, now.month, now.day);
     _month = DateTime(_today.year, _today.month);
     _selectedDay = _today.day;
@@ -187,6 +190,7 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      key: AllRoundE2EKeys.friendScheduleScreen,
       backgroundColor: cs.surface,
       appBar: AppBar(
         leading: IconButton(
@@ -200,41 +204,8 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
           },
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text(
-          '친구 일정',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-        ),
+        title: const Text('친구 일정'),
         centerTitle: false,
-        actions: [
-          IconButton(
-            tooltip: '검색',
-            onPressed: () {},
-            icon: const Icon(Icons.search_rounded, size: 30),
-          ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                tooltip: '알림',
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded, size: 30),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFF4B3E),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: AppSpacing.xs),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: AppSpacing.huge),
@@ -249,9 +220,9 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
+              AppSpacing.xl,
               AppSpacing.sm,
-              AppSpacing.lg,
+              AppSpacing.xl,
               AppSpacing.sm,
             ),
             child: _CalendarGrid(
@@ -269,19 +240,20 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
               _activityDetailByDay[_selectedDay] != null) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
+                AppSpacing.xl,
                 0,
-                AppSpacing.lg,
+                AppSpacing.xl,
                 AppSpacing.sm,
               ),
               child: _SelectedDayActivities(
+                month: _month.month,
                 day: _selectedDay!,
                 items: _activityDetailByDay[_selectedDay]!,
               ),
             ),
           ],
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: _FriendActivitySummary(
               mode: _mode,
               onModeChanged: (mode) => setState(() => _mode = mode),
@@ -289,7 +261,7 @@ class _FriendScheduleScreenState extends State<FriendScheduleScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: _FriendList(mode: _mode),
           ),
         ],
@@ -311,33 +283,26 @@ class _MonthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _RoundIconButton(
+          tooltip: '이전 달',
           icon: Icons.chevron_left_rounded,
           onPressed: onPrevious,
         ),
         const SizedBox(width: AppSpacing.sm),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 7,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1D74FF),
-            borderRadius: BorderRadius.circular(99),
-          ),
-          child: Text(
-            '${month.year}년 ${month.month}월',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
+        Text(
+          '${month.year}년 ${month.month}월',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w800,
+              ),
         ),
         const SizedBox(width: AppSpacing.sm),
         _RoundIconButton(
+          tooltip: '다음 달',
           icon: Icons.chevron_right_rounded,
           onPressed: onNext,
         ),
@@ -347,22 +312,29 @@ class _MonthHeader extends StatelessWidget {
 }
 
 class _RoundIconButton extends StatelessWidget {
+  final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
 
   const _RoundIconButton({
+    required this.tooltip,
     required this.icon,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return IconButton.filledTonal(
+      tooltip: tooltip,
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        fixedSize: const Size.square(40),
-        backgroundColor: const Color(0xFFEFF3F8),
-        foregroundColor: const Color(0xFF1F2937),
+        fixedSize: const Size.square(AppSizes.touchTarget),
+        backgroundColor: cs.surfaceContainerLow,
+        foregroundColor: cs.onSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
       icon: Icon(icon, size: 28),
     );
@@ -436,6 +408,7 @@ class _WeekdayRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         for (var i = 0; i < _weekdays.length; i++)
@@ -445,9 +418,9 @@ class _WeekdayRow extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: switch (i) {
-                      0 => const Color(0xFFFF4B3E),
-                      6 => const Color(0xFF1D74FF),
-                      _ => const Color(0xFF2D333B),
+                      0 => cs.error,
+                      6 => cs.primary,
+                      _ => cs.onSurface,
                     },
                     fontWeight: FontWeight.w800,
                   ),
@@ -477,70 +450,76 @@ class _CalendarDay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final inMonth = day.month == activeMonth;
-    final muted = const Color(0xFFC5CDD6);
-    final primary = const Color(0xFF1D74FF);
+    final muted = cs.outline;
+    final primary = cs.primary;
 
-    final content = Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          constraints: const BoxConstraints(minWidth: 34),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+    final content = Semantics(
+      label: isToday ? '오늘 ${day.day}일' : '${day.day}일',
+      button: onTap != null,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 28),
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+            decoration: BoxDecoration(
+              color: isSelected ? primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Text(
+              '${day.day}',
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 14,
+                    color: isSelected
+                        ? Colors.white
+                        : isToday
+                            ? primary
+                            : inMonth
+                                ? cs.onSurface
+                                : muted,
+                    fontWeight: isToday || isSelected
+                        ? FontWeight.w800
+                        : FontWeight.w600,
+                  ),
+            ),
           ),
-          child: Text(
-            isToday ? '오늘' : '${day.day}',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 14,
-                  color: isSelected
-                      ? Colors.white
-                      : isToday
-                          ? primary
-                          : inMonth
-                              ? const Color(0xFF2D333B)
-                              : muted,
-                  fontWeight:
-                      isToday || isSelected ? FontWeight.w900 : FontWeight.w700,
-                ),
-          ),
-        ),
-        const SizedBox(height: 7),
-        SizedBox(
-          height: 8,
-          child: activities != null && activities!.isNotEmpty
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final activity in activities!)
-                      Container(
-                        width: 7,
-                        height: 7,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: switch (activity) {
-                            _FriendActivityType.tournament =>
-                              const Color(0xFF1D74FF),
-                            _FriendActivityType.club => const Color(0xFF22C55E),
-                          },
-                          shape: BoxShape.circle,
+          const SizedBox(height: 2),
+          SizedBox(
+            height: 6,
+            child: activities != null && activities!.isNotEmpty
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (final activity in activities!)
+                        Container(
+                          width: 6,
+                          height: 6,
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          decoration: BoxDecoration(
+                            color: switch (activity) {
+                              _FriendActivityType.tournament => cs.primary,
+                              _FriendActivityType.club => cs.onSurfaceVariant,
+                            },
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                  ],
-                )
-              : null,
-        ),
-      ],
+                    ],
+                  )
+                : null,
+          ),
+        ],
+      ),
     );
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: content,
       ),
     );
@@ -566,25 +545,29 @@ class _FriendActivityPreview {
 }
 
 class _SelectedDayActivities extends StatelessWidget {
+  final int month;
   final int day;
   final List<_FriendActivityPreview> items;
 
   const _SelectedDayActivities({
+    required this.month,
     required this.day,
     required this.items,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -592,8 +575,8 @@ class _SelectedDayActivities extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
-              '6월 $day일 친구 일정',
-              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              '$month월 $day일 친구 일정',
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(height: 6),
@@ -611,9 +594,9 @@ class _SelectedDayActivityRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final isTournament = item.type == _FriendActivityType.tournament;
-    final color =
-        isTournament ? const Color(0xFF1D74FF) : const Color(0xFF22C55E);
+    final color = cs.primary;
     final icon =
         isTournament ? Icons.emoji_events_rounded : Icons.groups_rounded;
     final label = isTournament ? '대회' : '클럽';
@@ -627,7 +610,7 @@ class _SelectedDayActivityRow extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: color, size: 18),
           ),
@@ -642,7 +625,7 @@ class _SelectedDayActivityRow extends StatelessWidget {
                       label,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: color,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                           ),
                     ),
                     const SizedBox(width: 6),
@@ -652,7 +635,7 @@ class _SelectedDayActivityRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: const Color(0xFF64748B),
+                              color: cs.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
                             ),
                       ),
@@ -664,8 +647,8 @@ class _SelectedDayActivityRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
               ],
@@ -688,13 +671,16 @@ class _FriendActivitySummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF3FF),
-        borderRadius: BorderRadius.circular(18),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,7 +688,7 @@ class _FriendActivitySummary extends StatelessWidget {
           Text(
             '친구가 참여하는 대회와 클럽 일정을 모아봤어요.',
             style: tt.bodyMedium?.copyWith(
-              color: const Color(0xFF4B5563),
+              color: cs.onSurfaceVariant,
               height: 1.3,
               fontWeight: FontWeight.w800,
             ),
@@ -715,7 +701,7 @@ class _FriendActivitySummary extends StatelessWidget {
                   icon: Icons.groups_rounded,
                   label: '친구가 가입한 클럽보기',
                   count: '3',
-                  color: const Color(0xFF22C55E),
+                  color: cs.primary,
                   selected: mode == _FriendListMode.clubs,
                   onTap: () => onModeChanged(_FriendListMode.clubs),
                 ),
@@ -726,7 +712,7 @@ class _FriendActivitySummary extends StatelessWidget {
                   icon: Icons.emoji_events_rounded,
                   label: '친구가 신청한 대회보기',
                   count: '2',
-                  color: const Color(0xFF1D74FF),
+                  color: cs.primary,
                   selected: mode == _FriendListMode.tournaments,
                   onTap: () => onModeChanged(_FriendListMode.tournaments),
                 ),
@@ -758,59 +744,62 @@ class _SummaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? color : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? color : const Color(0xFFE5EAF0),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: selected ? Colors.white : color, size: 20),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color:
-                            selected ? Colors.white : const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
-                        height: 1.15,
-                      ),
-                ),
+            decoration: BoxDecoration(
+              color: selected ? color : cs.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: selected ? color : cs.outlineVariant,
               ),
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.18)
-                      : color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: selected ? Colors.white : color, size: 20),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: selected ? Colors.white : cs.onSurface,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                        ),
+                  ),
                 ),
-                child: Text(
-                  count,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: selected ? Colors.white : color,
-                        fontWeight: FontWeight.w900,
-                      ),
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white.withValues(alpha: 0.18)
+                        : color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    count,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: selected ? Colors.white : color,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -834,7 +823,6 @@ class _FriendList extends StatelessWidget {
             meta: '송파 · 주말 저녁 정기 모임',
             status: '클럽 멤버',
           ),
-          SizedBox(height: AppSpacing.sm),
           _FriendActivityCard(
             type: _FriendActivityType.club,
             friendName: '서연',
@@ -842,7 +830,6 @@ class _FriendList extends StatelessWidget {
             meta: '광주 · 수/토 운동',
             status: '운영진',
           ),
-          SizedBox(height: AppSpacing.sm),
           _FriendActivityCard(
             type: _FriendActivityType.club,
             friendName: '민지',
@@ -859,7 +846,6 @@ class _FriendList extends StatelessWidget {
             meta: '6월 21일 · 서울시민리그 공식 경기장',
             status: '대회 신청 완료',
           ),
-          SizedBox(height: AppSpacing.sm),
           _FriendActivityCard(
             type: _FriendActivityType.tournament,
             friendName: '지훈',
@@ -872,16 +858,15 @@ class _FriendList extends StatelessWidget {
           _FriendActivityCard(
             type: _FriendActivityType.tournament,
             friendName: '민지',
-            title: '2026 생활체육 서울시민리그 풋살리그',
-            meta: '6월 21일 · 서울시민리그 공식 경기장',
+            title: '서울 풋살 썸머컵',
+            meta: '7월 19일 · 서울시민리그 공식 경기장',
             status: '대회 신청 완료',
           ),
-          SizedBox(height: AppSpacing.sm),
           _FriendActivityCard(
             type: _FriendActivityType.club,
             friendName: '준호',
-            title: '서울 풋살 러너스 정기 모임',
-            meta: '6월 26일 · 잠실 풋살파크',
+            title: '서울 풋살 러너스 친선전',
+            meta: '7월 19일 · 잠실 풋살파크',
             status: '참석 예정',
           ),
         ],
@@ -899,7 +884,7 @@ class _FriendList extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -926,26 +911,18 @@ class _FriendActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final isTournament = type == _FriendActivityType.tournament;
-    final color =
-        isTournament ? const Color(0xFF1D74FF) : const Color(0xFF22C55E);
+    final color = cs.primary;
     final icon =
         isTournament ? Icons.emoji_events_rounded : Icons.groups_rounded;
     final label = isTournament ? '대회' : '클럽';
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      constraints: const BoxConstraints(minHeight: AppSizes.listRow),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -969,13 +946,13 @@ class _FriendActivityCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(99),
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                       child: Text(
                         label,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: color,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                             ),
                       ),
                     ),
@@ -985,7 +962,7 @@ class _FriendActivityCard extends StatelessWidget {
                         '$friendName님',
                         style:
                             Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: const Color(0xFF64748B),
+                                  color: cs.onSurfaceVariant,
                                   fontWeight: FontWeight.w800,
                                 ),
                       ),
@@ -998,8 +975,8 @@ class _FriendActivityCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
                 const SizedBox(height: 4),
@@ -1008,7 +985,7 @@ class _FriendActivityCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF64748B),
+                        color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                 ),
@@ -1017,7 +994,7 @@ class _FriendActivityCard extends StatelessWidget {
                   status,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: color,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                 ),
               ],

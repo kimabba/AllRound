@@ -81,8 +81,8 @@ class NearbyNewClubsSheet extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEAF7F1),
-                      borderRadius: BorderRadius.circular(16),
+                      color: cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Icon(Icons.near_me_rounded, color: cs.primary),
                   ),
@@ -172,7 +172,7 @@ class NearbyNewClubCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
       ),
       child: Row(
@@ -191,13 +191,13 @@ class NearbyNewClubCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE6F7C7),
-                        borderRadius: BorderRadius.circular(999),
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                       child: Text(
                         'NEW',
                         style: tt.labelSmall?.copyWith(
-                          color: const Color(0xFF4F8F00),
+                          color: cs.onPrimaryContainer,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -347,11 +347,12 @@ class SimpleClubTile extends StatelessWidget {
 
     if (item == null) {
       return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outlineVariant),
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant),
+            bottom: BorderSide(color: cs.outlineVariant),
+          ),
         ),
         child: Text(
           '관심 있는 클럽을 찾아 가입해보세요.',
@@ -360,88 +361,75 @@ class SimpleClubTile extends StatelessWidget {
       );
     }
 
-    return InkWell(
-      onTap: onOpen ?? () => context.push('/clubs/${item.id}', extra: item),
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.65)),
-          // 다크모드에서는 그림자 대신 surface 단계로 깊이 표현.
-          boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                SimpleClubAvatar(club: item, size: 72),
-                if (item.createdAt != null &&
-                    DateTime.now().difference(item.createdAt!).inDays <= 7)
-                  Positioned(
-                    left: -6,
-                    top: -6,
-                    child: Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF3B4F),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        'N',
-                        style: tt.labelMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen ?? () => context.push('/clubs/${item.id}', extra: item),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 84),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              SimpleClubAvatar(club: item, size: 52),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.titleMedium,
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.description ?? '새로운 클럽 일정을 확인해보세요.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${sportLabelFromString(item.sport)} · ${item.region ?? '지역 미정'} · ${clubMemberCountLabel(item.memberCount)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      item.description ?? '새로운 클럽 일정을 확인해보세요.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Text(
+                          '${sportLabelFromString(item.sport)} / ${item.region ?? '지역 미정'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          clubMemberCountLabel(item.memberCount),
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
-              onPressed: onFavoriteToggle == null
-                  ? null
-                  : () => onFavoriteToggle!(item, isFavorite),
-              icon: Icon(
-                isFavorite
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_outline_rounded,
+              IconButton(
+                tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+                onPressed: onFavoriteToggle == null
+                    ? null
+                    : () => onFavoriteToggle!(item, isFavorite),
+                icon: Icon(
+                  isFavorite
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_outline_rounded,
+                ),
+                color: isFavorite ? cs.primary : cs.onSurfaceVariant,
               ),
-              color: isFavorite ? cs.primary : cs.onSurfaceVariant,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -480,60 +468,17 @@ class SimpleClubAvatar extends StatelessWidget {
   }
 
   ClubLogoSpec _clubLogoSpec(Club club) {
-    final name = club.name;
-    if (name.contains('리얼')) {
-      return const ClubLogoSpec(
-        icon: Icons.shield_rounded,
-        background: Color(0xFFE8F2FF),
-        foreground: Color(0xFF2563EB),
-      );
-    }
-    if (name.contains('올라운드')) {
-      return const ClubLogoSpec(
-        icon: Icons.all_inclusive_rounded,
-        background: Color(0xFFEAF7F1),
-        foreground: Color(0xFF059669),
-      );
-    }
-    if (name.contains('위너스')) {
-      return const ClubLogoSpec(
-        icon: Icons.emoji_events_rounded,
-        background: Color(0xFFFFF4D6),
-        foreground: Color(0xFFF59E0B),
-      );
-    }
-    if (name.contains('랠리')) {
-      return const ClubLogoSpec(
-        icon: Icons.sports_tennis_rounded,
-        background: Color(0xFFFFF0D8),
-        foreground: Color(0xFFFF7A1A),
-      );
-    }
-    if (name.contains('첨단')) {
-      return const ClubLogoSpec(
-        icon: Icons.bolt_rounded,
-        background: Color(0xFFEDE9FE),
-        foreground: Color(0xFF7C3AED),
-      );
-    }
-    if (name.contains('주말')) {
-      return const ClubLogoSpec(
-        icon: Icons.wb_sunny_rounded,
-        background: Color(0xFFFFF7ED),
-        foreground: Color(0xFFEA580C),
-      );
-    }
     if (club.sport == 'tennis') {
       return const ClubLogoSpec(
         icon: Icons.sports_tennis_rounded,
-        background: Color(0xFFECFCCB), // 소프트 그린 (테니스=그린)
-        foreground: Color(0xFF65A30D),
+        background: Color(0xFFEDF1FF),
+        foreground: Color(0xFF3156D8),
       );
     }
     return const ClubLogoSpec(
       icon: Icons.sports_soccer_rounded,
-      background: Color(0xFFFFEDD5), // 소프트 오렌지 (풋살=오렌지)
-      foreground: Color(0xFFEA580C),
+      background: Color(0xFFEDF1FF),
+      foreground: Color(0xFF3156D8),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/moderation.dart';
+import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
 mixin ModerationApi on ApiBase {
@@ -23,10 +24,19 @@ mixin ModerationApi on ApiBase {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
-    final safeExtension =
-        {'jpg', 'jpeg', 'png', 'webp'}.contains(extension) ? extension : 'jpg';
-    final path =
-        '$userId/${DateTime.now().microsecondsSinceEpoch}.$safeExtension';
+    final normalized = extension.toLowerCase().replaceAll('jpeg', 'jpg');
+    final expectedContentType = switch (normalized) {
+      'jpg' => 'image/jpeg',
+      'png' => 'image/png',
+      _ => null,
+    };
+    if (expectedContentType == null || contentType != expectedContentType) {
+      throw const FormatException('Invalid sanitized image format');
+    }
+    // Report evidence is private and its database RPC still validates the
+    // reporter folder. Authorization itself uses Storage owner_id; the filename
+    // is opaque and never contains the device's original source name.
+    final path = '$userId/${newOpaqueImageObjectName(normalized)}';
     await supabase.storage.from('ugc-report-evidence').uploadBinary(
           path,
           bytes,

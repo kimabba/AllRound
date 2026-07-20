@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config.dart';
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 
 class AdminShell extends ConsumerWidget {
@@ -34,6 +36,7 @@ class AdminShell extends ConsumerWidget {
       ),
       data: (isAdmin) {
         if (!isAdmin) return const SizedBox.shrink();
+        if (!kIsWeb) return child;
         return Scaffold(
           body: Row(
             children: [
@@ -160,8 +163,7 @@ class _AdminSidebar extends ConsumerWidget {
                     icon: const Icon(Icons.logout, size: 16),
                     label: const Text('로그아웃'),
                     onPressed: () async {
-                      await Supabase.instance.client.auth
-                          .signOut(scope: SignOutScope.global);
+                      await signOutSecurely(Supabase.instance.client);
                     },
                   ),
                 ],

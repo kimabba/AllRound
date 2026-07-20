@@ -1,11 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 import '../../state/theme_provider.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/app_card.dart';
+
+class ProfileServiceSection extends StatelessWidget {
+  const ProfileServiceSection({super.key, required this.onRulesTap});
+
+  final VoidCallback onRulesTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: '도움말'),
+        const SizedBox(height: AppSpacing.sm),
+        const Divider(height: 1),
+        ActionRow(
+          icon: Icons.menu_book_outlined,
+          label: '룰북',
+          subtitle: '테니스와 풋살 규칙 확인',
+          onTap: onRulesTap,
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+}
 
 // ────────────────────────────────────────────────────────────
 // 화면 설정 섹션 (다크모드 토글)
@@ -21,11 +45,14 @@ class AppearanceSection extends ConsumerWidget {
     final mode = ref.watch(themeModeProvider);
 
     return Column(
+      key: AllRoundE2EKeys.profileAppearanceSection,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: '화면 설정'),
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
+        const SizedBox(height: AppSpacing.sm),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -63,6 +90,7 @@ class AppearanceSection extends ConsumerWidget {
             ],
           ),
         ),
+        const Divider(height: 1),
       ],
     );
   }
@@ -105,57 +133,54 @@ class AccountSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: '계정'),
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
-          child: Column(
-            children: [
-              ActionRow(
-                icon: Icons.notifications_active_outlined,
-                label: '알림함',
-                subtitle: unreadNotificationCount == 0
-                    ? '새 알림 없음'
-                    : '읽지 않은 알림 $unreadNotificationCount개',
-                onTap: onNotificationInboxTap,
-              ),
-              Divider(
-                height: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-              ),
-              ActionRow(
-                icon: Icons.notifications_outlined,
-                label: '알림 설정',
-                subtitle: activeCount == 0 ? '모든 알림 꺼짐' : '$activeCount개 알림 켜짐',
-                onTap: onNotificationTap,
-              ),
-              Divider(
-                height: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-              ),
-              ActionRow(
-                icon: Icons.logout_rounded,
-                label: '로그아웃',
-                accentColor: cs.error,
-                onTap: () async {
-                  // 서버 세션·리프레시 토큰까지 폐기 (JY-113 세션 잔존 버그).
-                  await ref
-                      .read(supabaseProvider)
-                      .auth
-                      .signOut(scope: SignOutScope.global);
-                },
-              ),
-              Divider(
-                height: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-              ),
-              ActionRow(
-                icon: Icons.person_remove_outlined,
-                label: '회원 탈퇴',
-                accentColor: cs.error,
-                onTap: () => _confirmDeleteAccount(context, ref),
-              ),
-            ],
-          ),
+        const SizedBox(height: AppSpacing.sm),
+        Divider(height: 1, color: cs.outlineVariant),
+        Column(
+          children: [
+            ActionRow(
+              icon: Icons.notifications_active_outlined,
+              label: '알림함',
+              subtitle: unreadNotificationCount == 0
+                  ? '새 알림 없음'
+                  : '읽지 않은 알림 $unreadNotificationCount개',
+              onTap: onNotificationInboxTap,
+            ),
+            Divider(
+              height: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+            ),
+            ActionRow(
+              icon: Icons.notifications_outlined,
+              label: '알림 설정',
+              subtitle: activeCount == 0 ? '모든 알림 꺼짐' : '$activeCount개 알림 켜짐',
+              onTap: onNotificationTap,
+            ),
+            Divider(
+              height: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+            ),
+            ActionRow(
+              icon: Icons.logout_rounded,
+              label: '로그아웃',
+              accentColor: cs.error,
+              onTap: () async {
+                // 서버 세션·리프레시 토큰까지 폐기 (JY-113 세션 잔존 버그).
+                await signOutSecurely(ref.read(supabaseProvider));
+              },
+            ),
+            Divider(
+              height: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+            ),
+            ActionRow(
+              icon: Icons.person_remove_outlined,
+              label: '회원 탈퇴',
+              accentColor: cs.error,
+              onTap: () => _confirmDeleteAccount(context, ref),
+            ),
+          ],
         ),
+        Divider(height: 1, color: cs.outlineVariant),
       ],
     );
   }
@@ -209,7 +234,7 @@ Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
         ),
       );
     }
-    await ref.read(supabaseProvider).auth.signOut();
+    await signOutSecurely(ref.read(supabaseProvider));
     // signOut 이 authState 변경 → 앱이 로그인 화면으로 라우팅.
   } catch (_) {
     messenger.showSnackBar(
@@ -245,30 +270,33 @@ class ActionRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: tt.bodyLarge?.copyWith(color: color)),
-                    if (subtitle != null)
-                      Text(
-                        subtitle!,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.listRow),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: tt.bodyLarge?.copyWith(color: color)),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              if (accentColor == null)
-                Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
-            ],
+                if (accentColor == null)
+                  Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),
@@ -364,7 +392,7 @@ class SheetActionRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,

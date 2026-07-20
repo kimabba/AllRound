@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/moderation.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_image_upload.dart';
 
 const _termsUrl =
     'https://kimabba.github.io/AllRound/legal/terms-of-service.html';
@@ -240,22 +241,29 @@ class _UgcReportSheetState extends ConsumerState<_UgcReportSheet> {
     );
     if (files.isEmpty) return;
     final next = <_EvidenceImage>[];
-    for (final file in files.take(3 - _images.length)) {
-      final extension = file.name.split('.').last.toLowerCase();
-      if (!{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) continue;
-      final bytes = await file.readAsBytes();
-      if (bytes.lengthInBytes > 5 * 1024 * 1024) continue;
-      next.add(
-        _EvidenceImage(
-          bytes: bytes,
-          extension: extension,
-          contentType: extension == 'png'
-              ? 'image/png'
-              : extension == 'webp'
-                  ? 'image/webp'
-                  : 'image/jpeg',
-        ),
-      );
+    try {
+      for (final file in files.take(3 - _images.length)) {
+        final image = await prepareClubImage(file);
+        if (image.bytes.lengthInBytes > 5 * 1024 * 1024) {
+          throw const ClubImagePreparationException(
+            '신고 사진은 한 장당 5MB 이하여야 합니다.',
+          );
+        }
+        next.add(
+          _EvidenceImage(
+            bytes: image.bytes,
+            extension: image.extension,
+            contentType: image.contentType,
+          ),
+        );
+      }
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
     }
     if (!mounted) return;
     setState(() => _images.addAll(next));

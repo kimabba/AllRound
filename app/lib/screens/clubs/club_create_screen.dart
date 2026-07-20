@@ -224,6 +224,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _submit() async {
+    // 약관 확인 같은 첫 await 전에 잠가야 빠른 연속 탭이 두 요청을 만들지 않는다.
+    if (_submitting || _submitted) return;
     if (!_validateBasicStep()) {
       setState(() => _step = 0);
       return;
@@ -233,17 +235,19 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
-    final allowed = await ensureUgcPermission(
-      context,
-      ref,
-      UgcActionKind.community,
-    );
-    if (!allowed || !mounted) return;
     setState(() {
       _submitting = true;
-      _submittingLabel = '제출 준비 중';
+      _submittingLabel = '권한 확인 중';
     });
     try {
+      final allowed = await ensureUgcPermission(
+        context,
+        ref,
+        UgcActionKind.community,
+      );
+      if (!allowed || !mounted) return;
+      _setSubmittingLabel('제출 준비 중');
+
       String? logoUrl;
       final introImageUrls = <String>[];
       final imageCount = (_logoBytes == null ? 0 : 1) + _introImages.length;
@@ -325,7 +329,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted && !_submitted) {
         setState(() {
           _submitting = false;
           _submittingLabel = null;
@@ -1154,7 +1158,7 @@ class _IntroPhotoThumb extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Image.memory(image.bytes, fit: BoxFit.cover),
         ),
@@ -1203,12 +1207,12 @@ class _LogoPickerCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: cs.outlineVariant),
         ),
         child: Row(
@@ -1219,7 +1223,7 @@ class _LogoPickerCard extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: logoBytes == null
                   ? Icon(Icons.add_photo_alternate_rounded,
@@ -1274,7 +1278,9 @@ class _SheetActionRow extends StatelessWidget {
         label,
         style: TextStyle(color: color, fontWeight: FontWeight.w700),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
       tileColor: cs.surfaceContainerLow,
       onTap: onTap,
     );
@@ -1349,7 +1355,7 @@ class _RegionPickerSheet extends StatelessWidget {
                     : const Icon(Icons.chevron_right_rounded),
                 tileColor: cs.surface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

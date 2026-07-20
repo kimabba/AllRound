@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../config.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
-import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
-import '../widgets/allround_logo.dart';
+import '../widgets/app_skeleton_card.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
   const RulesScreen({super.key});
@@ -134,11 +133,16 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     final cs = Theme.of(context).colorScheme;
 
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        key: AllRoundE2EKeys.rulesScreen,
+        appBar: AppBar(title: const Text('룰북')),
+        body: const _RulesLoadingState(),
+      );
     }
 
     if (_error != null) {
       return Scaffold(
+        key: AllRoundE2EKeys.rulesScreen,
         appBar: AppBar(title: const Text('룰북')),
         body: AppEmptyState(
           icon: Icons.menu_book_outlined,
@@ -152,24 +156,28 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
     if (_activeSport != null && _activeByCat != null) {
       return Scaffold(
+        key: AllRoundE2EKeys.rulesScreen,
         appBar: AppBar(
-          title: BrandedAppBarTitle(title: _titleForSport(_activeSport!)),
+          title: Text(_titleForSport(_activeSport!)),
         ),
-        backgroundColor: cs.surfaceContainerLow,
-        floatingActionButton: const _AskCoachFab(),
-        body: _RuleBookBody(
-          grouped: _activeByCat,
-          sport: _activeSport!,
-          query: _query,
-          searchController: _search,
-          usingPreviewData: _usingPreviewData,
+        backgroundColor: cs.surface,
+        body: KeyedSubtree(
+          key: AllRoundE2EKeys.rulesReady,
+          child: _RuleBookBody(
+            grouped: _activeByCat,
+            sport: _activeSport!,
+            query: _query,
+            searchController: _search,
+            usingPreviewData: _usingPreviewData,
+          ),
         ),
       );
     }
 
     return Scaffold(
+      key: AllRoundE2EKeys.rulesScreen,
       appBar: AppBar(
-        title: const BrandedAppBarTitle(title: '룰북'),
+        title: const Text('룰북'),
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -181,26 +189,28 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           unselectedLabelColor: cs.onSurfaceVariant,
         ),
       ),
-      backgroundColor: cs.surfaceContainerLow,
-      floatingActionButton: const _AskCoachFab(),
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          _RuleBookBody(
-            grouped: _tennisByCat,
-            sport: 'tennis',
-            query: _query,
-            searchController: _search,
-            usingPreviewData: _usingPreviewData,
-          ),
-          _RuleBookBody(
-            grouped: _futsalByCat,
-            sport: 'futsal',
-            query: _query,
-            searchController: _search,
-            usingPreviewData: _usingPreviewData,
-          ),
-        ],
+      backgroundColor: cs.surface,
+      body: KeyedSubtree(
+        key: AllRoundE2EKeys.rulesReady,
+        child: TabBarView(
+          controller: _tab,
+          children: [
+            _RuleBookBody(
+              grouped: _tennisByCat,
+              sport: 'tennis',
+              query: _query,
+              searchController: _search,
+              usingPreviewData: _usingPreviewData,
+            ),
+            _RuleBookBody(
+              grouped: _futsalByCat,
+              sport: 'futsal',
+              query: _query,
+              searchController: _search,
+              usingPreviewData: _usingPreviewData,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -230,9 +240,9 @@ class _RuleBookBody extends StatelessWidget {
     if (grouped == null || grouped!.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
           AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
+          AppSpacing.xl,
           AppSpacing.xxxl,
         ),
         children: [
@@ -257,9 +267,9 @@ class _RuleBookBody extends StatelessWidget {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
         AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
+        AppSpacing.xl,
         AppSpacing.xxxl,
       ),
       children: [
@@ -317,16 +327,50 @@ class _RuleBookBody extends StatelessWidget {
   }
 }
 
-class _AskCoachFab extends StatelessWidget {
-  const _AskCoachFab();
+class _RulesLoadingState extends StatelessWidget {
+  const _RulesLoadingState();
 
   @override
   Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
-      onPressed: () => context.go('/'),
-      icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-      label: const Text('이 상황은 어떻게 되나요?'),
-      extendedPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+    final cs = Theme.of(context).colorScheme;
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          Container(
+            height: AppSizes.control,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          for (var index = 0; index < 5; index++) ...[
+            Container(
+              height: AppSizes.listRow,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: index.isEven ? 0.72 : 0.56,
+                child: Container(
+                  height: 14,
+                  color: cs.surfaceContainerHighest,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -408,29 +452,16 @@ class _RuleSearchCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final accent = _accentFor(context, sport);
 
-    return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(14),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xs,
-      ),
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          hintText: '룰 검색하기...',
-          prefixIcon: Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
-          suffixIcon: Icon(
-            sport == 'tennis'
-                ? Icons.sports_tennis_rounded
-                : Icons.sports_soccer_rounded,
-            color: accent,
-          ),
-          filled: false,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        hintText: '룰 검색하기...',
+        prefixIcon: Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
+        suffixIcon: Icon(
+          sport == 'tennis'
+              ? Icons.sports_tennis_rounded
+              : Icons.sports_soccer_rounded,
+          color: accent,
         ),
       ),
     );
@@ -451,22 +482,22 @@ class _PreviewRulesBanner extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFEDD5),
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.visibility_rounded,
             size: 18,
-            color: Color(0xFFEA580C),
+            color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
               '백엔드 연결 전 디자인 미리보기 룰북입니다.',
               style: tt.labelMedium?.copyWith(
-                color: const Color(0xFF9A3412),
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -484,89 +515,49 @@ class _DailyRuleQuizCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final quiz = _quizForToday(sport);
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: Ink(
-        height: 126,
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/rules/rule-quiz-cover.jpg'),
-            fit: BoxFit.cover,
+      child: InkWell(
+        onTap: () => _showQuiz(context, quiz),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 112),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: cs.outline),
+              bottom: BorderSide(color: cs.outline),
+            ),
           ),
-        ),
-        child: InkWell(
-          onTap: () => _showQuiz(context, quiz),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xF20A1832),
-                  Color(0xC90A1832),
-                  Color(0x250A1832),
-                ],
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD9F84B),
-                            borderRadius: AppRadius.pill,
-                          ),
-                          child: Text(
-                            'TODAY QUIZ',
-                            style: tt.labelSmall?.copyWith(
-                              color: const Color(0xFF111827),
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          '오늘의 룰 퀴즈',
-                          style: tt.titleSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          quiz.question,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.82),
-                          ),
-                        ),
-                      ],
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '오늘의 룰 퀴즈',
+                      style: tt.labelMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 22,
-                    color: Colors.white,
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      quiz.question,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.titleMedium,
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Icon(Icons.arrow_forward_rounded, color: cs.primary),
+            ],
           ),
         ),
       ),
@@ -649,19 +640,20 @@ void _showQuiz(BuildContext context, _RuleQuiz quiz) {
         final tt = Theme.of(context).textTheme;
 
         return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
           title: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.lightbulb_outline_rounded,
-                color: Color(0xFFD97706),
+                color: cs.primary,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   '오늘의 룰 퀴즈',
-                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
             ],
@@ -698,9 +690,9 @@ void _showQuiz(BuildContext context, _RuleQuiz quiz) {
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
                       color: selectedIndex == quiz.correctIndex
-                          ? const Color(0xFFECFCCB)
+                          ? cs.primaryContainer
                           : cs.errorContainer,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
                     ),
                     child: Text(
                       quiz.explanation,
@@ -768,14 +760,14 @@ class _QuizOption extends StatelessWidget {
 
     return Material(
       color: background,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.xl),
             border: Border.all(
                 color: color, width: selected || correct || wrong ? 2 : 1),
           ),
@@ -790,7 +782,7 @@ class _QuizOption extends StatelessWidget {
                     color: correct || wrong || selected
                         ? Colors.white
                         : cs.onSurface,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -820,28 +812,27 @@ class _CategoryGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = grouped.entries.toList();
+    final cs = Theme.of(context).colorScheme;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: entries.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing: AppSpacing.sm,
-        childAspectRatio: 1.2,
-      ),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return _CategoryCard(
-          title: entry.key,
-          count: entry.value.length,
-          icon: _iconForCategory(entry.key),
-          sport: sport,
-          onTap: () =>
-              _showCategorySheet(context, entry.key, entry.value, sport),
-        );
-      },
+    return Column(
+      children: [
+        for (var index = 0; index < entries.length; index++) ...[
+          _CategoryCard(
+            title: entries[index].key,
+            count: entries[index].value.length,
+            icon: _iconForCategory(entries[index].key),
+            sport: sport,
+            onTap: () => _showCategorySheet(
+              context,
+              entries[index].key,
+              entries[index].value,
+              sport,
+            ),
+          ),
+          if (index < entries.length - 1)
+            Divider(height: 1, color: cs.outlineVariant),
+        ],
+      ],
     );
   }
 
@@ -891,62 +882,61 @@ class _CategoryCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final accent = _accentFor(context, sport);
-    final accentContainer = _accentContainerFor(context, sport);
     final description = _descriptionForCategory(title);
 
-    return AppCard(
-      onTap: onTap,
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(14),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: accentContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: accent, size: 26),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: AppSizes.listRow + AppSpacing.lg,
           ),
-          const Spacer(),
-          Text(
-            title,
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: AppSizes.touchTarget,
+                  height: AppSizes.touchTarget,
+                  child: Icon(icon, color: accent, size: 22),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '$description · $count개 규칙',
+                        style: tt.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.25,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: cs.onSurfaceVariant,
+                  size: 20,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            description,
-            style: tt.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.25,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              '$count개 규칙',
-              style: tt.labelSmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -980,7 +970,7 @@ class _PopularRulesList extends StatelessWidget {
       children: [
         Text(
           title,
-          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
         for (var index = 0; index < articles.length; index++) ...[
@@ -1008,49 +998,46 @@ class _ArticleRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final accent = _accentFor(context, sport);
-    final accentContainer = _accentContainerFor(context, sport);
-
-    return AppCard(
-      onTap: () => _showArticle(context, article),
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: accentContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '${index + 1}',
-              style: tt.labelSmall?.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w900,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showArticle(context, article),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${index + 1}'.padLeft(2, '0'),
+                  style: tt.labelMedium?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  article.title,
+                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              article.title,
-              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            size: 20,
-            color: cs.onSurfaceVariant,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1101,7 +1088,7 @@ class _CategorySheet extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -1257,9 +1244,4 @@ String _descriptionForCategory(String category) {
 Color _accentFor(BuildContext context, String sport) {
   final cs = Theme.of(context).colorScheme;
   return sport == 'tennis' ? cs.tertiary : cs.secondary;
-}
-
-Color _accentContainerFor(BuildContext context, String sport) {
-  final cs = Theme.of(context).colorScheme;
-  return sport == 'tennis' ? cs.tertiaryContainer : cs.secondaryContainer;
 }

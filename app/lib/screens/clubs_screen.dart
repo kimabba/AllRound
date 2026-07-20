@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../config.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/club_sort.dart';
 import '../utils/grade_labels.dart';
-import '../widgets/allround_logo.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
@@ -71,6 +73,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   Future<void> _loadMyClubs() async {
     setState(() => _loadingMy = true);
+    if (AppConfig.userDesignPreview) {
+      setState(() {
+        _myClubs = _previewMyClubs;
+        _loadingMy = false;
+      });
+      return;
+    }
     try {
       final list = await ref.read(apiProvider).myClubs();
       if (mounted) setState(() => _myClubs = list);
@@ -87,6 +96,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _loading = true;
       _searchError = null;
     });
+    if (AppConfig.userDesignPreview) {
+      setState(() {
+        _clubs = _previewClubs;
+        _loading = false;
+      });
+      return;
+    }
     try {
       final api = ref.read(apiProvider);
       final sports = _clubInterests.isEmpty
@@ -116,6 +132,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   Future<void> _loadRecruitingPosts() async {
     setState(() => _loadingRecruiting = true);
+    if (AppConfig.userDesignPreview) {
+      setState(() {
+        _recruitingPosts = _previewRecruitingPosts;
+        _loadingRecruiting = false;
+      });
+      return;
+    }
     try {
       final posts = await ref.read(apiProvider).teamRecruitingPosts();
       if (mounted) setState(() => _recruitingPosts = posts);
@@ -194,9 +217,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+        border: Border(
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
       ),
       child: Row(
         children: [
@@ -257,6 +280,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
+    if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
     ref.invalidate(clubFavoriteIdsProvider);
     ref.invalidate(myFavoriteClubsProvider);
@@ -370,16 +394,20 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
+      key: AllRoundE2EKeys.clubsScreen,
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const BrandedAppBarTitle(title: '클럽'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreate,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('클럽 만들기'),
+        title: const Text('클럽'),
+        actions: [
+          TextButton.icon(
+            onPressed: _openCreate,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('만들기'),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshClubLists,
@@ -388,10 +416,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           slivers: [
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
                 AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                112,
+                AppSpacing.xl,
+                96,
               ),
               sliver: SliverList.list(
                 children: [
@@ -410,7 +438,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     trailing: DropdownButtonHideUnderline(
                       child: DropdownButton<ClubSortOrder>(
                         value: _clubSortOrder,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                         icon: const Icon(Icons.sort_rounded),
                         onChanged: _selectClubSortOrder,
                         items: [
@@ -665,3 +693,84 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         .toList(growable: false);
   }
 }
+
+final _previewClubs = [
+  Club(
+    id: 'preview-club-futsal',
+    sport: 'futsal',
+    name: '서울 풋살 러너스',
+    region: '서울',
+    address: '서울 송파구 잠실동',
+    description: '주말 저녁, 꾸준히 함께 뛰는 생활체육 풋살 클럽입니다.',
+    memberCount: 24,
+    meetingDays: const ['토', '일'],
+    monthlyFee: 30000,
+    genderPreference: 'mixed',
+    contact: '오픈채팅 문의',
+    createdAt: DateTime(2026, 7, 10),
+  ),
+  Club(
+    id: 'preview-club-futsal-2',
+    sport: 'futsal',
+    name: '한강 풋살 유나이티드',
+    region: '서울',
+    address: '서울 마포구 망원동',
+    description: '초중급 중심으로 매주 수요일 저녁에 운동합니다.',
+    memberCount: 18,
+    meetingDays: const ['수'],
+    monthlyFee: 25000,
+    genderPreference: 'mixed',
+    createdAt: DateTime(2026, 6, 22),
+  ),
+  Club(
+    id: 'preview-club-tennis',
+    sport: 'tennis',
+    name: '광주 테니스 크루',
+    region: '광주',
+    address: '광주 서구 풍암동',
+    description: '초중급 복식 위주로 함께 치는 테니스 클럽입니다.',
+    memberCount: 38,
+    meetingDays: const ['화', '목'],
+    monthlyFee: 20000,
+    genderPreference: 'mixed',
+    createdAt: DateTime(2026, 5, 8),
+  ),
+];
+
+final _previewMyClubs = [
+  Club(
+    id: 'preview-club-my',
+    sport: 'futsal',
+    name: '성수 풋살 메이트',
+    region: '서울',
+    address: '서울 성동구 성수동',
+    description: '평일 퇴근 후 가볍게 뛰는 직장인 풋살 모임입니다.',
+    memberCount: 16,
+    meetingDays: const ['목'],
+    monthlyFee: 20000,
+    myRole: 'member',
+  ),
+];
+
+final _previewRecruitingPosts = [
+  RecruitingPostPreview(
+    id: 'preview-recruiting-1',
+    clubId: 'preview-club-futsal',
+    sport: 'futsal',
+    clubName: '서울 풋살 러너스',
+    title: '토요일 저녁 필드 플레이어 모집',
+    region: '서울',
+    place: '잠실 풋살장',
+    schedule: '매주 토요일 19:00',
+    grade: '초중급',
+    gender: '무관',
+    age: '20–40대',
+    position: '필드',
+    fieldCount: 3,
+    keeperCount: 1,
+    totalCount: 4,
+    cost: '회당 1만원',
+    intro: '기본 매너를 지키며 꾸준히 함께할 멤버를 찾습니다.',
+    createdAt: DateTime(2026, 7, 17),
+  ),
+];

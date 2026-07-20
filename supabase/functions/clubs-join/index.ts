@@ -9,7 +9,7 @@
 // }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { requireUser } from '../_shared/auth.ts';
+import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -134,6 +134,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'request') {
+    const ageError = await requireVerifiedAge(auth.supabase);
+    if (ageError) return ageError;
+
     const accessError = await ugcAccessError(supa, userId, 'club_join');
     if (accessError) return errorResponse(accessError, 403);
 
@@ -351,7 +354,7 @@ Deno.serve(async (req) => {
       .from('clubs')
       .update({ monthly_fee: fee })
       .eq('id', clubId)
-      .in('status', ['approved', 'rejected'])
+      .in('status', ['pending', 'approved', 'rejected'])
       .select('id')
       .maybeSingle();
     if (error) return errorResponse(error.message, 500);

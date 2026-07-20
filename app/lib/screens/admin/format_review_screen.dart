@@ -1,14 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../state/providers.dart';
 
-/// 정형화 검수 대기(needs_review) 큐. staged 콘텐츠가 있는 행과 검증 실패로
-/// format_flags 만 있는 행을 모두 포함한다. 위젯 테스트에서 override 가능하도록
-/// public 으로 노출.
+import '../../models/format_review.dart';
+import '../../services/api.dart';
+import '../../state/providers.dart';
+import '../../theme/tokens.dart';
+
 final formatReviewQueueProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider.autoDispose<List<FormatReviewItem>>((ref) async {
   return ref.read(apiProvider).formatReviewQueue();
+});
+
+abstract interface class FormatReviewActions {
+  Future<bool> approve(FormatReviewItem item);
+
+  Future<bool> reject(FormatReviewItem item, String reason);
+}
+
+class _ApiFormatReviewActions implements FormatReviewActions {
+  const _ApiFormatReviewActions(this.api);
+
+  final ApiService api;
+
+  @override
+  Future<bool> approve(FormatReviewItem item) => api.applyStaged(item);
+
+  @override
+  Future<bool> reject(FormatReviewItem item, String reason) {
+    return api.rejectStaged(item, reason);
+  }
+}
+
+final formatReviewActionsProvider = Provider<FormatReviewActions>((ref) {
+  return _ApiFormatReviewActions(ref.read(apiProvider));
 });
 
 class FormatReviewScreen extends ConsumerWidget {
@@ -16,90 +41,227 @@ class FormatReviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(formatReviewQueueProvider);
+    final queue = ref.watch(formatReviewQueueProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('요강 검수')),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('오류: $e')),
-        data: (rows) => rows.isEmpty
-            ? const Center(child: Text('검수할 요강이 없습니다.'))
+      body: queue.when(
+        loading: () => const _ReviewLoading(),
+        error: (_, __) => _ReviewStateMessage(
+          icon: Icons.cloud_off_outlined,
+          title: '검수 목록을 불러오지 못했습니다',
+          description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
+          actionLabel: '다시 시도',
+          onAction: () => ref.invalidate(formatReviewQueueProvider),
+        ),
+        data: (items) => items.isEmpty
+            ? const _ReviewStateMessage(
+                icon: Icons.task_alt_outlined,
+                title: '검수할 요강이 없습니다',
+                description: '새 검수 항목이 생기면 이곳에 표시됩니다.',
+              )
             : ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: rows.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _ReviewCard(row: rows[i]),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxl,
+                  AppSpacing.xl,
+                  AppSpacing.xxxl,
+                ),
+                itemCount: items.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: AppSpacing.xxl),
+                itemBuilder: (_, index) => _ReviewPanel(item: items[index]),
               ),
       ),
     );
   }
 }
 
-class _ReviewCard extends ConsumerWidget {
-  const _ReviewCard({required this.row});
+class _ReviewPanel extends ConsumerStatefulWidget {
+  const _ReviewPanel({required this.item});
 
-  final Map<String, dynamic> row;
+  final FormatReviewItem item;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stagedRaw = row['format_staged'] as Map?;
-    final sourceUrl = row['source_url'] as String?;
-    final hasStaged = stagedRaw != null;
-    return Card(
+  ConsumerState<_ReviewPanel> createState() => _ReviewPanelState();
+}
+
+class _ReviewPanelState extends ConsumerState<_ReviewPanel> {
+  _ReviewOperation? _operation;
+
+  bool get _busy => _operation != null;
+
+  Future<void> _approve() async {
+    await _run(
+      operation: _ReviewOperation.approve,
+      successMessage: '요강을 승인했습니다.',
+      action: () => ref.read(formatReviewActionsProvider).approve(widget.item),
+    );
+  }
+
+  Future<void> _reject() async {
+    final reason = await _requestRejectionReason();
+    if (reason == null || !mounted) return;
+    await _run(
+      operation: _ReviewOperation.reject,
+      successMessage: '요강을 반려했습니다.',
+      action: () =>
+          ref.read(formatReviewActionsProvider).reject(widget.item, reason),
+    );
+  }
+
+  Future<void> _run({
+    required _ReviewOperation operation,
+    required String successMessage,
+    required Future<bool> Function() action,
+  }) async {
+    if (_busy) return;
+    setState(() => _operation = operation);
+    try {
+      final applied = await action();
+      if (!mounted) return;
+      if (!applied) {
+        _showMessage('원문이 변경됐습니다. 목록을 새로 불러온 뒤 다시 확인해 주세요.');
+        ref.invalidate(formatReviewQueueProvider);
+        return;
+      }
+      _showMessage(successMessage);
+      ref.invalidate(formatReviewQueueProvider);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _operation = null);
+    }
+  }
+
+  Future<String?> _requestRejectionReason() async {
+    var input = '';
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('요강 반려'),
+        content: TextField(
+          autofocus: true,
+          onChanged: (value) => input = value,
+          maxLength: 200,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: '반려 사유',
+            hintText: '다시 확인할 내용을 적어 주세요',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = input.trim();
+              if (value.isNotEmpty) Navigator.of(dialogContext).pop(value);
+            },
+            child: const Text('반려 확정'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSource() async {
+    final sourceUrl = widget.item.sourceUrl;
+    if (sourceUrl == null) return;
+    final opened = await launchUrl(sourceUrl);
+    if (!opened && mounted) {
+      _showMessage('원문 링크를 열지 못했습니다.');
+    }
+  }
+
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final staged = item.staged;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: AppRadius.card,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppSpacing.cardInner,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(row['title'] as String? ?? '',
-                style: Theme.of(context).textTheme.titleMedium),
-            if (sourceUrl != null)
-              TextButton.icon(
-                icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('원문 공고 보기'),
-                onPressed: () => launchUrl(Uri.parse(sourceUrl)),
+            Text(
+              item.title,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-            const SizedBox(height: 8),
-            if (hasStaged)
-              ..._stagedContent(context, stagedRaw.cast<String, dynamic>())
-            else
-              ..._validationFailureContent(context),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () async {
-                    final ok = await ref
-                        .read(apiProvider)
-                        .rejectStaged(row['id'] as String, '검수 반려');
-                    if (!context.mounted) return;
-                    _notify(context, ok,
-                        okMsg: '반려 처리됨',
-                        failMsg: '반려 실패 — 이미 처리됐거나 검증실패 행일 수 있음');
-                    ref.invalidate(formatReviewQueueProvider);
-                  },
-                  child: const Text('반려'),
+            ),
+            if (item.sourceUrl != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              TextButton.icon(
+                onPressed: _busy ? null : _openSource,
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text('원문 공고 보기'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.touchTarget),
                 ),
-                if (hasStaged) ...[
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(88, 44),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            Divider(color: colorScheme.outlineVariant),
+            const SizedBox(height: AppSpacing.lg),
+            if (staged != null)
+              _StagedContent(staged: staged)
+            else
+              _ValidationFailure(flags: item.flags),
+            const SizedBox(height: AppSpacing.xl),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton(
+                  onPressed: _busy ? null : _reject,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, AppSizes.control),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(AppRadius.sm),
+                      ),
                     ),
-                    onPressed: () async {
-                      final ok = await ref
-                          .read(apiProvider)
-                          .applyStaged(row['id'] as String);
-                      if (!context.mounted) return;
-                      _notify(context, ok,
-                          okMsg: '승인 반영됨',
-                          failMsg: '승인 실패 — 이미 처리됐거나 반영할 내용 없음');
-                      ref.invalidate(formatReviewQueueProvider);
-                    },
-                    child: const Text('승인'),
                   ),
-                ],
+                  child: _operation == _ReviewOperation.reject
+                      ? const _ButtonProgress()
+                      : const Text('반려'),
+                ),
+                if (staged != null)
+                  FilledButton(
+                    onPressed: _busy ? null : _approve,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, AppSizes.control),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(AppRadius.sm),
+                        ),
+                      ),
+                    ),
+                    child: _operation == _ReviewOperation.approve
+                        ? const _ButtonProgress()
+                        : const Text('승인'),
+                  ),
               ],
             ),
           ],
@@ -107,85 +269,258 @@ class _ReviewCard extends ConsumerWidget {
       ),
     );
   }
+}
 
-  void _notify(BuildContext context, bool ok,
-      {required String okMsg, required String failMsg}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? okMsg : failMsg)),
+class _StagedContent extends StatelessWidget {
+  const _StagedContent({required this.staged});
+
+  final StagedRegulation staged;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasContent = staged.fields.isNotEmpty ||
+        staged.description != null ||
+        staged.notes.isNotEmpty ||
+        staged.body != null ||
+        staged.prize != null ||
+        staged.format != null;
+
+    if (!hasContent) {
+      return Text(
+        'AI가 제안한 내용이 비어 있습니다. 원문을 확인해 주세요.',
+        style: textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('AI 정형화 제안', style: textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.md),
+        ...staged.fields.map(
+          (field) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${field.label}  ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: field.value),
+                ],
+              ),
+              style: textTheme.bodyMedium,
+            ),
+          ),
+        ),
+        if (staged.format != null)
+          _LabeledParagraph(label: '진행 방식', value: staged.format!),
+        if (staged.prize != null)
+          _LabeledParagraph(label: '시상', value: staged.prize!),
+        if (staged.description != null)
+          _LabeledParagraph(label: '요약', value: staged.description!),
+        if (staged.notes.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text('유의 사항', style: textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          ...staged.notes.map(
+            (note) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text('• $note', style: textTheme.bodyMedium),
+            ),
+          ),
+        ],
+        if (staged.body != null)
+          _LabeledParagraph(label: '상세 요강', value: staged.body!),
+      ],
     );
   }
+}
 
-  List<Widget> _stagedContent(BuildContext context, Map<String, dynamic> staged) {
-    final fields = (staged['regulation_fields'] as List?) ?? [];
-    return [
-      ...fields.map((f) {
-        final m = (f as Map).cast<String, dynamic>();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text('${m['label']}: ${m['value']}'),
-        );
-      }),
-      if (staged['description'] != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text('요약: ${staged['description']}',
-              style: Theme.of(context).textTheme.bodySmall),
-        ),
-    ];
+class _LabeledParagraph extends StatelessWidget {
+  const _LabeledParagraph({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.xs),
+          SelectableText(value, style: textTheme.bodyMedium),
+        ],
+      ),
+    );
   }
+}
 
-  List<Widget> _validationFailureContent(BuildContext context) {
-    final flags = (row['format_flags'] as List?) ?? [];
-    return [
-      Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
+class _ValidationFailure extends StatelessWidget {
+  const _ValidationFailure({required this.flags});
+
+  final List<FormatReviewFlag> flags;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.35)),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+      ),
+      child: Padding(
+        padding: AppSpacing.cardInner,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '검증 실패 — 자동 반영 불가, 수동 확인 필요',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
+              '자동 검증을 통과하지 못했습니다',
+              style: textTheme.titleMedium?.copyWith(
+                color: colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 4),
-            ...flags.map((f) {
-              final m = (f as Map).cast<String, dynamic>();
-              final field = m['field'];
-              final code = m['code'];
-              final masked = m['masked'];
-              final maskedSuffix =
-                  (masked != null && (masked as String).isNotEmpty)
-                      ? ' ($masked)'
-                      : '';
-              // raw code를 어드민이 읽을 한국어 라벨로. 미매핑 code는 원문 노출(안전한 fallback).
-              final label = _flagLabels[code] ?? code;
-              // _model/_all 은 특정 필드가 아니라 모델·전체 수준 플래그 → 필드명 숨김.
-              final isMetaField = field == '_model' || field == '_all';
-              final text = isMetaField
-                  ? '검증 실패: $label$maskedSuffix'
-                  : '검증 실패: $field — $label$maskedSuffix';
-              return Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  text,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                ),
-              );
-            }),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '원문을 확인한 뒤 반려해 다시 처리해 주세요.',
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onErrorContainer,
+              ),
+            ),
+            if (flags.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              ...flags.map((flag) {
+                final masked = flag.masked == null ? '' : ' (${flag.masked})';
+                // raw code를 어드민이 읽을 한국어 라벨로. 미매핑 code는 원문 노출(안전한 fallback).
+                final label = _flagLabels[flag.code] ?? flag.code;
+                // _model/_all 은 특정 필드가 아니라 모델·전체 수준 플래그 → 필드명 숨김.
+                final isMetaField =
+                    flag.field == '_model' || flag.field == '_all';
+                final text = isMetaField
+                    ? '$label$masked'
+                    : '${flag.field} · $label$masked';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(
+                    text,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onErrorContainer,
+                    ),
+                  ),
+                );
+              }),
+            ],
           ],
         ),
       ),
-    ];
+    );
   }
 }
+
+class _ReviewLoading extends StatelessWidget {
+  const _ReviewLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: AppSpacing.cardInner,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: AppSpacing.md),
+            Text('검수 목록을 불러오는 중입니다'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewStateMessage extends StatelessWidget {
+  const _ReviewStateMessage({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 24, color: colorScheme.onSurfaceVariant),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              title,
+              style: textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              description,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              OutlinedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(actionLabel!),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.control),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ButtonProgress extends StatelessWidget {
+  const _ButtonProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+  }
+}
+
+enum _ReviewOperation { approve, reject }
 
 // format-pending 검증 flag code → 어드민용 한국어 라벨.
 // 계좌/한글금액 not_in_source 는 오탐이 잦음(원문 표기 다양성) → HANDOFF §3 참조.

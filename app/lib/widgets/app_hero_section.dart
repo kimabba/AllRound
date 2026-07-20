@@ -26,24 +26,21 @@ class AppHeroSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [cs.primary, cs.primaryContainer],
-        ),
+        color: cs.surfaceContainerLowest,
         borderRadius: AppRadius.hero,
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: cs.onPrimary, size: 18),
+              Icon(icon, color: cs.primary, size: 18),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 eyebrow,
                 style: tt.labelMedium?.copyWith(
-                  color: cs.onPrimary.withValues(alpha: 0.85),
+                  color: cs.primary,
                 ),
               ),
             ],
@@ -51,7 +48,7 @@ class AppHeroSection extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
-            style: tt.headlineMedium?.copyWith(color: cs.onPrimary),
+            style: tt.headlineMedium?.copyWith(color: cs.onSurface),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -59,19 +56,12 @@ class AppHeroSection extends StatelessWidget {
           Text(
             subtitle,
             style: tt.bodyMedium?.copyWith(
-              color: cs.onPrimary.withValues(alpha: 0.85),
+              color: cs.onSurfaceVariant,
             ),
           ),
           if (ctaLabel != null && onCta != null) ...[
             const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: onCta,
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.onPrimary,
-                foregroundColor: cs.primary,
-              ),
-              child: Text(ctaLabel!),
-            ),
+            FilledButton(onPressed: onCta, child: Text(ctaLabel!)),
           ],
         ],
       ),

@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
+import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../utils/recent_tournaments.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
@@ -28,6 +30,9 @@ class _TournamentDetailScreenState
   Tournament? _t;
   bool _loading = true;
   String? _error;
+
+  bool get _isPreviewTournament =>
+      !kReleaseMode && widget.tournamentId.startsWith('preview-');
 
   @override
   void initState() {
@@ -46,8 +51,7 @@ class _TournamentDetailScreenState
   }
 
   Future<void> _load() async {
-    if (AppConfig.userDesignPreview &&
-        widget.tournamentId.startsWith('preview-')) {
+    if (_isPreviewTournament) {
       setState(() {
         _t = _previewTournamentById(widget.tournamentId);
         _loading = false;
@@ -95,15 +99,18 @@ class _TournamentDetailScreenState
     final isFav = (favorites.valueOrNull ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview = AppConfig.userDesignPreview &&
-        widget.tournamentId.startsWith('preview-');
+    final isPreview = _isPreviewTournament;
 
     return Scaffold(
+      key: AllRoundE2EKeys.tournamentDetailScreen,
       appBar: AppBar(
-        title: const Text('대회 상세'),
+        title: const Text('대회'),
         actions: [
           if (_t != null && !isPreview)
             IconButton(
+              key: isFav
+                  ? AllRoundE2EKeys.tournamentFavoriteSaved
+                  : AllRoundE2EKeys.tournamentFavoriteUnsaved,
               icon: Icon(
                 isFav ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
                 color: isFav ? cs.primary : null,
@@ -140,12 +147,56 @@ class _TournamentDetailScreenState
           ? null
           : _TournamentApplyBar(tournament: _t!, isPreview: isPreview),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _TournamentDetailLoadingState()
           : _error != null
               ? _TournamentDetailError(message: _error!, onRetry: _load)
               : _t == null
-                  ? const Center(child: Text('대회 정보 없음'))
+                  ? const AppEmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: '대회 정보가 없습니다',
+                      description: '대회 목록에서 다른 대회를 확인해 주세요.',
+                    )
                   : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+    );
+  }
+}
+
+class _TournamentDetailLoadingState extends StatelessWidget {
+  const _TournamentDetailLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppSkeletonCard(
+      loading: true,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          Container(height: 28, color: cs.surfaceContainerHighest),
+          const SizedBox(height: AppSpacing.sm),
+          FractionallySizedBox(
+            widthFactor: 0.68,
+            alignment: Alignment.centerLeft,
+            child: Container(height: 16, color: cs.surfaceContainerHighest),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          for (var index = 0; index < 5; index++) ...[
+            Container(
+              height: AppSizes.listRow,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -166,8 +217,6 @@ class _DetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final isTennis = t.sport == 'tennis';
-    final accentColor = isTennis ? cs.primary : cs.tertiary;
     final futsalCategory = t.sport == 'futsal'
         ? futsalEventCategoryLabel(t.futsalEventCategory)
         : '';
@@ -177,9 +226,9 @@ class _DetailBody extends StatelessWidget {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xl,
+        AppSpacing.xl,
         AppSpacing.huge,
       ),
       child: Center(
@@ -193,14 +242,19 @@ class _DetailBody extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
               ],
 
-              // ── 통합 헤더 ──
-              _StatusPill(closed: t.isRegistrationClosed),
-              const SizedBox(height: AppSpacing.md),
+              Text(
+                sportLabelFromString(t.sport),
+                style: tt.labelMedium?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 t.title,
-                style: tt.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  height: 1.18,
+                style: tt.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
                 ),
               ),
               if (t.organizer != null) ...[
@@ -214,48 +268,52 @@ class _DetailBody extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Text(
+                    t.isRegistrationClosed ? '접수 마감' : '접수 중',
+                    style: tt.labelMedium?.copyWith(
+                      color: t.isRegistrationClosed
+                          ? cs.onSurfaceVariant
+                          : cs.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (t.applicationDeadline != null) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    Text(
+                      '${df.format(t.applicationDeadline!)} 마감',
+                      style: tt.labelMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xl),
               if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
                 _TournamentPosterCard(url: t.posterUrl!.trim()),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.xl),
               ],
 
-              // ── 핵심 정보 (행 레이아웃) ──
-              _DetailInfoRow(
-                icon: Icons.calendar_today_rounded,
-                label: '대회일',
-                value: _dateText(),
-              ),
-              if (t.applicationDeadline != null)
-                _DetailInfoRow(
-                  icon: Icons.timer_rounded,
-                  label: '신청 마감',
-                  value: df.format(t.applicationDeadline!),
-                  valueColor: cs.error,
-                ),
-              _DetailInfoRow(
-                icon: Icons.location_on_rounded,
-                label: '장소',
-                value: t.location ?? t.region ?? '장소 확인 필요',
-              ),
-              _DetailInfoRow(
-                icon: Icons.payments_rounded,
-                label: '참가비',
-                value: t.entryFee == null
+              _DetailFacts(
+                date: _dateText(),
+                location: t.location ?? t.region ?? '장소 확인 필요',
+                division: t.format ??
+                    (t.eligibleGrades.isEmpty
+                        ? '부문 확인 필요'
+                        : divisionLabel(t.eligibleGrades.first)),
+                fee: t.entryFee == null
                     ? '주최 문의'
                     : '${t.entryFeeUnit == 'per_person' ? '인당' : '팀당'} ${_feeFormat.format(t.entryFee!)}원',
               ),
-              if (t.format != null)
-                _DetailInfoRow(
-                  icon: Icons.format_list_numbered_rounded,
-                  label: '형식',
-                  value: t.format!,
+              if (futsalCategory.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  futsalCategory,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
-              if (futsalCategory.isNotEmpty)
-                _DetailInfoRow(
-                  icon: Icons.flag_rounded,
-                  label: '분류',
-                  value: futsalCategory,
-                ),
+              ],
 
               const SizedBox(height: AppSpacing.lg),
               Divider(color: cs.outlineVariant),
@@ -279,15 +337,11 @@ class _DetailBody extends StatelessWidget {
                             : gradeLabel(g),
                       ),
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: accentColor.withValues(alpha: 0.1),
-                      side: BorderSide.none,
                     ),
                   if (t.isJointEvent)
                     Chip(
                       label: const Text('통합 대회'),
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: cs.secondaryContainer,
-                      side: BorderSide.none,
                     ),
                 ],
               ),
@@ -424,37 +478,6 @@ class _DetailBody extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.closed});
-
-  final bool closed;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final label = closed ? '마감' : '모집중';
-    final color = closed ? cs.outline : cs.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w900,
-            ),
-      ),
-    );
-  }
-}
-
 class _TournamentPosterCard extends StatelessWidget {
   const _TournamentPosterCard({required this.url});
 
@@ -510,47 +533,96 @@ class _TournamentPosterCard extends StatelessWidget {
   }
 }
 
-class _DetailInfoRow extends StatelessWidget {
-  final IconData icon;
+class _DetailFacts extends StatelessWidget {
+  const _DetailFacts({
+    required this.date,
+    required this.location,
+    required this.division,
+    required this.fee,
+  });
+
+  final String date;
+  final String location;
+  final String division;
+  final String fee;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: cs.outline),
+          bottom: BorderSide(color: cs.outline),
+        ),
+      ),
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _DetailFact(label: '일정', value: date)),
+                VerticalDivider(width: 1, color: cs.outlineVariant),
+                Expanded(
+                  child: _DetailFact(label: '장소', value: location),
+                ),
+              ],
+            ),
+          ),
+          Divider(color: cs.outlineVariant),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _DetailFact(label: '부문', value: division),
+                ),
+                VerticalDivider(width: 1, color: cs.outlineVariant),
+                Expanded(child: _DetailFact(label: '참가비', value: fee)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailFact extends StatelessWidget {
+  const _DetailFact({required this.label, required this.value});
+
   final String label;
   final String value;
-  final Color? valueColor;
-
-  const _DetailInfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: cs.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.sm),
-          SizedBox(
-            width: 72,
-            child: Text(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 86),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
               label,
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
             ),
-          ),
-          Expanded(
-            child: Text(
+            const SizedBox(height: AppSpacing.sm),
+            Text(
               value,
-              style: tt.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: valueColor,
-              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -662,8 +734,10 @@ class _TournamentApplyBar extends StatelessWidget {
           icon: Icon(icon),
           label: Text(label),
           style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(54),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
           ),
         ),
       ),
@@ -692,7 +766,7 @@ class _TournamentDetailError extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               '대회 정보를 불러오지 못했어요',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -735,8 +809,13 @@ class _AccordionSection extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant),
+            bottom: BorderSide(color: cs.outlineVariant),
+          ),
+        ),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
           tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),

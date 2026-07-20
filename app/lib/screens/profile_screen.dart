@@ -8,13 +8,15 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/providers.dart';
+import '../services/local_user_preferences.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
+import '../utils/club_image_upload.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
 import '../widgets/profile/profile_sports_widgets.dart';
 
-const _profileAvatarPrefsKey = 'profile.avatar.base64';
 const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
 const _notifyClubPrefsKey = 'notify.club_updates';
 const _notifyCoachPrefsKey = 'notify.coachbot_replies';
@@ -34,6 +36,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _notifyCoach = false;
   bool _notifySound = true;
 
+  String? get _profileAvatarPrefsKey {
+    final userId = ref.read(currentUserProvider)?.id;
+    return userId == null ? null : profileAvatarKeyForUser(userId);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,8 +48,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _loadProfileSettings() async {
+    final avatarKey = _profileAvatarPrefsKey;
     final prefs = await SharedPreferences.getInstance();
-    final avatarBase64 = prefs.getString(_profileAvatarPrefsKey);
+    await removeLegacyUnscopedProfileAvatar(prefs);
+    final avatarBase64 = avatarKey == null ? null : prefs.getString(avatarKey);
     if (!mounted) return;
     setState(() {
       if (avatarBase64 != null && avatarBase64.isNotEmpty) {
@@ -56,6 +65,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _pickProfilePhoto(ImageSource source) async {
+    final avatarKey = _profileAvatarPrefsKey;
+    if (avatarKey == null) return;
     final picked = await ImagePicker().pickImage(
       source: source,
       maxWidth: 512,
@@ -64,16 +75,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
     if (picked == null) return;
 
-    final bytes = await picked.readAsBytes();
+    final PreparedClubImage image;
+    try {
+      image = await prepareClubImage(picked);
+    } on ClubImagePreparationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_profileAvatarPrefsKey, base64Encode(bytes));
+    await prefs.setString(avatarKey, base64Encode(image.bytes));
     if (!mounted) return;
-    setState(() => _avatarBytes = bytes);
+    setState(() => _avatarBytes = image.bytes);
   }
 
   Future<void> _removeProfilePhoto() async {
+    final avatarKey = _profileAvatarPrefsKey;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_profileAvatarPrefsKey);
+    if (avatarKey != null) await prefs.remove(avatarKey);
     if (!mounted) return;
     setState(() => _avatarBytes = null);
   }
@@ -160,7 +182,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               title: Text(
                 '알림 설정',
@@ -270,6 +292,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
     return Scaffold(
+      key: AllRoundE2EKeys.profileScreen,
       body: CustomScrollView(
         slivers: [
           ProfileHeroSliver(
@@ -281,6 +304,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
             onAvatarTap: _showProfilePhotoSheet,
+            onMoreTap: () => context.push('/more'),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -311,6 +335,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   data: (orgs) => orgs.isEmpty
                       ? const SizedBox.shrink()
                       : TennisOrgsSection(orgs: orgs),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                ProfileServiceSection(
+                  onRulesTap: () => context.push('/rules'),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppearanceSection(),

@@ -129,55 +129,75 @@ class SportCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final isTennis = sport.sport == 'tennis';
     final accentColor = isTennis ? cs.tertiary : cs.secondary;
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.5;
+
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          sportLabelFromString(sport.sport),
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          gradeLabel(sport.grade),
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ],
+    );
+    final action = sport.isPrimary
+        ? Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: AppRadius.pill,
+            ),
+            child: Text(
+              '기본 종목',
+              style: tt.labelSmall?.copyWith(
+                color: accentColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        : onSetPrimary != null
+            ? TextButton(
+                onPressed: onSetPrimary,
+                child: const Text('기본 종목으로 설정'),
+              )
+            : null;
 
     return AppCard(
-      variant: AppCardVariant.elevated,
-      borderRadius: BorderRadius.circular(16),
-      child: Row(
-        children: [
-          ProfileSportThumbnail(sport: sport.sport),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
+      variant: AppCardVariant.outlined,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: largeText
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  sportLabelFromString(sport.sport),
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                Row(
+                  children: [
+                    ProfileSportThumbnail(sport: sport.sport),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(child: info),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  gradeLabel(sport.grade),
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
+                if (action != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  action,
+                ],
+              ],
+            )
+          : Row(
+              children: [
+                ProfileSportThumbnail(sport: sport.sport),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: info),
+                if (action != null) action,
               ],
             ),
-          ),
-          if (sport.isPrimary)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.12),
-                borderRadius: AppRadius.pill,
-              ),
-              child: Text(
-                '활성 종목 (필터 기준)',
-                style: tt.labelSmall?.copyWith(
-                  color: accentColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            )
-          else if (onSetPrimary != null)
-            TextButton(
-              onPressed: onSetPrimary,
-              child: const Text('주 종목으로 설정'),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -192,7 +212,7 @@ class ProfileSportThumbnail extends StatelessWidget {
     final isTennis = sport == 'tennis';
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: SizedBox(
         width: 54,
         height: 54,

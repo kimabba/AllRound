@@ -15,11 +15,13 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
+import 'models/chat_entry_context.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
+import 'screens/clubs/club_inquiry_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
-import 'screens/friend_schedule_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
@@ -31,11 +33,14 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
-import 'theme/tokens.dart';
+import 'widgets/app_bottom_nav.dart';
+import 'widgets/global_chat_dock.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: kIsWeb && AppConfig.userDesignPreview
+        ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
+        : '/',
     refreshListenable: GoRouterRefreshStream(ref),
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
@@ -56,7 +61,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (userDesignPreview && !loc.startsWith('/admin')) {
-        if (loc == '/login') return '/';
         return null;
       }
 
@@ -77,13 +81,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      // 앱: 클럽 승인은 관리자가 알림에서 바로 처리할 수 있게
+      // 모바일에서도 해당 경로만 허용한다. 권한 판정은 서버 role이 기준이다.
+      if (loc == '/admin/clubs') {
+        final adminAsync = ref.read(isAdminProvider);
+        if (adminAsync.isLoading) return null;
+        return (adminAsync.valueOrNull ?? false) ? null : '/';
+      }
+
       // 앱: 기존 로직
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.valueOrNull ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
-      // 앱에서는 어드민 경로 완전 차단 (웹 전용)
+      // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.
       if (loc.startsWith('/admin')) return '/';
 
       if (loc == '/login') return '/';
@@ -102,7 +114,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, __) => const ChatScreen()),
+          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(
+            path: '/chat',
+            builder: (_, state) {
+              final extra = state.extra;
+              return ChatScreen(
+                entryContext: extra is ChatEntryContext ? extra : null,
+              );
+            },
+          ),
           GoRoute(
             path: '/tournaments',
             builder: (_, __) => const TournamentsScreen(),
@@ -124,12 +145,27 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => const FavoritesScreen(),
           ),
           GoRoute(
-            path: '/friend-schedule',
-            builder: (_, __) => const FriendScheduleScreen(),
-          ),
-          GoRoute(
             path: '/blocked-users',
             builder: (_, __) => const BlockedUsersScreen(),
+          ),
+          GoRoute(
+            path: '/tournaments/submit',
+            builder: (_, __) => const TournamentSubmitScreen(),
+          ),
+          GoRoute(
+            path: '/clubs/:id',
+            builder: (_, state) {
+              final club = state.extra as Club?;
+              return club != null
+                  ? ClubDetailScreen(club: club)
+                  : ClubDetailScreen(clubId: state.pathParameters['id']!);
+            },
+          ),
+          GoRoute(
+            path: '/tournaments/:id',
+            builder: (_, state) => TournamentDetailScreen(
+              tournamentId: state.pathParameters['id']!,
+            ),
           ),
         ],
       ),
@@ -177,24 +213,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-
       GoRoute(
-        path: '/tournaments/submit',
-        builder: (_, __) => const TournamentSubmitScreen(),
+        path: '/clubs/:id/inquiries/manage',
+        builder: (_, state) => ClubInquiryInboxScreen(
+          clubId: state.pathParameters['id']!,
+        ),
       ),
       GoRoute(
-        path: '/clubs/:id',
-        builder: (_, state) {
-          final club = state.extra as Club?;
-          return club != null
-              ? ClubDetailScreen(club: club)
-              : ClubDetailScreen(clubId: state.pathParameters['id']!);
-        },
+        path: '/clubs/:id/inquiries/:threadId',
+        builder: (_, state) => ClubInquiryConversationScreen(
+          clubId: state.pathParameters['id']!,
+          threadId: state.pathParameters['threadId']!,
+        ),
       ),
       GoRoute(
-        path: '/tournaments/:id',
-        builder: (_, state) =>
-            TournamentDetailScreen(tournamentId: state.pathParameters['id']!),
+        path: '/clubs/:id/inquiries',
+        builder: (_, state) => ClubInquiryConversationScreen(
+          clubId: state.pathParameters['id']!,
+        ),
       ),
     ],
   );
@@ -211,45 +247,36 @@ class GoRouterRefreshStream extends ChangeNotifier {
 
 class _MainShell extends ConsumerWidget {
   const _MainShell({required this.child});
+
   final Widget child;
 
-  // (path, 기본 아이콘, 선택 아이콘, 라벨)
-  // TODO(design): Phosphor duotone 으로 교체 예정 — phosphor_flutter 는
-  // Flutter 3.44(IconData final class)와 비호환이라 flutter_svg 벤더링으로 후속.
-  static const _tabs = <(String, IconData, IconData, String)>[
-    ('/', Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, '라운드 코치'),
-    (
-      '/tournaments',
-      Icons.emoji_events_outlined,
-      Icons.emoji_events_rounded,
-      '대회',
-    ),
-    ('/clubs', Icons.groups_outlined, Icons.groups_rounded, '클럽'),
-    ('/more', Icons.grid_view_outlined, Icons.grid_view_rounded, '더보기'),
+  static const _tabs = <String>[
+    '/',
+    '/tournaments',
+    '/clubs',
+    '/profile',
   ];
 
-  // 더보기 하위 경로는 더보기 탭이 선택된 것으로 표시
-  static const _moreSubPaths = [
+  static const _profileSubPaths = [
     '/more',
     '/speed-gun',
-    '/rules',
     '/profile',
     '/notifications',
     '/favorites',
-    '/friend-schedule',
     '/blocked-users',
+    '/rules',
   ];
 
   int _indexOf(String location) {
     for (var i = 0; i < _tabs.length; i++) {
-      if (_tabs[i].$1 == '/more') {
-        if (_moreSubPaths.any(
+      if (_tabs[i] == '/profile') {
+        if (_profileSubPaths.any(
           (p) => location == p || (location.startsWith(p) && p != '/'),
         )) {
           return i;
         }
-      } else if (location == _tabs[i].$1 ||
-          (location.startsWith(_tabs[i].$1) && _tabs[i].$1 != '/')) {
+      } else if (location == _tabs[i] ||
+          (location.startsWith(_tabs[i]) && _tabs[i] != '/')) {
         return i;
       }
     }
@@ -258,90 +285,27 @@ class _MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final loc = GoRouterState.of(context).matchedLocation;
     final currentPath =
         GoRouter.of(context).routeInformationProvider.value.uri.path;
-    final idx = _indexOf(loc);
-    final cs = Theme.of(context).colorScheme;
+    final idx = _indexOf(currentPath);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final isFullChat = currentPath == '/chat';
+    final showChatDock = !isFullChat && !currentPath.startsWith('/speed-gun');
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: ColoredBox(
-              color: cs.surface,
-              child: child,
-            ),
-          ),
-          if (currentPath != '/notifications')
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              right: 12,
-              child: const _NotificationBell(),
-            ),
-        ],
-      ),
-      bottomNavigationBar: keyboardVisible
+      body: child,
+      bottomNavigationBar: keyboardVisible || isFullChat
           ? null
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                border: Border(top: BorderSide(color: cs.outlineVariant)),
-                boxShadow: AppShadows.cardFor(Theme.of(context).brightness),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-                  child: NavigationBar(
-                    selectedIndex: idx,
-                    onDestinationSelected: (i) => context.go(_tabs[i].$1),
-                    labelBehavior:
-                        NavigationDestinationLabelBehavior.alwaysShow,
-                    height: 66,
-                    destinations: [
-                      for (final t in _tabs)
-                        NavigationDestination(
-                          icon: Icon(t.$2),
-                          selectedIcon: Icon(t.$3),
-                          label: t.$4,
-                        ),
-                    ],
-                  ),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showChatDock) GlobalChatDock(location: currentPath),
+                AppBottomNav(
+                  currentIndex: idx,
+                  onChanged: (index) => context.go(_tabs[index]),
                 ),
-              ),
+              ],
             ),
-    );
-  }
-
-}
-
-class _NotificationBell extends ConsumerWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
-
-    return Material(
-      color: cs.surface.withValues(alpha: 0.96),
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: Badge(
-        isLabelVisible: unread > 0,
-        label: Text(unread > 99 ? '99+' : '$unread'),
-        child: IconButton(
-          tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
-          onPressed: () => context.push('/notifications'),
-          icon: Icon(
-            unread > 0
-                ? Icons.notifications_rounded
-                : Icons.notifications_none_rounded,
-          ),
-        ),
-      ),
     );
   }
 }

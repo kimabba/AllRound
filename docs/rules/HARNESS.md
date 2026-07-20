@@ -26,7 +26,7 @@ Documentation alone is not a harness; a rule is stronger when it has a test, scr
 scripts/harness/
   run_all.sh              # one local entrypoint for common gates
   check_enums.py          # Dart/TS/SQL enum consistency
-  check_static_rules.py   # root rule size, rule-doc, GitHub template checks
+  check_static_rules.py   # root rules, docs/templates, Pureform token drift
   check_secrets.sh        # cheap secret scanning for git-visible files
 ```
 
@@ -36,6 +36,8 @@ scripts/harness/
 - Root agent file length guard to prevent rule bloat.
 - Required `docs/rules/` files exist and are linked from `AGENTS.md`.
 - GitHub PR/Issue templates and harness workflow exist.
+- User UI cannot introduce undocumented radius or fixed button-size literals;
+  `AppRadius` and `AppSizes` are the contract.
 - Cheap secret scan for files Git would track or add.
 - Flutter `analyze` and `test`.
 - Deno `fmt`, `lint`, `check`, and `test`.
@@ -59,9 +61,9 @@ bash scripts/harness/check_secrets.sh
 cd app && flutter analyze && flutter test
 
 cd supabase/functions
-deno fmt --check */index.ts _shared/*.ts tests/*.ts
-deno lint --config deno.json */index.ts _shared/*.ts tests/*.ts
-deno check --config deno.json */index.ts _shared/*.ts tests/*.ts
+deno fmt --check */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+deno lint --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+deno check --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
 deno test --config deno.json --allow-env --allow-read tests
 ```
 

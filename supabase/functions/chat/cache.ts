@@ -13,10 +13,12 @@ import { QA_CACHE_THRESHOLD, QA_CACHE_TTL_HOURS } from './types.ts';
 export async function cacheLookup(
   adminSupabase: SupabaseClient,
   vectorLiteral: string,
+  ownerUserId: string,
   userContextHash: string,
 ): Promise<QaCacheHit | null> {
   const { data: hitRows, error: cacheErr } = await adminSupabase.rpc('qa_cache_lookup', {
     p_query_embedding: vectorLiteral,
+    p_owner_user_id: ownerUserId,
     p_user_context_hash: userContextHash,
     p_threshold: QA_CACHE_THRESHOLD,
   });
@@ -61,6 +63,7 @@ export async function cacheInsert(
     vectorLiteral: string;
     answerText: string;
     citations: DbCitation[];
+    ownerUserId: string;
     userContextHash: string;
     hashedUserId: string;
     conversationId: string;
@@ -76,6 +79,7 @@ export async function cacheInsert(
       p_question_embedding: params.vectorLiteral,
       p_answer_text: params.answerText,
       p_citations: params.citations,
+      p_owner_user_id: params.ownerUserId,
       p_user_context_hash: params.userContextHash,
       p_ttl_expires_at: ttlExpiresAt,
     },

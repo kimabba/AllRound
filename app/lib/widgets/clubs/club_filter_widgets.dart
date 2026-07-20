@@ -253,7 +253,7 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                     height: 44,
                     decoration: BoxDecoration(
                       color: widget.accentColor,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
                     ),
                     child: Icon(
                       widget.icon,
@@ -286,11 +286,11 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                           filled: true,
                           fillColor: cs.surface,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             borderSide: BorderSide(color: cs.outlineVariant),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             borderSide: BorderSide(color: cs.outlineVariant),
                           ),
                           contentPadding: const EdgeInsets.symmetric(

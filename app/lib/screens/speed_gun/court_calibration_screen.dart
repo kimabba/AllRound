@@ -28,7 +28,7 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('코트 캘리브레이션'),
+        title: const Text('코트 기준점 지정'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
@@ -38,14 +38,14 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
           // 안내 배너
           Container(
             width: double.infinity,
-            color: done ? Colors.green.withValues(alpha: 0.2) : cs.primaryContainer,
+            color: cs.primary.withValues(alpha: done ? 0.38 : 0.24),
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Text(
               done
                   ? '4개 코너를 모두 선택했습니다. 확인 후 진행하세요.'
                   : '코트의 4개 코너를 순서대로 탭하세요: ${_labels[_points.length]}',
               style: tt.bodySmall?.copyWith(
-                color: done ? Colors.green.shade800 : cs.onPrimaryContainer,
+                color: Colors.white,
               ),
               textAlign: TextAlign.center,
             ),
@@ -101,7 +101,7 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
                 children: [
                   Expanded(
                     child: AppSecondaryButton(
-                      label: '다시 찍기',
+                      label: '다시 지정',
                       onPressed: _points.isEmpty
                           ? null
                           : () => setState(() => _points.clear()),
@@ -142,9 +142,7 @@ class _CourtCalibrationScreenState extends State<CourtCalibrationScreen> {
 
     // 표시 크기 → 실제 픽셀 좌표 변환
     // (간단히 직접 비율 사용 — 실제 ImageInfo가 있으면 더 정확)
-    final pixelPoints = _points
-        .map((p) => (x: p.dx, y: p.dy))
-        .toList();
+    final pixelPoints = _points.map((p) => (x: p.dx, y: p.dy)).toList();
 
     final calibration = CourtCalibration(
       pixelPoints: pixelPoints,
@@ -160,12 +158,6 @@ class _CalibrationPainter extends CustomPainter {
   final Size displaySize;
   final Size containerSize;
 
-  static const _colors = [
-    Colors.red,
-    Colors.green,
-    Colors.blue,
-    Colors.orange,
-  ];
   static const _labels = ['좌상', '우상', '우하', '좌하'];
 
   const _CalibrationPainter({
@@ -199,7 +191,7 @@ class _CalibrationPainter extends CustomPainter {
 
     // 각 점
     for (var i = 0; i < points.length; i++) {
-      dotPaint.color = _colors[i];
+      dotPaint.color = const Color(0xFF3156D8);
       canvas.drawCircle(points[i], 12, dotPaint);
       canvas.drawCircle(points[i], 12, borderPaint);
 

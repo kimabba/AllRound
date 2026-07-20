@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,15 +10,24 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'router.dart';
 import 'services/api.dart';
+import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
+import 'state/chat_state.dart';
+import 'state/providers.dart';
 import 'state/theme_provider.dart';
 import 'theme/app_theme.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/allround_logo.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+bool _allRoundServicesInitialized = false;
+
+/// 실제 앱과 integration_test가 같은 초기화 경로를 사용한다.
+/// 테스트는 자신의 binding을 먼저 만들기 때문에 여기서 binding을 생성하지 않는다.
+Future<void> initializeAllRoundServices({
+  FlutterAuthClientOptions authOptions = const FlutterAuthClientOptions(),
+}) async {
+  if (_allRoundServicesInitialized) return;
   AppConfig.assertConfigured();
 
   await initializeDateFormatting('ko');
@@ -26,6 +35,7 @@ Future<void> main() async {
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
+    authOptions: authOptions,
   );
 
   // 인증 후 FCM 등록 + 부서 카탈로그 DB 로드 (실패해도 앱 진입 허용)
@@ -40,6 +50,13 @@ Future<void> main() async {
     }
   });
 
+  _allRoundServicesInitialized = true;
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAllRoundServices();
+
   runApp(const ProviderScope(child: MatchUpApp()));
 }
 
@@ -48,6 +65,19 @@ class MatchUpApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!AppConfig.userDesignPreview) {
+      ref.listen(authStateProvider, (previous, next) {
+        final previousUserId = previous?.valueOrNull?.session?.user.id;
+        final nextUserId = next.valueOrNull?.session?.user.id;
+        if (previousUserId == nextUserId) return;
+
+        ref.read(chatProvider).reset();
+        if (previousUserId != null) {
+          unawaited(clearLocalUserPreferences(previousUserId));
+        }
+      });
+    }
+
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp.router(
@@ -66,9 +96,34 @@ class MatchUpApp extends ConsumerWidget {
         Locale('en', 'US'),
       ],
       locale: const Locale('ko', 'KR'),
-      builder: (context, child) => _AllRoundStartupSplash(
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final app = _AllRoundStartupSplash(
+          child: child ?? const SizedBox.shrink(),
+        );
+        if (!kIsWeb || !AppConfig.userDesignPreview) return app;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final previewWidth =
+                constraints.maxWidth < 390 ? constraints.maxWidth : 390.0;
+            final previewSize = Size(previewWidth, constraints.maxHeight);
+            return ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: previewWidth,
+                  height: constraints.maxHeight,
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(size: previewSize),
+                    child: app,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
       routerConfig: router,
     );
   }
@@ -83,18 +138,12 @@ class _AllRoundStartupSplash extends StatefulWidget {
   State<_AllRoundStartupSplash> createState() => _AllRoundStartupSplashState();
 }
 
-class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   bool _visible = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..forward();
     _dismissSplashWhenReady();
   }
 
@@ -116,12 +165,6 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
@@ -136,191 +179,41 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash>
           child: AnimatedOpacity(
             opacity: _visible ? 1 : 0,
             duration: const Duration(milliseconds: 260),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                final raw = _controller.value;
-                final ballProgress =
-                    Curves.easeInCubic.transform((raw / 0.58).clamp(0, 1));
-                final impactProgress = Curves.easeOutCubic
-                    .transform(((raw - 0.46) / 0.36).clamp(0, 1));
-                final logoProgress = Curves.easeOutBack
-                    .transform(((raw - 0.58) / 0.36).clamp(0, 1));
-                final size = MediaQuery.sizeOf(context);
-                final impact = Offset(size.width * 0.5, size.height * 0.45);
-                final ballStart = Offset(size.width * -0.18, size.height * 0.2);
-                final ballEnd = impact;
-                final ball = Offset.lerp(ballStart, ballEnd, ballProgress)!;
-
-                return ColoredBox(
-                  color: const Color(0xFF0F1D47),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: _SportImpactPainter(
-                            ball: ball,
-                            impact: impact,
-                            ballProgress: ballProgress,
-                            impactProgress: impactProgress,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surface,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AllRoundLogo(
+                      fontSize: 34,
+                      markSize: 48,
+                      textColor: Theme.of(context).colorScheme.onSurface,
+                      showMark: true,
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: 32,
+                      height: 7,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      '내 운동 생활을 한눈에',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
                           ),
-                        ),
-                      ),
-                      Center(
-                        child: Opacity(
-                          opacity: logoProgress.clamp(0, 1),
-                          child: Transform.scale(
-                            scale: 0.92 + (0.08 * logoProgress),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const AllRoundLogo(
-                                  fontSize: 34,
-                                  markSize: 58,
-                                  textColor: Colors.white,
-                                  showMark: true,
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  '내 운동 생활을 한눈에',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.76),
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
-  }
-}
-
-class _SportImpactPainter extends CustomPainter {
-  const _SportImpactPainter({
-    required this.ball,
-    required this.impact,
-    required this.ballProgress,
-    required this.impactProgress,
-  });
-
-  final Offset ball;
-  final Offset impact;
-  final double ballProgress;
-  final double impactProgress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final trailPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFFB9E769).withValues(alpha: 0),
-          const Color(0xFFB9E769).withValues(alpha: 0.38),
-          Colors.white.withValues(alpha: 0.72),
-        ],
-      ).createShader(Rect.fromPoints(Offset.zero, ball))
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-
-    final trailStart = Offset(
-      ball.dx - 150 * (0.4 + ballProgress),
-      ball.dy - 58 * (0.4 + ballProgress),
-    );
-    canvas.drawLine(trailStart, ball, trailPaint);
-
-    if (impactProgress > 0) {
-      final shockPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = Colors.white.withValues(alpha: 0.34 * (1 - impactProgress));
-      canvas.drawCircle(impact, 36 + 170 * impactProgress, shockPaint);
-
-      final glowPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 16
-        ..color = const Color(0xFFB9E769)
-            .withValues(alpha: 0.16 * (1 - impactProgress))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-      canvas.drawCircle(impact, 28 + 142 * impactProgress, glowPaint);
-
-      final crackPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.46 * (1 - impactProgress))
-        ..strokeWidth = 1.8
-        ..strokeCap = StrokeCap.round;
-      const angles = [-2.8, -2.16, -1.52, -0.82, -0.26, 0.42, 1.1, 1.88];
-      for (var i = 0; i < angles.length; i++) {
-        final angle = angles[i];
-        final length = (44 + i * 9) * impactProgress;
-        final bend = Offset(
-          math.cos(angle + 0.28) * length * 0.34,
-          math.sin(angle + 0.28) * length * 0.34,
-        );
-        final start =
-            impact + Offset(math.cos(angle) * 18, math.sin(angle) * 18);
-        final end =
-            impact + Offset(math.cos(angle) * length, math.sin(angle) * length);
-        final path = Path()
-          ..moveTo(start.dx, start.dy)
-          ..lineTo(start.dx + bend.dx, start.dy + bend.dy)
-          ..lineTo(end.dx, end.dy);
-        canvas.drawPath(path, crackPaint);
-      }
-    }
-
-    final ballOpacity = (1 - impactProgress).clamp(0, 1).toDouble();
-    final ballPaint = Paint()
-      ..shader = const RadialGradient(
-        center: Alignment(-0.35, -0.35),
-        colors: [Color(0xFFFFFFFF), Color(0xFFD9F66F), Color(0xFF7AB719)],
-      ).createShader(Rect.fromCircle(center: ball, radius: 31))
-      ..color = Colors.white.withValues(alpha: ballOpacity);
-    canvas.saveLayer(
-      Rect.fromCircle(center: ball, radius: 40),
-      Paint()..color = Colors.white.withValues(alpha: ballOpacity),
-    );
-    canvas.drawCircle(ball, 31, ballPaint);
-
-    final seamPaint = Paint()
-      ..color = const Color(0xFF0F1D47).withValues(alpha: 0.38)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(center: ball + const Offset(-4, 0), radius: 22),
-      -math.pi / 2,
-      math.pi,
-      false,
-      seamPaint,
-    );
-    canvas.drawArc(
-      Rect.fromCircle(center: ball + const Offset(9, 0), radius: 22),
-      math.pi / 2,
-      math.pi,
-      false,
-      seamPaint,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _SportImpactPainter oldDelegate) {
-    return oldDelegate.ball != ball ||
-        oldDelegate.impact != impact ||
-        oldDelegate.ballProgress != ballProgress ||
-        oldDelegate.impactProgress != impactProgress;
   }
 }

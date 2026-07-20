@@ -4,12 +4,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeRegulationFields } from '../_shared/regulation.ts';
-import type {
-  RawSemanticTournament,
-  SemanticRule,
-  SemanticTournament,
-  VenueRow,
-} from './types.ts';
+import type { RawSemanticTournament, SemanticRule, SemanticTournament, VenueRow } from './types.ts';
 
 /** RPC raw result (unknown jsonb) -> SemanticTournament[] safely narrowed. */
 export function normalizeSemanticTournaments(rows: unknown): SemanticTournament[] {

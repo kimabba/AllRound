@@ -20,6 +20,14 @@ alter table public.tennis_tournament_details
 
 -- 3) tournaments_for_user 재생성 (반환 host_orgs text[], p_host_org 캐스트 제거)
 --    반환 타입 변경이라 CREATE OR REPLACE 불가 → DROP 후 CREATE.
+--    071이 public.sport 파라미터 버전을 만든 뒤 072가 text 파라미터 버전을 별도로
+--    만들면서 sport 오버로드가 남았다. 둘 다 tennis_org[]를 반환하므로 enum 삭제 전
+--    명시적으로 제거해야 fresh reset에서 타입 의존성이 남지 않는다.
+drop function if exists public.tournaments_for_user(
+  uuid, public.sport, text, date, date, boolean, text,
+  integer, integer, text, text
+);
+
 drop function if exists public.tournaments_for_user(uuid,text,text,date,date,boolean,text,integer,integer,text,text,text[],text);
 
 create function public.tournaments_for_user(

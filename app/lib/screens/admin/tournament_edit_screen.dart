@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 
 class TournamentEditScreen extends ConsumerStatefulWidget {
@@ -105,8 +106,7 @@ class _TournamentEditScreenState extends ConsumerState<TournamentEditScreen> {
       }
     } on AuthException {
       if (mounted) {
-        await Supabase.instance.client.auth
-            .signOut(scope: SignOutScope.global);
+        await signOutSecurely(Supabase.instance.client);
       }
     } catch (e) {
       if (mounted) {

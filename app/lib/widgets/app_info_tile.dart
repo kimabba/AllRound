@@ -36,14 +36,13 @@ class AppInfoTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 36,
+              SizedBox(
+                width: 28,
                 height: 36,
-                decoration: BoxDecoration(
-                  color: c.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(icon, size: 20, color: c),
                 ),
-                child: Icon(icon, size: 20, color: c),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(

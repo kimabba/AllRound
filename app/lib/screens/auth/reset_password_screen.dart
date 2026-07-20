@@ -2,13 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/session_security.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
-
-const Color _primaryBlue = Color(0xFF1E3A8A);
-const Color _primaryBlueSoft = Color(0xFF1E40AF);
-const Color _futsalGreen = Color(0xFF84CC16);
 
 /// 비밀번호 재설정 메일 딥링크(passwordRecovery 이벤트)로 진입하는 화면.
 /// 세션은 이미 복원된 상태이므로 새 비밀번호만 받아 updateUser 로 설정한다.
@@ -80,110 +76,98 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomRight,
-            colors: [_primaryBlue, _primaryBlueSoft, _futsalGreen],
-            stops: [0, 0.52, 1],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '새 비밀번호 설정',
-                      style: tt.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '새 비밀번호 설정',
+                    style: tt.headlineSmall?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      '사용할 새 비밀번호를 입력해 주세요.',
-                      style: tt.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.86),
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '사용할 새 비밀번호를 입력해 주세요.',
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _Field(
-                      controller: _password,
-                      label: '새 비밀번호',
-                      hintText: '6자 이상 입력',
-                      textInputAction: TextInputAction.next,
-                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  _Field(
+                    controller: _password,
+                    label: '새 비밀번호',
+                    hintText: '6자 이상 입력',
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _Field(
+                    controller: _passwordConfirm,
+                    label: '새 비밀번호 확인',
+                    hintText: '비밀번호를 한 번 더 입력',
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _busy ? null : _submit(),
+                  ),
+                  if (_error != null) ...[
                     const SizedBox(height: AppSpacing.md),
-                    _Field(
-                      controller: _passwordConfirm,
-                      label: '새 비밀번호 확인',
-                      hintText: '비밀번호를 한 번 더 입력',
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _busy ? null : _submit(),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        _error!,
-                        style: tt.bodySmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    Text(
+                      _error!,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.error,
+                        fontWeight: FontWeight.w800,
                       ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _busy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('비밀번호 변경'),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    // 링크 만료 등으로 재설정을 못 하거나 그만두려는 경우의 탈출구.
-                    // 로그아웃하면 signedOut 이벤트로 recovery 모드가 풀려 로그인 화면으로.
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              try {
-                                await ref
-                                    .read(supabaseProvider)
-                                    .auth
-                                    .signOut();
-                              } catch (_) {
-                                if (mounted) {
-                                  setState(() => _error =
-                                      '로그아웃에 실패했습니다. 다시 시도해 주세요.');
-                                }
-                              }
-                            },
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('취소하고 로그인으로'),
                     ),
                   ],
-                ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(AppSizes.control),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                    ),
+                    child: _busy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('비밀번호 변경'),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // 링크 만료 등으로 재설정을 못 하거나 그만두려는 경우의 탈출구.
+                  // 로그아웃하면 signedOut 이벤트로 recovery 모드가 풀려 로그인 화면으로.
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            try {
+                              await signOutSecurely(
+                                ref.read(supabaseProvider),
+                              );
+                            } catch (_) {
+                              if (mounted) {
+                                setState(
+                                    () => _error = '로그아웃에 실패했습니다. 다시 시도해 주세요.');
+                              }
+                            }
+                          },
+                    child: const Text('취소하고 로그인으로'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -215,23 +199,10 @@ class _Field extends StatelessWidget {
       obscureText: true,
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
-      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.12),
-        labelStyle: const TextStyle(color: Colors.white),
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.white),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.white, width: 1.6),
-        ),
+        prefixIcon: const Icon(Icons.lock_outline_rounded),
       ),
     );
   }

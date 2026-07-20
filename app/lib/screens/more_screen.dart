@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
+import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
-import '../widgets/allround_logo.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -14,28 +14,24 @@ class MoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
-    final cs = Theme.of(context).colorScheme;
 
     final personalItems = [
       _MenuItem(
         icon: Icons.person_rounded,
         label: 'MY',
         subtitle: '프로필, 종목 설정, 내 클럽, 대회 기록',
-        color: cs.primary,
         onTap: () => context.push('/profile'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
         label: '관심',
         subtitle: '관심 대회와 클럽 모아보기',
-        color: cs.tertiary,
         onTap: () => context.push('/favorites'),
       ),
       _MenuItem(
         icon: Icons.person_off_rounded,
         label: '차단 관리',
         subtitle: '차단한 사용자 확인과 해제',
-        color: cs.error,
         onTap: () => context.push('/blocked-users'),
       ),
     ];
@@ -45,16 +41,14 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.menu_book_rounded,
         label: '룰북',
         subtitle: '테니스와 풋살 규칙 확인',
-        color: AppSportColors.tennis,
         onTap: () => context.push('/rules'),
       ),
-      if (kIsWeb && isAdmin)
+      if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
-          label: '어드민',
-          subtitle: '관리자 메뉴',
-          color: cs.onSurfaceVariant,
-          onTap: () => context.go('/admin'),
+          label: kIsWeb ? '어드민' : '클럽 승인',
+          subtitle: kIsWeb ? '관리자 메뉴' : '승인 대기 클럽 확인·처리',
+          onTap: () => context.go(kIsWeb ? '/admin' : '/admin/clubs'),
         ),
     ];
 
@@ -63,7 +57,6 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.description_outlined,
         label: '이용약관',
         subtitle: '서비스 이용 조건',
-        color: cs.onSurfaceVariant,
         onTap: () => launchUrl(
           Uri.parse(
             'https://kimabba.github.io/AllRound/legal/terms-of-service.html',
@@ -75,7 +68,6 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.privacy_tip_outlined,
         label: '개인정보 처리방침',
         subtitle: '개인정보 수집 및 이용 안내',
-        color: cs.onSurfaceVariant,
         onTap: () => launchUrl(
           Uri.parse(
             'https://kimabba.github.io/AllRound/legal/privacy-policy.html',
@@ -86,12 +78,13 @@ class MoreScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const BrandedAppBarTitle(title: '더보기')),
+      key: AllRoundE2EKeys.moreScreen,
+      appBar: AppBar(title: const Text('전체 메뉴')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
+          AppSpacing.xl,
           AppSpacing.md,
-          AppSpacing.lg,
+          AppSpacing.xl,
           AppSpacing.huge,
         ),
         children: [
@@ -135,7 +128,7 @@ class _MenuSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
@@ -143,29 +136,21 @@ class _MenuSection extends StatelessWidget {
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.md),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: AppRadius.hero,
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                _MenuRow(item: items[i]),
-                if (i < items.length - 1)
-                  Divider(
-                    height: 1,
-                    indent: 74,
-                    endIndent: AppSpacing.lg,
-                    color: cs.outlineVariant.withValues(alpha: 0.55),
-                  ),
-              ],
+        Divider(height: 1, color: cs.outlineVariant),
+        Column(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              _MenuRow(item: items[i]),
+              if (i < items.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 52,
+                  color: cs.outlineVariant,
+                ),
             ],
-          ),
+          ],
         ),
+        Divider(height: 1, color: cs.outlineVariant),
       ],
     );
   }
@@ -185,7 +170,6 @@ class _MenuRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: AppRadius.hero,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -193,14 +177,13 @@ class _MenuRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.14),
-                  borderRadius: AppRadius.card,
+              SizedBox(
+                width: 36,
+                child: Icon(
+                  item.icon,
+                  color: cs.onSurfaceVariant,
+                  size: 22,
                 ),
-                child: Icon(item.icon, color: item.color, size: 24),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -210,7 +193,7 @@ class _MenuRow extends StatelessWidget {
                     Text(
                       item.label,
                       style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -247,45 +230,31 @@ class _LegalSection extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: AppRadius.hero,
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              ListTile(
-                onTap: items[i].onTap,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                ),
-                title: Text(
-                  items[i].label,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                trailing: Icon(
-                  Icons.open_in_new_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              if (i < items.length - 1)
-                Divider(
-                  height: 1,
-                  indent: AppSpacing.lg,
-                  endIndent: AppSpacing.lg,
-                  color: cs.outlineVariant.withValues(alpha: 0.5),
-                ),
-            ],
-          ],
-        ),
-      ),
+    return Column(
+      children: [
+        Divider(height: 1, color: cs.outlineVariant),
+        for (var i = 0; i < items.length; i++) ...[
+          ListTile(
+            onTap: items[i].onTap,
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              items[i].label,
+              style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            trailing: Icon(
+              Icons.open_in_new_rounded,
+              size: 18,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          if (i < items.length - 1)
+            Divider(
+              height: 1,
+              color: cs.outlineVariant,
+            ),
+        ],
+        Divider(height: 1, color: cs.outlineVariant),
+      ],
     );
   }
 }
@@ -294,14 +263,12 @@ class _MenuItem {
   final IconData icon;
   final String label;
   final String subtitle;
-  final Color color;
   final VoidCallback onTap;
 
   const _MenuItem({
     required this.icon,
     required this.label,
     required this.subtitle,
-    required this.color,
     required this.onTap,
   });
 }
