@@ -363,7 +363,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.fullChatScreen,
       appBar: AppBar(
-        title: const Text('볼보이'),
+        title: const Text('BB'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -420,7 +420,7 @@ class _EmbeddedChatHeader extends StatelessWidget {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
-                      '볼보이',
+                      'BB',
                       style:
                           tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                     ),
@@ -575,13 +575,13 @@ class _EmptyHint extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '볼보이에게\n그냥 물어보세요',
+            'BB에게\n그냥 물어보세요',
             style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '어느 메뉴에 있는지 몰라도 괜찮아요.\n'
-            '대회, 클럽, 구장, 규칙 — 궁금한 걸 말하면 볼보이가 찾아다 드려요.',
+            '여러분의 도우미 볼보이(BB)예요. 어느 메뉴에 있는지 몰라도 괜찮아요.\n'
+            '대회, 클럽, 구장, 규칙 — 궁금한 걸 말하면 BB가 찾아다 드려요.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.5,
