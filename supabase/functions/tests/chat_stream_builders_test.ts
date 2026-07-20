@@ -36,7 +36,9 @@ function venue(id: string): VenueRow {
   };
 }
 
-type CardBlocks = { blocks: Array<{ type: string; entity: string; items: Array<{ location: string | null }> }> };
+type CardBlocks = {
+  blocks: Array<{ type: string; entity: string; items: Array<{ location: string | null }> }>;
+};
 
 Deno.test('buildDbCitations: 소스별 매핑 + 순서(tournaments→rules→venues)', () => {
   const cites = buildDbCitations([tourn('t1')], [rule('r1')], [venue('v1')]);
