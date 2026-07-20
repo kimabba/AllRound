@@ -68,7 +68,12 @@ export function verifyAgainstSource(
   // 원문의 개별 숫자 런(구분자 포함)들을 각각 digits-only로. 전체 concat 금지(오탐 방지).
   const runs = [...sourceText.matchAll(/\d[\d,.-]*\d|\d/g)].map((m) => m[0].replace(/[^0-9]/g, ''));
   const seen = new Set<string>();
-  for (const f of result.regulation_fields) {
+  // prize도 순위별 상금액을 구체적으로 뽑게 했으므로(buildPrompt) 같은 원문 대조를 거친다.
+  // 안 그러면 모델이 지어낸 상금이 검증을 우회해 스테이징된다(금융 할루시 방어 일관성).
+  const checked = result.prize
+    ? [...result.regulation_fields, { label: '시상', value: result.prize }]
+    : result.regulation_fields;
+  for (const f of checked) {
     if (CONTACT_LABEL.test(f.label)) continue; // 문의처/전화 필드는 원문 대조 검증 제외(과탐 방지)
     for (const tok of sensitiveTokens(f.value)) {
       const d = digitsOnly(tok);
