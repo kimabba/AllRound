@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../models/chat_ui.dart';
 import '../theme/tokens.dart';
@@ -42,6 +43,7 @@ class ChatClubCard extends StatelessWidget {
 
     return AppCard(
       variant: AppCardVariant.outlined,
+      onTap: () => context.push('/clubs/${item.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -105,12 +107,22 @@ class ChatClubCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => onAction('이 클럽 상세 알려줘', item.id),
-              child: const Text('상세 보기'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => onAction('이 클럽 상세 알려줘', item.id),
+                  child: const Text('상세 보기'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => context.push('/clubs/${item.id}'),
+                  child: const Text('클럽 방문하기'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

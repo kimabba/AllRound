@@ -256,6 +256,16 @@ Deno.serve(async (req) => {
 
           const answerText = renderClubDetailText(clubRow as unknown as ClubDetailRow);
           send('delta', { text: answerText });
+          // 상세 텍스트 아래에 카드도 함께 — 앱의 '클럽 방문하기' 네비 진입점.
+          send('ui', {
+            blocks: [
+              {
+                type: 'cards',
+                entity: 'club',
+                items: buildClubCards([clubRow as unknown as ClubCardRow]),
+              },
+            ],
+          });
 
           await chatWriter.from('chat_messages').insert({
             user_id: user.id,
