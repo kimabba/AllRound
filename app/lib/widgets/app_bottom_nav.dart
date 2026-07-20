@@ -12,7 +12,7 @@ class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  /// 가운데 볼보이 버튼 탭 콜백. null이면 버튼 숨김(스피드건 등 채팅 미지원 화면).
+  /// 가운데 볼보이 버튼 탭 콜백. null이면 버튼 숨김(채팅 미지원 화면).
   final VoidCallback? onChatTap;
 
   /// 볼보이 버튼 접근성 hint (예: '대회 화면에서 채팅 열기').
