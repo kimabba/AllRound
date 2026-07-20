@@ -1,6 +1,6 @@
+import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/theme/tokens.dart';
 import 'package:allround/widgets/app_bottom_nav.dart';
-import 'package:allround/widgets/global_chat_dock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +11,6 @@ void main() {
     expect(AppSizes.control, 48);
     expect(AppSizes.appBar, 56);
     expect(AppSizes.listRow, 56);
-    expect(AppSizes.globalChatDock, 60);
     expect(AppSizes.bottomNavigation, 64);
   });
 
@@ -29,12 +28,10 @@ void main() {
             data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
             child: Scaffold(
               body: const SizedBox.expand(),
-              bottomNavigationBar: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const GlobalChatDock(location: '/'),
-                  AppBottomNav(currentIndex: 0, onChanged: (_) {}),
-                ],
+              bottomNavigationBar: AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () {},
               ),
             ),
           ),
@@ -43,13 +40,12 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('AI에게 물어보기'), findsOneWidget);
-    expect(find.text('오늘에서 바로 질문'), findsOneWidget);
+    expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
     expect(find.text('오늘'), findsOneWidget);
     expect(find.text('MY'), findsOneWidget);
   });
 
-  testWidgets('200% text keeps the global AI dock within its fixed region',
+  testWidgets('200% text keeps the bottom nav within its fixed region',
       (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
@@ -57,23 +53,26 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: MediaQuery(
-          data: MediaQueryData(textScaler: TextScaler.linear(2)),
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: Scaffold(
-            body: SizedBox.expand(),
-            bottomNavigationBar: GlobalChatDock(location: '/'),
+            body: const SizedBox.expand(),
+            bottomNavigationBar: AppBottomNav(
+              currentIndex: 0,
+              onChanged: (_) {},
+              onChatTap: () {},
+            ),
           ),
         ),
       ),
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('AI에게 물어보기'), findsOneWidget);
-    expect(find.text('오늘에서 바로 질문'), findsNothing);
+    expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
     expect(
-      tester.getSize(find.byType(GlobalChatDock)),
-      const Size(320, AppSizes.globalChatDock),
+      tester.getSize(find.byType(AppBottomNav)),
+      const Size(320, AppSizes.bottomNavigation),
     );
   });
 }

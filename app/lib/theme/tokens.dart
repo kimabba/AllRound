@@ -53,7 +53,6 @@ class AppSizes {
   static const double control = 48;
   static const double appBar = 56;
   static const double listRow = 56;
-  static const double globalChatDock = 60;
   static const double bottomNavigation = 64;
   static const double chatComposerMax = 104;
 }

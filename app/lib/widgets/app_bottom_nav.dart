@@ -7,10 +7,18 @@ class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
+  /// 가운데 AI 버튼 탭 콜백. null이면 버튼 숨김(스피드건 등 채팅 미지원 화면).
+  final VoidCallback? onChatTap;
+
+  /// AI 버튼 접근성 hint (예: '대회 화면에서 채팅 열기').
+  final String? chatHint;
+
   const AppBottomNav({
     super.key,
     required this.currentIndex,
     required this.onChanged,
+    this.onChatTap,
+    this.chatHint,
   });
 
   @override
@@ -25,6 +33,58 @@ class AppBottomNav extends StatelessWidget {
       AllRoundE2EKeys.navProfile,
     ];
 
+    Widget tab(int index) {
+      return Expanded(
+        child: SizedBox(
+          height: AppSizes.bottomNavigation,
+          child: Semantics(
+            key: keys[index],
+            selected: currentIndex == index,
+            button: true,
+            label: '${labels[index]} 탭',
+            onTap: () => onChanged(index),
+            child: ExcludeSemantics(
+              child: InkWell(
+                onTap: () => onChanged(index),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      top: 7,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        curve: Curves.easeOut,
+                        width: currentIndex == index ? 20 : 0,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          borderRadius: BorderRadius.circular(AppRadius.xs),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        labels[index],
+                        style: tt.labelSmall?.copyWith(
+                          color: currentIndex == index
+                              ? cs.onSurface
+                              : cs.onSurfaceVariant,
+                          fontWeight: currentIndex == index
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: 0.98),
@@ -36,59 +96,84 @@ class AppBottomNav extends StatelessWidget {
           height: AppSizes.bottomNavigation,
           child: Row(
             children: [
-              for (var index = 0; index < labels.length; index++)
-                Expanded(
-                  child: SizedBox(
-                    height: AppSizes.bottomNavigation,
-                    child: Semantics(
-                      key: keys[index],
-                      selected: currentIndex == index,
-                      button: true,
-                      label: '${labels[index]} 탭',
-                      onTap: () => onChanged(index),
-                      child: ExcludeSemantics(
-                        child: InkWell(
-                          onTap: () => onChanged(index),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Positioned(
-                                top: 7,
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 160),
-                                  curve: Curves.easeOut,
-                                  width: currentIndex == index ? 20 : 0,
-                                  height: 2,
-                                  decoration: BoxDecoration(
-                                    color: cs.primary,
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.xs,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Text(
-                                  labels[index],
-                                  style: tt.labelSmall?.copyWith(
-                                    color: currentIndex == index
-                                        ? cs.onSurface
-                                        : cs.onSurfaceVariant,
-                                    fontWeight: currentIndex == index
-                                        ? FontWeight.w800
-                                        : FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              tab(0),
+              tab(1),
+              if (onChatTap != null)
+                _ChatDialButton(onTap: onChatTap!, hint: chatHint),
+              tab(2),
+              tab(3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 냅 중앙의 원형 AI 진입 버튼 — 메인 기능 강조.
+/// ponytail: 실제 회전 다이얼 대신 눌림 스케일만. 반응 좋으면 모션 확장.
+class _ChatDialButton extends StatefulWidget {
+  const _ChatDialButton({required this.onTap, this.hint});
+
+  final VoidCallback onTap;
+  final String? hint;
+
+  @override
+  State<_ChatDialButton> createState() => _ChatDialButtonState();
+}
+
+class _ChatDialButtonState extends State<_ChatDialButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      // 좌우 탭과 시각 균형: 터치 타깃 48 보장, 원은 그보다 살짝 큼.
+      width: AppSizes.touchTarget + 16,
+      height: AppSizes.bottomNavigation,
+      child: Semantics(
+        key: AllRoundE2EKeys.globalChatDock,
+        button: true,
+        label: 'AI에게 물어보기',
+        hint: widget.hint,
+        onTap: widget.onTap,
+        child: ExcludeSemantics(
+          child: Center(
+            child: GestureDetector(
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapCancel: () => setState(() => _pressed = false),
+              onTapUp: (_) {
+                setState(() => _pressed = false);
+                widget.onTap();
+              },
+              child: AnimatedScale(
+                scale: _pressed ? 0.9 : 1,
+                duration: const Duration(milliseconds: 110),
+                curve: Curves.easeOut,
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: cs.primaryContainer, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
-                    ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 22,
+                    color: cs.onPrimary,
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ),

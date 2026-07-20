@@ -1,6 +1,8 @@
 import 'package:allround/models/chat_entry_context.dart';
 import 'package:allround/screens/chat_screen.dart';
-import 'package:allround/widgets/global_chat_dock.dart';
+import 'package:allround/testing/e2e_keys.dart';
+import 'package:allround/widgets/app_bottom_nav.dart';
+import 'package:allround/widgets/chat_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,21 +44,27 @@ void main() {
 
   testWidgets('전역 AI 진입창에서 절반 높이 채팅 시트를 연다', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
+      ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            bottomNavigationBar: GlobalChatDock(
-              location: '/tournaments/tournament-17',
+            bottomNavigationBar: Builder(
+              builder: (context) => AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () => openChatSheet(
+                  context,
+                  chatEntryContextForPath('/tournaments/tournament-17'),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
 
-    expect(find.text('AI에게 물어보기'), findsOneWidget);
-    expect(find.text('현재 대회에서 바로 질문'), findsOneWidget);
+    expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
 
-    await tester.tap(find.text('AI에게 물어보기'));
+    await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
     await tester.pumpAndSettle();
 
     expect(find.text('현재 대회 연결'), findsOneWidget);
@@ -110,8 +118,15 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder: (_, __) => const Scaffold(
-            bottomNavigationBar: GlobalChatDock(location: '/'),
+          builder: (_, __) => Scaffold(
+            bottomNavigationBar: Builder(
+              builder: (context) => AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () =>
+                    openChatSheet(context, chatEntryContextForPath('/')),
+              ),
+            ),
           ),
         ),
         GoRoute(
@@ -129,7 +144,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(child: MaterialApp.router(routerConfig: router)),
     );
-    await tester.tap(find.text('AI에게 물어보기'));
+    await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '라우터 확장 초안');
     await tester.tap(find.byTooltip('전체 화면으로 열기'));

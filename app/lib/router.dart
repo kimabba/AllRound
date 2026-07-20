@@ -34,7 +34,7 @@ import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
 import 'widgets/app_bottom_nav.dart';
-import 'widgets/global_chat_dock.dart';
+import 'widgets/chat_sheet.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -292,19 +292,19 @@ class _MainShell extends ConsumerWidget {
     final isFullChat = currentPath == '/chat';
     final showChatDock = !isFullChat && !currentPath.startsWith('/speed-gun');
 
+    final entryContext = chatEntryContextForPath(currentPath);
+
     return Scaffold(
       body: child,
       bottomNavigationBar: keyboardVisible || isFullChat
           ? null
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showChatDock) GlobalChatDock(location: currentPath),
-                AppBottomNav(
-                  currentIndex: idx,
-                  onChanged: (index) => context.go(_tabs[index]),
-                ),
-              ],
+          : AppBottomNav(
+              currentIndex: idx,
+              onChanged: (index) => context.go(_tabs[index]),
+              onChatTap: showChatDock
+                  ? () => openChatSheet(context, entryContext)
+                  : null,
+              chatHint: '${entryContext.screenLabel} 화면에서 채팅 열기',
             ),
     );
   }

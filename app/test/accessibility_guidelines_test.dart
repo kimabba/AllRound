@@ -3,7 +3,7 @@ import 'package:allround/state/chat_state.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/widgets/app_bottom_nav.dart';
-import 'package:allround/widgets/global_chat_dock.dart';
+import 'package:allround/widgets/chat_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,12 +18,11 @@ void main() {
             theme: AppTheme.light(),
             home: Scaffold(
               body: const SizedBox.expand(),
-              bottomNavigationBar: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const GlobalChatDock(location: '/tournaments'),
-                  AppBottomNav(currentIndex: 0, onChanged: (_) {}),
-                ],
+              bottomNavigationBar: AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () {},
+                chatHint: '대회 화면에서 채팅 열기',
               ),
             ),
           ),
@@ -61,17 +60,24 @@ void main() {
         ProviderScope(
           child: MaterialApp(
             theme: AppTheme.light(),
-            home: const Scaffold(
-              body: SizedBox.expand(),
-              bottomNavigationBar: GlobalChatDock(
-                location: '/tournaments/tournament-17',
+            home: Scaffold(
+              body: const SizedBox.expand(),
+              bottomNavigationBar: Builder(
+                builder: (context) => AppBottomNav(
+                  currentIndex: 0,
+                  onChanged: (_) {},
+                  onChatTap: () => openChatSheet(
+                    context,
+                    chatEntryContextForPath('/tournaments/tournament-17'),
+                  ),
+                ),
               ),
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('AI에게 물어보기'));
+      await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
       await tester.pumpAndSettle();
 
       expect(find.text('현재 대회 연결'), findsOneWidget);
