@@ -135,44 +135,63 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
       child: Semantics(
         key: AllRoundE2EKeys.globalChatDock,
         button: true,
-        label: 'AI에게 물어보기',
+        label: '볼보이',
         hint: widget.hint,
         onTap: widget.onTap,
         child: ExcludeSemantics(
-          child: Center(
-            child: GestureDetector(
-              onTapDown: (_) => setState(() => _pressed = true),
-              onTapCancel: () => setState(() => _pressed = false),
-              onTapUp: (_) {
-                setState(() => _pressed = false);
-                widget.onTap();
-              },
-              child: AnimatedScale(
-                scale: _pressed ? 0.9 : 1,
-                duration: const Duration(milliseconds: 110),
-                curve: Curves.easeOut,
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: cs.primaryContainer, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTapUp: (_) {
+              setState(() => _pressed = false);
+              widget.onTap();
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.topCenter,
+              children: [
+                // 원이 냅 상단 경계선 위로 떠올라 메인 기능임을 강조.
+                Positioned(
+                  top: -14,
+                  child: AnimatedScale(
+                    scale: _pressed ? 0.9 : 1,
+                    duration: const Duration(milliseconds: 110),
+                    curve: Curves.easeOut,
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: cs.surface, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    size: 22,
-                    color: cs.onPrimary,
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 24,
+                        color: cs.onPrimary,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  bottom: 9,
+                  child: Text(
+                    '볼보이',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

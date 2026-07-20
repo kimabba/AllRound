@@ -364,7 +364,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.fullChatScreen,
       appBar: AppBar(
-        title: const Text('AI에게 물어보기'),
+        title: const Text('볼보이'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -421,7 +421,7 @@ class _EmbeddedChatHeader extends StatelessWidget {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
-                      'AI에게 물어보기',
+                      '볼보이',
                       style:
                           tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                     ),
