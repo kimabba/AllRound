@@ -153,22 +153,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  ffmpeg_kit_flutter_new:
-    dependency: "direct main"
-    description:
-      name: ffmpeg_kit_flutter_new
-      sha256: d127635f27e93a7f21f0a14ce0a1a148e80919c402dac4a2118d73bfb17ce841
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.1.0"
-  ffmpeg_kit_flutter_platform_interface:
-    dependency: transitive
-    description:
-      name: ffmpeg_kit_flutter_platform_interface
-      sha256: addf046ae44e190ad0101b2fde2ad909a3cd08a2a109f6106d2f7048b7abedee
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
   file:
     dependency: transitive
     description:
@@ -653,7 +637,7 @@ packages:
     source: hosted
     version: "1.9.1"
   path_provider:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: path_provider
       sha256: "50c5dd5b6e1aaf6fb3a78b33f6aa3afca52bf903a8a5298f53101fdaee55bbcd"
@@ -764,14 +748,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  quiver:
-    dependency: transitive
-    description:
-      name: quiver
-      sha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.2"
   realtime_client:
     dependency: transitive
     description:
@@ -969,14 +945,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
-  tflite_flutter:
-    dependency: "direct main"
-    description:
-      name: tflite_flutter
-      sha256: "48e6fde2ad97162bb66a16a142f4c4698add9e8cd397ce9d1cc7451b55537ac1"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.11.0"
   typed_data:
     dependency: transitive
     description:

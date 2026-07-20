@@ -26,9 +26,6 @@ import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rules_screen.dart';
-// 웹은 dart:io 미지원 → stub 사용
-import 'screens/speed_gun/speed_gun_screen.dart'
-    if (dart.library.html) 'screens/speed_gun/speed_gun_screen_web.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
@@ -130,10 +127,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/clubs', builder: (_, __) => const ClubsScreen()),
           GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
-          GoRoute(
-            path: '/speed-gun',
-            builder: (_, __) => const SpeedGunScreen(),
-          ),
           GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
           GoRoute(
@@ -259,7 +252,6 @@ class _MainShell extends ConsumerWidget {
 
   static const _profileSubPaths = [
     '/more',
-    '/speed-gun',
     '/profile',
     '/notifications',
     '/favorites',
@@ -290,7 +282,7 @@ class _MainShell extends ConsumerWidget {
     final idx = _indexOf(currentPath);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isFullChat = currentPath == '/chat';
-    final showChatDock = !isFullChat && !currentPath.startsWith('/speed-gun');
+    final showChatDock = !isFullChat;
 
     final entryContext = chatEntryContextForPath(currentPath);
 
