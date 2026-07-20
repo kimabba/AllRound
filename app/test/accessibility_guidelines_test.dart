@@ -32,7 +32,7 @@ void main() {
       expect(
         tester.getSemantics(find.byKey(AllRoundE2EKeys.globalChatDock)),
         matchesSemantics(
-          label: '볼보이',
+          label: 'BB',
           isButton: true,
           hasTapAction: true,
         ),

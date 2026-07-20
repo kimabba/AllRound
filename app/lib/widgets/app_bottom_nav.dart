@@ -152,7 +152,7 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
       child: Semantics(
         key: AllRoundE2EKeys.globalChatDock,
         button: true,
-        label: '볼보이',
+        label: 'BB',
         hint: widget.hint,
         onTap: widget.onTap,
         child: ExcludeSemantics(
@@ -196,7 +196,7 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
                 Positioned(
                   bottom: 9,
                   child: Text(
-                    '볼보이',
+                    'BB',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: cs.primary,
                           fontWeight: FontWeight.w800,
