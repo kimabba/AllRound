@@ -374,6 +374,11 @@ class _UgcReportSheetState extends ConsumerState<_UgcReportSheet> {
                 ),
                 OutlinedButton.icon(
                   onPressed: _busy || _images.length >= 3 ? null : _pickImages,
+                  // 테마 기본 minimumSize가 Size.fromHeight(=폭 무한대)라 Row 안에서
+                  // 레이아웃 크래시 → 폭 제약 해제(높이만 유지).
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, AppSizes.control),
+                  ),
                   icon: const Icon(Icons.add_photo_alternate_outlined),
                   label: const Text('사진 추가'),
                 ),

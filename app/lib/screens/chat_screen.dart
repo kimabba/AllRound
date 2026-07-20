@@ -354,10 +354,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     if (widget.embedded) {
-      return Material(
+      // Material 대신 Scaffold: 신고 실패 등 SnackBar가 시트 안에도 표시되게 한다.
+      // (root Scaffold의 SnackBar는 모달 시트 뒤에 가려져 사용자가 못 봄)
+      return Scaffold(
         key: AllRoundE2EKeys.embeddedChatSheet,
-        color: cs.surface,
-        child: chatBody,
+        backgroundColor: cs.surface,
+        body: chatBody,
       );
     }
 
