@@ -529,4 +529,7 @@ const _flagLabels = <String, String>{
   'unusual': '모델이 특이 요강으로 표시',
   'low_confidence': '모델 신뢰도 낮음',
   'empty_fields': '추출된 필드 없음',
+  'kato_missing_section': 'KATO 요강에서 섹션을 찾지 못함',
+  'kato_division_coverage': 'KATO 부서 정보 파싱 불완전',
+  'kato_parse_failed': 'KATO 요강 파싱 실패',
 };
