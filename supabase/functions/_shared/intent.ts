@@ -303,6 +303,15 @@ export function extractDateRange(text: string, now: Date = new Date()): DateRang
     }
   }
 
+  // "올해" / "금년" — 올해 남은 기간(오늘 ~ 연말). "몇 개 남았어" 류 질문에서 지난 대회
+  // 제외. 구체 월("올해 5월")이 함께면 위 monthOnly 가 먼저 잡아 더 좁은 범위 우선.
+  if (/올해|올\s*한\s*해|금년/.test(text)) {
+    const kst = new Date(today.getTime() + KST_OFFSET_MS);
+    const year = kst.getUTCFullYear();
+    const yearEnd = new Date(Date.UTC(year, 11, 31) - KST_OFFSET_MS);
+    return { from: formatKstDate(today), to: formatKstDate(yearEnd) };
+  }
+
   return undefined;
 }
 
