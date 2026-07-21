@@ -328,6 +328,7 @@ class SimpleClubMiniTile extends StatelessWidget {
 class SimpleClubTile extends StatelessWidget {
   final Club? club;
   final bool isFavorite;
+  final bool pending;
   final ClubFavoriteToggle? onFavoriteToggle;
   final VoidCallback? onOpen;
 
@@ -335,6 +336,7 @@ class SimpleClubTile extends StatelessWidget {
     super.key,
     required this.club,
     this.isFavorite = false,
+    this.pending = false,
     this.onFavoriteToggle,
     this.onOpen,
   });
@@ -379,11 +381,38 @@ class SimpleClubTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleMedium,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.titleMedium,
+                          ),
+                        ),
+                        if (pending) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.secondaryContainer,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              '승인 대기중',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSecondaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
