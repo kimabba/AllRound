@@ -332,8 +332,11 @@ class _TeamRecruitingDetailScreenState
       if (!mounted) return;
       setState(() {
         _resolvedClub = loadedClub;
-        _threadId = inquiry?.id;
-        _applied = inquiry != null;
+        // 늦게 도착한 조회 결과가 전송으로 생성된 스레드를 덮어쓰지 않도록 가드.
+        if (_threadId == null) {
+          _threadId = inquiry?.id;
+          _applied = inquiry != null;
+        }
       });
     } catch (_) {
       if (!mounted) return;
