@@ -373,14 +373,33 @@ class _TeamRecruitingDetailScreenState
         const SnackBar(content: Text('운영진에게 참여 문의를 보냈습니다.')),
       );
       await _openInquiry(targetClub, threadId);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('참여 신청을 보내지 못했습니다. 잠시 후 다시 시도해주세요.')),
+        SnackBar(content: Text(_participationErrorMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  // 서버(clubs-inquiries) 에러 코드를 사용자용 안내로 매핑. 기존엔 모든 실패를
+  // "다시 시도"로 뭉뚱그려, 운영진 부재 등 재시도로 풀리지 않는 경우를 오인시켰다.
+  String _participationErrorMessage(Object e) {
+    final s = e.toString();
+    if (s.contains('NO_CLUB_OPERATOR')) {
+      return '이 클럽은 아직 운영진이 없어 참여 신청을 받을 수 없어요.';
+    }
+    if (s.contains('USER_BLOCKED')) {
+      return '차단 상태라 이 클럽에 참여 신청을 보낼 수 없어요.';
+    }
+    if (s.contains('ALREADY_MEMBER')) {
+      return '이미 이 클럽의 멤버예요.';
+    }
+    if (s.contains('CLUB_NOT_AVAILABLE')) {
+      return '지금은 참여 신청을 받지 않는 클럽이에요.';
+    }
+    return '참여 신청을 보내지 못했어요. 잠시 후 다시 시도해주세요.';
   }
 
   Future<void> _openInquiry(Club targetClub, String threadId) {
