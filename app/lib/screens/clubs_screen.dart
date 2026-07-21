@@ -33,6 +33,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   // 내 클럽 탭
   List<Club>? _myClubs;
+  List<Club> _pendingClubs = const <Club>[];
   bool _loadingMy = false;
 
   // 클럽 찾기 탭
@@ -88,6 +89,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       if (mounted) setState(() => _myClubs = []);
     } finally {
       if (mounted) setState(() => _loadingMy = false);
+    }
+    // pending 조회 실패가 이미 로드된 가입 클럽 목록을 지우지 않도록 별도 처리.
+    try {
+      final pending = await ref.read(apiProvider).myPendingJoinRequests();
+      if (mounted) setState(() => _pendingClubs = pending);
+    } catch (e) {
+      debugPrint('myPendingJoinRequests error: $e');
     }
   }
 
@@ -391,6 +399,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
+    // 승인 대기중 가입신청 — 이미 멤버인 클럽은 제외.
+    final pendingClubs = _pendingClubs
+        .where((p) => !joinedClubs.any((j) => j.id == p.id))
+        .toList();
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
@@ -574,12 +586,23 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   const SizedBox(height: AppSpacing.xl),
                   const SimpleSectionHeader(title: '가입한 클럽'),
                   const SizedBox(height: AppSpacing.sm),
-                  if (joinedClubs.isEmpty)
+                  if (joinedClubs.isEmpty && pendingClubs.isEmpty)
                     SimpleClubTile(
                       club: null,
                       onFavoriteToggle: _toggleClubFavorite,
                     )
-                  else
+                  else ...[
+                    for (final club in pendingClubs)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: SimpleClubTile(
+                          club: club,
+                          pending: true,
+                          isFavorite: favoriteClubIds.contains(club.id),
+                          onFavoriteToggle: _toggleClubFavorite,
+                          onOpen: () => _openClub(club),
+                        ),
+                      ),
                     for (final club in joinedClubs)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -590,6 +613,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                           onOpen: () => _openClub(club),
                         ),
                       ),
+                  ],
                 ],
               ),
             ),

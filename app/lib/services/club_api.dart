@@ -58,6 +58,23 @@ mixin ClubApi on ApiBase {
         .toList();
   }
 
+  /// 내 pending 가입 신청 클럽(승인 대기중). 활성 멤버십과 별개 목록.
+  Future<List<Club>> myPendingJoinRequests() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final rows = await supabase
+        .from('club_join_requests')
+        .select('clubs!inner(*)')
+        .eq('user_id', uid)
+        .eq('status', 'pending');
+    return (rows as List)
+        .whereType<Map>()
+        .map((r) => r['clubs'])
+        .whereType<Map>()
+        .map((c) => Club.fromJson(Map<String, dynamic>.from(c)))
+        .toList();
+  }
+
   Future<List<Venue>> searchVenues({
     String? sport,
     String? region,
