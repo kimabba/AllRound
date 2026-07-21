@@ -82,21 +82,20 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return;
     }
     try {
-      final api = ref.read(apiProvider);
-      final list = await api.myClubs();
+      final list = await ref.read(apiProvider).myClubs();
       if (mounted) setState(() => _myClubs = list);
-      final pending = await api.myPendingJoinRequests();
-      if (mounted) setState(() => _pendingClubs = pending);
     } catch (e) {
       debugPrint('myClubs error: $e');
-      if (mounted) {
-        setState(() {
-          _myClubs = [];
-          _pendingClubs = const <Club>[];
-        });
-      }
+      if (mounted) setState(() => _myClubs = []);
     } finally {
       if (mounted) setState(() => _loadingMy = false);
+    }
+    // pending 조회 실패가 이미 로드된 가입 클럽 목록을 지우지 않도록 별도 처리.
+    try {
+      final pending = await ref.read(apiProvider).myPendingJoinRequests();
+      if (mounted) setState(() => _pendingClubs = pending);
+    } catch (e) {
+      debugPrint('myPendingJoinRequests error: $e');
     }
   }
 
