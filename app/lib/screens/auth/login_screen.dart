@@ -41,6 +41,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // onChanged: 바텀시트의 setSheetState. 부모 setState 만으로는 시트가
   // 리빌드되지 않아 에러/로딩이 시트에 반영되지 않으므로 함께 갱신한다.
   Future<void> _emailAuth({VoidCallback? onChanged}) async {
+    // 이미 처리 중이면 중복 제출(빠른 다중 탭·엔터)을 무시한다. 버튼은 rebuild
+    // 후에야 비활성화돼 그 전 탭이 새어들 수 있어, 동기 가드로 확실히 막는다.
+    if (_busy) return;
     void set(VoidCallback fn) {
       setState(fn);
       onChanged?.call();
@@ -211,6 +214,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return _signUp
         ? '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.'
         : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  // 입력을 수정하면 이전 에러를 즉시 지운다. 기존엔 제출할 때만 지워져,
+  // 비번을 바꿔도 옛 에러가 남아 "계속 거절되는 것처럼" 보였다.
+  void _clearAuthError(StateSetter setSheetState) {
+    if (_error == null) return;
+    setState(() => _error = null);
+    setSheetState(() {});
   }
 
   void _setMode({required bool signUp}) {
@@ -388,6 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         hintText: 'test@example.com',
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) => _clearAuthError(setSheetState),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       _SheetAuthField(
@@ -405,6 +417,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : _emailAuth(
                                 onChanged: () => setSheetState(() {}),
                               ),
+                        onChanged: (_) => _clearAuthError(setSheetState),
                       ),
                       if (_signUp) ...[
                         const SizedBox(height: AppSpacing.md),
@@ -421,6 +434,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : _emailAuth(
                                   onChanged: () => setSheetState(() {}),
                                 ),
+                          onChanged: (_) => _clearAuthError(setSheetState),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
@@ -960,6 +974,7 @@ class _SheetAuthField extends StatelessWidget {
     this.textInputAction,
     this.obscureText = false,
     this.onSubmitted,
+    this.onChanged,
   });
 
   final Key? fieldKey;
@@ -971,6 +986,7 @@ class _SheetAuthField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final bool obscureText;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -981,6 +997,7 @@ class _SheetAuthField extends StatelessWidget {
       textInputAction: textInputAction,
       obscureText: obscureText,
       onSubmitted: onSubmitted,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
