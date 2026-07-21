@@ -181,8 +181,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (m.contains('rate limit') || m.contains('too many')) {
       return '요청이 많습니다. 잠시 후 다시 시도해 주세요.';
     }
-    if (m.contains('weak password') || m.contains('password should')) {
-      return '비밀번호가 너무 약합니다. 더 복잡하게 설정해 주세요.';
+    // 유출/취약 비밀번호(HaveIBeenPwned). GoTrue 실제 문구는
+    // "known to be weak and easy to guess"라 기존 'weak password' 문자열
+    // 매칭이 빗나가 generic 폴백으로 떨어졌다. error_code 로 견고하게 잡는다.
+    if (e.code == 'weak_password' ||
+        m.contains('weak password') ||
+        m.contains('known to be weak') ||
+        m.contains('easy to guess') ||
+        m.contains('pwned') ||
+        m.contains('password should')) {
+      return '사용할 수 없는 비밀번호예요. 유출되었거나 너무 단순한 비밀번호이니 '
+          '다른 비밀번호로 바꿔 주세요.';
     }
     if (m.contains('birth_date_required')) {
       return '계정 생성 전에 생년월일을 확인해 주세요.';
