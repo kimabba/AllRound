@@ -1,7 +1,7 @@
 name: allround
 description: 올라운드 — 스포츠 동호인 통합 정보 앱
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.6.0
