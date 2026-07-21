@@ -323,8 +323,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: () => context.push('/onboarding'),
-                    icon: const Icon(Icons.tune_rounded, size: 18),
-                    label: const Text('맞춤 설정'),
+                    icon: const Icon(Icons.manage_accounts_rounded, size: 18),
+                    label: const Text('프로필·생년월일 수정'),
                   ),
                 ),
                 SportsSection(sports: sports),

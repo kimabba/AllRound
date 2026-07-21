@@ -739,6 +739,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
+            if (_birthDate != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '현재 만 ${ageOn(_birthDate!, DateTime.now())}세',
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '생년월일은 연령 확인과 대회 참가 자격 매칭에만 사용되며 다른 사용자에게 공개되지 않습니다.',
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             Material(
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(AppRadius.sm),
