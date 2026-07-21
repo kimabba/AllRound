@@ -213,6 +213,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
+  // 입력을 수정하면 이전 에러를 즉시 지운다. 기존엔 제출할 때만 지워져,
+  // 비번을 바꿔도 옛 에러가 남아 "계속 거절되는 것처럼" 보였다.
+  void _clearAuthError(StateSetter setSheetState) {
+    if (_error == null) return;
+    setState(() => _error = null);
+    setSheetState(() {});
+  }
+
   void _setMode({required bool signUp}) {
     if (_busy) return;
     setState(() {
@@ -388,6 +396,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         hintText: 'test@example.com',
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
+                        onChanged: (_) => _clearAuthError(setSheetState),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       _SheetAuthField(
@@ -405,6 +414,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : _emailAuth(
                                 onChanged: () => setSheetState(() {}),
                               ),
+                        onChanged: (_) => _clearAuthError(setSheetState),
                       ),
                       if (_signUp) ...[
                         const SizedBox(height: AppSpacing.md),
@@ -421,6 +431,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : _emailAuth(
                                   onChanged: () => setSheetState(() {}),
                                 ),
+                          onChanged: (_) => _clearAuthError(setSheetState),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
@@ -960,6 +971,7 @@ class _SheetAuthField extends StatelessWidget {
     this.textInputAction,
     this.obscureText = false,
     this.onSubmitted,
+    this.onChanged,
   });
 
   final Key? fieldKey;
@@ -971,6 +983,7 @@ class _SheetAuthField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final bool obscureText;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -981,6 +994,7 @@ class _SheetAuthField extends StatelessWidget {
       textInputAction: textInputAction,
       obscureText: obscureText,
       onSubmitted: onSubmitted,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
