@@ -455,8 +455,16 @@ class UserProfile {
   final String? name;
   final String? nickname;
   final DateTime? birthDate;
+  final String? primaryRegion;
+  final List<String> interestRegions;
 
-  const UserProfile({this.name, this.nickname, this.birthDate});
+  const UserProfile({
+    this.name,
+    this.nickname,
+    this.birthDate,
+    this.primaryRegion,
+    this.interestRegions = const [],
+  });
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
         name: j['name'] as String?,
@@ -464,7 +472,24 @@ class UserProfile {
         birthDate: j['birth_date'] == null
             ? null
             : DateTime.tryParse(j['birth_date'] as String),
+        primaryRegion: j['primary_region'] as String?,
+        interestRegions: (j['interest_regions'] as List?)
+                ?.whereType<String>()
+                .toList(growable: false) ??
+            const [],
       );
+
+  /// 주 거주지 + 관심지역 합집합(중복 제거, 공백 제외). 홈 모집글 지역 매칭 기준.
+  List<String> get regions {
+    final s = <String>{};
+    final p = primaryRegion?.trim();
+    if (p != null && p.isNotEmpty) s.add(p);
+    for (final r in interestRegions) {
+      final t = r.trim();
+      if (t.isNotEmpty) s.add(t);
+    }
+    return s.toList(growable: false);
+  }
 
   /// 앱 활동 표시명: 닉네임 우선, 없으면 실명. 둘 다 없으면 null.
   String? get displayName {

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
 
@@ -154,11 +155,37 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   // 등급·협회 등록이 하나도 없으면 자격 매칭이 전부 실패해 목록이 빈다.
   // 그 경우엔 전체 published 를 보여준다(등록이 있으면 내 등급 필터 유지).
   final hasGradeBasis = sports.isNotEmpty || tennisOrgs.isNotEmpty;
-  return api.searchTournaments(
+  final matched = await api.searchTournaments(
     sport: sport,
     onlyMyGrade: hasGradeBasis,
     limit: 50,
   );
+  // 임시책(지역↔KATO 등급 대응표 완성 전): 내 등급 매칭 중 '다가오는' 대회가
+  // 하나도 없으면 같은 종목 전체 대회로 fallback 해 추천이 비지 않게 한다.
+  // 예) 광주 등급 유저에게 8월 KATO 전국대회가 등급 불일치로 전부 걸러지는 경우.
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final hasUpcoming = matched.any((t) => !t.startDate.isBefore(today));
+  if (hasGradeBasis && !hasUpcoming) {
+    return api.searchTournaments(sport: sport, onlyMyGrade: false, limit: 50);
+  }
+  return matched;
+});
+
+/// 홈 노출용 팀원 모집글 — 내 거주/관심 지역(primary_region + interest_regions)
+/// 대회 우선, 모집중만, 풋살 우선, 상위 4개. 지역 등록이 없으면 필터 없이 전체.
+final homeRecruitingProvider =
+    FutureProvider<List<RecruitingPostPreview>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  final sport = ref.watch(activeSportProvider);
+  final profile = await ref.watch(myProfileProvider.future);
+  final regions = profile?.regions ?? const <String>[];
+  final posts = await api.teamRecruitingPosts(
+    sport: sport,
+    regions: regions.isEmpty ? null : regions,
+  );
+  return pickHomeRecruiting(posts);
 });
 
 /// public.users.role 을 읽어 어드민 여부 반환.

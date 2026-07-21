@@ -31,7 +31,7 @@ mixin UserApi on ApiBase {
     if (userId == null) return null;
     final row = await supabase
         .from('users')
-        .select('name, nickname, birth_date')
+        .select('name, nickname, birth_date, primary_region, interest_regions')
         .eq('id', userId)
         .maybeSingle();
     return row == null ? null : UserProfile.fromJson(row);
