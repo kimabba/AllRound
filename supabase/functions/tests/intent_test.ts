@@ -196,6 +196,23 @@ Deno.test('날짜 범위: 다음 주 > 이번 주말 > 이번 주 우선순위',
   });
 });
 
+Deno.test('날짜 범위: "올해" = 오늘 ~ 연말 (남은 기간)', () => {
+  // "올해 몇 개 남았어?" → 지난 대회 제외 위해 오늘부터, 상한은 연말.
+  assertEquals(extractDateRange('광주 대회 올해 몇개 남았어?', FIXED_NOW), {
+    from: '2026-06-07',
+    to: '2026-12-31',
+  });
+  assertEquals(extractDateRange('금년 대회', FIXED_NOW), {
+    from: '2026-06-07',
+    to: '2026-12-31',
+  });
+  // "올해 5월" 처럼 구체 월이 함께면 월이 우선 (더 좁은 범위).
+  assertEquals(extractDateRange('올해 5월 대회', FIXED_NOW), {
+    from: '2026-05-01',
+    to: '2026-05-31',
+  });
+});
+
 Deno.test('routing 가능 여부: rule 분류 tournament_search 만 LLM 우회 대상', () => {
   // chat/index.ts 의 routing 조건 미러: intent ∈ {tournament_search} && confidence ≥ 0.95.
   // 룰 분류는 confidence 1.0 → tournament_search 면 routable.

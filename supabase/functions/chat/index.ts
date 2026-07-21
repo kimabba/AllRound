@@ -785,6 +785,10 @@ Deno.serve(async (req) => {
             ? (REGION_LABELS[regionCode as RegionCode] ?? regionCode)
             : null;
           const dateRange = intentResult.slots.date_range;
+          // 명시 기간이 없으면 오늘(KST)을 하한으로 → 이미 지난(종료된) 대회 제외.
+          // 'closed' 상태(모집 마감)와 무관하게 event 날짜 기준으로 거른다(coalesce(end,start)>=from).
+          const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
           // 기본은 전체(false). 정제 칩 재요청이면 그 값으로 좁히거나(true) 넓힌다(JY-101).
           const onlyMyGrade = tournamentRefine?.only_my_grade ?? false;
           // 등급 등록자에게만 전체↔내 등급 전환 칩(JY-101). 풋살은 futsal 프로필의
@@ -814,7 +818,8 @@ Deno.serve(async (req) => {
               p_sport: requestedSport,
               // region_code(정규 코드) 직접 전달. 한글 라벨은 t.region 표기와 불일치(JY-104).
               p_region_code: regionCode,
-              p_date_from: dateRange?.from ?? null,
+              // 명시 기간이 없으면 오늘 하한으로 지난 대회 제외(JY: "몇 개 남았어" 버그).
+              p_date_from: dateRange?.from ?? todayKst,
               p_date_to: dateRange?.to ?? null,
               // 기본 전체 · 정제 칩("내 등급만 보기") 재요청 시에만 등급 필터(JY-101).
               p_only_my_grade: onlyMyGrade,
