@@ -167,7 +167,11 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   final today = DateTime(now.year, now.month, now.day);
   final hasUpcoming = matched.any((t) => !t.startDate.isBefore(today));
   if (hasGradeBasis && !hasUpcoming) {
-    return api.searchTournaments(sport: sport, onlyMyGrade: false, limit: 50);
+    try {
+      return await api.searchTournaments(sport: sport, onlyMyGrade: false, limit: 50);
+    } catch (_) {
+      return matched; // fallback 조회 실패 시 1차 결과라도 보존 (codex P2)
+    }
   }
   return matched;
 });
