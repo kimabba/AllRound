@@ -506,6 +506,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // 이메일·구글 로그인만 노출. 실제 권한은 서버 RLS.
     final adminMode = AppConfig.adminMode;
     final showTestShortcuts = kDebugMode;
+    // App Store 첫 출시는 자체 이메일 인증만 제공한다. iOS에서 Google 같은
+    // 제3자 로그인을 노출하면 App Review Guideline 4.8에 따라 동등한
+    // Sign in with Apple 옵션이 필요하다. Android/Web의 기존 Google 로그인은
+    // 유지하되 iOS에서는 서버의 가입 전 연령 게이트가 있는 이메일 흐름만 쓴다.
+    final showGoogleLogin =
+        kIsWeb || defaultTargetPlatform != TargetPlatform.iOS;
 
     return Scaffold(
       key: AllRoundE2EKeys.loginScreen,
@@ -567,13 +573,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),
-                      _SocialButton(
-                        key: AllRoundE2EKeys.googleExistingLoginButton,
-                        onPressed: _busy ? null : _openGoogleExistingLogin,
-                        icon: Icons.account_circle_outlined,
-                        label: 'Google 기존 회원 로그인',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
+                      if (showGoogleLogin) ...[
+                        _SocialButton(
+                          key: AllRoundE2EKeys.googleExistingLoginButton,
+                          onPressed: _busy ? null : _openGoogleExistingLogin,
+                          icon: Icons.account_circle_outlined,
+                          label: 'Google 기존 회원 로그인',
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       FilledButton(
                         key: AllRoundE2EKeys.emailFlowButton,
                         onPressed: _busy ? null : _showEmailAuthSheet,
