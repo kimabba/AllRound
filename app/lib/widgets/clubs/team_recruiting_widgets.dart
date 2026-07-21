@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/club_recruiting.dart';
 import '../../models/tournament.dart';
+import '../../screens/clubs/club_inquiry_screen.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
@@ -309,30 +310,69 @@ class _TeamRecruitingDetailScreenState
     extends ConsumerState<TeamRecruitingDetailScreen> {
   bool _busy = false;
   bool _applied = false;
+  Club? _resolvedClub;
+  String? _threadId;
 
   RecruitingPostPreview get post => widget.post;
-  Club? get club => widget.club;
+  Club? get club => _resolvedClub;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedClub = widget.club;
+    _loadContext();
+  }
+
+  Future<void> _loadContext() async {
+    try {
+      final api = ref.read(apiProvider);
+      final loadedClub = _resolvedClub ?? await api.getClub(post.clubId);
+      final inquiry =
+          loadedClub.isMember ? null : await api.myClubInquiry(loadedClub.id);
+      if (!mounted) return;
+      setState(() {
+        _resolvedClub = loadedClub;
+        // 늦게 도착한 조회 결과가 전송으로 생성된 스레드를 덮어쓰지 않도록 가드.
+        if (_threadId == null) {
+          _threadId = inquiry?.id;
+          _applied = inquiry != null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('클럽 정보를 불러오지 못했습니다.')),
+      );
+    }
+  }
 
   Future<void> _contactForParticipation() async {
     final targetClub = club;
     if (targetClub == null || post.isClosed || _busy) return;
-    if (targetClub.isMember || _applied) {
+    if (targetClub.isMember) {
       await context.push('/clubs/${targetClub.id}', extra: targetClub);
+      return;
+    }
+    if (_threadId != null) {
+      await _openInquiry(targetClub, _threadId!);
       return;
     }
 
     setState(() => _busy = true);
     try {
-      await ref.read(apiProvider).joinClub(
-            targetClub.id,
-            message: '팀원모집 참여 신청: ${post.title}',
+      final threadId = await ref.read(apiProvider).sendClubInquiry(
+            clubId: targetClub.id,
+            body: '팀원모집 참여 신청: ${post.title}\n참여를 희망합니다.',
           );
       if (!mounted) return;
-      setState(() => _applied = true);
+      setState(() {
+        _threadId = threadId;
+        _applied = true;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('운영진에게 참여 신청을 보냈습니다.')),
+        const SnackBar(content: Text('운영진에게 참여 문의를 보냈습니다.')),
       );
-      await context.push('/clubs/${targetClub.id}', extra: targetClub);
+      await _openInquiry(targetClub, threadId);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,6 +381,19 @@ class _TeamRecruitingDetailScreenState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openInquiry(Club targetClub, String threadId) {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubInquiryConversationScreen(
+          clubId: targetClub.id,
+          threadId: threadId,
+          clubName: targetClub.name,
+        ),
+      ),
+    );
   }
 
   @override
@@ -513,7 +566,7 @@ class _TeamRecruitingDetailScreenState
                     : club?.isMember == true
                         ? '클럽에서 문의하기'
                         : _applied
-                            ? '가입 승인 상태 확인'
+                            ? '참여 문의 계속하기'
                             : '참여 신청하기',
               ),
             ),
