@@ -122,15 +122,34 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supa
       .from('club_members')
-      .select(
-        'user_id, role, can_create_event, can_post_notice, joined_at, users(name)',
-      )
+      .select('user_id, role, can_create_event, can_post_notice, joined_at')
       .eq('club_id', clubId)
       .eq('status', 'active')
       .order('joined_at');
     if (error) return errorResponse(error.message, 500);
 
-    return jsonResponse({ members: data ?? [] });
+    // club_members → public.users FK 가 없어 임베드(users(name))가 스키마 캐시에서
+    // 관계를 못 찾아 실패한다. service-role 로 이름을 별도 조회해 앱이 기대하는
+    // users:{name} 형태로 합쳐 반환한다.
+    const memberRows = data ?? [];
+    const userIds = memberRows.map((r) => r.user_id as string);
+    const nameById = new Map<string, string | null>();
+    if (userIds.length > 0) {
+      const { data: profiles, error: profileError } = await supa
+        .from('users')
+        .select('id, name')
+        .in('id', userIds);
+      if (profileError) return errorResponse(profileError.message, 500);
+      for (const p of profiles ?? []) {
+        nameById.set(p.id as string, (p.name as string | null) ?? null);
+      }
+    }
+    const members = memberRows.map((r) => ({
+      ...r,
+      users: { name: nameById.get(r.user_id as string) ?? null },
+    }));
+
+    return jsonResponse({ members });
   }
 
   if (action === 'request') {
