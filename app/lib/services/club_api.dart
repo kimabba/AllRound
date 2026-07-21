@@ -179,15 +179,21 @@ mixin ClubApi on ApiBase {
 
   // ── 팀원 모집 ──────────────────────────────────────────────
 
-  Future<List<RecruitingPostPreview>> teamRecruitingPosts() async {
-    final Object raw = await supabase
+  Future<List<RecruitingPostPreview>> teamRecruitingPosts(
+      {List<String>? regions, String? sport}) async {
+    var query = supabase
         .from('club_recruiting_posts')
         .select(
           '*, clubs!inner(id, name, sport, region, status)',
         )
-        .eq('clubs.status', 'approved')
-        .order('created_at', ascending: false)
-        .limit(50);
+        .eq('clubs.status', 'approved');
+    if (sport != null && sport.isNotEmpty) {
+      query = query.eq('clubs.sport', sport);
+    }
+    if (regions != null && regions.isNotEmpty) {
+      query = query.inFilter('clubs.region', regions);
+    }
+    final Object raw = await query.order('created_at', ascending: false).limit(50);
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()

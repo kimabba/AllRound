@@ -87,3 +87,19 @@ class RecruitingPostPreview {
     );
   }
 }
+
+/// 홈 노출용 선별: 모집중(열린)만, 풋살 우선, 그다음 최신순, 상위 [limit]개.
+/// 풋살은 대회보다 팀원 모집이 메인이라 위로 올린다.
+List<RecruitingPostPreview> pickHomeRecruiting(
+  List<RecruitingPostPreview> posts, {
+  int limit = 4,
+}) {
+  final open = posts.where((p) => !p.isClosed).toList();
+  open.sort((a, b) {
+    final af = a.sport == 'futsal';
+    final bf = b.sport == 'futsal';
+    if (af != bf) return af ? -1 : 1;
+    return b.createdAt.compareTo(a.createdAt);
+  });
+  return open.take(limit).toList(growable: false);
+}

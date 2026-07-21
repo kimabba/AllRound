@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../config.dart';
+import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/clubs/team_recruiting_widgets.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -24,6 +26,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _refresh() async {
     ref.invalidate(homeTournamentsProvider);
+    ref.invalidate(homeRecruitingProvider);
     ref.invalidate(favoriteIdsProvider);
     ref.invalidate(myClubsProvider);
     ref.invalidate(unreadNotificationCountProvider);
@@ -52,6 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final tournaments = ref.watch(homeTournamentsProvider);
+    final recruiting = ref.watch(homeRecruitingProvider);
     final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
     final cs = Theme.of(context).colorScheme;
 
@@ -174,6 +178,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   );
                 },
               ),
+            recruiting.maybeWhen(
+              data: (posts) => posts.isEmpty
+                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                  : SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        AppSpacing.xxxl,
+                        AppSpacing.xl,
+                        0,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: _HomeRecruitingSection(
+                          posts: posts,
+                          onOpen: (post) => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  TeamRecruitingDetailScreen(post: post),
+                            ),
+                          ),
+                          onSeeAll: () => context.go('/clubs'),
+                        ),
+                      ),
+                    ),
+              orElse: () =>
+                  const SliverToBoxAdapter(child: SizedBox.shrink()),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
@@ -246,6 +276,42 @@ class _HomeSectionHeader extends StatelessWidget {
         Expanded(child: Text(title, style: tt.titleLarge)),
         if (actionLabel != null && onAction != null)
           TextButton(onPressed: onAction, child: Text(actionLabel!)),
+      ],
+    );
+  }
+}
+
+class _HomeRecruitingSection extends StatelessWidget {
+  const _HomeRecruitingSection({
+    required this.posts,
+    required this.onOpen,
+    required this.onSeeAll,
+  });
+
+  final List<RecruitingPostPreview> posts;
+  final ValueChanged<RecruitingPostPreview> onOpen;
+  final VoidCallback onSeeAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _HomeSectionHeader(
+          title: '우리 동네 팀원 모집',
+          actionLabel: '전체 보기',
+          onAction: onSeeAll,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (var i = 0; i < posts.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sm),
+          TeamRecruitingPostCard(
+            post: posts[i],
+            canManage: false,
+            onClose: () {},
+            onTap: () => onOpen(posts[i]),
+          ),
+        ],
       ],
     );
   }
