@@ -422,6 +422,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   onChanged: () => setSheetState(() {}),
                                 ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          '6자 이상 · 다른 사이트에서 쓰지 않은 비밀번호를 권장해요. '
+                          '유출된 흔한 비밀번호는 보안을 위해 사용할 수 없어요.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
                         const SizedBox(height: AppSpacing.md),
                         _SignupBirthDateField(
                           key: AllRoundE2EKeys.signupBirthDate,
