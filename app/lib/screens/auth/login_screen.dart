@@ -41,6 +41,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // onChanged: 바텀시트의 setSheetState. 부모 setState 만으로는 시트가
   // 리빌드되지 않아 에러/로딩이 시트에 반영되지 않으므로 함께 갱신한다.
   Future<void> _emailAuth({VoidCallback? onChanged}) async {
+    // 이미 처리 중이면 중복 제출(빠른 다중 탭·엔터)을 무시한다. 버튼은 rebuild
+    // 후에야 비활성화돼 그 전 탭이 새어들 수 있어, 동기 가드로 확실히 막는다.
+    if (_busy) return;
     void set(VoidCallback fn) {
       setState(fn);
       onChanged?.call();
