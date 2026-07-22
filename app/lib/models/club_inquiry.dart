@@ -7,6 +7,9 @@ class ClubInquiryThread {
     required this.lastMessageAt,
     required this.createdAt,
     this.requesterNickname,
+    this.requesterAvatarUrl,
+    this.requesterRegion,
+    this.requesterAgeGroup,
   });
 
   final String id;
@@ -16,6 +19,9 @@ class ClubInquiryThread {
   final DateTime lastMessageAt;
   final DateTime createdAt;
   final String? requesterNickname;
+  final String? requesterAvatarUrl;
+  final String? requesterRegion;
+  final String? requesterAgeGroup;
 
   String get requesterLabel {
     final nickname = requesterNickname?.trim();
@@ -35,6 +41,9 @@ class ClubInquiryThread {
       lastMessageAt: DateTime.parse(json['last_message_at'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
       requesterNickname: requesterMap['nickname'] as String?,
+      requesterAvatarUrl: requesterMap['avatar_url'] as String?,
+      requesterRegion: requesterMap['primary_region'] as String?,
+      requesterAgeGroup: requesterMap['age_group'] as String?,
     );
   }
 }

@@ -283,14 +283,25 @@ class _ClubInquiryInboxScreenState
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: cs.primaryContainer,
-                      child: Icon(
-                        Icons.person_outline_rounded,
-                        color: cs.onPrimaryContainer,
+                      foregroundImage: _validNetworkImage(
+                        thread.requesterAvatarUrl,
                       ),
+                      child: Icon(Icons.person_outline_rounded,
+                          color: cs.onPrimaryContainer),
                     ),
                     title: Text(thread.requesterLabel),
-                    subtitle: Text(_formatDate(thread.lastMessageAt)),
-                    trailing: const Icon(Icons.chevron_right_rounded),
+                    subtitle: Text([
+                      if ((thread.requesterRegion ?? '').trim().isNotEmpty)
+                        thread.requesterRegion!.trim(),
+                      if ((thread.requesterAgeGroup ?? '').trim().isNotEmpty)
+                        thread.requesterAgeGroup!.trim(),
+                      _formatDate(thread.lastMessageAt),
+                    ].join(' · ')),
+                    trailing: IconButton(
+                      tooltip: '문의자 프로필 보기',
+                      onPressed: () => _showRequesterProfile(context, thread),
+                      icon: const Icon(Icons.account_circle_outlined),
+                    ),
                     onTap: () async {
                       await Navigator.push<void>(
                         context,
@@ -313,6 +324,85 @@ class _ClubInquiryInboxScreenState
       ),
     );
   }
+}
+
+ImageProvider<Object>? _validNetworkImage(String? value) {
+  final url = value?.trim();
+  if (url == null || url.isEmpty) return null;
+  final uri = Uri.tryParse(url);
+  if (uri == null ||
+      !uri.hasScheme ||
+      !{'http', 'https'}.contains(uri.scheme)) {
+    return null;
+  }
+  return NetworkImage(url);
+}
+
+Future<void> _showRequesterProfile(
+  BuildContext context,
+  ClubInquiryThread thread,
+) {
+  final cs = Theme.of(context).colorScheme;
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.sm,
+          AppSpacing.xl,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 38,
+              backgroundColor: cs.primaryContainer,
+              foregroundImage: _validNetworkImage(thread.requesterAvatarUrl),
+              child: Icon(Icons.person_outline_rounded,
+                  size: 36, color: cs.onPrimaryContainer),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              thread.requesterLabel,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if ((thread.requesterRegion ?? '').trim().isNotEmpty)
+                  Chip(
+                    avatar: const Icon(Icons.location_on_outlined, size: 18),
+                    label: Text(thread.requesterRegion!.trim()),
+                  ),
+                if ((thread.requesterAgeGroup ?? '').trim().isNotEmpty)
+                  Chip(
+                    avatar: const Icon(Icons.badge_outlined, size: 18),
+                    label: Text(thread.requesterAgeGroup!.trim()),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              '가입 전 문의를 받은 클럽장과 매니저에게만 공개되는 프로필입니다.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _MessageBubble extends StatelessWidget {

@@ -10,10 +10,18 @@ void main() {
       'status': 'open',
       'last_message_at': '2026-07-16T12:00:00Z',
       'created_at': '2026-07-16T11:00:00Z',
-      'requester': {'nickname': '주희'},
+      'requester': {
+        'nickname': '주희',
+        'avatar_url': 'https://example.com/avatar.jpg',
+        'primary_region': '서울',
+        'age_group': '30대',
+      },
     });
 
     expect(thread.requesterLabel, '주희');
+    expect(thread.requesterAvatarUrl, 'https://example.com/avatar.jpg');
+    expect(thread.requesterRegion, '서울');
+    expect(thread.requesterAgeGroup, '30대');
     expect(thread.lastMessageAt.toUtc(), DateTime.utc(2026, 7, 16, 12));
   });
 

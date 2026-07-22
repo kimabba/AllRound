@@ -1516,35 +1516,40 @@ class _ClubManagementTab extends ConsumerWidget {
         const SizedBox(height: AppSpacing.md),
         AppCard(
           variant: AppCardVariant.outlined,
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.mark_chat_unread_outlined, color: cs.primary),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '가입 전 문의',
-                      style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.mark_chat_unread_outlined, color: cs.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '가입 전 문의',
+                          style: tt.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '클럽장과 매니저가 함께 확인하고 답변하는 운영진 문의함입니다.',
+                          softWrap: true,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '클럽장·매니저가 함께 답변하는 운영진 문의함',
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              FilledButton.tonal(
-                // 전역 테마가 버튼을 full-width(Size.fromHeight)로 지정하므로
-                // Row 안에서는 폭을 내용에 맞춰 줄여 무한 폭 레이아웃 오류를 막는다.
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppSizes.control),
-                ),
+              const SizedBox(height: AppSpacing.md),
+              FilledButton.icon(
                 onPressed: () => Navigator.push<void>(
                   context,
                   MaterialPageRoute(
@@ -1554,7 +1559,8 @@ class _ClubManagementTab extends ConsumerWidget {
                     ),
                   ),
                 ),
-                child: const Text('문의함'),
+                icon: const Icon(Icons.forum_outlined),
+                label: const Text('운영진 문의함 열기'),
               ),
             ],
           ),

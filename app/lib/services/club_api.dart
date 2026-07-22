@@ -146,7 +146,9 @@ mixin ClubApi on ApiBase {
     if (userId == null) throw StateError('Not authenticated');
 
     final ext = _verifiedImageExtension(extension, contentType);
-    final path = newOpaqueImageObjectName(ext);
+    // 구형 폴더 기반 정책과 현재 owner_id 정책에서 모두 업로드되도록
+    // 사용자 폴더를 유지한다. 공개 URL에는 불투명 파일명만 추가로 노출된다.
+    final path = '$userId/${newOpaqueImageObjectName(ext)}';
 
     await supabase.storage.from('club-logos').uploadBinary(
           path,
@@ -168,7 +170,7 @@ mixin ClubApi on ApiBase {
     if (userId == null) throw StateError('Not authenticated');
 
     final ext = _verifiedImageExtension(extension, contentType);
-    final path = newOpaqueImageObjectName(ext);
+    final path = '$userId/${newOpaqueImageObjectName(ext)}';
 
     await supabase.storage.from('club-intro-images').uploadBinary(
           path,
@@ -210,7 +212,8 @@ mixin ClubApi on ApiBase {
     if (regions != null && regions.isNotEmpty) {
       query = query.inFilter('clubs.region', regions);
     }
-    final Object raw = await query.order('created_at', ascending: false).limit(50);
+    final Object raw =
+        await query.order('created_at', ascending: false).limit(50);
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
@@ -289,14 +292,14 @@ mixin ClubApi on ApiBase {
   }
 
   Future<List<ClubInquiryThread>> managedClubInquiries(String clubId) async {
-    final Object raw = await supabase
-        .from('club_inquiry_threads')
-        .select(
-          'id, club_id, requester_id, status, last_message_at, created_at, '
-          'requester:users!club_inquiry_threads_requester_id_fkey(nickname)',
-        )
-        .eq('club_id', clubId)
-        .order('last_message_at', ascending: false);
+    final response = await httpGet(
+      uri('clubs-inquiries', {'club_id': clubId}),
+      headers: await authHeaders(),
+    );
+    check(response);
+    final Object? decoded = jsonDecode(response.body);
+    if (decoded is! Map) return const [];
+    final Object? raw = decoded['threads'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
