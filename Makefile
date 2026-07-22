@@ -1,8 +1,13 @@
 SUPABASE ?= supabase
 # 원격 Supabase 프로젝트 ref (make backend 에서 사용)
 PROJECT_REF ?= bsjdgwmveokanclqwtvx
-# iOS Simulator: ffmpeg_kit arm64 미지원으로 기본은 macOS 로 실행.
-# 실기기/다른 기기에서 돌리려면: make app DEVICE_ID=<flutter devices 의 id>
+# 기본은 macOS (가장 빠른 반복 개발용). 다른 기기: make app DEVICE_ID=<flutter devices 의 id>
+#
+# iOS Simulator 도 정상 동작한다 (2026-07-22 iPhone 17 / iOS 26.5 실행 확인).
+# 과거 "ffmpeg_kit arm64 미지원" 주석이 있었으나 ffmpeg_kit 은 이미 의존성에서
+# 빠졌다(pubspec.lock 에 없음). 그럼에도 arm64 오류가 나면 그건 제거된 패키지를
+# 아직 참조하는 CocoaPods 잔재 탓이므로 아래로 해결한다:
+#   cd app && flutter clean
 DEVICE_ID ?= macos
 
 .PHONY: setup backend app admin web check deps reset release-android release-ios
