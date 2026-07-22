@@ -39,10 +39,25 @@ supabase link --project-ref <PROJECT_REF>
 ### 2.2 마이그레이션 적용
 
 ```bash
-supabase db push
+supabase db push --linked --dry-run   # 적용될 파일 먼저 확인
+supabase db push --linked             # 실제 적용
 ```
 
-현재 51개 마이그레이션 파일이 순서대로 적용됩니다.
+`supabase/migrations/` 의 파일이 파일명 순서대로 적용됩니다. 적용 이력은
+`supabase_migrations.schema_migrations` 에 **파일명 version 그대로** 기록됩니다.
+
+**지켜야 할 것**
+
+- **`apply_migration`(MCP)로 스키마를 적용하지 않는다.** 호출 시각으로 version 을 새로
+  만들어 이력이 파일명과 어긋난다. 그렇게 83건이 어긋나 `db push` 가 막혔던 것이 JY-116 이고,
+  2026-07-22 에 이력 127행을 정합화해 해소했다
+  (경위·대응표: `docs/db/migration-history-repair-20260722.md`).
+- **`046b_seed_futsal_venues.sql` 의 파일명을 고치지 않는다.** 규칙(`<version>_name.sql`)에
+  안 맞아 CLI 가 항상 건너뛰는데, 내용은 이미 프로덕션에 적용돼 있다. 이름을 고치면
+  `db push` 가 시드를 재실행한다.
+- 이력이 다시 어긋나면 `supabase migration repair --linked --status applied|reverted <version>`
+  으로 맞춘다. `reverted` 는 행을 **삭제**하므로 실행 전 `supabase migration fetch` 로
+  원격 SQL 본문을 백업한다.
 
 ### 2.3 Secrets 설정
 
