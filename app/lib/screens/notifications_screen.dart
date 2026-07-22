@@ -66,6 +66,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       context.push('/admin/clubs');
       return;
     }
+    if (notification.referenceType == 'club_join_request' &&
+        clubId != null &&
+        clubId.isNotEmpty) {
+      context.push('/clubs/$clubId?tab=manage');
+      return;
+    }
     if (notification.referenceType == 'tournament' &&
         referenceId != null &&
         referenceId.isNotEmpty) {

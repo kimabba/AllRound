@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +14,7 @@ import 'services/api.dart';
 import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
+import 'services/notification_events.dart';
 import 'state/chat_state.dart';
 import 'state/providers.dart';
 import 'state/theme_provider.dart';
@@ -97,8 +99,11 @@ class MatchUpApp extends ConsumerWidget {
       ],
       locale: const Locale('ko', 'KR'),
       builder: (context, child) {
-        final app = _AllRoundStartupSplash(
-          child: child ?? const SizedBox.shrink(),
+        final app = _NotificationEventListener(
+          router: router,
+          child: _AllRoundStartupSplash(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
         if (!kIsWeb || !AppConfig.userDesignPreview) return app;
 
@@ -127,6 +132,67 @@ class MatchUpApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
+}
+
+class _NotificationEventListener extends ConsumerStatefulWidget {
+  const _NotificationEventListener({
+    required this.router,
+    required this.child,
+  });
+
+  final GoRouter router;
+  final Widget child;
+
+  @override
+  ConsumerState<_NotificationEventListener> createState() =>
+      _NotificationEventListenerState();
+}
+
+class _NotificationEventListenerState
+    extends ConsumerState<_NotificationEventListener> {
+  StreamSubscription<NotificationEvent>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = notificationEvents.stream.listen(_handleNotification);
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleNotification(NotificationEvent event) {
+    ref.invalidate(unreadNotificationCountProvider);
+    final route = routeForNotificationEvent(event);
+    if (event.openedFromSystem) {
+      unawaited(widget.router.push(route));
+      return;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            event.body.trim().isEmpty
+                ? event.title
+                : '${event.title}\n${event.body}',
+          ),
+          action: SnackBarAction(
+            label: '확인',
+            onPressed: () => unawaited(widget.router.push(route)),
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _AllRoundStartupSplash extends StatefulWidget {

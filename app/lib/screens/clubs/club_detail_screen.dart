@@ -30,8 +30,13 @@ enum ClubDetailResult { membershipChanged, deleted }
 class ClubDetailScreen extends ConsumerStatefulWidget {
   final Club? club;
   final String? clubId;
-  const ClubDetailScreen({super.key, this.club, this.clubId})
-      : assert(club != null || clubId != null);
+  final bool openManagement;
+  const ClubDetailScreen({
+    super.key,
+    this.club,
+    this.clubId,
+    this.openManagement = false,
+  }) : assert(club != null || clubId != null);
 
   @override
   ConsumerState<ClubDetailScreen> createState() => _ClubDetailScreenState();
@@ -70,7 +75,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
 
   void _initTab() {
     _monthlyFee = club.monthlyFee;
-    _tab = TabController(length: _canManageClub ? 5 : 4, vsync: this);
+    final length = _canManageClub ? 5 : 4;
+    _tab = TabController(
+      length: length,
+      initialIndex: widget.openManagement && _canManageClub ? 4 : 0,
+      vsync: this,
+    );
     if (AppConfig.userDesignPreview) return;
     if (club.isMember) {
       _reload();
@@ -151,8 +161,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _joinRequestLoadFailed = false;
         }
         if (_tab == null || _tab!.length != nextTabLength) {
-          final nextIndex =
-              ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
+          final nextIndex = widget.openManagement && nextTabLength == 5
+              ? 4
+              : ((_tab?.index ?? 0).clamp(0, nextTabLength - 1)).toInt();
           _tab?.dispose();
           _tab = TabController(length: nextTabLength, vsync: this);
           _tab!.index = nextIndex;

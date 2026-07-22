@@ -6,6 +6,23 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'notification_events.dart';
+
+bool _messageListenersInitialized = false;
+
+NotificationEvent _eventFromMessage(
+  RemoteMessage message, {
+  required bool openedFromSystem,
+}) {
+  return NotificationEvent(
+    title: message.notification?.title ?? '새 알림',
+    body: message.notification?.body ?? '',
+    referenceType: message.data['reference_type'],
+    referenceId: message.data['reference_id'],
+    clubId: message.data['club_id'],
+    openedFromSystem: openedFromSystem,
+  );
+}
 
 /// FCM 토큰을 가져와 Supabase 에 등록한다.
 ///
@@ -29,17 +46,29 @@ Future<void> initNotifications(ApiService api) async {
     await api.registerDeviceToken(token, platform);
   }
 
+  if (_messageListenersInitialized) return;
+  _messageListenersInitialized = true;
+
   messaging.onTokenRefresh.listen((t) {
     final platform =
         Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
     api.registerDeviceToken(t, platform);
   });
 
-  FirebaseMessaging.onMessage.listen((_) async {
+  FirebaseMessaging.onMessage.listen((message) async {
     final preferences = await SharedPreferences.getInstance();
     final soundEnabled = preferences.getBool('notify.sound') ?? true;
     if (soundEnabled) {
       await SystemSound.play(SystemSoundType.alert);
     }
+    notificationEvents.add(
+      _eventFromMessage(message, openedFromSystem: false),
+    );
+  });
+
+  FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    notificationEvents.add(
+      _eventFromMessage(message, openedFromSystem: true),
+    );
   });
 }
