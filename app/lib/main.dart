@@ -34,7 +34,11 @@ Future<void> initializeAllRoundServices({
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
+    // supabase_flutter 2.16 에서 anonKey 가 deprecated 됐다(다음 메이저에 제거).
+    // 넘기는 값은 그대로 — 이 프로젝트 키는 이미 sb_publishable_ 형식이다.
+    // AppConfig 필드명/환경변수(SUPABASE_ANON_KEY)는 CI 시크릿·로컬 .env.local 이
+    // 함께 걸려 있어 이번에는 건드리지 않는다.
+    publishableKey: AppConfig.supabaseAnonKey,
     authOptions: authOptions,
   );
 
