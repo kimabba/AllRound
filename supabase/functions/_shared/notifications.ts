@@ -15,10 +15,29 @@ export interface CreateNotificationInput {
   clubId?: string | null;
 }
 
+export function buildFcmPayload(
+  tokens: string[],
+  input: CreateNotificationInput,
+) {
+  return {
+    registration_ids: tokens,
+    notification: {
+      title: input.title,
+      body: input.body?.trim() ?? '',
+    },
+    data: {
+      type: input.type,
+      reference_type: input.referenceType ?? '',
+      reference_id: input.referenceId ?? '',
+      club_id: input.clubId ?? '',
+    },
+    priority: 'high',
+  };
+}
+
 async function sendFcm(
   tokens: string[],
-  title: string,
-  body: string,
+  input: CreateNotificationInput,
 ): Promise<boolean> {
   const serverKey = Deno.env.get('FCM_SERVER_KEY');
   if (!serverKey || tokens.length === 0) return false;
@@ -29,11 +48,7 @@ async function sendFcm(
       Authorization: `key=${serverKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      registration_ids: tokens,
-      notification: { title, body },
-      priority: 'high',
-    }),
+    body: JSON.stringify(buildFcmPayload(tokens, input)),
   });
   return res.ok;
 }
@@ -57,7 +72,7 @@ export async function createNotification(
 
   if (tokens.length > 0 && body.length > 0 && Deno.env.get('FCM_SERVER_KEY')) {
     try {
-      const ok = await sendFcm(tokens, input.title, body);
+      const ok = await sendFcm(tokens, input);
       status = ok ? 'sent' : 'failed';
       sentAt = ok ? new Date().toISOString() : null;
     } catch (error) {

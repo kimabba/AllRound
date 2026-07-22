@@ -149,9 +149,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/clubs/:id',
             builder: (_, state) {
               final club = state.extra as Club?;
+              final openManagement =
+                  state.uri.queryParameters['tab'] == 'manage';
               return club != null
-                  ? ClubDetailScreen(club: club)
-                  : ClubDetailScreen(clubId: state.pathParameters['id']!);
+                  ? ClubDetailScreen(
+                      club: club,
+                      openManagement: openManagement,
+                    )
+                  : ClubDetailScreen(
+                      clubId: state.pathParameters['id']!,
+                      openManagement: openManagement,
+                    );
             },
           ),
           GoRoute(

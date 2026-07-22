@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +14,7 @@ import 'services/api.dart';
 import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
+import 'services/notification_events.dart';
 import 'state/chat_state.dart';
 import 'state/providers.dart';
 import 'state/theme_provider.dart';
@@ -40,7 +42,12 @@ Future<void> initializeAllRoundServices({
 
   // 인증 후 FCM 등록 + 부서 카탈로그 DB 로드 (실패해도 앱 진입 허용)
   Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-    if (event.event == AuthChangeEvent.signedIn) {
+    // signedIn(신규 로그인)만 보면 저장된 세션으로 앱을 재시작한 경우
+    // (initialSession) FCM 리스너가 등록되지 않아 포그라운드 알림이 죽는다.
+    // 중복 호출은 notifications.dart 의 _messageListenersInitialized 가 막는다.
+    if (event.session != null &&
+        (event.event == AuthChangeEvent.signedIn ||
+            event.event == AuthChangeEvent.initialSession)) {
       initNotifications(ApiService(Supabase.instance.client));
     }
     // signedIn(신규 로그인) + initialSession(복원 세션) 모두에서 로드.
@@ -97,8 +104,11 @@ class MatchUpApp extends ConsumerWidget {
       ],
       locale: const Locale('ko', 'KR'),
       builder: (context, child) {
-        final app = _AllRoundStartupSplash(
-          child: child ?? const SizedBox.shrink(),
+        final app = _NotificationEventListener(
+          router: router,
+          child: _AllRoundStartupSplash(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
         if (!kIsWeb || !AppConfig.userDesignPreview) return app;
 
@@ -127,6 +137,67 @@ class MatchUpApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
+}
+
+class _NotificationEventListener extends ConsumerStatefulWidget {
+  const _NotificationEventListener({
+    required this.router,
+    required this.child,
+  });
+
+  final GoRouter router;
+  final Widget child;
+
+  @override
+  ConsumerState<_NotificationEventListener> createState() =>
+      _NotificationEventListenerState();
+}
+
+class _NotificationEventListenerState
+    extends ConsumerState<_NotificationEventListener> {
+  StreamSubscription<NotificationEvent>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = notificationEvents.stream.listen(_handleNotification);
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleNotification(NotificationEvent event) {
+    ref.invalidate(unreadNotificationCountProvider);
+    final route = routeForNotificationEvent(event);
+    if (event.openedFromSystem) {
+      unawaited(widget.router.push(route));
+      return;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            event.body.trim().isEmpty
+                ? event.title
+                : '${event.title}\n${event.body}',
+          ),
+          action: SnackBarAction(
+            label: '확인',
+            onPressed: () => unawaited(widget.router.push(route)),
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _AllRoundStartupSplash extends StatefulWidget {
