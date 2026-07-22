@@ -482,13 +482,19 @@ mixin ClubApi on ApiBase {
   }
 
   Future<List<Map<String, dynamic>>> pendingJoinRequests(String clubId) async {
-    final rows = await supabase
-        .from('club_join_requests')
-        .select('id, user_id, message, created_at, users(name, email)')
-        .eq('club_id', clubId)
-        .eq('status', 'pending')
-        .order('created_at');
-    return List<Map<String, dynamic>>.from(rows);
+    final response = await httpGet(
+      uri('clubs-review-join', {'club_id': clubId}),
+      headers: await authHeaders(),
+    );
+    check(response);
+    final Object? decoded = jsonDecode(response.body);
+    if (decoded is! Map) return const [];
+    final Object? raw = decoded['requests'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
   }
 
   Future<void> reviewJoinRequest(String requestId,

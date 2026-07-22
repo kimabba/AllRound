@@ -1454,13 +1454,14 @@ class _ClubJoinRequest {
   });
 
   factory _ClubJoinRequest.fromJson(Map<String, dynamic> json) {
-    final user = _joinRequestUserFrom(json['users']);
+    final user = _joinRequestUserFrom(json['applicant'] ?? json['users']);
     return _ClubJoinRequest(
       id: _stringValue(json['id']) ?? '',
       userId: _stringValue(json['user_id']) ?? '',
       message: _stringValue(json['message']),
       createdAt: DateTime.tryParse(_stringValue(json['created_at']) ?? ''),
-      displayName: _stringValue(user?['name']),
+      displayName:
+          _stringValue(user?['display_name']) ?? _stringValue(user?['name']),
       email: _stringValue(user?['email']),
     );
   }
