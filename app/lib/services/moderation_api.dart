@@ -7,6 +7,14 @@ import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
 mixin ModerationApi on ApiBase {
+  Future<bool> hasVerifiedSignupAge() async {
+    final raw = await supabase.rpc('has_verified_signup_age');
+    if (raw is! bool) {
+      throw const FormatException('Invalid signup age verification payload');
+    }
+    return raw;
+  }
+
   Future<UgcAccess> myUgcAccess() async {
     final raw = await supabase.rpc('my_ugc_access');
     if (raw is! Map) throw const FormatException('Invalid UGC access payload');
