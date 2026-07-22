@@ -118,6 +118,18 @@ const CASES: RuleCase[] = [
     intent: 'tournament_search',
     slots: { sport: 'futsal' },
   },
+  // rule_lookup — '대회'가 있어도 '규정/규칙' 질문은 검색이 아니라 룰 조회
+  {
+    msg: '테니스 대회 참가 자격 공식 규정 알려줘',
+    intent: 'rule_lookup',
+    slots: { sport: 'tennis' },
+  },
+  // club_search 아님 — '클럽 만들기'(개설)는 기존 클럽 검색이 아님 → 폴백(임베딩)
+  {
+    msg: '테니스 클럽 직접 만들려면 어떻게 해',
+    intent: null,
+    slots: { sport: 'tennis' },
+  },
   // free_chat 폴백 — 룰 미매칭
   {
     msg: '안녕하세요',

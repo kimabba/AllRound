@@ -348,6 +348,8 @@ const SCHEDULE_KW = /(일정|스케줄|언제|오늘|내일|이번\s*주|다음\
 const DETAIL_KW = /(자세|상세|어떻게|신청|참가\s*방법|등록\s*방법|접수)/;
 const SEARCH_KW = /(검색|찾|알려|뭐\s*있|있어|있나|추천|보여)/;
 const MY_PROFILE_KW = /(내\s*(등급|점수|협회|프로필|랭킹|부수)|제\s*(등급|점수|협회|프로필|부수))/;
+// "클럽 만들기/개설/창단" 은 기존 클럽 검색이 아니다 → club_search 룰에서 제외해 폴백(임베딩)으로.
+const CREATE_KW = /(만들|만드는|개설|창단|창설)/;
 
 export function classifyByRule(text: string): RuleClassification | null {
   // 1. tournament_detail — 대회 + 상세 키워드 (my_profile보다 먼저: "내 등급 대회 신청방법")
@@ -355,19 +357,20 @@ export function classifyByRule(text: string): RuleClassification | null {
     return { intent: 'tournament_detail', rule: 'tournament_with_detail' };
   }
 
-  // 2. tournament_search — 대회 키워드 (my_profile보다 먼저: "내 등급에 맞는 대회 알려줘")
+  // 2. rule_lookup — 룰/규칙/규정 키워드는 tournament_search 보다 먼저.
+  //    "대회 참가 자격 규정" 처럼 '대회'가 있어도 규정 질문은 검색이 아니라 룰 조회다.
+  if (RULE_KW.test(text)) {
+    return { intent: 'rule_lookup', rule: 'rule_keyword' };
+  }
+
+  // 3. tournament_search — 대회 키워드 (my_profile보다 먼저: "내 등급에 맞는 대회 알려줘")
   if (TOURNAMENT_KW.test(text)) {
     return { intent: 'tournament_search', rule: 'tournament_keyword' };
   }
 
-  // 3. my_profile — 대회 키워드 없을 때만 ("내 등급이 뭐야", "내 협회 알려줘")
+  // 4. my_profile — 대회 키워드 없을 때만 ("내 등급이 뭐야", "내 협회 알려줘")
   if (MY_PROFILE_KW.test(text)) {
     return { intent: 'my_profile', rule: 'my_profile_keyword' };
-  }
-
-  // 4. rule_lookup — 룰/규칙 키워드 단독으로도 명확
-  if (RULE_KW.test(text)) {
-    return { intent: 'rule_lookup', rule: 'rule_keyword' };
   }
 
   // 5. venue_search — 구장/풋살장/테니스장 키워드
@@ -375,8 +378,8 @@ export function classifyByRule(text: string): RuleClassification | null {
     return { intent: 'venue_search', rule: 'venue_keyword' };
   }
 
-  // 6. club_search — 클럽 키워드
-  if (CLUB_KW.test(text)) {
+  // 6. club_search — 클럽 키워드 (단, "만들기/개설" 은 생성 의도 → 제외해 폴백으로)
+  if (CLUB_KW.test(text) && !CREATE_KW.test(text)) {
     return { intent: 'club_search', rule: 'club_keyword' };
   }
 
