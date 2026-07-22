@@ -81,12 +81,16 @@ Deno.serve(async (req) => {
   }
 
   // 일반 검색: approved 클럽만
+  // club_members 는 요청자 본인 것만 임베드한다. 필터하지 않으면 전체 멤버가
+  // 반환되고 Club.fromJson 이 members.first(=owner)를 내 역할로 오인해, 비오너도
+  // 클럽장으로 표시되고 관리 탭이 노출된다(getClub 과 동일하게 user_id 로 필터).
   let query = auth.supabase
     .from('clubs')
     .select(
-      '*, meeting_days, monthly_fee, gender_preference, club_members(role, status, can_post_notice)',
+      '*, meeting_days, monthly_fee, gender_preference, club_members!left(role, status, can_post_notice)',
     )
     .eq('status', 'approved')
+    .eq('club_members.user_id', auth.user.id)
     .limit(limit);
 
   if (sport) query = query.eq('sport', sport);
