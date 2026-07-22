@@ -256,6 +256,20 @@ Deno.test('reviewJoin: 멤버 upsert 실패 시 신청은 pending 유지(교착 
   assertEquals(db.tables.notifications.length, 0);
 });
 
+Deno.test('reviewJoin: 상태 update 실패 시 500·알림 미생성', async () => {
+  const db = new FakeDb(baseTables(), ['club_join_requests.update']);
+  const result = await reviewJoin(asClient(db), {
+    requestId: 'req-1',
+    action: 'approve',
+    reviewerId: 'owner-1',
+  });
+
+  assertEquals(result.ok, false);
+  assertEquals((result as { status: number }).status, 500);
+  // update 실패는 upsert 뒤 단계 — 알림까지 가면 안 된다
+  assertEquals(db.tables.notifications.length, 0);
+});
+
 Deno.test('reviewJoin: 존재하지 않는 신청은 404', async () => {
   const db = new FakeDb(baseTables());
   const result = await reviewJoin(asClient(db), {
@@ -278,6 +292,9 @@ Deno.test('reviewJoin: 이미 처리된 신청은 409', async () => {
   });
 
   assertEquals(result, { ok: false, status: 409, message: 'Already reviewed' });
+  // 이미 처리된 신청은 멤버 추가·알림 등 어떤 부작용도 없어야 한다
+  assertEquals(db.tables.club_members.some((m) => m.user_id === 'req-user'), false);
+  assertEquals(db.tables.notifications.length, 0);
 });
 
 Deno.test('reviewJoin: 클럽 정보가 없으면 알림 본문은 기본 "클럽" 표기', async () => {
