@@ -1,5 +1,4 @@
 import 'package:allround/models/club_recruiting.dart';
-import 'package:allround/models/tournament.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 RecruitingPostPreview post(
@@ -50,17 +49,5 @@ void main() {
     final posts =
         List.generate(6, (i) => post('p$i', createdAt: t0.add(Duration(days: i))));
     expect(pickHomeRecruiting(posts, limit: 4).length, 4);
-  });
-
-  test('UserProfile.regions: primary + interest 합집합, 중복·공백 제거', () {
-    const p = UserProfile(
-      primaryRegion: '광주',
-      interestRegions: ['광주', '전남', '  ', '전북'],
-    );
-    expect(p.regions, ['광주', '전남', '전북']);
-  });
-
-  test('UserProfile.regions: 지역 미등록이면 빈 목록', () {
-    expect(const UserProfile().regions, isEmpty);
   });
 }

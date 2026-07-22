@@ -294,7 +294,7 @@
     <li><a href="#step-supabase">Supabase CLI</a></li>
     <li><a href="#step-deno">Deno</a></li>
     <li><a href="#step-flutter">Flutter SDK</a></li>
-    <li><a href="#step-xcode">Xcode + CocoaPods</a></li>
+    <li><a href="#step-xcode">Xcode</a></li>
     <li><a href="#step-gemini">Gemini API 키</a></li>
     <li><a href="#step-stack">로컬 스택 기동</a></li>
     <li><a href="#step-functions">Edge Functions</a></li>
@@ -335,7 +335,7 @@
       <span class="icon">📋</span>
       <strong>본인 macOS에서 해야 할 것</strong>
       <ul style="margin-top: 6px; margin-bottom: 0;">
-        <li>도구 설치 (Docker · Supabase CLI · Deno · Flutter · Xcode · CocoaPods)</li>
+        <li>도구 설치 (Docker · Supabase CLI · Deno · Flutter · Xcode)</li>
         <li><strong>본인 Gemini API 키</strong> 발급 (사용자 키 공유 X — 보안상)</li>
         <li>본인 머신에서 <code>supabase start</code> → <code>db reset</code> (코드는 이미 있으므로 명령만)</li>
         <li><code>.env</code> 작성 + functions serve + flutter run</li>
@@ -391,8 +391,7 @@
       <tr><td>Deno</td><td>2.1+</td><td>Edge Functions 런타임 (정적 검증·테스트)</td><td>100MB</td></tr>
       <tr><td>Flutter SDK</td><td>3.41+</td><td>Flutter 앱 빌드</td><td>2GB</td></tr>
       <tr><td>Xcode</td><td>16.x</td><td>macOS desktop / iOS 빌드</td><td>13GB + 컴포넌트</td></tr>
-      <tr><td>CocoaPods</td><td>1.16+</td><td>iOS/macOS 의존성</td><td>200MB</td></tr>
-      <tr><td>Apple ID + GitHub 계정</td><td>—</td><td>Xcode 다운로드 + repo 접근</td><td>—</td></tr>
+            <tr><td>Apple ID + GitHub 계정</td><td>—</td><td>Xcode 다운로드 + repo 접근</td><td>—</td></tr>
       <tr><td>Gemini API 키</td><td>무료 발급</td><td>챗봇·임베딩</td><td>—</td></tr>
     </table>
     <div class="box info">
@@ -492,9 +491,9 @@ flutter doctor</code></pre>
     <p><code>flutter doctor</code>가 빨간 에러 없이 떠야 합니다. macOS desktop 빌드까지 가려면 다음 단계의 Xcode가 추가로 필요.</p>
   </section>
 
-  <!-- ─── 8. Xcode + CocoaPods ─── -->
+  <!-- ─── 8. Xcode ─── -->
   <section id="step-xcode">
-    <h2><span class="step-num">6</span>Xcode + CocoaPods (macOS 앱 실행 필수)</h2>
+    <h2><span class="step-num">6</span>Xcode (macOS 앱 실행 필수)</h2>
 
     <h3>Xcode 다운로드 (~10GB)</h3>
     <p>App Store에서 직접 받아야 합니다 (Apple ID 로그인 필요):</p>
@@ -511,15 +510,14 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 <span class="cmt"># 3) 첫 실행 컴포넌트 (시뮬레이터 런타임 등) 자동 설치</span>
 sudo xcodebuild -runFirstLaunch</code></pre>
 
-    <h3>CocoaPods (iOS/macOS 의존성 매니저)</h3>
-    <pre><code>brew install cocoapods
-
-<span class="cmt"># 검증</span>
-pod --version</code></pre>
+    <h3>CocoaPods — 설치 불필요</h3>
+    <p>iOS/macOS 의존성은 <strong>Swift Package Manager</strong>로 관리합니다. 2026-07 에 CocoaPods 를
+    완전히 걷어냈으므로(<code>Podfile</code> 없음) <code>brew install cocoapods</code> 는 하지 않아도 됩니다.
+    Xcode 가 첫 빌드에서 Swift Package 를 알아서 내려받습니다.</p>
 
     <div class="box danger">
       <span class="icon">⚠️</span>
-      <strong>여기까지 안 하면 macOS desktop 빌드가 실패합니다</strong> — <code>xcodebuild</code> 또는 CocoaPods 누락 에러 발생.
+      <strong>여기까지 안 하면 macOS desktop 빌드가 실패합니다</strong> — <code>xcodebuild</code> 누락 에러 발생.
     </div>
   </section>
 
@@ -647,7 +645,7 @@ flutter run -d macos \
       <strong>SUPABASE_ANON_KEY는 <code>supabase start</code> 출력의 Publishable 값</strong>을 그대로 붙이세요. 매 환경마다 다릅니다.
     </div>
 
-    <p>첫 빌드는 CocoaPods + Xcode build로 3~5분 걸립니다. 끝나면 <code>matchup</code> 앱 창이 뜹니다.</p>
+    <p>첫 빌드는 Swift Package 내려받기 + Xcode build로 3~5분 걸립니다. 끝나면 <code>matchup</code> 앱 창이 뜹니다.</p>
   </section>
 
   <!-- ─── 13. E2E ─── -->
@@ -711,8 +709,9 @@ docker exec -e PGPASSWORD=postgres supabase_db_matchup \
     </details>
 
     <details>
-      <summary>🔴 "Error: CocoaPods not installed or not in valid state"</summary>
-      <p><code>brew install cocoapods</code> + <code>pod --version</code> 로 검증.</p>
+      <summary>🔴 Swift Package 내려받기 실패 / "Couldn't get revision"</summary>
+      <p>네트워크 문제거나 SPM 캐시가 깨진 경우. <code>rm -rf ~/Library/Caches/org.swift.swiftpm</code> 후
+      <code>flutter clean &amp;&amp; flutter pub get</code> 재실행.</p>
     </details>
 
     <details>
