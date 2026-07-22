@@ -3968,6 +3968,39 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
       );
       return;
     }
+    if (_images.isNotEmpty) {
+      try {
+        final hasVerifiedAge =
+            await ref.read(apiProvider).hasVerifiedSignupAge();
+        if (!hasVerifiedAge) {
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('생년월일 등록이 필요합니다'),
+              content: const Text(
+                '사진을 올리려면 프로필에서 생년월일을 등록해주세요. '
+                '프로필 화면의 “프로필·생년월일 수정”에서 등록할 수 있습니다.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('확인'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('사진 업로드 권한을 확인하지 못했습니다.')),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
     final allowed = await ensureUgcPermission(
       context,
       ref,
