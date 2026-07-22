@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
+import '../../models/tournament_schedule.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
@@ -377,6 +378,18 @@ class _DetailBody extends StatelessWidget {
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  /// 요강 필드 한 줄. `부서별 일정·장소` 만 날짜 그룹 렌더를 쓰고,
+  /// 파싱이 안 되면(원문 형식 변경 등) 일반 필드 렌더로 폴백한다.
+  Widget _regulationField(RegulationField f) {
+    if (f.label.replaceAll(' ', '') == '부서별일정·장소') {
+      final days = parseTournamentSchedule(f.value);
+      if (days.isNotEmpty) {
+        return _RegulationScheduleField(label: f.label, days: days);
+      }
+    }
+    return _RegulationFieldRow(label: f.label, value: f.value);
+  }
+
   /// 대회 요강 아코디언 본문.
   /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
   /// 그것도 없으면 "아직 공지되지 않았습니다".
@@ -418,8 +431,7 @@ class _DetailBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final f in fields)
-                  _RegulationFieldRow(label: f.label, value: f.value),
+                for (final f in fields) _regulationField(f),
               ],
             ),
           ),
@@ -812,6 +824,12 @@ class _AccordionSection extends StatelessWidget {
 
 /// 구조화 요강 한 줄 (라벨 + 값). 아코디언 내부 들여쓰기 스타일은
 /// 기존 _InfoRow 와 동일하게 유지한다.
+/// 요강 한 필드(라벨 + 값).
+///
+/// 라벨을 값 위에 두고 값은 전체 폭을 쓴다. 이전엔 92px 라벨과 값을 가로로
+/// 붙였는데, `부서별 일정·장소` 처럼 긴 값이 좁은 폭에서 계속 접혀
+/// **실제 줄바꿈과 접힌 줄이 구별되지 않았다**. 또 값 전체가 w700 이라
+/// 12줄이 전부 같은 목소리로 읽혔다 — 값은 보통 굵기로 낮춘다.
 class _RegulationFieldRow extends StatelessWidget {
   const _RegulationFieldRow({required this.label, required this.value});
 
@@ -822,38 +840,207 @@ class _RegulationFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+
+    // 값 안의 "\n" 은 항목 구분이다. 줄마다 별도 Text 로 그리고 사이에 여백을
+    // 둬서, 폭 때문에 접힌 줄(행간 좁음)과 눈으로 구별되게 한다.
+    final lines = value
+        .replaceAll('\r\n', '\n')
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList(growable: false);
+
     return Padding(
-      // 카드 패딩(lg)에 맞춰 본문 폭 확보 — 56px 들여쓰기는 좁은 화면에서
-      // 요강 텍스트를 과도하게 압축한다(가독성).
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
+        vertical: AppSpacing.md,
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              style: tt.labelMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
+          Text(
+            label,
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Text(
-              value.isNotEmpty ? value : '-',
-              style: tt.bodyMedium?.copyWith(
-                height: 1.45,
-                fontWeight: FontWeight.w700,
+          const SizedBox(height: AppSpacing.xs),
+          if (lines.isEmpty)
+            Text('-', style: tt.bodyMedium?.copyWith(height: 1.4))
+          else
+            for (final (i, line) in lines.indexed)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpacing.xs),
+                child: Text(
+                  line,
+                  style: tt.bodyMedium?.copyWith(
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `부서별 일정·장소` 전용 렌더 — 날짜로 묶어 반복(연·월·시각)을 걷어낸다.
+/// 파싱이 실패하면 호출부가 [_RegulationFieldRow] 로 폴백한다.
+class _RegulationScheduleField extends StatelessWidget {
+  const _RegulationScheduleField({required this.label, required this.days});
+
+  final String label;
+  final List<ScheduleDay> days;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final (i, day) in days.indexed)
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpacing.lg),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ScheduleDateBadge(day: day),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final (j, group) in day.divisions.indexed)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: j == 0 ? 0 : AppSpacing.md,
+                            ),
+                            child: _ScheduleDivision(group: group),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleDateBadge extends StatelessWidget {
+  const _ScheduleDateBadge({required this.day});
+
+  final ScheduleDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      // 고정폭이 아니라 최소폭 — 큰 글씨 설정(200%)에서 뱃지가 함께 늘어나야
+      // 숫자가 잘리거나 오버플로우하지 않는다.
+      constraints: const BoxConstraints(minWidth: 46),
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppSpacing.md),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${day.date.month}월',
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          Text(
+            '${day.date.day}',
+            style: tt.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            day.weekday,
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ScheduleDivision extends StatelessWidget {
+  const _ScheduleDivision({required this.group});
+
+  final ScheduleDivisionGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                group.division,
+                style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text(
+              group.time,
+              style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+        for (final place in group.places)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  if (place.area != null)
+                    TextSpan(
+                      text: '${place.area}  ',
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  TextSpan(text: place.venue),
+                ],
+              ),
+              style: tt.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1299,6 +1486,34 @@ Tournament? _previewTournamentById(String id) {
       prize: '우승 상품권',
       format: '복식 조별리그',
       status: 'published',
+      // 요강 렌더(부서별 일정 날짜 그룹 포함)를 로그인 없이 디자인 프리뷰에서
+      // 확인할 수 있도록, 실제 KATO 공고와 같은 형태의 표본을 넣어 둔다.
+      regulationFields: const [
+        RegulationField(
+          label: '부서별 일정·장소',
+          value: '국화부 · 2026년 08월 06일 (목) 09:00 · 공주시립테니스코트\n'
+              '개나리부(공주) · 2026년 08월 07일 (금) 09:00 · 공주시립테니스코트\n'
+              '개나리부(서산,태안) · 2026년 08월 07일 (금) 09:00 · 서산시 종합운동장 테니스장\n'
+              '개나리부(보령,홍성) · 2026년 08월 07일 (금) 09:00 · 보령남포실내테니스장 외\n'
+              '개나리부(부여,청양) · 2026년 08월 07일 (금) 09:00 · 부여종합운동장 테니스장\n'
+              '챌린저부(공주) · 2026년 08월 08일 (토) 09:00 · 공주시립테니스코트\n'
+              '챌린저부(서산,태안) · 2026년 08월 08일 (토) 09:00 · 서산시 종합운동장 테니스장\n'
+              '마스터스부 · 2026년 08월 09일 (일) 09:00 · 공주시립테니스코트\n'
+              '베테랑부 · 2026년 08월 09일 (일) 09:00 · 서산시 종합운동장 테니스장',
+        ),
+        RegulationField(
+          label: '대회 안내',
+          value: '▣ 전경기 실내코트 진행 예정 !! ▣ 각부 4강전 : 8월 9일(일) '
+              '공주시립테니스장 예정(시간 추후공지)',
+        ),
+        RegulationField(
+          label: '입금계좌',
+          value: '개나리부 : 신협 137-014-435320 광주시테니스협회\n'
+              '국 화 부 : 신협 137-014-435279 광주시테니스협회',
+        ),
+        RegulationField(label: '주최', value: '(사) 한국테니스발전협의회(KATO)'),
+        RegulationField(label: '참가비', value: '개인복식 팀당 54,000원'),
+      ],
     ),
     Tournament(
       id: 'preview-tennis-2',
