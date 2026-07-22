@@ -55,7 +55,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _busy = false;
   String? _error;
   bool _existingSportsReady = false;
-  bool _existingRegionReady = false;
   bool _existingProfileReady = false;
   bool _profilePhotoReady = false;
   bool _sportsTouched = false;
@@ -284,36 +283,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _nickname.text = profile.nickname!;
         }
         _birthDate ??= profile.birthDate;
+        // 지역도 프로필에서 복원. 17시도 정본에 있는 코드만 쓴다 — deprecated
+        // 묶음 코드(seoul_metro 등)는 목록에 없으므로 다시 선택하게 둔다.
+        // 사용자가 이미 직접 고른 값은 덮어쓰지 않는다.
+        final savedRegion = profile.primaryRegion;
+        if (_regionCode == null &&
+            savedRegion != null &&
+            regionCodes.contains(savedRegion)) {
+          _regionCode = savedRegion;
+        }
         _existingProfileReady = true;
       });
     });
-  }
-
-  void _prepareExistingRegion(List<UserTennisOrg>? tennisOrgs) {
-    // tennisOrgs == null 은 프로바이더가 아직 로딩 중이라는 뜻이므로 대기한다.
-    // 스포츠 복원과 별도 플래그로 분리해, tennisOrgs가 늦게 도착해도
-    // (또는 스포츠가 먼저 resolve돼도) 지역 복원이 유실되지 않도록 한다.
-    if (_existingRegionReady || tennisOrgs == null) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _existingRegionReady) return;
-      // 사용자가 이미 지역을 직접 선택했다면 덮어쓰지 않는다.
-      final restoredRegionCode = _regionCode ?? _restoreRegionCode(tennisOrgs);
-      setState(() {
-        _regionCode = restoredRegionCode;
-        _existingRegionReady = true;
-      });
-    });
-  }
-
-  String? _restoreRegionCode(List<UserTennisOrg> tennisOrgs) {
-    for (final org in tennisOrgs) {
-      final code = org.regionCode;
-      // 17시도 정본에 있는 코드만 복원. deprecated 묶음 코드(seoul_metro 등,
-      // backfill 이전 데이터)는 목록에 없으므로 사용자가 다시 선택하게 둔다.
-      if (code != null && regionCodes.contains(code)) return code;
-    }
-    return null;
   }
 
   void _selectGrade(Sport sport, String? grade) {
@@ -429,6 +410,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         name: _realName.text.trim(),
         nickname: _nickname.text.trim(),
         birthDate: _birthDate!,
+        // 지역은 종목·협회 등록 여부와 무관하게 항상 users.primary_region 에 남긴다.
+        primaryRegion: _regionCode,
       );
 
       // 1) user_sports
@@ -457,7 +440,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 : o.divisionLocal.text.trim(),
             divisionCodes: o.selectedDivisionCodes.toList(),
             score: double.tryParse(o.score.text.trim()),
-            regionCode: _regionCode,
+            // region_code 는 deprecated — 지역은 users.primary_region 단일 소스.
             isPrimary: o.org == _primaryOrg,
           );
         }).toList();
@@ -509,7 +492,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _prepareProfilePhoto();
     _prepareExistingProfile(ref.watch(myProfileProvider).valueOrNull);
     _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
-    _prepareExistingRegion(ref.watch(userTennisOrgsProvider).valueOrNull);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 

@@ -176,19 +176,18 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   return matched;
 });
 
-/// 홈 노출용 팀원 모집글 — 내 거주/관심 지역(primary_region + interest_regions)
-/// 대회 우선, 모집중만, 풋살 우선, 상위 4개. 지역 등록이 없으면 필터 없이 전체.
+/// 홈 노출용 팀원 모집글 — 모집중만, 풋살 우선, 상위 4개.
+///
+/// ponytail: 지역 필터는 아직 걸지 않는다(전국 노출). users.primary_region 은
+/// 코드('gwangju')인데 clubs.region 은 한글 자유입력('광주'/'광주광역시', 경기
+/// 광주시까지 혼재)이라 매칭이 성립하지 않는다. clubs.region 정합성 정리 후
+/// 코드 기준 필터를 다시 건다 (Commander 결정 2026-07-21).
 final homeRecruitingProvider =
     FutureProvider<List<RecruitingPostPreview>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
   final sport = ref.watch(activeSportProvider);
-  final profile = await ref.watch(myProfileProvider.future);
-  final regions = profile?.regions ?? const <String>[];
-  final posts = await api.teamRecruitingPosts(
-    sport: sport,
-    regions: regions.isEmpty ? null : regions,
-  );
+  final posts = await api.teamRecruitingPosts(sport: sport);
   return pickHomeRecruiting(posts);
 });
 
