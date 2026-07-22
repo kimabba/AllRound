@@ -1,0 +1,6 @@
+[
+ {"email":"p-t1@example.com","password":"Passw0rd!23","birth_date":"1991-06-10","name":"박신중","nickname":"신중한백핸드","sport":"tennis","grade":"y3to5","region_code":"gwangju","org":"kta","division_codes":["gj_m_general"],"questions":["대회 참가 자격은 어떻게 정해져?","내 등급으로 나갈 수 있는 대회 알려줘","광주 테니스 대회 신청 기간 언제야?","복식 타이브레이크 규칙 설명해줘"]},
+ {"email":"p-t2@example.com","password":"Passw0rd!23","birth_date":"1973-02-20","name":"이느긋","nickname":"주말텄니스","sport":"tennis","grade":"over5y","region_code":"gwangju","org":"kta","division_codes":["gj_m_gold"],"questions":["테니스 클럽 어떻게 가입해?","우리 동네 클럽 있어?","앱으로 뭐 할 수 있어?","레슨 정보도 있어?"]},
+ {"email":"p-f1@example.com","password":"Passw0rd!23","birth_date":"1998-11-05","name":"최적극","nickname":"풋살광","sport":"futsal","grade":"intermediate","questions":["풋살 대회 있어?","풋살 클럽 가입하고 싶어","이번 주말 매치 잡을 수 있어?","풋살 등급은 어떻게 나뉘어?"]},
+ {"email":"p-f2@example.com","password":"Passw0rd!23","birth_date":"1984-08-15","name":"정초보","nickname":"풋살입문","sport":"futsal","grade":"beginner","questions":["풋살 처음인데 어떻게 시작해?","초보도 갈 수 있는 클럽 있어?","무료로 풋살 할 수 있는 곳 알려줘","경기 규칙 간단히 알려줘"]}
+]
