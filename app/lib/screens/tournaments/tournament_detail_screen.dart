@@ -917,74 +917,27 @@ class _RegulationScheduleField extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           for (final (i, day) in days.indexed)
             Padding(
-              padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpacing.lg),
-              child: Row(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpacing.xl),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ScheduleDateBadge(day: day),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final (j, group) in day.divisions.indexed)
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: j == 0 ? 0 : AppSpacing.md,
-                            ),
-                            child: _ScheduleDivision(group: group),
-                          ),
-                      ],
+                  Text(
+                    '${day.date.month}월 ${day.date.day}일 (${day.weekday})',
+                    style: tt.labelLarge?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Divider(color: cs.outlineVariant, height: 1),
+                  for (final group in day.divisions)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.md),
+                      child: _ScheduleDivision(group: group),
+                    ),
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScheduleDateBadge extends StatelessWidget {
-  const _ScheduleDateBadge({required this.day});
-
-  final ScheduleDay day;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      // 고정폭이 아니라 최소폭 — 큰 글씨 설정(200%)에서 뱃지가 함께 늘어나야
-      // 숫자가 잘리거나 오버플로우하지 않는다.
-      constraints: const BoxConstraints(minWidth: 46),
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.sm,
-        horizontal: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppSpacing.md),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '${day.date.month}월',
-            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-          ),
-          Text(
-            '${day.date.day}',
-            style: tt.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-            ),
-          ),
-          Text(
-            day.weekday,
-            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-          ),
         ],
       ),
     );
@@ -1003,23 +956,28 @@ class _ScheduleDivision extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                group.division,
+        // 시각을 오른쪽 끝으로 밀면 넓은 화면에서 부서명과 사이가 크게 벌어져
+        // 시선이 끊긴다. 부서명 바로 뒤에 붙인다.
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: group.division,
                 style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
-            ),
-            Text(
-              group.time,
-              style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
+              TextSpan(
+                text: '   ${group.time}',
+                style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
         for (final place in group.places)
           Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            padding: const EdgeInsets.only(
+              top: AppSpacing.xs,
+              left: AppSpacing.md,
+            ),
             child: Text.rich(
               TextSpan(
                 children: [
@@ -1376,6 +1334,21 @@ Tournament? _previewTournamentById(String id) {
   final lastDay = DateTime(now.year, now.month + 1, 0).day;
   DateTime inMonth(int offsetDays) =>
       DateTime(now.year, now.month, (now.day + offsetDays).clamp(1, lastDay));
+  // 4일에 걸친 통합 대회용 날짜. inMonth 는 월말에 clamp 되어 여러 날이 같은
+  // 날짜로 뭉치므로, 4일이 항상 서로 다르게 잡히도록 시작일을 당긴다.
+  final jointStart = (now.day + 6).clamp(1, lastDay - 3);
+  DateTime jointDay(int index) =>
+      DateTime(now.year, now.month, jointStart + index);
+
+  // 요강 "부서별 일정·장소" 한 줄. 날짜를 하드코딩하면 프리뷰 대회 일정
+  // (inMonth 로 매달 재계산)과 어긋나므로 같은 날짜에서 만들어 쓴다.
+  String scheduleLine(String division, DateTime d, String venue) {
+    final weekday = '월화수목금토일'[d.weekday - 1];
+    final month = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$division · ${d.year}년 $month월 $day일 ($weekday) 09:00 · $venue';
+  }
+
   final tournaments = [
     Tournament(
       id: 'preview-futsal-sleague-2026',
@@ -1486,33 +1459,68 @@ Tournament? _previewTournamentById(String id) {
       prize: '우승 상품권',
       format: '복식 조별리그',
       status: 'published',
-      // 요강 렌더(부서별 일정 날짜 그룹 포함)를 로그인 없이 디자인 프리뷰에서
-      // 확인할 수 있도록, 실제 KATO 공고와 같은 형태의 표본을 넣어 둔다.
-      regulationFields: const [
+    ),
+    // 요강이 가장 복잡한 형태(부서 5개 × 지역 4개 = 12줄)를 디자인 프리뷰에서
+    // 확인하기 위한 표본. 실제 KATO 충남권 통합 공고와 같은 구조다.
+    Tournament(
+      id: 'preview-tennis-multiregion',
+      sport: 'tennis',
+      title: '충남권 시·군 통합 동호인 테니스대회',
+      organizer: '(사) 한국테니스발전협의회(KATO)',
+      startDate: jointDay(0),
+      endDate: jointDay(3),
+      applicationDeadline: inMonth(2),
+      region: '충남',
+      location: '공주시립테니스코트 외 3개소',
+      eligibleGrades: const ['y1to3', 'y3to5'],
+      entryFee: 54000,
+      entryFeeUnit: 'per_team',
+      status: 'published',
+      isJointEvent: true,
+      regulationFields: [
         RegulationField(
           label: '부서별 일정·장소',
-          value: '국화부 · 2026년 08월 06일 (목) 09:00 · 공주시립테니스코트\n'
-              '개나리부(공주) · 2026년 08월 07일 (금) 09:00 · 공주시립테니스코트\n'
-              '개나리부(서산,태안) · 2026년 08월 07일 (금) 09:00 · 서산시 종합운동장 테니스장\n'
-              '개나리부(보령,홍성) · 2026년 08월 07일 (금) 09:00 · 보령남포실내테니스장 외\n'
-              '개나리부(부여,청양) · 2026년 08월 07일 (금) 09:00 · 부여종합운동장 테니스장\n'
-              '챌린저부(공주) · 2026년 08월 08일 (토) 09:00 · 공주시립테니스코트\n'
-              '챌린저부(서산,태안) · 2026년 08월 08일 (토) 09:00 · 서산시 종합운동장 테니스장\n'
-              '마스터스부 · 2026년 08월 09일 (일) 09:00 · 공주시립테니스코트\n'
-              '베테랑부 · 2026년 08월 09일 (일) 09:00 · 서산시 종합운동장 테니스장',
+          value: [
+            scheduleLine('국화부', jointDay(0), '공주시립테니스코트'),
+            scheduleLine('개나리부(공주)', jointDay(1), '공주시립테니스코트'),
+            scheduleLine('개나리부(서산,태안)', jointDay(1), '서산시 종합운동장 테니스장'),
+            scheduleLine('개나리부(보령,홍성)', jointDay(1), '보령남포실내테니스장 외'),
+            scheduleLine('개나리부(부여,청양)', jointDay(1), '부여종합운동장 테니스장'),
+            scheduleLine('챌린저부(공주)', jointDay(2), '공주시립테니스코트'),
+            scheduleLine('챌린저부(서산,태안)', jointDay(2), '서산시 종합운동장 테니스장'),
+            scheduleLine('챌린저부(보령,홍성)', jointDay(2), '보령남포실내테니스장 외'),
+            scheduleLine('챌린저부(부여,청양)', jointDay(2), '부여종합운동장 테니스장'),
+            scheduleLine('마스터스부', jointDay(3), '공주시립테니스코트'),
+            scheduleLine('베테랑부', jointDay(3), '서산시 종합운동장 테니스장'),
+          ].join('\n'),
         ),
-        RegulationField(
+        const RegulationField(
           label: '대회 안내',
-          value: '▣ 전경기 실내코트 진행 예정 !! ▣ 각부 4강전 : 8월 9일(일) '
+          value: '▣ 전경기 실내코트 진행 예정 !! ▣ 각부 4강전 : 대회 마지막 날 '
               '공주시립테니스장 예정(시간 추후공지)',
         ),
-        RegulationField(
-          label: '입금계좌',
-          value: '개나리부 : 신협 137-014-435320 광주시테니스협회\n'
-              '국 화 부 : 신협 137-014-435279 광주시테니스협회',
+        const RegulationField(
+          label: '장소 안내',
+          value: '▣ 국화부 : 공주시립 + 서산(태안)코트 진행 '
+              '▣ 베테랑부 : 서산+보령+태안코트 진행함.',
         ),
-        RegulationField(label: '주최', value: '(사) 한국테니스발전협의회(KATO)'),
-        RegulationField(label: '참가비', value: '개인복식 팀당 54,000원'),
+        const RegulationField(
+          label: '입금계좌',
+          value: '개나리부 : 농협 351-1311-9988-83 충남테니스협회\n'
+              '챌린저부 : 농협 351-1115-4433-63 충남테니스협회\n'
+              '베테랑부 : 농협 351-1194-2606-53 충남테니스협회',
+        ),
+        const RegulationField(
+          label: '시상',
+          value: '◈ 우 승 : 상패 및 상금 100만원\n'
+              '◈ 준우승 : 상패 및 상금 60만원\n'
+              '◈ 공동 3위 : 상패 및 상금 40만원\n'
+              '◈ 8강 : 지역특산품',
+        ),
+        const RegulationField(label: '참가비', value: '개인복식 팀당 54,000원'),
+      ],
+      regulationNotes: const [
+        '※ 참가팀수 미달 시 상금이 조정될 수 있습니다(각부 70팀 이하 시).',
       ],
     ),
     Tournament(
