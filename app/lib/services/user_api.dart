@@ -5,10 +5,13 @@ import 'api_base.dart';
 mixin UserApi on ApiBase {
   /// 프로필 저장. 실명(name)은 대회·클럽용, 닉네임(nickname)은 앱 활동용,
   /// 생년월일(birth_date)은 연령·합산나이 대회 자격 매칭 내부용.
+  /// 활동 지역(primary_region)은 유저 지역의 **단일 진실원천**이다.
+  /// (협회 등록 여부와 무관하게 여기에 저장한다. user_tennis_orgs.region_code 는 deprecated)
   Future<void> saveProfile({
     required String name,
     String? nickname,
     required DateTime birthDate,
+    String? primaryRegion,
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
@@ -22,6 +25,8 @@ mixin UserApi on ApiBase {
       // date 컬럼: 'YYYY-MM-DD' 형식 (시간대 영향 없음).
       'birth_date':
           birthDate.toIso8601String().split('T').first,
+      // null 은 "이번 저장에서 지역을 다루지 않음" → 기존 값 보존.
+      if (primaryRegion != null) 'primary_region': primaryRegion,
     }).eq('id', userId);
   }
 
@@ -31,7 +36,7 @@ mixin UserApi on ApiBase {
     if (userId == null) return null;
     final row = await supabase
         .from('users')
-        .select('name, nickname, birth_date, primary_region, interest_regions')
+        .select('name, nickname, birth_date, primary_region')
         .eq('id', userId)
         .maybeSingle();
     return row == null ? null : UserProfile.fromJson(row);

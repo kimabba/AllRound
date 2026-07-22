@@ -191,6 +191,16 @@ Future<void> _completeOnboarding(
   );
   await _tap(tester, find.byKey(AllRoundE2EKeys.onboardingPrimaryAction));
   await _waitFor(tester, find.byKey(AllRoundE2EKeys.homeScreen));
+
+  // 협회(user_tennis_orgs)를 등록하지 않는 이 경로에서도 지역이 남아야 한다.
+  // (지역이 협회 INSERT 안에서만 저장돼 통째로 유실되던 회귀 방지)
+  final userId = Supabase.instance.client.auth.currentUser!.id;
+  final savedProfile = await Supabase.instance.client
+      .from('users')
+      .select('primary_region')
+      .eq('id', userId)
+      .single();
+  expect(savedProfile['primary_region'], 'seoul');
 }
 
 void _goTo(WidgetTester tester, String location) {
