@@ -1280,6 +1280,12 @@ String _weekdayLabel(DateTime date) {
 
 List<Tournament> _previewTournaments(String? sport) {
   final now = DateTime.now();
+  // 대회 목록은 캘린더 기본 뷰(이번 달)만 보여준다. 프리뷰(디버그 전용)에 상대
+  // 날짜(now + N일)를 쓰면 월말에는 다음 달로 넘어가 기본 뷰에서 사라지므로,
+  // 항상 이번 달 안(오늘 이후)에 놓이도록 고정한다.
+  final lastDay = DateTime(now.year, now.month + 1, 0).day;
+  DateTime inMonth(int offsetDays) =>
+      DateTime(now.year, now.month, (now.day + offsetDays).clamp(1, lastDay));
   if (sport == 'futsal') {
     return [
       Tournament(
@@ -1313,9 +1319,9 @@ List<Tournament> _previewTournaments(String? sport) {
         title: '서울 풋살 위클리 컵',
         organizer: '올라운드 풋살 커뮤니티',
         description: '주말 저녁에 열리는 5대5 풋살 모집전',
-        startDate: now.add(const Duration(days: 9)),
-        endDate: now.add(const Duration(days: 9)),
-        applicationDeadline: now.add(const Duration(days: 4)),
+        startDate: inMonth(4),
+        endDate: inMonth(4),
+        applicationDeadline: inMonth(1),
         region: '수도권',
         location: '서울 송파 풋살파크',
         eligibleGrades: const ['intro', 'beginner', 'intermediate'],
@@ -1331,9 +1337,9 @@ List<Tournament> _previewTournaments(String? sport) {
         title: '부산 야간 풋살 리그',
         organizer: '부산 풋살 연합',
         description: '퇴근 후 참여 가능한 지역 풋살 리그',
-        startDate: now.add(const Duration(days: 18)),
-        endDate: now.add(const Duration(days: 18)),
-        applicationDeadline: now.add(const Duration(days: 11)),
+        startDate: inMonth(7),
+        endDate: inMonth(7),
+        applicationDeadline: inMonth(3),
         region: '부산·울산·경남',
         location: '부산 사직 풋살장',
         eligibleGrades: const ['advanced', 'elite'],
@@ -1352,9 +1358,9 @@ List<Tournament> _previewTournaments(String? sport) {
       title: '광주 오픈 테니스 챌린지',
       organizer: '광주테니스협회',
       description: '지역 동호인을 위한 복식 대회',
-      startDate: now.add(const Duration(days: 12)),
-      endDate: now.add(const Duration(days: 13)),
-      applicationDeadline: now.add(const Duration(days: 5)),
+      startDate: inMonth(3),
+      endDate: inMonth(4),
+      applicationDeadline: inMonth(1),
       region: '광주',
       location: '염주실내테니스장',
       eligibleGrades: const ['under1y', 'y1to3'],
@@ -1370,9 +1376,9 @@ List<Tournament> _previewTournaments(String? sport) {
       title: '수도권 동호인 랭킹전',
       organizer: 'KATA 수도권 지부',
       description: '등급별 자동 추천에 맞춘 랭킹전',
-      startDate: now.add(const Duration(days: 21)),
-      endDate: now.add(const Duration(days: 21)),
-      applicationDeadline: now.add(const Duration(days: 14)),
+      startDate: inMonth(6),
+      endDate: inMonth(6),
+      applicationDeadline: inMonth(3),
       region: '수도권',
       location: '분당 테니스파크',
       eligibleGrades: const ['y3to5', 'over5y'],
