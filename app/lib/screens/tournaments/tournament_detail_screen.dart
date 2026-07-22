@@ -386,7 +386,9 @@ class _DetailBody extends StatelessWidget {
   }) {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
-    final fields = <RegulationField>[...t.regulationFields];
+    final fields = t.regulationFields
+        .where((field) => field.label.replaceAll(' ', '') != '포스터')
+        .toList(growable: true);
     final hasBody =
         t.regulationBody != null && t.regulationBody!.trim().isNotEmpty;
     bool hasLabel(String label) =>
@@ -486,48 +488,22 @@ class _TournamentPosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
     return ClipRRect(
       borderRadius: AppRadius.card,
-      child: AspectRatio(
-        aspectRatio: 4 / 5,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              color: cs.surfaceContainerLow,
-              child: const Center(child: CircularProgressIndicator()),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              color: cs.surfaceContainerLow,
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.broken_image_outlined,
-                    size: 36,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    '포스터 이미지를 불러오지 못했습니다.',
-                    style: tt.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+      child: Image.network(
+        url,
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            height: 240,
+            color: cs.surfaceContainerLow,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
       ),
     );
   }

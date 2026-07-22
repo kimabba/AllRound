@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_image_upload.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 
@@ -26,7 +28,7 @@ class _TournamentSubmitScreenState
   final _location = TextEditingController();
   final _description = TextEditingController();
   final _sourceUrl = TextEditingController();
-  final _posterUrl = TextEditingController();
+  PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
   String _tennisOrg = 'gj'; // 테니스 주최 협회
   DateTime? _startDate;
@@ -42,8 +44,33 @@ class _TournamentSubmitScreenState
     _location.dispose();
     _description.dispose();
     _sourceUrl.dispose();
-    _posterUrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPoster() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1800,
+      maxHeight: 2400,
+      imageQuality: 88,
+    );
+    if (picked == null) return;
+    try {
+      final image = await prepareClubImage(picked);
+      if (image.bytes.lengthInBytes > 10 * 1024 * 1024) {
+        throw const ClubImagePreparationException(
+          '포스터 사진은 10MB 이하여야 합니다.',
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _posterImage = image;
+        _error = null;
+      });
+    } on ClubImagePreparationException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -72,6 +99,13 @@ class _TournamentSubmitScreenState
       _error = null;
     });
     try {
+      final posterUrl = _posterImage == null
+          ? null
+          : await ref.read(apiProvider).uploadTournamentPoster(
+                bytes: _posterImage!.bytes,
+                extension: _posterImage!.extension,
+                contentType: _posterImage!.contentType,
+              );
       final gradeList = _grades.toList();
       await ref.read(apiProvider).submitTournament({
         'sport': sportToString(_sport),
@@ -88,8 +122,7 @@ class _TournamentSubmitScreenState
           'division_label_local': formatEligibleGrades(gradeList),
         if (_sourceUrl.text.trim().isNotEmpty)
           'source_url': _sourceUrl.text.trim(),
-        if (_posterUrl.text.trim().isNotEmpty)
-          'poster_url': _posterUrl.text.trim(),
+        if (posterUrl != null) 'poster_url': posterUrl,
       });
       if (mounted) {
         ScaffoldMessenger.of(
@@ -348,12 +381,37 @@ class _TournamentSubmitScreenState
               validator: _optionalHttpUrlValidator,
             ),
             const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _posterUrl,
-              decoration: _inputDeco('포스터 이미지 URL'),
-              keyboardType: TextInputType.url,
-              validator: _optionalHttpUrlValidator,
-            ),
+            if (_posterImage == null)
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _pickPoster,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('포스터 사진 선택 (선택)'),
+              )
+            else
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: AppRadius.card,
+                    child: Image.memory(
+                      _posterImage!.bytes,
+                      width: double.infinity,
+                      height: 240,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  Positioned(
+                    top: AppSpacing.xs,
+                    right: AppSpacing.xs,
+                    child: IconButton.filled(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _posterImage = null),
+                      tooltip: '포스터 제거',
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ),
+                ],
+              ),
 
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),

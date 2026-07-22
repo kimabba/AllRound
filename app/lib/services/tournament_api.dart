@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/match_record.dart';
 import '../models/schedule_share.dart';
 import '../models/tournament.dart';
+import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
 /// `tournaments-search` Edge Function 쿼리 파라미터를 조립한다.
@@ -98,6 +102,32 @@ mixin TournamentApi on ApiBase {
     check(res);
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return Tournament.fromJson(body['tournament'] as Map<String, dynamic>);
+  }
+
+  Future<String> uploadTournamentPoster({
+    required Uint8List bytes,
+    required String extension,
+    required String contentType,
+  }) async {
+    if (supabase.auth.currentUser == null) {
+      throw StateError('Not authenticated');
+    }
+    final normalized = extension.toLowerCase().replaceAll('jpeg', 'jpg');
+    final expectedContentType = switch (normalized) {
+      'jpg' => 'image/jpeg',
+      'png' => 'image/png',
+      _ => null,
+    };
+    if (expectedContentType == null || contentType != expectedContentType) {
+      throw const FormatException('Invalid sanitized image format');
+    }
+    final path = newOpaqueImageObjectName(normalized);
+    await supabase.storage.from('tournament-posters').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    return supabase.storage.from('tournament-posters').getPublicUrl(path);
   }
 
   Future<void> approveTournament(String id,

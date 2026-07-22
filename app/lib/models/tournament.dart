@@ -149,6 +149,15 @@ class Tournament {
             .whereType<RegulationField>()
             .toList(growable: false)
         : const <RegulationField>[];
+    String? structuredPosterUrl;
+    for (final field in regulationFields) {
+      final value = field.value.trim();
+      if (field.label.replaceAll(' ', '') == '포스터' &&
+          (value.startsWith('https://') || value.startsWith('http://'))) {
+        structuredPosterUrl = value;
+        break;
+      }
+    }
 
     // regulation_notes: List<dynamic> → List<String> (빈/비문자열 제거)
     final rawNotes = j['regulation_notes'];
@@ -186,7 +195,7 @@ class Tournament {
       prize: j['prize'] as String?,
       format: j['format'] as String?,
       sourceUrl: j['source_url'] as String?,
-      posterUrl: j['poster_url'] as String?,
+      posterUrl: (j['poster_url'] as String?) ?? structuredPosterUrl,
       status: j['status'] as String,
       regionCode: j['region_code'] as String?,
       hostAssociations: hostAssoc,
@@ -268,10 +277,9 @@ class UserTennisOrg {
     return UserTennisOrg(
       org: j['org'] as String,
       division: j['division'] as String,
-      divisionCodes: (j['division_codes'] as List?)
-              ?.map((e) => e as String)
-              .toList() ??
-          const [],
+      divisionCodes:
+          (j['division_codes'] as List?)?.map((e) => e as String).toList() ??
+              const [],
       score: score,
       isPrimary: (j['is_primary'] as bool?) ?? false,
       regionCode: j['region_code'] as String?,
