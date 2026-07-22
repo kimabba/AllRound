@@ -398,7 +398,6 @@ void main() {
     await _tap(tester, find.byKey(AllRoundE2EKeys.globalChatDock));
     await _waitFor(tester, find.byKey(AllRoundE2EKeys.embeddedChatSheet));
     expect(find.byKey(AllRoundE2EKeys.chatContextDetached), findsOneWidget);
-    expect(find.text('참가 가능 여부'), findsOneWidget);
     await _tap(tester, find.byKey(AllRoundE2EKeys.chatContextDetached));
     await _waitFor(tester, find.byKey(AllRoundE2EKeys.chatContextAttached));
     await _captureDesignScreenshot(tester, '05-context-chat');

@@ -1184,6 +1184,11 @@ class _RegulationPlainText extends StatelessWidget {
 
 Tournament? _previewTournamentById(String id) {
   final now = DateTime.now();
+  // 목록(_previewTournaments)과 동일하게 프리뷰 날짜를 이번 달 안에 고정해
+  // 목록 카드와 상세의 일정이 어긋나지 않도록 한다.
+  final lastDay = DateTime(now.year, now.month + 1, 0).day;
+  DateTime inMonth(int offsetDays) =>
+      DateTime(now.year, now.month, (now.day + offsetDays).clamp(1, lastDay));
   final tournaments = [
     Tournament(
       id: 'preview-futsal-sleague-2026',
@@ -1231,9 +1236,9 @@ Tournament? _previewTournamentById(String id) {
 경기방식: 5대5 조별리그 후 토너먼트
 안내: 팀 대표자는 경기 시작 30분 전까지 접수 데스크에서 선수 명단을 확인해 주세요.
 ''',
-      startDate: now.add(const Duration(days: 10)),
-      endDate: now.add(const Duration(days: 11)),
-      applicationDeadline: now.add(const Duration(days: 4)),
+      startDate: inMonth(4),
+      endDate: inMonth(5),
+      applicationDeadline: inMonth(1),
       region: '수도권',
       location: '서울 송파 풋살파크',
       eligibleGrades: const ['intro', 'beginner', 'intermediate'],
@@ -1256,9 +1261,9 @@ Tournament? _previewTournamentById(String id) {
 경기방식: 풀리그 후 순위 결정전
 안내: 유니폼 색상은 접수 후 운영진 안내에 따라 조정됩니다.
 ''',
-      startDate: now.add(const Duration(days: 18)),
-      endDate: now.add(const Duration(days: 18)),
-      applicationDeadline: now.add(const Duration(days: 11)),
+      startDate: inMonth(7),
+      endDate: inMonth(7),
+      applicationDeadline: inMonth(3),
       region: '부산·울산·경남',
       location: '부산 사직 풋살장',
       eligibleGrades: const ['advanced', 'elite'],
@@ -1283,9 +1288,9 @@ Tournament? _previewTournamentById(String id) {
 경기종목: 복식 조별리그
 안내: 참가자는 신분 확인 후 코트 배정을 받습니다. 우천 시 실내 코트 배정 상황에 따라 경기 시간이 조정될 수 있습니다.
 ''',
-      startDate: now.add(const Duration(days: 12)),
-      endDate: now.add(const Duration(days: 13)),
-      applicationDeadline: now.add(const Duration(days: 5)),
+      startDate: inMonth(3),
+      endDate: inMonth(4),
+      applicationDeadline: inMonth(1),
       region: '광주',
       location: '염주실내테니스장',
       eligibleGrades: const ['under1y', 'y1to3'],
@@ -1309,9 +1314,9 @@ Tournament? _previewTournamentById(String id) {
 경기방식: 복식 토너먼트
 안내: 파트너 변경은 신청 마감 전까지만 가능합니다.
 ''',
-      startDate: now.add(const Duration(days: 21)),
-      endDate: now.add(const Duration(days: 21)),
-      applicationDeadline: now.add(const Duration(days: 14)),
+      startDate: inMonth(6),
+      endDate: inMonth(6),
+      applicationDeadline: inMonth(3),
       region: '수도권',
       location: '분당 테니스파크',
       eligibleGrades: const ['y3to5', 'over5y'],

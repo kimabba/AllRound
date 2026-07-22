@@ -1540,6 +1540,11 @@ class _ClubManagementTab extends ConsumerWidget {
                 ),
               ),
               FilledButton.tonal(
+                // 전역 테마가 버튼을 full-width(Size.fromHeight)로 지정하므로
+                // Row 안에서는 폭을 내용에 맞춰 줄여 무한 폭 레이아웃 오류를 막는다.
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.control),
+                ),
                 onPressed: () => Navigator.push<void>(
                   context,
                   MaterialPageRoute(
