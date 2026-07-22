@@ -4,6 +4,22 @@ export interface InquiryRequest {
   body: string;
 }
 
+export function ageGroupFromBirthDate(
+  birthDate: string | null,
+  today = new Date(),
+): string | null {
+  if (!birthDate) return null;
+  const parts = birthDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return null;
+  const [year, month, day] = parts;
+  let age = today.getUTCFullYear() - year;
+  const birthdayPassed = today.getUTCMonth() + 1 > month ||
+    (today.getUTCMonth() + 1 === month && today.getUTCDate() >= day);
+  if (!birthdayPassed) age -= 1;
+  if (age < 14 || age > 120) return null;
+  return `${Math.floor(age / 10) * 10}대`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

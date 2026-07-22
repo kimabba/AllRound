@@ -5,7 +5,7 @@ import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
-import { parseInquiryRequest } from './validation.ts';
+import { ageGroupFromBirthDate, parseInquiryRequest } from './validation.ts';
 
 interface InquiryThreadRow {
   id: string;
@@ -18,6 +18,20 @@ interface ClubRow {
   name: string;
   status: string;
   created_by: string | null;
+}
+
+interface InquiryListRow extends InquiryThreadRow {
+  status: string;
+  last_message_at: string;
+  created_at: string;
+}
+
+interface RequesterProfileRow {
+  id: string;
+  nickname: string | null;
+  avatar_url: string | null;
+  primary_region: string | null;
+  birth_date: string | null;
 }
 
 function stringField(value: unknown): string | null {
@@ -41,6 +55,32 @@ function clubFrom(value: unknown): ClubRow | null {
   const status = stringField(row.status);
   if (!id || !name || !status) return null;
   return { id, name, status, created_by: stringField(row.created_by) };
+}
+
+function inquiryListRowFrom(value: unknown): InquiryListRow | null {
+  const thread = threadFrom(value);
+  if (!thread || typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const status = stringField(row.status);
+  const lastMessageAt = stringField(row.last_message_at);
+  const createdAt = stringField(row.created_at);
+  return status && lastMessageAt && createdAt
+    ? { ...thread, status, last_message_at: lastMessageAt, created_at: createdAt }
+    : null;
+}
+
+function requesterProfileFrom(value: unknown): RequesterProfileRow | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = stringField(row.id);
+  if (!id) return null;
+  return {
+    id,
+    nickname: stringField(row.nickname),
+    avatar_url: stringField(row.avatar_url),
+    primary_region: stringField(row.primary_region),
+    birth_date: stringField(row.birth_date),
+  };
 }
 
 async function isBlockedPair(
@@ -149,10 +189,63 @@ async function notifyMessage(
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
-  if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
+
+  const supabase = serviceClient();
+  if (req.method === 'GET') {
+    const clubId = new URL(req.url).searchParams.get('club_id')?.trim() ?? '';
+    if (!clubId) return errorResponse('club_id is required', 400);
+    if (!(await canOperateClub(supabase, auth.user.id, clubId, auth.user.isAdmin))) {
+      return errorResponse('FORBIDDEN', 403);
+    }
+
+    const { data: rawThreads, error: threadError } = await supabase
+      .from('club_inquiry_threads')
+      .select('id, club_id, requester_id, status, last_message_at, created_at')
+      .eq('club_id', clubId)
+      .order('last_message_at', { ascending: false });
+    if (threadError) return errorResponse('INQUIRY_LIST_FAILED', 500);
+    const threads = Array.isArray(rawThreads)
+      ? rawThreads.map(inquiryListRowFrom).filter((row): row is InquiryListRow => row !== null)
+      : [];
+    const requesterIds = [...new Set(threads.map((thread) => thread.requester_id))];
+    const profiles = new Map<string, RequesterProfileRow>();
+    if (requesterIds.length > 0) {
+      const { data: rawProfiles, error: profileError } = await supabase
+        .from('users')
+        .select('id, nickname, avatar_url, primary_region, birth_date')
+        .in('id', requesterIds);
+      if (profileError) return errorResponse('INQUIRY_PROFILE_FAILED', 500);
+      if (Array.isArray(rawProfiles)) {
+        for (const rawProfile of rawProfiles) {
+          const profile = requesterProfileFrom(rawProfile);
+          if (profile) profiles.set(profile.id, profile);
+        }
+      }
+    }
+
+    return jsonResponse({
+      threads: threads.map((thread) => {
+        const profile = profiles.get(thread.requester_id);
+        return {
+          ...thread,
+          requester: profile
+            ? {
+              nickname: profile.nickname,
+              avatar_url: profile.avatar_url,
+              primary_region: profile.primary_region,
+              age_group: ageGroupFromBirthDate(profile.birth_date),
+            }
+            : null,
+        };
+      }),
+    });
+  }
 
   let rawBody: unknown;
   try {
@@ -163,7 +256,6 @@ Deno.serve(async (req) => {
   const parsed = parseInquiryRequest(rawBody);
   if (!parsed.ok) return errorResponse(parsed.message, 400);
 
-  const supabase = serviceClient();
   const accessError = await ugcAccessError(
     supabase,
     auth.user.id,
