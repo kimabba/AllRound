@@ -1,18 +1,21 @@
 SUPABASE ?= supabase
 # 원격 Supabase 프로젝트 ref (make backend 에서 사용)
 PROJECT_REF ?= bsjdgwmveokanclqwtvx
-# iOS Simulator: ffmpeg_kit arm64 미지원으로 기본은 macOS 로 실행.
-# 실기기/다른 기기에서 돌리려면: make app DEVICE_ID=<flutter devices 의 id>
+# 기본 실행 대상. iOS 시뮬레이터/실기기로 돌리려면:
+#   make app DEVICE_ID=<flutter devices 의 id>
+# 실기기는 --release 필수 (debug 는 iOS 26 ProMotion 크래시 flutter#183900)
 DEVICE_ID ?= macos
 
-.PHONY: setup backend app admin web check deps reset release-android release-ios
+.PHONY: setup backend app admin web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
-# macOS 시스템 의존성 (ffmpeg_kit_flutter_new 요구)
+# iOS/macOS 의존성 = Swift Package Manager (CocoaPods 사용 안 함)
 # ────────────────────────────────────────────────────
-deps:
-	brew install fontconfig zlib fribidi harfbuzz glib pcre2 graphite2 libiconv libsamplerate srt
-
+# 플러그인이 전부 Swift Package 라서 2026-07 에 CocoaPods 를 완전히 걷어냈다
+# (Podfile · Podfile.lock · [CP] 빌드 페이즈 · Pods xcconfig include 제거).
+# 남겨두면 빌드마다 pod install 이 빈 Pods 프로젝트를 만들며 pbxproj·Podfile.lock
+# 을 다시 써서 워킹트리가 더러워졌다. brew install cocoapods 도 이제 불필요.
+# 새 플러그인이 SPM 미지원이면 flutter 가 Podfile 을 자동 생성하므로 그때 복원하면 된다.
 # ────────────────────────────────────────────────────
 # DB reset 후 시뮬레이터 앱 캐시 초기화
 # (make setup 이후 세션 불일치 방지)
