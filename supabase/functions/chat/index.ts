@@ -700,7 +700,10 @@ Deno.serve(async (req) => {
             {
               p_user_id: user.id,
               p_sport: requestedSport,
-              p_region: regionLabel,
+              // region_code(정규 코드) 직접 전달. 한글 라벨은 t.region 표기와 불일치(JY-104).
+              // p_region 은 tournament_search_by_slots 에 존재하지 않는 파라미터라
+              // RPC 가 통째로 실패해 이 안내 경로가 죽어 있었다.
+              p_region_code: regionCode,
               p_date_from: dateRange?.from ?? null,
               p_date_to: dateRange?.to ?? null,
               p_only_my_grade: true,
