@@ -64,12 +64,39 @@ void main() {
       expect(t.regulationFields.single.label, '장소');
       expect(t.regulationFields.single.value, '서울');
     });
+
+    test('poster_url이 없으면 구조화 요강의 포스터 URL을 사용', () {
+      final j = _baseJson()
+        ..['regulation_fields'] = [
+          {'label': '포스터', 'value': 'https://example.com/poster.heic'},
+        ];
+      final t = Tournament.fromJson(j);
+      expect(t.posterUrl, 'https://example.com/poster.heic');
+    });
+
+    test('명시적인 poster_url이 구조화 요강 값보다 우선', () {
+      final j = _baseJson()
+        ..['poster_url'] = 'https://example.com/uploaded.jpg'
+        ..['regulation_fields'] = [
+          {'label': '포스터', 'value': 'https://example.com/crawled.heic'},
+        ];
+      final t = Tournament.fromJson(j);
+      expect(t.posterUrl, 'https://example.com/uploaded.jpg');
+    });
+
+    test('포스터 값이 웹 URL이 아니면 이미지 주소로 사용하지 않음', () {
+      final j = _baseJson()
+        ..['regulation_fields'] = [
+          {'label': '포스터', 'value': '없음'},
+        ];
+      final t = Tournament.fromJson(j);
+      expect(t.posterUrl, isNull);
+    });
   });
 
   group('Tournament.fromJson — regulation_notes', () {
     test('정상: 문자열 배열 파싱', () {
-      final j = _baseJson()
-        ..['regulation_notes'] = ['참가비로 보험 가입', '접수 마감 엄수'];
+      final j = _baseJson()..['regulation_notes'] = ['참가비로 보험 가입', '접수 마감 엄수'];
       final t = Tournament.fromJson(j);
       expect(t.regulationNotes, ['참가비로 보험 가입', '접수 마감 엄수']);
     });
