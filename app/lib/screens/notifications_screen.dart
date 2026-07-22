@@ -19,6 +19,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   late Future<List<AppNotification>> _future;
+  bool _showReadHistory = false;
 
   @override
   void initState() {
@@ -88,6 +89,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
+  void _toggleReadHistory() {
+    setState(() => _showReadHistory = !_showReadHistory);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -98,10 +103,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('알림'),
         actions: [
-          TextButton(
-            onPressed: AppConfig.userDesignPreview ? null : _markAllRead,
-            child: const Text('전체 읽음'),
-          ),
+          if (!_showReadHistory)
+            TextButton(
+              onPressed: AppConfig.userDesignPreview ? null : _markAllRead,
+              child: const Text('전체 읽음'),
+            ),
         ],
       ),
       body: FutureBuilder<List<AppNotification>>(
@@ -120,14 +126,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             );
           }
 
-          final notifications = snapshot.data ?? const [];
+          final allNotifications = snapshot.data ?? const [];
+          final notifications = notificationsForInbox(
+            allNotifications,
+            showReadHistory: _showReadHistory,
+          );
           if (notifications.isEmpty) {
-            return const KeyedSubtree(
+            return KeyedSubtree(
               key: AllRoundE2EKeys.notificationsReady,
               child: AppEmptyState(
-                icon: Icons.notifications_none_rounded,
-                title: '새 알림이 없습니다',
-                description: '대회 마감, 가입 신청과 클럽 공지를 여기에서 확인할 수 있어요.',
+                icon: _showReadHistory
+                    ? Icons.history_rounded
+                    : Icons.notifications_none_rounded,
+                title: _showReadHistory ? '지난 알림이 없습니다' : '새 알림이 없습니다',
+                description: _showReadHistory
+                    ? '확인한 알림은 이곳에 모아서 보여드려요.'
+                    : '읽은 알림은 지난 알림에서 다시 확인할 수 있어요.',
+                actionLabel: _showReadHistory ? '새 알림 보기' : '지난 알림 보기',
+                onAction: _toggleReadHistory,
               ),
             );
           }
@@ -143,13 +159,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   AppSpacing.xl,
                   AppSpacing.xxxl,
                 ),
-                itemCount: notifications.length,
+                itemCount: notifications.length + 1,
                 separatorBuilder: (_, __) => Divider(
                   height: 1,
                   color: cs.outlineVariant,
                 ),
                 itemBuilder: (context, index) {
-                  final item = notifications[index];
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: OutlinedButton.icon(
+                        onPressed: _toggleReadHistory,
+                        icon: Icon(
+                          _showReadHistory
+                              ? Icons.notifications_none_rounded
+                              : Icons.history_rounded,
+                        ),
+                        label: Text(
+                          _showReadHistory ? '새 알림 보기' : '지난 알림 보기',
+                        ),
+                      ),
+                    );
+                  }
+                  final item = notifications[index - 1];
                   return Material(
                     color: item.isRead ? cs.surface : cs.primaryContainer,
                     child: InkWell(
@@ -248,6 +280,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ),
     );
   }
+}
+
+@visibleForTesting
+List<AppNotification> notificationsForInbox(
+  List<AppNotification> notifications, {
+  required bool showReadHistory,
+}) {
+  return notifications
+      .where((notification) => notification.isRead == showReadHistory)
+      .toList(growable: false);
 }
 
 class _NotificationLoadingState extends StatelessWidget {
