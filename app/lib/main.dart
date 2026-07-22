@@ -42,7 +42,12 @@ Future<void> initializeAllRoundServices({
 
   // 인증 후 FCM 등록 + 부서 카탈로그 DB 로드 (실패해도 앱 진입 허용)
   Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-    if (event.event == AuthChangeEvent.signedIn) {
+    // signedIn(신규 로그인)만 보면 저장된 세션으로 앱을 재시작한 경우
+    // (initialSession) FCM 리스너가 등록되지 않아 포그라운드 알림이 죽는다.
+    // 중복 호출은 notifications.dart 의 _messageListenersInitialized 가 막는다.
+    if (event.session != null &&
+        (event.event == AuthChangeEvent.signedIn ||
+            event.event == AuthChangeEvent.initialSession)) {
       initNotifications(ApiService(Supabase.instance.client));
     }
     // signedIn(신규 로그인) + initialSession(복원 세션) 모두에서 로드.

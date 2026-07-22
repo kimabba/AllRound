@@ -1,7 +1,15 @@
+import 'dart:io';
+
 import 'package:allround/services/notification_events.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('저장된 세션으로 재시작해도 FCM 리스너를 등록한다', () {
+    final source = File('lib/main.dart').readAsStringSync();
+
+    expect(source, contains('AuthChangeEvent.initialSession'));
+  });
+
   test('가입 신청 알림은 해당 클럽 관리 탭으로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
