@@ -16,6 +16,7 @@ DEVICE_ID ?= macos
 # 남겨두면 빌드마다 pod install 이 빈 Pods 프로젝트를 만들며 pbxproj·Podfile.lock
 # 을 다시 써서 워킹트리가 더러워졌다. brew install cocoapods 도 이제 불필요.
 # 새 플러그인이 SPM 미지원이면 flutter 가 Podfile 을 자동 생성하므로 그때 복원하면 된다.
+
 # ────────────────────────────────────────────────────
 # DB reset 후 시뮬레이터 앱 캐시 초기화
 # (make setup 이후 세션 불일치 방지)
