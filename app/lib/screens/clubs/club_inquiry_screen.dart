@@ -59,7 +59,7 @@ class _ClubInquiryConversationScreenState
       _clubName ??= club.name;
       _threadId ??= (await api.myClubInquiry(widget.clubId))?.id;
       ClubInquiryThread? requesterThread;
-      if (_threadId != null && club.isManager) {
+      if (_threadId != null && (club.isOwner || club.isManager)) {
         final threads = await api.managedClubInquiries(widget.clubId);
         for (final thread in threads) {
           if (thread.id == _threadId) {
