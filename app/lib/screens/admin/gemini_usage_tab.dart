@@ -53,7 +53,9 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
     await _future;
   }
 

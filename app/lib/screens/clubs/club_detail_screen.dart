@@ -1668,7 +1668,11 @@ class _JoinRequestManageCardState
   }
 
   void _refresh() {
-    setState(() => _future = _load());
+    // 화살표 `() => _future = _load()` 는 대입식 값(Future)을 반환해
+    // Flutter setState 가 던진다(승인 흐름에서 catch 되어 오표시됐음). 블록 바디로 둔다.
+    setState(() {
+      _future = _load();
+    });
   }
 
   Future<bool> _confirmReject(_ClubJoinRequest request) async {
