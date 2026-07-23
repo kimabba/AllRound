@@ -97,7 +97,7 @@ class _TournamentDetailScreenState
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
-    final isFav = (favorites.valueOrNull ?? const {}).contains(
+    final isFav = (favorites.value ?? const {}).contains(
       widget.tournamentId,
     );
     final isPreview = _isPreviewTournament;

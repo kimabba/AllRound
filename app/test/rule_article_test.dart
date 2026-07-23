@@ -19,13 +19,30 @@ void main() {
     expect(r.embeddingPending, false);
   });
 
-  test('RuleArticle.fromJson stays compatible with legacy rows (no new fields)', () {
+  test('RuleArticle.fromJson stays compatible with legacy rows (no new fields)',
+      () {
     final r = RuleArticle.fromJson({
-      'id': 'r2', 'sport': 'futsal', 'category': '파울',
-      'title': 't', 'body': 'b',
+      'id': 'r2',
+      'sport': 'futsal',
+      'category': '파울',
+      'title': 't',
+      'body': 'b',
     });
     expect(r.orderIdx, 0);
     expect(r.published, true);
     expect(r.embeddingPending, true); // embedding_updated_at 없음 → 대기
+  });
+
+  test('rule display removes internal numbering and escaped newlines', () {
+    final r = RuleArticle.fromJson({
+      'id': 'r3',
+      'sport': 'futsal',
+      'category': '파울',
+      'title': '규칙 12 – 파울과 불법행위',
+      'body': r'첫째 줄\n둘째 줄|n셋째 줄',
+    });
+
+    expect(r.title, '파울과 불법행위');
+    expect(r.body, '첫째 줄\n둘째 줄\n셋째 줄');
   });
 }

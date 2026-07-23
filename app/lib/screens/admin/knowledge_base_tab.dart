@@ -40,8 +40,12 @@ class _KnowledgeBaseTabState extends ConsumerState<KnowledgeBaseTab> {
             child: SegmentedButton<String?>(
               segments: [
                 const ButtonSegment(value: null, label: Text('전체')),
-                ButtonSegment(value: 'tennis', label: Text(sportLabelFromString('tennis'))),
-                ButtonSegment(value: 'futsal', label: Text(sportLabelFromString('futsal'))),
+                ButtonSegment(
+                    value: 'tennis',
+                    label: Text(sportLabelFromString('tennis'))),
+                ButtonSegment(
+                    value: 'futsal',
+                    label: Text(sportLabelFromString('futsal'))),
               ],
               selected: {_sportFilter},
               onSelectionChanged: (s) => setState(() => _sportFilter = s.first),
@@ -54,8 +58,8 @@ class _KnowledgeBaseTabState extends ConsumerState<KnowledgeBaseTab> {
               data: (rules) => rules.isEmpty
                   ? const Center(child: Text('문서가 없습니다'))
                   : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                       itemCount: rules.length,
                       itemBuilder: (_, i) {
                         final r = rules[i];
@@ -63,7 +67,7 @@ class _KnowledgeBaseTabState extends ConsumerState<KnowledgeBaseTab> {
                           child: ListTile(
                             title: Text(r.title),
                             subtitle: Text(
-                                '${sportLabelFromString(r.sport)} · ${r.category} · #${r.orderIdx}'),
+                                '${sportLabelFromString(r.sport)} · ${r.category}'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

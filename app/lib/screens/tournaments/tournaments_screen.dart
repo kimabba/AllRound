@@ -197,13 +197,13 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     // 등급·협회 등록이 없으면 홈 목록 = 전체 대회이므로 "내 등급" 배지가 거짓이 된다.
     // 등급 근거가 있을 때만 배지를 노출한다.
     final hasGradeBasis =
-        (ref.watch(userSportsProvider).valueOrNull?.isNotEmpty ?? false) ||
-            (ref.watch(userTennisOrgsProvider).valueOrNull?.isNotEmpty ??
+        (ref.watch(userSportsProvider).value?.isNotEmpty ?? false) ||
+            (ref.watch(userTennisOrgsProvider).value?.isNotEmpty ??
                 false);
     final myGradeIds = hasGradeBasis
         ? (ref
                 .watch(homeTournamentsProvider)
-                .valueOrNull
+                .value
                 ?.map((t) => t.id)
                 .toSet() ??
             const <String>{})
@@ -259,7 +259,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                         : _TournamentCalendarListView(
                             tournaments: _results!,
                             favoriteIds:
-                                favorites.valueOrNull ?? const <String>{},
+                                favorites.value ?? const <String>{},
                             myGradeIds: myGradeIds,
                             focusedMonth: _focusedMonth,
                             selectedDate: _selectedDate,

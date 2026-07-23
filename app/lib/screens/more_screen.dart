@@ -13,7 +13,7 @@ class MoreScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
+    final isAdmin = ref.watch(isAdminProvider).value ?? false;
 
     final personalItems = [
       _MenuItem(

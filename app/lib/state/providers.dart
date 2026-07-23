@@ -27,7 +27,7 @@ class RecoveryModeNotifier extends Notifier<bool> {
   @override
   bool build() {
     ref.listen(authStateProvider, (_, next) {
-      final event = next.valueOrNull?.event;
+      final event = next.value?.event;
       if (event == AuthChangeEvent.passwordRecovery) {
         state = true;
       } else if (event == AuthChangeEvent.userUpdated ||
@@ -38,7 +38,7 @@ class RecoveryModeNotifier extends Notifier<bool> {
       }
     });
     // 콜드스타트 딥링크: listen 등록 전 이미 도착한 이벤트도 반영.
-    return ref.read(authStateProvider).valueOrNull?.event ==
+    return ref.read(authStateProvider).value?.event ==
         AuthChangeEvent.passwordRecovery;
   }
 
@@ -141,7 +141,7 @@ String? primarySportFrom(List<UserSport> sports) {
 /// 사용자의 active 종목 — 앱 전체 필터 기준.
 /// 프로필의 주 종목을 사용한다.
 final activeSportProvider = Provider<String?>((ref) {
-  final sports = ref.watch(userSportsProvider).valueOrNull ?? [];
+  final sports = ref.watch(userSportsProvider).value ?? [];
   return primarySportFrom(sports);
 });
 
@@ -150,8 +150,8 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
   final sport = ref.watch(activeSportProvider);
-  final sports = ref.watch(userSportsProvider).valueOrNull ?? const [];
-  final tennisOrgs = ref.watch(userTennisOrgsProvider).valueOrNull ?? const [];
+  final sports = ref.watch(userSportsProvider).value ?? const [];
+  final tennisOrgs = ref.watch(userTennisOrgsProvider).value ?? const [];
   // 등급·협회 등록이 하나도 없으면 자격 매칭이 전부 실패해 목록이 빈다.
   // 그 경우엔 전체 published 를 보여준다(등록이 있으면 내 등급 필터 유지).
   final hasGradeBasis = sports.isNotEmpty || tennisOrgs.isNotEmpty;

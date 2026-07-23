@@ -424,8 +424,8 @@ class RuleArticle {
         id: j['id'] as String,
         sport: j['sport'] as String,
         category: j['category'] as String,
-        title: j['title'] as String,
-        body: j['body'] as String,
+        title: normalizeRuleTitle(j['title'] as String),
+        body: normalizeRuleBody(j['body'] as String),
         orderIdx: (j['order_idx'] as int?) ?? 0,
         published: (j['published'] as bool?) ?? true,
         embeddingUpdatedAt: j['embedding_updated_at'] != null
@@ -435,6 +435,17 @@ class RuleArticle {
             ? DateTime.parse(j['updated_at'] as String)
             : null,
       );
+}
+
+String normalizeRuleTitle(String title) {
+  return title.replaceFirst(RegExp(r'^\s*규칙\s*\d+\s*[–—-]\s*'), '').trim();
+}
+
+String normalizeRuleBody(String body) {
+  return body
+      .replaceAll(r'\r\n', '\n')
+      .replaceAll(r'\n', '\n')
+      .replaceAll('|n', '\n');
 }
 
 class UserSport {

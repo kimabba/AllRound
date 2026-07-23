@@ -973,8 +973,8 @@ class _PopularRulesList extends StatelessWidget {
           style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
-        for (var index = 0; index < articles.length; index++) ...[
-          _ArticleRow(article: articles[index], index: index, sport: sport),
+        for (final article in articles) ...[
+          _ArticleRow(article: article),
           const SizedBox(height: AppSpacing.sm),
         ],
       ],
@@ -985,19 +985,14 @@ class _PopularRulesList extends StatelessWidget {
 class _ArticleRow extends StatelessWidget {
   const _ArticleRow({
     required this.article,
-    required this.index,
-    required this.sport,
   });
 
   final RuleArticle article;
-  final int index;
-  final String sport;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final accent = _accentFor(context, sport);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1010,18 +1005,6 @@ class _ArticleRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: 34,
-                child: Text(
-                  '${index + 1}'.padLeft(2, '0'),
-                  style: tt.labelMedium?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
                   article.title,
@@ -1094,8 +1077,8 @@ class _CategorySheet extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        for (var index = 0; index < articles.length; index++) ...[
-          _ArticleRow(article: articles[index], index: index, sport: sport),
+        for (final article in articles) ...[
+          _ArticleRow(article: article),
           const SizedBox(height: AppSpacing.sm),
         ],
       ],
