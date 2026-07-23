@@ -208,6 +208,32 @@ Deno.test('reviewJoin: manager 승인 시 멤버 추가·상태 approved·알림
   assertEquals(String(notification.body).includes('테니스 크루'), true);
 });
 
+Deno.test('reviewJoin: 탈퇴 후 재신청 승인 시 기존 멤버십을 active 로 복구', async () => {
+  const tables = baseTables();
+  tables.club_members.push({
+    club_id: 'club-1',
+    user_id: 'req-user',
+    role: 'member',
+    status: 'left',
+    left_at: '2026-07-22T00:00:00.000Z',
+  });
+  const db = new FakeDb(tables);
+
+  const result = await reviewJoin(asClient(db), {
+    requestId: 'req-1',
+    action: 'approve',
+    reviewerId: 'owner-1',
+  });
+
+  assertEquals(result, { ok: true, action: 'approve' });
+  const membership = db.tables.club_members.find((row) =>
+    row.club_id === 'club-1' && row.user_id === 'req-user'
+  );
+  assertEquals(membership?.status, 'active');
+  assertEquals(membership?.role, 'member');
+  assertEquals(membership?.left_at, null);
+});
+
 Deno.test('reviewJoin: admin 거절 시 멤버 추가 없이 상태 rejected·거절 알림', async () => {
   const db = new FakeDb(baseTables());
   const result = await reviewJoin(asClient(db), {

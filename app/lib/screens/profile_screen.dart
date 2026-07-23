@@ -16,6 +16,7 @@ import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
 import '../widgets/profile/profile_sports_widgets.dart';
+import '../widgets/app_card.dart';
 
 const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
 const _notifyClubPrefsKey = 'notify.club_updates';
@@ -86,6 +87,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
       return;
     }
+    try {
+      await ref.read(apiProvider).uploadProfileAvatar(
+            bytes: image.bytes,
+            extension: image.extension,
+            contentType: image.contentType,
+          );
+      ref.invalidate(myProfileProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('프로필 사진을 저장하지 못했습니다. 다시 시도해주세요.'),
+          ),
+        );
+      }
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(avatarKey, base64Encode(image.bytes));
     if (!mounted) return;
@@ -94,6 +112,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _removeProfilePhoto() async {
     final avatarKey = _profileAvatarPrefsKey;
+    try {
+      await ref.read(apiProvider).removeProfileAvatar();
+      ref.invalidate(myProfileProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('프로필 사진을 삭제하지 못했습니다.')),
+        );
+      }
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     if (avatarKey != null) await prefs.remove(avatarKey);
     if (!mounted) return;
@@ -272,6 +301,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
     final profile = ref.watch(myProfileProvider).valueOrNull;
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
     final unreadNotificationCount =
         ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
 
@@ -303,7 +333,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             sports: sports,
             tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
+            avatarUrl: profile?.avatarUrl,
             onAvatarTap: _showProfilePhotoSheet,
+            onNotificationsTap: () => context.push('/notifications'),
+            unreadNotificationCount: unreadNotificationCount,
             onMoreTap: () => context.push('/more'),
           ),
           SliverPadding(
@@ -315,6 +348,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                if (profile?.birthDate == null) ...[
+                  AppCard(
+                    variant: AppCardVariant.outlined,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.edit_calendar_rounded),
+                      title: const Text('생년월일을 등록해 주세요'),
+                      subtitle: const Text(
+                        '클럽 사진·게시글 작성과 대회 자격 확인에 필요합니다.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => context.push('/onboarding'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (isAdmin) ...[
+                  AppCard(
+                    variant: AppCardVariant.outlined,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.admin_panel_settings_rounded),
+                      title: const Text('승인 대기 클럽 확인'),
+                      subtitle: const Text('새로 등록된 클럽을 승인하거나 반려합니다.'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => context.push('/admin/clubs'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 const MyClubsSection(),
                 const SizedBox(height: AppSpacing.xl),
                 const MyTournamentRecordsSection(),

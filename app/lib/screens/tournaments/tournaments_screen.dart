@@ -15,6 +15,7 @@ import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/tournament_card.dart';
+import '../../widgets/notification_inbox_action.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
   const TournamentsScreen({super.key, this.previewTournaments});
@@ -213,6 +214,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       appBar: AppBar(
         title: const Text('대회'),
         actions: [
+          const NotificationInboxAction(),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: '최근 본 대회',

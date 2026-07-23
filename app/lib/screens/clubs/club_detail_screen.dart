@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1423,6 +1424,18 @@ String _formatJoinRequestDate(DateTime? date) {
 
 String? _stringValue(Object? value) => value is String ? value : null;
 
+ImageProvider<Object>? _validClubNetworkImage(String? value) {
+  final url = value?.trim();
+  if (url == null || url.isEmpty) return null;
+  final uri = Uri.tryParse(url);
+  if (uri == null ||
+      !uri.hasScheme ||
+      !{'http', 'https'}.contains(uri.scheme)) {
+    return null;
+  }
+  return NetworkImage(url);
+}
+
 Map<String, Object?>? _joinRequestUserFrom(Object? value) {
   if (value is Map<String, Object?>) return value;
   if (value is Map) {
@@ -1442,6 +1455,7 @@ class _ClubJoinRequest {
   final String? message;
   final DateTime? createdAt;
   final String? displayName;
+  final String? avatarUrl;
   final String? email;
 
   const _ClubJoinRequest({
@@ -1450,6 +1464,7 @@ class _ClubJoinRequest {
     required this.message,
     required this.createdAt,
     required this.displayName,
+    required this.avatarUrl,
     required this.email,
   });
 
@@ -1462,6 +1477,7 @@ class _ClubJoinRequest {
       createdAt: DateTime.tryParse(_stringValue(json['created_at']) ?? ''),
       displayName:
           _stringValue(user?['display_name']) ?? _stringValue(user?['name']),
+      avatarUrl: _stringValue(user?['avatar_url']),
       email: _stringValue(user?['email']),
     );
   }
@@ -1825,6 +1841,7 @@ class _JoinRequestManageRow extends StatelessWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: cs.primaryContainer,
+              foregroundImage: _validClubNetworkImage(request.avatarUrl),
               child: Text(
                 initial,
                 style: TextStyle(
@@ -3997,22 +4014,30 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
             await ref.read(apiProvider).hasVerifiedSignupAge();
         if (!hasVerifiedAge) {
           if (!mounted) return;
-          await showDialog<void>(
+          final openProfile = await showDialog<bool>(
             context: context,
             builder: (dialogContext) => AlertDialog(
               title: const Text('생년월일 등록이 필요합니다'),
               content: const Text(
-                '사진을 올리려면 프로필에서 생년월일을 등록해주세요. '
-                '프로필 화면의 “프로필·생년월일 수정”에서 등록할 수 있습니다.',
+                '사진을 올리려면 만 14세 이상 생년월일 확인이 필요합니다. '
+                '지금 프로필 정보 화면에서 등록할 수 있습니다.',
               ),
               actions: [
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('확인'),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('나중에'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('입력하러 가기'),
                 ),
               ],
             ),
           );
+          if (openProfile == true && mounted) {
+            context.push('/onboarding');
+          }
           return;
         }
       } catch (_) {
