@@ -12,6 +12,14 @@ mixin NotificationApi on ApiBase {
     });
   }
 
+  Future<void> setDeviceTokenSound(String token, bool enabled) async {
+    if (supabase.auth.currentUser == null) return;
+    await supabase.rpc('set_my_device_token_sound', params: {
+      'p_token': token,
+      'p_sound_enabled': enabled,
+    });
+  }
+
   Future<void> unregisterDeviceTokens() async {
     if (supabase.auth.currentUser == null) return;
     await supabase.rpc('unbind_my_device_tokens');

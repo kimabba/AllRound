@@ -5,6 +5,7 @@ import type { FcmNotificationInput } from './fcm.ts';
 export interface DeviceTokenRow {
   token: string;
   platform: 'ios' | 'android' | 'web';
+  sound_enabled: boolean;
 }
 
 export interface CreateNotificationInput {
@@ -23,11 +24,14 @@ export async function createNotification(
 ): Promise<void> {
   const { data: tokenRows } = await supabase
     .from('device_tokens')
-    .select('token, platform')
+    .select('token, platform, sound_enabled')
     .eq('user_id', input.userId)
     .eq('enabled', true);
 
-  const tokens = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => row.token);
+  const targets = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => ({
+    token: row.token,
+    soundEnabled: row.sound_enabled,
+  }));
   const body = input.body?.trim() ?? '';
 
   const pushInput: FcmNotificationInput = {
@@ -38,7 +42,7 @@ export async function createNotification(
     referenceId: input.referenceId,
     clubId: input.clubId,
   };
-  const result = await sendFcm(tokens, pushInput);
+  const result = await sendFcm(targets, pushInput);
   const status = result.status === 'skipped' ? 'pending' : result.status;
   const sentAt = result.status === 'sent' ? new Date().toISOString() : null;
 
