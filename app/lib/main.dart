@@ -66,7 +66,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeAllRoundServices();
 
-  runApp(const ProviderScope(child: MatchUpApp()));
+  // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
+  // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
+  runApp(
+    ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
+  );
 }
 
 class MatchUpApp extends ConsumerWidget {
@@ -76,8 +80,8 @@ class MatchUpApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!AppConfig.userDesignPreview) {
       ref.listen(authStateProvider, (previous, next) {
-        final previousUserId = previous?.valueOrNull?.session?.user.id;
-        final nextUserId = next.valueOrNull?.session?.user.id;
+        final previousUserId = previous?.value?.session?.user.id;
+        final nextUserId = next.value?.session?.user.id;
         if (previousUserId == nextUserId) return;
 
         ref.read(chatProvider).reset();

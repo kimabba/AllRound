@@ -14,13 +14,12 @@ dependencies:
 
   # 인증·DB
   supabase_flutter: ^2.8.0
-  google_sign_in: ^6.2.1
 
   # 상태 관리
-  flutter_riverpod: ^2.6.1
+  flutter_riverpod: ^3.0.0
 
   # 라우팅
-  go_router: ^14.6.1
+  go_router: ^17.0.0
 
   # 네트워크
   http: ^1.3.0

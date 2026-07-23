@@ -490,8 +490,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     _prepareProfilePhoto();
-    _prepareExistingProfile(ref.watch(myProfileProvider).valueOrNull);
-    _prepareExistingSports(ref.watch(userSportsProvider).valueOrNull);
+    _prepareExistingProfile(ref.watch(myProfileProvider).value);
+    _prepareExistingSports(ref.watch(userSportsProvider).value);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 

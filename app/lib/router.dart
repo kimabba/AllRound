@@ -69,7 +69,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (kIsWeb) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
-        final isAdmin = adminAsync.valueOrNull ?? false;
+        final isAdmin = adminAsync.value ?? false;
 
         if (loc == '/login') return '/';
         if (loc.startsWith('/admin')) {
@@ -83,13 +83,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/admin/clubs') {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
-        return (adminAsync.valueOrNull ?? false) ? null : '/';
+        return (adminAsync.value ?? false) ? null : '/';
       }
 
       // 앱: 기존 로직
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
-      final sports = sportsAsync.valueOrNull ?? const [];
+      final sports = sportsAsync.value ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
       // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.
