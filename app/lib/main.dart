@@ -36,7 +36,9 @@ Future<void> initializeAllRoundServices({
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
+    // supabase_flutter 2.16+ 에서 anonKey deprecated → publishableKey.
+    // 값은 동일(effectiveKey = publishableKey ?? anonKey), 키 체계 전환 아님.
+    publishableKey: AppConfig.supabaseAnonKey,
     authOptions: authOptions,
   );
 
