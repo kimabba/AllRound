@@ -1122,7 +1122,9 @@ void _showArticle(BuildContext context, RuleArticle article) {
         ),
         child: Markdown(
           controller: scroll,
-          data: '# ${article.title}\n\n${article.body}',
+          // ponytail: 본문에 리터럴 `\n`이 저장된 오염 데이터 방어 변환
+          data:
+              '# ${article.title}\n\n${article.body.replaceAll(r'\n', '\n\n')}',
         ),
       ),
     ),

@@ -360,6 +360,39 @@ class _DetailBody extends StatelessWidget {
                 ),
               ),
 
+              const SizedBox(height: AppSpacing.lg),
+
+              // ── 참가 신청 준비 중 안내 (모든 대회 공고 하단 고정) ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_rounded,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        '참가 신청을 BB가 대신해 드릴 수 있도록 준비 중이에요. 기대해 주세요!',
+                        style: tt.labelMedium?.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: AppSpacing.xxxl),
             ],
           ),

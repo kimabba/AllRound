@@ -208,7 +208,11 @@ class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: AppRadius.card,
                 ),
-                child: MarkdownBody(data: '# ${_title.text}\n\n${_body.text}'),
+                // ponytail: 본문에 리터럴 `\n`이 저장된 오염 데이터 방어 변환
+                child: MarkdownBody(
+                  data:
+                      '# ${_title.text}\n\n${_body.text.replaceAll(r'\n', '\n\n')}',
+                ),
               )
             else
               TextFormField(
