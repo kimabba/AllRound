@@ -19,7 +19,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
 
   # 라우팅
-  go_router: ^14.6.1
+  go_router: ^17.0.0
 
   # 네트워크
   http: ^1.3.0
