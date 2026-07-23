@@ -23,6 +23,11 @@ class AllRoundE2EKeys {
   static const onboardingNicknameField = Key('e2e-onboarding-nickname-field');
   static const onboardingBirthDate = Key('e2e-onboarding-birth-date');
   static const onboardingPrimaryAction = Key('e2e-onboarding-primary-action');
+  static const verifyPhoneScreen = Key('e2e-verify-phone-screen');
+  static const verifyPhoneNumberField = Key('e2e-verify-phone-number-field');
+  static const verifyPhoneSendButton = Key('e2e-verify-phone-send-button');
+  static const verifyPhoneCodeField = Key('e2e-verify-phone-code-field');
+  static const verifyPhoneConfirmButton = Key('e2e-verify-phone-confirm-button');
   static const homeScreen = Key('e2e-home-screen');
   static const homeLoadingState = Key('e2e-home-loading-state');
   static const homeEmptyState = Key('e2e-home-empty-state');
