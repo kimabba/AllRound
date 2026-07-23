@@ -60,8 +60,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       initialIndex: widget.initialTab,
     );
     _tab.addListener(_onTabChanged);
-    _startRefreshTimer();
-    _loadLogs();
+    _loadTab(widget.initialTab);
   }
 
   @override
@@ -75,18 +74,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     // FAB visibility depends on _tab.index — force rebuild on every change.
     if (_tab.indexIsChanging) return;
     if (mounted) setState(() {});
-    if (_tab.index == 0) {
-      _startRefreshTimer();
-      _loadLogs();
-    } else {
-      _cancelRefreshTimer();
-      if (_tab.index == 1) {
+    _loadTab(_tab.index);
+  }
+
+  void _loadTab(int index) {
+    _cancelRefreshTimer();
+    switch (index) {
+      case 0:
+        _startRefreshTimer();
+        _loadLogs();
+      case 1:
         _loadDrafts();
-      } else if (_tab.index == 2) {
+      case 2:
         _loadSources();
-      } else if (_tab.index == 3) {
+      case 3:
         _loadPendingClubs();
-      }
     }
   }
 

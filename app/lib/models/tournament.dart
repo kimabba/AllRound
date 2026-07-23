@@ -465,12 +465,14 @@ class UserProfile {
   final String? nickname;
   final DateTime? birthDate;
   final String? primaryRegion;
+  final String? avatarUrl;
 
   const UserProfile({
     this.name,
     this.nickname,
     this.birthDate,
     this.primaryRegion,
+    this.avatarUrl,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -480,6 +482,7 @@ class UserProfile {
             ? null
             : DateTime.tryParse(j['birth_date'] as String),
         primaryRegion: j['primary_region'] as String?,
+        avatarUrl: j['avatar_url'] as String?,
       );
 
   /// 앱 활동 표시명: 닉네임 우선, 없으면 실명. 둘 다 없으면 null.

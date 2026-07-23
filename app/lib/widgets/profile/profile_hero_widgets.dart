@@ -19,7 +19,10 @@ class ProfileHeroSliver extends StatelessWidget {
   final AsyncValue<List<UserSport>> sports;
   final AsyncValue<List<UserTennisOrg>> tennisOrgs;
   final Uint8List? avatarBytes;
+  final String? avatarUrl;
   final VoidCallback onAvatarTap;
+  final VoidCallback onNotificationsTap;
+  final int unreadNotificationCount;
   final VoidCallback onMoreTap;
 
   const ProfileHeroSliver({
@@ -31,7 +34,10 @@ class ProfileHeroSliver extends StatelessWidget {
     required this.sports,
     required this.tennisOrgs,
     required this.avatarBytes,
+    required this.avatarUrl,
     required this.onAvatarTap,
+    required this.onNotificationsTap,
+    required this.unreadNotificationCount,
     required this.onMoreTap,
   });
 
@@ -53,6 +59,19 @@ class ProfileHeroSliver extends StatelessWidget {
         ),
       ),
       actions: [
+        Badge(
+          isLabelVisible: unreadNotificationCount > 0,
+          label: Text(
+            unreadNotificationCount > 99 ? '99+' : '$unreadNotificationCount',
+          ),
+          child: IconButton(
+            tooltip: unreadNotificationCount > 0
+                ? '읽지 않은 알림 $unreadNotificationCount개'
+                : '알림함',
+            onPressed: onNotificationsTap,
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
+        ),
         IconButton(
           tooltip: '전체 메뉴',
           onPressed: onMoreTap,
@@ -79,6 +98,7 @@ class ProfileHeroSliver extends StatelessWidget {
                 infoLine: infoLine,
                 sports: sports,
                 avatarBytes: avatarBytes,
+                avatarUrl: avatarUrl,
                 onAvatarTap: onAvatarTap,
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -100,6 +120,7 @@ class ProfileHeaderContent extends StatelessWidget {
     required this.infoLine,
     required this.sports,
     required this.avatarBytes,
+    required this.avatarUrl,
     required this.onAvatarTap,
   });
 
@@ -109,6 +130,7 @@ class ProfileHeaderContent extends StatelessWidget {
   final String? infoLine;
   final AsyncValue<List<UserSport>> sports;
   final Uint8List? avatarBytes;
+  final String? avatarUrl;
   final VoidCallback onAvatarTap;
 
   @override
@@ -120,6 +142,12 @@ class ProfileHeaderContent extends StatelessWidget {
       orElse: () => null,
     );
     final sportCount = sports.maybeWhen(data: (l) => l.length, orElse: () => 0);
+    final normalizedAvatarUrl = avatarUrl?.trim();
+    final ImageProvider<Object>? avatarImage = avatarBytes != null
+        ? MemoryImage(avatarBytes!)
+        : normalizedAvatarUrl == null || normalizedAvatarUrl.isEmpty
+            ? null
+            : NetworkImage(normalizedAvatarUrl);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -135,15 +163,15 @@ class ProfileHeaderContent extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(AppRadius.xl),
-                  image: avatarBytes == null
+                  image: avatarImage == null
                       ? null
                       : DecorationImage(
-                          image: MemoryImage(avatarBytes!),
+                          image: avatarImage,
                           fit: BoxFit.cover,
                         ),
                 ),
                 alignment: Alignment.center,
-                child: avatarBytes == null
+                child: avatarImage == null
                     ? Text(
                         initial,
                         style: tt.headlineMedium?.copyWith(
