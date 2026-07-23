@@ -275,7 +275,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
     final favoriteIds =
-        ref.read(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+        ref.read(clubFavoriteIdsProvider).value ?? const <String>{};
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -380,7 +380,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     });
     final cs = Theme.of(context).colorScheme;
     final favoriteClubIds =
-        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+        ref.watch(clubFavoriteIdsProvider).value ?? const <String>{};
     final effectiveClubs = _clubs ?? const <Club>[];
     final visibleClubs = effectiveClubs
         .where((club) => _clubInterests.contains(club.sport))

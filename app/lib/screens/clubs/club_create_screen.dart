@@ -528,7 +528,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     final cs = Theme.of(context).colorScheme;
 
     // 사용자가 등록한 종목만 선택지로 노출 (미등록 시에만 양쪽 fallback)
-    final registered = (ref.watch(userSportsProvider).valueOrNull ?? [])
+    final registered = (ref.watch(userSportsProvider).value ?? [])
         .map((s) => s.sport)
         .toSet()
         .toList()

@@ -435,7 +435,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
 
     final isMember = club.isMember;
     final favoriteIds =
-        ref.watch(clubFavoriteIdsProvider).valueOrNull ?? const <String>{};
+        ref.watch(clubFavoriteIdsProvider).value ?? const <String>{};
     final isFavorite = favoriteIds.contains(club.id);
     final membersFuture = _membersF ?? Future<List<ClubMember>>.value(const []);
     final eventsFuture = _eventsF ?? Future<List<ClubEvent>>.value(const []);
