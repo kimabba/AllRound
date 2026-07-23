@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { sendFcm } from './fcm.ts';
+import type { FcmNotificationInput } from './fcm.ts';
 
 export interface DeviceTokenRow {
   token: string;
@@ -15,44 +17,6 @@ export interface CreateNotificationInput {
   clubId?: string | null;
 }
 
-export function buildFcmPayload(
-  tokens: string[],
-  input: CreateNotificationInput,
-) {
-  return {
-    registration_ids: tokens,
-    notification: {
-      title: input.title,
-      body: input.body?.trim() ?? '',
-    },
-    data: {
-      type: input.type,
-      reference_type: input.referenceType ?? '',
-      reference_id: input.referenceId ?? '',
-      club_id: input.clubId ?? '',
-    },
-    priority: 'high',
-  };
-}
-
-async function sendFcm(
-  tokens: string[],
-  input: CreateNotificationInput,
-): Promise<boolean> {
-  const serverKey = Deno.env.get('FCM_SERVER_KEY');
-  if (!serverKey || tokens.length === 0) return false;
-
-  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `key=${serverKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(buildFcmPayload(tokens, input)),
-  });
-  return res.ok;
-}
-
 export async function createNotification(
   supabase: SupabaseClient,
   input: CreateNotificationInput,
@@ -66,20 +30,17 @@ export async function createNotification(
   const tokens = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => row.token);
   const body = input.body?.trim() ?? '';
 
-  let status: 'pending' | 'sent' | 'failed' = 'sent';
-  let errorText: string | null = null;
-  let sentAt: string | null = null;
-
-  if (tokens.length > 0 && body.length > 0 && Deno.env.get('FCM_SERVER_KEY')) {
-    try {
-      const ok = await sendFcm(tokens, input);
-      status = ok ? 'sent' : 'failed';
-      sentAt = ok ? new Date().toISOString() : null;
-    } catch (error) {
-      status = 'failed';
-      errorText = error instanceof Error ? error.message : 'Unknown FCM error';
-    }
-  }
+  const pushInput: FcmNotificationInput = {
+    title: input.title,
+    body,
+    type: input.type,
+    referenceType: input.referenceType,
+    referenceId: input.referenceId,
+    clubId: input.clubId,
+  };
+  const result = await sendFcm(tokens, pushInput);
+  const status = result.status === 'skipped' ? 'pending' : result.status;
+  const sentAt = result.status === 'sent' ? new Date().toISOString() : null;
 
   const { error } = await supabase.from('notifications').insert({
     user_id: input.userId,
@@ -90,7 +51,7 @@ export async function createNotification(
     reference_id: input.referenceId ?? null,
     club_id: input.clubId ?? null,
     status,
-    error: errorText,
+    error: result.error,
     sent_at: sentAt,
   });
 

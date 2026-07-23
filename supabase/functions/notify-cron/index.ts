@@ -1,5 +1,6 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { jsonResponse, preflight } from '../_shared/cors.ts';
+import { sendFcm } from '../_shared/fcm.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 /**
@@ -10,8 +11,7 @@ import { serviceClient } from '../_shared/supabase.ts';
  *   - 신청 마감일 == 오늘
  * 알림을 발송한다. notifications 의 unique idx (user, reference, type) 로 중복 방지.
  *
- * FCM 발송은 FCM_SERVER_KEY 가 설정된 경우에만 수행.
- * (개발 단계에서는 환경변수 없이도 로직 검증 가능 — 실패는 status='failed' 로 기록)
+ * FCM HTTP v1 발송은 FIREBASE_SERVICE_ACCOUNT_JSON secret 을 사용한다.
  */
 
 interface NotifyTask {
@@ -28,25 +28,47 @@ interface DeviceTokenRow {
   platform: 'ios' | 'android' | 'web';
 }
 
-async function sendFcm(tokens: string[], title: string, body: string): Promise<boolean> {
-  const serverKey = Deno.env.get('FCM_SERVER_KEY');
-  if (!serverKey || tokens.length === 0) return false;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
-  // Firebase Cloud Messaging Legacy HTTP API
-  // 운영 시 v1 API + service account 권장. MVP 는 legacy 로 시작.
-  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `key=${serverKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      registration_ids: tokens,
-      notification: { title, body },
-      priority: 'high',
-    }),
-  });
-  return res.ok;
+function parseTasks(rows: unknown, today: string, dPlus3: string): NotifyTask[] {
+  if (!Array.isArray(rows)) return [];
+  const tasks: NotifyTask[] = [];
+  for (const row of rows) {
+    if (!isRecord(row) || typeof row['user_id'] !== 'string') continue;
+    const tournament = row['tournaments'];
+    if (!isRecord(tournament)) continue;
+    const id = tournament['id'];
+    const title = tournament['title'];
+    const startDate = tournament['start_date'];
+    const deadline = tournament['application_deadline'];
+    if (
+      typeof id !== 'string' || typeof title !== 'string' || typeof startDate !== 'string' ||
+      (deadline !== null && typeof deadline !== 'string')
+    ) continue;
+    if (startDate === dPlus3) {
+      tasks.push({
+        user_id: row['user_id'],
+        tournament_id: id,
+        type: 'd_minus_3',
+        title,
+        start_date: startDate,
+        application_deadline: deadline,
+      });
+    }
+    if (deadline === today) {
+      tasks.push({
+        user_id: row['user_id'],
+        tournament_id: id,
+        type: 'deadline',
+        title,
+        start_date: startDate,
+        application_deadline: deadline,
+      });
+    }
+  }
+  return tasks;
 }
 
 Deno.serve(async (req) => {
@@ -73,33 +95,7 @@ Deno.serve(async (req) => {
 
   if (error) return jsonResponse({ error: error.message }, { status: 500 });
 
-  // deno-lint-ignore no-explicit-any
-  const tasks: NotifyTask[] = ((favorites as any[]) ?? [])
-    .flatMap((f) => {
-      const t = f.tournaments;
-      const out: NotifyTask[] = [];
-      if (t.start_date === dPlus3) {
-        out.push({
-          user_id: f.user_id,
-          tournament_id: t.id,
-          type: 'd_minus_3',
-          title: t.title,
-          start_date: t.start_date,
-          application_deadline: t.application_deadline,
-        });
-      }
-      if (t.application_deadline === today) {
-        out.push({
-          user_id: f.user_id,
-          tournament_id: t.id,
-          type: 'deadline',
-          title: t.title,
-          start_date: t.start_date,
-          application_deadline: t.application_deadline,
-        });
-      }
-      return out;
-    });
+  const tasks = parseTasks(favorites as unknown, today, dPlus3);
 
   let sent = 0, dedupSkipped = 0, failed = 0;
 
@@ -133,13 +129,13 @@ Deno.serve(async (req) => {
       ? `대회 3일 전: ${task.title} — ${task.start_date}`
       : `오늘 신청 마감: ${task.title}`;
 
-    let ok = false;
-    let errText: string | null = null;
-    try {
-      ok = await sendFcm(tokens, '대회 알림', message);
-    } catch (e) {
-      errText = (e as Error).message;
-    }
+    const result = await sendFcm(tokens, {
+      title: '대회 알림',
+      body: message,
+      type: notifType,
+      referenceType: 'tournament',
+      referenceId: task.tournament_id,
+    });
 
     const notifTitle = task.type === 'd_minus_3' ? '대회 3일 전 알림' : '신청 마감 알림';
     await supabase.from('notifications').insert({
@@ -149,12 +145,12 @@ Deno.serve(async (req) => {
       body: message,
       reference_type: 'tournament',
       reference_id: task.tournament_id,
-      status: ok ? 'sent' : 'failed',
-      error: errText,
-      sent_at: ok ? new Date().toISOString() : null,
+      status: result.status === 'skipped' ? 'pending' : result.status,
+      error: result.error,
+      sent_at: result.status === 'sent' ? new Date().toISOString() : null,
     });
 
-    if (ok) sent++;
+    if (result.status === 'sent') sent++;
     else failed++;
   }
 
