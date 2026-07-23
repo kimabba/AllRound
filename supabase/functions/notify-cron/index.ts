@@ -1,6 +1,12 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
+import {
+  parseClubEventReminders,
+  parseUserIds,
+  tomorrowKstBounds,
+} from '../_shared/club_event_reminders.ts';
 import { jsonResponse, preflight } from '../_shared/cors.ts';
 import { sendFcm } from '../_shared/fcm.ts';
+import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 /**
@@ -158,9 +164,63 @@ Deno.serve(async (req) => {
     else failed++;
   }
 
+  // KST 기준 내일 00:00~24:00 사이의 활성 클럽 일정.
+  // 삭제된 일정은 조회되지 않고, 조기 종료 일정은 ended_early_at 필터로 제외한다.
+  const tomorrow = tomorrowKstBounds(new Date());
+  const { data: eventRows, error: eventError } = await supabase
+    .from('club_events')
+    .select('id, club_id, title, starts_at, clubs(name)')
+    .is('ended_early_at', null)
+    .gte('starts_at', tomorrow.start)
+    .lt('starts_at', tomorrow.end);
+  if (eventError) {
+    return jsonResponse({ error: eventError.message }, { status: 500 });
+  }
+
+  const eventReminders = parseClubEventReminders(eventRows as unknown);
+  for (const event of eventReminders) {
+    const { data: members, error: membersError } = await supabase
+      .from('club_members')
+      .select('user_id')
+      .eq('club_id', event.clubId)
+      .eq('status', 'active');
+    if (membersError) {
+      failed++;
+      continue;
+    }
+    for (const userId of parseUserIds(members as unknown)) {
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', 'club_event_reminder')
+        .eq('reference_id', event.id)
+        .maybeSingle();
+      if (existing) {
+        dedupSkipped++;
+        continue;
+      }
+      try {
+        await createNotification(supabase, {
+          userId,
+          type: 'club_event_reminder',
+          title: `${event.clubName} 일정 하루 전`,
+          body: event.title,
+          referenceType: 'club_event',
+          referenceId: event.id,
+          clubId: event.clubId,
+        });
+        sent++;
+      } catch {
+        failed++;
+      }
+    }
+  }
+
   return jsonResponse({
     today,
-    candidate_count: tasks.length,
+    candidate_count: tasks.length + eventReminders.length,
+    club_event_candidate_count: eventReminders.length,
     sent,
     dedup_skipped: dedupSkipped,
     failed,
