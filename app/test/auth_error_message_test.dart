@@ -94,4 +94,38 @@ void main() {
       );
     });
   });
+
+  group('비밀번호 재설정 화면 매핑', () {
+    const weakExpected = '사용할 수 없는 비밀번호예요. 유출되었거나 너무 단순한 비밀번호이니 '
+        '다른 비밀번호로 바꿔 주세요.';
+    const linkExpected = '재설정에 실패했습니다. 링크가 만료됐다면 다시 요청해 주세요.';
+
+    test('유출 비밀번호(422 pwned)는 링크 만료가 아니라 취약 비번 안내로 간다', () {
+      // 실제 재설정 실패의 근본 원인(2026-07-23 로그): updateUser 가 422 weak_password 로 떨어졌다.
+      final e = AuthException(
+          'Password is known to be weak and easy to guess, please choose a different one.',
+          statusCode: '422',
+          code: 'weak_password');
+      expect(resetPasswordErrorMessage(e), weakExpected);
+    });
+
+    test('길이 정책 위반도 취약 비번 안내로 간다', () {
+      final e = AuthException('Password should be at least 6 characters.',
+          statusCode: '422', code: 'weak_password');
+      expect(resetPasswordErrorMessage(e), weakExpected);
+    });
+
+    test('새 비번이 이전과 같으면 별도 안내(취약 비번 오분류 방지)', () {
+      final e = AuthException(
+          'New password should be different from the old password.',
+          statusCode: '422',
+          code: 'same_password');
+      expect(resetPasswordErrorMessage(e), '이전과 다른 비밀번호로 설정해 주세요.');
+    });
+
+    test('그 밖의 알 수 없는 실패는 링크 재요청을 안내한다', () {
+      final e = AuthException('Something unexpected', statusCode: '500');
+      expect(resetPasswordErrorMessage(e), linkExpected);
+    });
+  });
 }
