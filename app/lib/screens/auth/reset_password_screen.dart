@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/session_security.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/auth_error_message.dart';
 
 /// 비밀번호 재설정 메일 딥링크(passwordRecovery 이벤트)로 진입하는 화면.
 /// 세션은 이미 복원된 상태이므로 새 비밀번호만 받아 updateUser 로 설정한다.
@@ -58,12 +59,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       context.go('/');
     } on AuthException catch (e) {
       if (!mounted) return;
-      final m = e.message.toLowerCase();
       setState(() {
         _busy = false;
-        _error = m.contains('should be different')
-            ? '이전과 다른 비밀번호로 설정해 주세요.'
-            : '재설정에 실패했습니다. 링크가 만료됐다면 다시 요청해 주세요.';
+        _error = resetPasswordErrorMessage(e);
       });
     } catch (_) {
       if (!mounted) return;

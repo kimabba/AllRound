@@ -55,3 +55,29 @@ String authErrorMessage(AuthException e, {required bool signUp}) {
       ? '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.'
       : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
 }
+
+/// 비밀번호 재설정 화면(updateUser)용 매핑.
+///
+/// 기존엔 이 화면이 `authErrorMessage` 를 쓰지 않고 `should be different` 외
+/// 모든 오류를 "링크가 만료됐다면 다시 요청" 으로 뭉갰다. 그 결과 유출/취약
+/// 비밀번호(422 weak_password)까지 링크 만료로 오안내돼, 링크가 멀쩡한데도
+/// 사용자가 링크를 다시 받으러 가는 헛수고를 했다(2026-07-23 실측).
+///
+/// 취약 비번·기타 표준 오류는 공용 매핑을 재사용하고, 재설정 문맥에서만
+/// 의미 있는 두 가지(이전과 동일한 비번, 그리고 세션/토큰 만료성 실패)는
+/// 여기서 따로 안내한다.
+String resetPasswordErrorMessage(AuthException e) {
+  final m = e.message.toLowerCase();
+  // 새 비번이 이전과 같은 경우. authErrorMessage 는 'password should' 부분일치로
+  // 이 문구를 취약 비번으로 오분류하므로 반드시 먼저 가른다.
+  if (e.code == 'same_password' || m.contains('should be different')) {
+    return '이전과 다른 비밀번호로 설정해 주세요.';
+  }
+  final mapped = authErrorMessage(e, signUp: false);
+  // 구체 매핑이 없어 로그인용 제네릭 폴백이 나왔다면, 재설정 화면에서는
+  // 링크 재요청 안내가 더 정확하다(세션/토큰 만료 등).
+  if (mapped == '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.') {
+    return '재설정에 실패했습니다. 링크가 만료됐다면 다시 요청해 주세요.';
+  }
+  return mapped;
+}
