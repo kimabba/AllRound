@@ -10,7 +10,8 @@ import '../../utils/grade_labels.dart';
 class RuleEditScreen extends ConsumerStatefulWidget {
   final RuleArticle? rule; // null = 신규
   final List<String> existingCategories; // 자동완성 제안
-  const RuleEditScreen({super.key, this.rule, this.existingCategories = const []});
+  const RuleEditScreen(
+      {super.key, this.rule, this.existingCategories = const []});
 
   @override
   ConsumerState<RuleEditScreen> createState() => _RuleEditScreenState();
@@ -19,7 +20,8 @@ class RuleEditScreen extends ConsumerStatefulWidget {
 class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late String _sport = widget.rule?.sport ?? 'tennis';
-  late final _category = TextEditingController(text: widget.rule?.category ?? '');
+  late final _category =
+      TextEditingController(text: widget.rule?.category ?? '');
   late final _title = TextEditingController(text: widget.rule?.title ?? '');
   late final _body = TextEditingController(text: widget.rule?.body ?? '');
   late final _orderIdx =
@@ -47,8 +49,8 @@ class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
       final data = {
         'sport': _sport,
         'category': _category.text.trim(),
-        'title': _title.text.trim(),
-        'body': _body.text,
+        'title': normalizeRuleTitle(_title.text),
+        'body': normalizeRuleBody(_body.text),
         'order_idx': int.tryParse(_orderIdx.text.trim()) ?? 0,
         'published': _published,
       };
@@ -142,8 +144,12 @@ class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
           children: [
             SegmentedButton<String>(
               segments: [
-                ButtonSegment(value: 'tennis', label: Text(sportLabelFromString('tennis'))),
-                ButtonSegment(value: 'futsal', label: Text(sportLabelFromString('futsal'))),
+                ButtonSegment(
+                    value: 'tennis',
+                    label: Text(sportLabelFromString('tennis'))),
+                ButtonSegment(
+                    value: 'futsal',
+                    label: Text(sportLabelFromString('futsal'))),
               ],
               selected: {_sport},
               onSelectionChanged: (s) => setState(() => _sport = s.first),
@@ -226,7 +232,8 @@ class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
               onPressed: _saving ? null : _save,
               child: _saving
                   ? const SizedBox(
-                      width: 20, height: 20,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('저장'),
             ),
