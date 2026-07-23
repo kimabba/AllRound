@@ -2716,6 +2716,7 @@ class _EventsTab extends ConsumerWidget {
                   itemBuilder: (context, i) => _EventCard(
                     event: events[i],
                     members: members,
+                    canManage: canCreateEvent,
                     onChanged: onChanged,
                   ),
                 );
@@ -2751,10 +2752,12 @@ class _EventsTab extends ConsumerWidget {
 class _EventCard extends ConsumerStatefulWidget {
   final ClubEvent event;
   final List<ClubMember> members;
+  final bool canManage;
   final VoidCallback onChanged;
   const _EventCard({
     required this.event,
     required this.members,
+    required this.canManage,
     required this.onChanged,
   });
 
@@ -2813,6 +2816,50 @@ class _EventCardState extends ConsumerState<_EventCard> {
     if (blocked) widget.onChanged();
   }
 
+  Future<void> _manageEvent({required bool delete}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(delete ? '일정을 삭제할까요?' : '일정을 조기 종료할까요?'),
+        content: Text(
+          delete
+              ? '삭제한 일정은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
+              : '종료한 일정은 목록에서 내려가고 예정 알림도 발송되지 않습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(delete ? '삭제' : '종료'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final api = ref.read(apiProvider);
+      if (delete) {
+        await api.deleteClubEvent(widget.event.clubId, widget.event.id);
+      } else {
+        await api.endClubEvent(widget.event.clubId, widget.event.id);
+      }
+      widget.onChanged();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(delete ? '일정 삭제에 실패했습니다.' : '일정 종료에 실패했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2862,16 +2909,40 @@ class _EventCardState extends ConsumerState<_EventCard> {
                     ],
                   ),
                 ),
-                if (canModerateAuthor)
+                if (widget.canManage || canModerateAuthor)
                   PopupMenuButton<String>(
                     tooltip: '모임 더보기',
                     onSelected: (value) {
+                      if (value == 'end') {
+                        unawaited(_manageEvent(delete: false));
+                      }
+                      if (value == 'delete') {
+                        unawaited(_manageEvent(delete: true));
+                      }
                       if (value == 'report') unawaited(_reportEvent());
                       if (value == 'block') unawaited(_blockEventAuthor());
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'report', child: Text('모임 신고')),
-                      PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+                    itemBuilder: (_) => [
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'end',
+                          child: Text('모임 조기 종료'),
+                        ),
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('모임 삭제'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('모임 신고'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('작성자 차단'),
+                        ),
                     ],
                   ),
               ],
