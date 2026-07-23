@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/providers.dart';
 import '../services/local_user_preferences.dart';
+import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
@@ -281,6 +282,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
 
     if (result == null) return;
+    try {
+      await syncNotificationSoundPreference(
+        ref.read(apiProvider),
+        enabled: result.sound,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('알림음 설정을 저장하지 못했어요. 다시 시도해주세요.')),
+      );
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
     await prefs.setBool(_notifyClubPrefsKey, result.club);
