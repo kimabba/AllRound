@@ -17,6 +17,7 @@ import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
+import '../../utils/google_calendar.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
@@ -2864,6 +2865,24 @@ class _EventCardState extends ConsumerState<_EventCard> {
     }
   }
 
+  Future<void> _addToGoogleCalendar() async {
+    final event = widget.event;
+    final opened = await launchUrl(
+      buildGoogleCalendarUrl(
+        title: event.title,
+        startsAt: event.startsAt,
+        description: event.description,
+        location: event.locationText,
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google 캘린더를 열지 못했습니다.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2983,6 +3002,15 @@ class _EventCardState extends ConsumerState<_EventCard> {
               const SizedBox(height: AppSpacing.sm),
               Text(e.description!, style: tt.bodyMedium),
             ],
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _addToGoogleCalendar,
+                icon: const Icon(Icons.add_to_photos_outlined, size: 18),
+                label: const Text('Google 캘린더에 추가'),
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
