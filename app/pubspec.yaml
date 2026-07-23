@@ -14,7 +14,6 @@ dependencies:
 
   # 인증·DB
   supabase_flutter: ^2.8.0
-  google_sign_in: ^6.2.1
 
   # 상태 관리
   flutter_riverpod: ^2.6.1
