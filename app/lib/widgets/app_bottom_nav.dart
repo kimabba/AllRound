@@ -30,7 +30,7 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['오늘', '대회', '클럽', 'MY'];
+    const labels = ['오늘', '대회', '모임', 'MY'];
     const keys = [
       AllRoundE2EKeys.navToday,
       AllRoundE2EKeys.navTournaments,

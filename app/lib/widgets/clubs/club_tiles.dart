@@ -357,7 +357,7 @@ class SimpleClubTile extends StatelessWidget {
           ),
         ),
         child: Text(
-          '관심 있는 클럽을 찾아 가입해보세요.',
+          '관심 있는 모임을 찾아 가입해보세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
       );
@@ -424,19 +424,25 @@ class SimpleClubTile extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          '${sportLabelFromString(item.sport)} / ${item.region ?? '지역 미정'}',
+                          item.region ?? '지역 미정',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '·',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
                         Text(
                           clubMemberCountLabel(item.memberCount),
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w800,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ],
