@@ -85,6 +85,7 @@ export async function reviewJoin(
         role: 'member',
         status: 'active',
         joined_at: new Date().toISOString(),
+        left_at: null,
       }, { onConflict: 'club_id,user_id' });
     if (memberErr) return { ok: false, status: 500, message: memberErr.message };
   }

@@ -62,9 +62,8 @@ Deno.serve(async (req) => {
     if (userIds.length > 0) {
       const { data: rawProfiles, error: profilesError } = await supa
         .from('users')
-        // 운영진 승인 판단에 필요한 표시 이름만. avatar/지역 등은 UI 미사용이라
-        // service_role 로 조회해 내려주지 않는다(최소 노출).
-        .select('id, nickname, name')
+        // 승인 판단에 필요한 표시 이름과 사용자가 공개 프로필로 등록한 사진만 반환한다.
+        .select('id, nickname, name, avatar_url')
         .in('id', userIds);
       if (profilesError) return errorResponse('JOIN_REQUEST_PROFILE_FAILED', 500);
       if (Array.isArray(rawProfiles)) {
@@ -85,6 +84,7 @@ Deno.serve(async (req) => {
           applicant: profile === null ? null : {
             display_name: stringField(profile.nickname) ??
               stringField(profile.name),
+            avatar_url: stringField(profile.avatar_url),
           },
         };
       }),

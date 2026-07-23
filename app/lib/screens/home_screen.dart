@@ -11,6 +11,7 @@ import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
+import '../widgets/notification_inbox_action.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -56,7 +57,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final tournaments = ref.watch(homeTournamentsProvider);
     final recruiting = ref.watch(homeRecruitingProvider);
-    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -70,15 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
         ),
         actions: [
-          Badge(
-            isLabelVisible: unread > 0,
-            label: Text(unread > 99 ? '99+' : '$unread'),
-            child: IconButton(
-              tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
-              onPressed: () => context.push('/notifications'),
-              icon: const Icon(Icons.notifications_none_rounded),
-            ),
-          ),
+          const NotificationInboxAction(),
           const SizedBox(width: 8),
         ],
       ),
@@ -201,8 +193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                     ),
-              orElse: () =>
-                  const SliverToBoxAdapter(child: SizedBox.shrink()),
+              orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(

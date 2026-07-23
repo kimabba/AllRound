@@ -400,8 +400,7 @@ class SimpleClubTile extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: cs.secondaryContainer,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.sm),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
                             child: Text(
                               '승인 대기중',
@@ -538,7 +537,8 @@ class _ClubAvatarImage extends StatelessWidget {
 
     return Image.network(
       url,
-      fit: BoxFit.cover,
+      // 로고 전체가 정사각형 프레임 안에 보여야 하므로 가장자리를 자르지 않는다.
+      fit: BoxFit.contain,
       errorBuilder: (_, __, ___) => fallback,
     );
   }

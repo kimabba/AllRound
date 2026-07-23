@@ -16,6 +16,7 @@ import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
+import '../widgets/notification_inbox_action.dart';
 import 'clubs/club_create_screen.dart';
 import 'clubs/club_detail_screen.dart';
 
@@ -413,6 +414,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         surfaceTintColor: Colors.transparent,
         title: const Text('클럽'),
         actions: [
+          const NotificationInboxAction(),
           TextButton.icon(
             onPressed: _openCreate,
             icon: const Icon(Icons.add_rounded, size: 18),

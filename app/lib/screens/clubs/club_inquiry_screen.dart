@@ -31,6 +31,7 @@ class _ClubInquiryConversationScreenState
   String? _threadId;
   String? _clubName;
   List<ClubInquiryMessage> _messages = const [];
+  ClubInquiryThread? _requesterThread;
   bool _loading = true;
   bool _sending = false;
   String? _error;
@@ -54,14 +55,26 @@ class _ClubInquiryConversationScreenState
     if (mounted) setState(() => _loading = true);
     try {
       final api = ref.read(apiProvider);
-      _clubName ??= (await api.getClub(widget.clubId)).name;
+      final club = await api.getClub(widget.clubId);
+      _clubName ??= club.name;
       _threadId ??= (await api.myClubInquiry(widget.clubId))?.id;
+      ClubInquiryThread? requesterThread;
+      if (_threadId != null && club.isManager) {
+        final threads = await api.managedClubInquiries(widget.clubId);
+        for (final thread in threads) {
+          if (thread.id == _threadId) {
+            requesterThread = thread;
+            break;
+          }
+        }
+      }
       final messages = _threadId == null
           ? const <ClubInquiryMessage>[]
           : await api.clubInquiryMessages(_threadId!);
       if (!mounted) return;
       setState(() {
         _messages = messages;
+        _requesterThread = requesterThread;
         _error = null;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -117,6 +130,13 @@ class _ClubInquiryConversationScreenState
       appBar: AppBar(
         title: Text(_clubName == null ? '1:1 문의' : '${_clubName!} 문의'),
         actions: [
+          if (_requesterThread != null)
+            IconButton(
+              tooltip: '문의자 프로필 보기',
+              onPressed: () =>
+                  _showRequesterProfile(context, _requesterThread!),
+              icon: const Icon(Icons.account_circle_outlined),
+            ),
           IconButton(
             tooltip: '새로고침',
             onPressed: _loading ? null : _load,
