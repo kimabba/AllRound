@@ -68,7 +68,7 @@ GEMINI_API_KEY, GEMINI_MODEL=gemini-2.0-flash
 SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (platform 주입)
 SUPABASE_PUBLISHABLE_KEYS, SUPABASE_SECRET_KEYS (새 API key JSON dictionary)
 INTERNAL_CRON_JWT (pg_cron 전용 랜덤 secret)
-FCM_SERVER_KEY (push 발송)
+FIREBASE_SERVICE_ACCOUNT_JSON (FCM HTTP v1 푸시 발송)
 ```
 
 ### Flutter (`--dart-define-from-file=.env.local`)
