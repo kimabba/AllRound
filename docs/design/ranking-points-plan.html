@@ -1,0 +1,275 @@
+<title>협회 랭킹 포인트 — 구현 계획서</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1d21; --muted: #5c6470; --line: #e3e6ea;
+    --card: #f6f7f9; --accent: #0f6b4f; --warn-bg: #fdf3e7; --warn-line: #e8b06b;
+    --bad-bg: #fdecec; --bad-line: #e08585; --good-bg: #eaf6f0; --good-line: #7fc4a5;
+    --code-bg: #eef0f3; --chip-fg: #fff;
+    --done: #2e9e6b; --active: #d99a2b; --wait: #8a919b; --gate: #c2612e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181c; --fg: #e6e8ea; --muted: #9aa3ad; --line: #333a42;
+      --card: #1e2329; --accent: #4fc79a; --warn-bg: #2e2417; --warn-line: #8a6a35;
+      --bad-bg: #2e1c1c; --bad-line: #8a4545; --good-bg: #17281f; --good-line: #3d7a5c;
+      --code-bg: #262c33;
+      --done: #4fc79a; --active: #e0b25a; --wait: #7a828c; --gate: #d98a5a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --fg: #e6e8ea; --muted: #9aa3ad; --line: #333a42;
+    --card: #1e2329; --accent: #4fc79a; --warn-bg: #2e2417; --warn-line: #8a6a35;
+    --bad-bg: #2e1c1c; --bad-line: #8a4545; --good-bg: #17281f; --good-line: #3d7a5c;
+    --code-bg: #262c33;
+    --done: #4fc79a; --active: #e0b25a; --wait: #7a828c; --gate: #d98a5a;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --fg: #1a1d21; --muted: #5c6470; --line: #e3e6ea;
+    --card: #f6f7f9; --accent: #0f6b4f; --warn-bg: #fdf3e7; --warn-line: #e8b06b;
+    --bad-bg: #fdecec; --bad-line: #e08585; --good-bg: #eaf6f0; --good-line: #7fc4a5;
+    --code-bg: #eef0f3;
+    --done: #2e9e6b; --active: #d99a2b; --wait: #8a919b; --gate: #c2612e;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: "Pretendard", "Apple SD Gothic Neo", system-ui, sans-serif;
+         line-height: 1.65; max-width: 900px; margin: 0 auto; padding: 32px 20px 100px; }
+  h1 { font-size: 1.65rem; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+  h2 { font-size: 1.3rem; margin-top: 2.4em; padding-left: 10px; border-left: 4px solid var(--accent); }
+  h3 { font-size: 1.05rem; margin-top: 1.6em; }
+  .meta { color: var(--muted); font-size: 0.85rem; }
+  a { color: var(--accent); }
+  .verdict { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 16px 20px; margin: 20px 0; font-size: 1.02rem; }
+  .verdict strong { color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+  .bad  { background: var(--bad-bg);  border: 1px solid var(--bad-line);  border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+  .good { background: var(--good-bg); border: 1px solid var(--good-line); border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+  .scroll { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; min-width: 600px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--card); }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  pre.mermaid { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; font-size: 0.82rem; }
+  .analogy { color: var(--muted); font-size: 0.9rem; display: block; margin-top: 4px; }
+  .analogy::before { content: "비유 — "; font-weight: 600; }
+  /* phase header */
+  .phase { border: 1px solid var(--line); border-radius: 12px; margin: 18px 0; overflow: hidden; }
+  .phase > .head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--card); font-weight: 700; }
+  .phase > .body { padding: 6px 18px 14px; }
+  .badge { font-size: 0.7rem; font-weight: 800; letter-spacing: .02em; padding: 2px 9px; border-radius: 20px; color: var(--chip-fg); white-space: nowrap; }
+  .b-done { background: var(--done); } .b-active { background: var(--active); }
+  .b-wait { background: var(--wait); } .b-gate { background: var(--gate); }
+  /* checklist */
+  ul.check { list-style: none; padding-left: 0; }
+  ul.check li { margin: 7px 0; padding-left: 4px; }
+  ul.check label { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; }
+  ul.check input { margin-top: 4px; width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; }
+  ul.check input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--wait); }
+  .crit { color: var(--muted); font-size: 0.86rem; }
+  .crit::before { content: "완료 기준 — "; font-weight: 600; color: var(--accent); }
+  .toolbar { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; font-size: 0.82rem; z-index: 5; }
+  .toolbar button { font: inherit; font-size: 0.8rem; padding: 4px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); cursor: pointer; }
+  .prog { color: var(--muted); }
+  ul, ol { padding-left: 1.3em; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--accent); color: var(--accent); margin-right: 6px; }
+</style>
+
+<h1>협회 랭킹 포인트 시스템 — 구현 계획서</h1>
+<p class="meta">작성 2026-07-24 · 상태: <b>계획(0단계만 구현 완료)</b> · 담당 레인: 드론<br>
+근거 문서 — 설계 검토: <a href="./ranking-points-design-review.html">ranking-points-design-review.html</a> ·
+규정 원문: <a href="../research/tennis-ranking-point-rules.md">tennis-ranking-point-rules.md</a> ·
+등급 체계: <a href="../research/tennis-grade-systems.md">tennis-grade-systems.md</a></p>
+
+<div class="toolbar">
+  <span class="prog" id="prog">진행률 계산 중…</span>
+  <button onclick="resetChecks()">체크 초기화</button>
+  <span class="meta">체크 상태는 이 브라우저에만 저장됩니다(공유 안 됨).</span>
+</div>
+
+<div class="verdict">
+  <strong>한 줄 요약: 데이터가 없어서 지금은 랭킹을 못 만든다. 광주협회 배점 규정은 원문으로 다 확보됐으니, 남은 병목은 "검증된 경기 결과"를 어디서 받느냐 — 광주협회 제휴다.</strong><br>
+  0단계(자기신고 점수 잠금)는 <b>구현·검증 완료</b>. 1단계부터는 <b>협회 제휴</b>가 선행 조건이라 코드보다 협의(BD)가 먼저다.
+  이 문서는 그 전체를 하나로 묶어 나중에 항목별로 대조·체크하기 위한 것이다.
+</div>
+
+<h2>1. 지금까지 확정된 것 (검토·리서치 결과)</h2>
+<div class="scroll"><table>
+  <tr><th>질문</th><th>결론</th><th>상태</th></tr>
+  <tr><td>랭킹을 지금 만들 수 있나</td><td><b>아니오.</b> 검증된 경기 결과 데이터가 0. 자기신고는 조작 가능</td><td>확정</td></tr>
+  <tr><td>데이터 소스</td><td><b>광주협회 공식 제휴.</b> 결과 크롤링은 이름↔계정 매칭 불가+개인정보 리스크로 제외</td><td>확정</td></tr>
+  <tr><td>배점 규정 확보</td><td>광주(2026-03-17)·KTA·KATO·전북 <b>전문 확보</b>. 전남 2026본은 미공개라 실패</td><td>확정</td></tr>
+  <tr><td>점수 저장 방식</td><td><b>사실만 저장, 점수는 규정 적용해 파생 계산.</b> 규정이 매년 개정+오류 정정 필요하므로</td><td>확정</td></tr>
+  <tr><td>규정 정형화 범위</td><td><b>광주 1개 파일럿.</b> 4단체 동시는 전남·KTFS 미확보로 재작업 확정</td><td>확정</td></tr>
+  <tr><td>광주↔전남 통합 랭킹</td><td><b>분리.</b> 2026년부터 두 협회 랭킹대회 분리, 광주는 전남 우승 불인정</td><td>확정(리서치가 뒤집음)</td></tr>
+  <tr><td>협회 간 점수 환산</td><td><b>안 함.</b> 공식 환산표 없음. 협회별 랭킹을 각각 따로 둠</td><td>확정</td></tr>
+</table></div>
+<div class="good"><b>정형화 판단:</b> 포인트 <u>계산</u>(대회그룹 × 진출라운드 룩업)과 집계(베스트N·유효기간)는 완전 정형화 가능.
+<b>등급·부서 판정</b>은 우승횟수+연령+선수출신+유예가 얽힌 20~40개 분기 + 협회 심의·통보 전제라 <u>자동화 불가</u> → 사람/협회 개입 필수.</div>
+
+<h2>2. 데이터 모델 (2단계에서 생성 — 지금 만들지 않음)</h2>
+<p>기존 <code>tennis_orgs</code>·<code>tennis_divisions</code> 카탈로그(JY-120)를 참조축으로 재사용하고, 새 테이블은 <b>3개</b>만 추가한다.</p>
+<pre class="mermaid">
+erDiagram
+    tournaments ||--o{ tournament_results : "대회의 공식 결과"
+    tennis_orgs ||--o{ org_point_rules : "협회 규정(시즌 버전)"
+    tennis_divisions ||--o{ tournament_results : "부서"
+    users |o--o{ tournament_results : "본인 계정 연결(옵트인, NULL 허용)"
+    tournament_results }o--|| ranking_snapshots : "밤 배치가 집계"
+
+    tournament_results {
+        uuid id PK
+        uuid tournament_id FK
+        text division_code FK
+        text placement "champion|runner_up|semi|qf|r16|r32|r64|entry"
+        uuid user_id FK "옵트인 매칭, NULL 허용"
+        text player_name_masked "미매칭 시 마스킹"
+        text source "org_official|admin"
+        uuid entered_by
+        timestamptz verified_at
+    }
+    org_point_rules {
+        uuid id PK
+        text org_code "gj|jn|kta|kato|jb"
+        int season_year "2026"
+        date effective_from "부칙 시행일"
+        text source_url
+        jsonb rule_config "배점표·베스트N·유효기간·타단체인정"
+    }
+    ranking_snapshots {
+        uuid id PK
+        text org_code
+        int season_year
+        date computed_on
+        jsonb standings "파생 결과 캐시"
+    }
+</pre>
+<p class="crit" style="display:block">근거 — <code>tournament_results</code>는 "사실"(영수증), <code>org_point_rules</code>는 "규칙"(시즌 버전), <code>ranking_snapshots</code>는 밤 배치 "결산" 캐시.
+<code>rule_config</code>를 jsonb로 두는 이유: 협회마다 규정 <b>모양 자체</b>가 다르다(광주 우승/비우승 2표, KTA OPEN/SEMI/REST 3표, KATO 그룹×종목, 전북 그룹제). 공통 컬럼으로 정규화하면 협회 추가마다 스키마 변경이 된다. <code>rule_config</code>의 구체 필드 스펙은 규정 리서치 §5.2에 이미 초안이 있다.</p>
+
+<h2>3. 단계별 로드맵 (체크리스트)</h2>
+
+<div class="phase">
+  <div class="head"><span class="badge b-done">완료</span> 0단계 · 자기신고 점수 잠금 <span class="meta">(출시 블로커 아님, 데이터 0건일 때 선제 조치)</span></div>
+  <div class="body">
+    <ul class="check" data-phase="p0">
+      <li><label><input type="checkbox"><span><code>match_entries_self</code> RLS에 <code>points_earned=0 AND source='manual'</code> 강제</span></label></li>
+      <li><label><input type="checkbox"><span><code>UNIQUE(user_id, tournament_id, division)</code> 중복 등록 차단</span></label></li>
+      <li><label><input type="checkbox"><span>pgTAP 4케이스(조작·위조·정상·중복) 통과</span></label></li>
+      <li><label><input type="checkbox"><span>커밋 <code>ab755e8</code> · 브랜치 <code>fix/lock-selfreported-match-points</code></span></label></li>
+      <li><label><input type="checkbox"><span>PR 생성 → CI 통과 → codex 리뷰 GATE PASS → 머지 <span class="tag">남은 일</span></span></label></li>
+    </ul>
+    <p class="crit">위 4항 코드는 완료. 마지막 항목(머지)만 미결. 관리자·service_role 경로는 그대로라 나중에 검증 점수 넣는 길은 열려 있음.</p>
+  </div>
+</div>
+
+<div class="phase">
+  <div class="head"><span class="badge b-gate">결정·협의 대기</span> 1단계 · 제휴 협의 기간 <span class="meta">(코드보다 BD가 본체)</span></div>
+  <div class="body">
+    <ul class="check" data-phase="p1">
+      <li><label><input type="checkbox"><span>광주협회 제휴 타진 (가상계좌 BM 접점과 같은 채널)</span></label></li>
+      <li><label><input type="checkbox"><span>제휴 안건 자료 준비 — "결과 데이터 제공 → 앱 랭킹 노출" 제안서 + 협회 측 이득</span></label></li>
+      <li><label><input type="checkbox"><span>전남 2026 랭킹규정 전문 확보 (현재 홈페이지 미게시 — 협회에 직접 요청)</span></label></li>
+      <li><label><input type="checkbox"><span>광주 규정 정형화 검증 — 리서치 §5.2 <code>rule_config</code> 초안을 협회 실제값과 대조</span></label></li>
+      <li><label><input type="checkbox"><span>광주 규정 모순 해소 — 랭킹순위 "베스트25"(제13조) vs 종합시상 "베스트15"(제27조) 협회 확인</span></label></li>
+      <li><label><input type="checkbox"><span>파트너 상호확인 기능(소셜 증빙, 랭킹 아님) — <code>match_entries.partner_confirmed_at</code> 소규모 추가</span></label></li>
+    </ul>
+    <p class="crit">광주 규정 원문이 정형화 가능한 수준으로 확정되고, 협회가 "결과 데이터 제공"에 원칙 합의. 여전히 점수 계산 코드는 없음.</p>
+  </div>
+</div>
+
+<div class="phase">
+  <div class="head"><span class="badge b-wait">대기</span> 2단계 · 제휴 성사 후 · 결과 입력 인프라</div>
+  <div class="body">
+    <ul class="check" data-phase="p2">
+      <li><label><input type="checkbox"><span><code>tournament_results</code> + <code>org_point_rules</code> 테이블 생성 (RLS: admin/service_role 전용 쓰기)</span></label></li>
+      <li><label><input type="checkbox"><span><code>UNIQUE(tournament_id, division_code, placement, player_name)</code> 중복 차단</span></label></li>
+      <li><label><input type="checkbox"><span><code>tournament_results</code>는 <code>status='published'</code> 대회에만 FK 연결 (유령대회 차단)</span></label></li>
+      <li><label><input type="checkbox"><span>광주 2026 <code>rule_config</code> 시드 1건 (리서치 §5.2 스키마)</span></label></li>
+      <li><label><input type="checkbox"><span>관리자 결과 입력 화면 (협회 제공 데이터 수기/CSV 입력)</span></label></li>
+      <li><label><input type="checkbox"><span>과거 1시즌 백필</span></label></li>
+      <li><label><input type="checkbox"><span>backend-architect / security-engineer 소환 (스키마·RLS 되돌리기 어려움) + Supabase get_advisors</span></label></li>
+    </ul>
+    <p class="crit">관리자가 광주 대회 결과를 입력 → 규정 적용 계산이 광주 실제 1시즌 순위를 재현. 아직 유저 노출 없음(내부 검증).</p>
+  </div>
+</div>
+
+<div class="phase">
+  <div class="head"><span class="badge b-wait">대기</span> 3단계 · 본격 랭킹 공개</div>
+  <div class="body">
+    <ul class="check" data-phase="p3">
+      <li><label><input type="checkbox"><span>밤 배치 파생 계산(pg_cron) + <code>ranking_snapshots</code></span></label></li>
+      <li><label><input type="checkbox"><span>랭킹 화면 — 협회별 부서별 순위 (옵트인 유저 이름, 미매칭자 마스킹)</span></label></li>
+      <li><label><input type="checkbox"><span>"○○협회 제공 데이터 기반 · 참고용, 협회 공표가 우선" 표기 상시 노출</span></label></li>
+      <li><label><input type="checkbox"><span>랭킹 공개 동의를 개인정보 처리방침에 별도 항목으로 추가</span></label></li>
+      <li><label><input type="checkbox"><span>탈퇴 시 랭킹 표기 즉시 제거(보존의무 데이터와 분리)</span></label></li>
+      <li><label><input type="checkbox"><span>사후 포인트 박탈·유권해석 반영 경로 (규정상 확정 랭킹도 소급 변경 가능)</span></label></li>
+    </ul>
+    <p class="crit">광주 파일럿 랭킹이 실제 유저에게 노출되고, 개인정보·표기 정책이 다 걸려 있음. 타 협회 확장은 파일럿 성과 본 뒤.</p>
+  </div>
+</div>
+
+<h2>4. Commander 결정 대기</h2>
+<p>아래는 코드가 아니라 판단이 필요한 것. 결정되면 체크.</p>
+<ul class="check" data-phase="dec">
+  <li><label><input type="checkbox"><span><b>점수 표기 방식</b> — 권고 A: 협회별 랭킹만 각각 표시 (앱 자체 "매치업 통합점수"는 §5 오인·환산 리스크로 보류)</span></label></li>
+  <li><label><input type="checkbox"><span><b>실명 노출 범위</b> — 권고 A+C: 가입·동의자는 이름/닉네임, 미매칭 입상자는 마스킹("김○수")</span></label></li>
+  <li><label><input type="checkbox"><span><b>광주↔전남</b> — 2026 분리 확정. 랭킹은 협회별 분리. (자격매칭 <code>equiv_group</code>은 유지할지 별도 판단 — 아래 4-1)</span></label></li>
+  <li><label><input type="checkbox"><span><b>제휴 대상 순서</b> — 광주 파일럿 우선 확정. 전남은 규정 확보 후 재논의</span></label></li>
+</ul>
+
+<h3 id="q41">4-1. 미결 기술 판단 — <code>equiv_group</code></h3>
+<div class="card">
+  현재 <code>expand_division_codes('gj_m_gold')</code> → <code>{gj_m_gold, jn_m_gold}</code> 로 광주·전남 부서를 <b>동치 취급</b>한다(대회 <u>출전 자격 매칭</u>용).
+  2026 랭킹 분리와 겉으론 어긋나 보이나, <b>"이 대회에 내 부서로 나갈 수 있나"(자격)</b>와 <b>"내 등급·랭킹을 상호 인정하나"(랭킹)</b>는 다른 문제다.
+  <b>지금 판단하지 않는다</b> — 협회 질문지 4번("전남은 광주 우승을 계속 인정하는가, 비대칭인가")의 답을 받은 뒤 결정. 랭킹은 어차피 협회별 분리라 자격매칭을 지금 건드릴 이유가 없다.
+</div>
+
+<h2>5. 협회 질문지 (제휴 협의 때 사용)</h2>
+<p>규정 원문으로 못 푸는 12개 항목이 리서치 문서에 정리돼 있다 → <a href="../research/tennis-ranking-point-rules.md">tennis-ranking-point-rules.md §6</a>. 최우선 4개:</p>
+<ol>
+  <li>전남 2026 랭킹규정 전문을 받을 수 있는가 (홈페이지 미게시)</li>
+  <li>광주 "베스트25"(순위)와 "베스트15"(시상)가 정말 다른 기준인가</li>
+  <li>랭킹 데이터를 API/CSV로 제공받을 수 있는가 (현재 HTML 조회만)</li>
+  <li>시·도 협회 랭킹 포인트를 앱에 표시·재가공하는 것에 대한 협회 입장/이용 조건</li>
+</ol>
+
+<h2>6. 조심할 것 (나중에 바꾸면 아픈 지점)</h2>
+<div class="bad">
+  <ul>
+    <li><b>점수만 저장하고 사실을 버리는 것</b> — <code>points_earned</code> 누적 컬럼에 의존하면 규정 개정·오류 정정 때 재계산 불가. 원천(입상 사실) 없이 랭킹을 켜는 게 가장 비싼 실수.</li>
+    <li><b>앱 계산값을 권위 있는 값으로 제시</b> — 광주 규정에 "명시 안 된 사항은 협회 유권해석에 따르며 그 효력은 명문 규정과 동일"이 있다. 계산이 규정대로여도 협회와 달라질 수 있음 → "참고용, 협회 공표 우선" 표기 필수.</li>
+    <li><b>실패 ①</b> 자기신고 베타 랭킹 공개 → 조작 계정 1위 → 캡처 확산 → "조작 앱" 낙인. (0단계가 이걸 선제 차단)</li>
+    <li><b>실패 ②</b> 결과 게시판 크롤링으로 실명 랭킹 자동생성 → 미가입자 실명 노출 항의·신고 → 개인정보 + 협회 관계 동시 훼손.</li>
+    <li><b>실패 ③</b> 4단체 동시 모델링 → 전남·KTFS 미확보분을 추정으로 채움 → 틀린 계산 → 전면 재작업. (광주 1개로 좁힌 이유)</li>
+  </ul>
+</div>
+
+<p class="meta">이 계획서는 실행 산출물이다. 스키마 생성·RLS 변경은 각 단계에서 Commander 승인 후 별도 PR로. 체크 상태는 브라우저 로컬 저장이라 정본이 아니며, 진짜 완료 판정은 코드·PR·협회 회신으로 한다.</p>
+
+<script>
+// ponytail: 체크 상태를 localStorage 에만 저장(정본 아님). 서버·git 추적은 의도적으로 안 함 — Commander가 훑어보며 대조하는 용도.
+(function () {
+  var KEY = 'ranking-plan-checks-v1';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('ul.check input[type=checkbox]'));
+  boxes.forEach(function (b, i) { b.dataset.k = (b.closest('ul').dataset.phase || 'x') + ':' + i; });
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  boxes.forEach(function (b) { if (saved[b.dataset.k]) b.checked = true; });
+  function prog() {
+    var done = boxes.filter(function (b) { return b.checked; }).length;
+    document.getElementById('prog').textContent = '진행률 ' + done + ' / ' + boxes.length +
+      ' (' + Math.round(done / boxes.length * 100) + '%)';
+  }
+  function save() {
+    var o = {}; boxes.forEach(function (b) { if (b.checked) o[b.dataset.k] = 1; });
+    try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+    prog();
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', save); });
+  window.resetChecks = function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    prog();
+  };
+  prog();
+})();
+</script>
