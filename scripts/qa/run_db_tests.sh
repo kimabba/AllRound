@@ -32,20 +32,36 @@ echo "QA 페르소나 준비 완료"
 failed=0
 total_ok=0
 
-for f in supabase/tests/database/*.test.sql; do
+# 글롭이 하나도 안 맞으면 리터럴 문자열이 루프에 들어가 조용히 통과한다.
+shopt -s nullglob
+test_files=(supabase/tests/database/*.test.sql)
+if [ "${#test_files[@]}" -eq 0 ]; then
+  echo "테스트 파일을 찾지 못했습니다: supabase/tests/database/*.test.sql" >&2
+  exit 1
+fi
+
+for f in "${test_files[@]}"; do
   name="$(basename "$f")"
-  out="$(psql "$DB_URL" -q -f "$f" 2>&1 || true)"
+  # set -e 아래에서 psql 실패로 스크립트가 죽지 않게 rc 를 따로 잡는다.
+  set +e
+  out="$(psql "$DB_URL" -q -f "$f" 2>&1)"
+  rc=$?
+  set -e
 
   n_ok="$(printf '%s' "$out" | grep -cE '^ ok ' || true)"
   n_bad="$(printf '%s' "$out" | grep -cE '^ not ok ' || true)"
-  n_err="$(printf '%s' "$out" | grep -cE '^psql.*ERROR' || true)"
+  # 서버 오류는 "psql:file:line: ERROR:", 클라이언트 오류는 "psql: error:" 로 대소문자가
+  # 다르다. 대소문자를 구분하면 접속 끊김 같은 후자를 놓쳐 ok=0 인 파일이 통과로 위장된다.
+  n_err="$(printf '%s' "$out" | grep -ciE '^psql.*error' || true)"
   # pgTAP 은 plan 과 실제 실행 수가 다르면 "Looks like ..." 를 출력한다.
   n_plan="$(printf '%s' "$out" | grep -cE 'Looks like' || true)"
 
-  if [ "$n_bad" -gt 0 ] || [ "$n_err" -gt 0 ] || [ "$n_plan" -gt 0 ]; then
+  # assertion 이 0 개면 파일이 실제로 돌지 않은 것이다(모든 테스트 파일은 최소 3건).
+  if [ "$n_bad" -gt 0 ] || [ "$n_err" -gt 0 ] || [ "$n_plan" -gt 0 ] \
+     || [ "$rc" -ne 0 ] || [ "$n_ok" -eq 0 ]; then
     failed=$((failed + 1))
-    printf '✗ %-46s ok=%s not_ok=%s error=%s\n' "$name" "$n_ok" "$n_bad" "$n_err"
-    printf '%s\n' "$out" | grep -E '^ not ok |^psql.*ERROR|Looks like' | head -12 | sed 's/^/    /'
+    printf '✗ %-46s ok=%s not_ok=%s error=%s rc=%s\n' "$name" "$n_ok" "$n_bad" "$n_err" "$rc"
+    printf '%s\n' "$out" | grep -iE '^ not ok |^psql.*error|Looks like' | head -12 | sed 's/^/    /'
   else
     total_ok=$((total_ok + n_ok))
     printf '✓ %-46s ok=%s\n' "$name" "$n_ok"
