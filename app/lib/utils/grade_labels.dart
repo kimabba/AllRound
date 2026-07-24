@@ -23,10 +23,11 @@ const gradeLabels = <String, String>{
 /// 등급 무관. 등급 코드가 아니라 "가리지 않음"을 뜻하는 선택지 라벨이다.
 const anyGradeLabel = '무관';
 
-/// 팀 모집글 `skill_level` 에 저장 가능한 라벨(등급 라벨 ∪ 무관).
-/// free-text 컬럼이라 DB 가 막지 못하는 오염을 코드 경계에서 거른다.
-bool isAllowedSkillLevelLabel(String value) =>
-    value == anyGradeLabel || gradeLabels.containsValue(value);
+/// 팀 모집글 `skill_level` 에 저장 가능한 라벨(해당 종목의 등급 라벨 ∪ 무관).
+/// 종목을 받는 이유: 합집합으로 검사하면 풋살 모집글에 '1년 미만'(테니스 등급)이
+/// 들어가도 통과한다. free-text 컬럼이라 DB 가 막지 못하는 오염을 코드 경계에서 거른다.
+bool isAllowedSkillLevelLabel(Sport sport, String value) =>
+    value == anyGradeLabel || gradesFor(sport).map(gradeLabel).contains(value);
 
 const futsalEventCategoryLabels = <String, String>{
   'regional_federation': '지역 풋살연맹',

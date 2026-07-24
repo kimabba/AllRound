@@ -121,68 +121,131 @@ def check_pureform_literal_contracts() -> None:
     print("✓ Pureform radius and fixed-control literals use shared tokens")
 
 
-# 종목·등급의 한글 라벨은 정본 두 파일에만 있어야 한다. 화면 코드가 라벨을 직접
-# 적으면 등급 개편 때 그 줄만 남아 조용히 갈라진다(JY-146).
+# 종목·등급의 한글 라벨은 정본에만 있어야 한다. 화면 코드가 라벨을 직접 적으면 등급
+# 개편 때 그 줄만 남아 조용히 갈라진다(JY-146).
 #
 # 규칙: 문자열 리터럴 **전체**가 라벨과 같으면 위반. 리터럴 안에 라벨이 들어 있기만
-# 한 건(예: '서울 오픈 테니스' 같은 대회명, 주석 문장) 잡지 않는다. 코드값이 같은 줄에
-# 있는지는 보지 않는다 — 여러 줄에 걸친 형태(`Text('테니스')`)와 라벨만 나열한
-# 형태(`['무관', '1년 미만', …]`)가 실제 재발 경로였다.
-LABEL_SSOT_FILES = {
-    "app/lib/utils/grade_labels.dart",
-    "supabase/functions/_shared/enums.ts",
-}
-# 외부 텍스트(사용자 발화·크롤링 원문)를 한국어로 매칭해 코드값을 얻는 입력 파서.
-# 라벨을 표시하는 게 아니라 인식하는 쪽이라 정본 파생으로 대체할 수 없다.
-LABEL_SCAN_EXEMPT_FILES = {
-    "supabase/functions/_shared/intent.ts",
-}
-LABEL_SCAN_EXEMPT_DIRS = ("supabase/functions/_shared/crawler/",)
+# 한 건(대회명 '서울 오픈 테니스') 잡지 않는다. 코드값이 같은 줄에 있는지는 보지 않는다 —
+# 여러 줄에 걸친 `Text('테니스')` 와 라벨만 나열한 `['무관', '1년 미만', …]` 가 실제
+# 재발 경로였다.
+#
+# 금지 목록은 **정본을 파싱해서 만든다**. 여기에 라벨을 다시 적으면 가드 자신이 또 하나의
+# 사본이 되어, 정본이 바뀔 때 가드만 뒤처진다.
+LABEL_SSOT_DART = "app/lib/utils/grade_labels.dart"
+LABEL_SSOT_FILES = {LABEL_SSOT_DART, "supabase/functions/_shared/enums.ts"}
+# 외부 텍스트(사용자 발화)를 한국어로 매칭해 코드값을 얻는 입력 파서. 라벨을 표시하는 게
+# 아니라 인식하는 쪽이라 정본 파생으로 대체할 수 없다. 크롤러 파서는 예외로 두지 않는다 —
+# 출력용 라벨 하드코딩이 거기 들어가도 잡아야 한다.
+LABEL_SCAN_EXEMPT_FILES = {"supabase/functions/_shared/intent.ts"}
 LABEL_SCAN_ROOTS = [("app/lib", "*.dart"), ("supabase/functions", "*.ts")]
-# 정본(grade_labels.dart / enums.ts)의 라벨 값과 일치해야 한다.
-FORBIDDEN_LABELS = {
-    "테니스",
-    "풋살",
-    "1년 미만",
-    "1~3년",
-    "3~5년",
-    "5년 이상",
-    "입문",
-    "초급",
-    "중급",
-    "고급",
-    "선출",
-    # '무관'(anyGradeLabel)은 성별·나이대 선택지에도 쓰이는 범용어라 제외한다.
-    # 등급 목록을 직접 나열하면 나머지 라벨에서 걸린다.
-}
-STRING_LITERAL = re.compile(r"'([^'\\\n]*)'|\"([^\"\\\n]*)\"")
+# 마이그 010 에서 폐기된 옛 테니스 부수체계. 정본에 없으니 파생할 수 없지만, 실제로
+# 2026-07 까지 팀모집 UI 에 살아 있었다. 되돌아오면 막는다.
+RETIRED_LABELS = {"신입", "5부", "4부", "3부", "2부", "1부"}
+# '무관'(anyGradeLabel)은 성별·나이대 선택지에도 쓰이는 범용어라 제외한다. 등급 목록을
+# 통째로 나열하면 나머지 라벨에서 걸린다.
+LABEL_SCAN_IGNORED = {"무관"}
+
+
+def string_literals(line: str) -> list[str]:
+    """한 줄에서 문자열 리터럴(작은/큰따옴표·백틱)을 뽑는다.
+
+    줄 주석(`//`) 이후는 코드가 아니므로 무시하고, 따옴표 **안**의 `//`(URL 등)는
+    주석으로 오인하지 않는다. 닫히지 않은 따옴표(여러 줄 문자열)를 만나면 그 줄은 포기한다.
+    """
+    literals: list[str] = []
+    index, length = 0, len(line)
+    while index < length:
+        char = line[index]
+        if char == "/" and index + 1 < length and line[index + 1] == "/":
+            break
+        if char in "'\"`":
+            cursor = index + 1
+            buffer: list[str] = []
+            while cursor < length and line[cursor] != char:
+                if line[cursor] == "\\":
+                    cursor += 2
+                    continue
+                buffer.append(line[cursor])
+                cursor += 1
+            if cursor >= length:
+                break
+            literals.append("".join(buffer))
+            index = cursor + 1
+            continue
+        index += 1
+    return literals
+
+
+def forbidden_labels() -> set[str]:
+    """정본(grade_labels.dart)의 등급·종목 라벨 + 폐기 라벨."""
+    text = read(LABEL_SSOT_DART)
+    labels: set[str] = set()
+    grade_block = re.search(r"const gradeLabels\s*=\s*<String, String>\{(.*?)\};", text, re.S)
+    sport_block = re.search(r"const sportLabels\s*=\s*<Sport, String>\{(.*?)\};", text, re.S)
+    if not grade_block or not sport_block:
+        fail(f"{LABEL_SSOT_DART}: gradeLabels/sportLabels 선언을 찾지 못했다 (가드가 무력해진다)")
+    labels |= {m.group(2) for m in re.finditer(r"'([^']+)'\s*:\s*'([^']+)'", grade_block.group(1))}
+    labels |= {
+        m.group(2) for m in re.finditer(r"Sport\.(\w+)\s*:\s*'([^']+)'", sport_block.group(1))
+    }
+    if not labels:
+        fail(f"{LABEL_SSOT_DART}: 라벨을 한 건도 추출하지 못했다 (가드가 무력해진다)")
+    return (labels | RETIRED_LABELS) - LABEL_SCAN_IGNORED
+
+
+def label_violations_in_line(line: str, labels: set[str]) -> list[str]:
+    return [literal for literal in string_literals(line) if literal in labels]
+
+
+# 가드가 잡아야 하는 형태 / 통과시켜야 하는 형태. 규칙을 바꾸면 여기서 먼저 깨진다.
+GUARD_MUST_BLOCK = [
+    "label: Text('테니스'),",
+    "static const _g = ['무관', '1년 미만', '1~3년'];",
+    'const z = sport == "tennis" ? "테니스" : "풋살";',
+    "  return '테니스';",
+    "const heading = `풋살`;",
+    "static const _tennisGrades = ['무관', '신입', '5부', '4부', '3부', '2부', '1부'];",
+]
+GUARD_MUST_ALLOW = [
+    "const t = '서울 오픈 테니스';",
+    "// label: Text('테니스') 였던 자리",
+    "const u = {'url': 'https://x.test/a', 'name': '광주 오픈'};",
+    "if (/(테니스|tennis)/i.test(text)) return 'tennis';",
+    "const sports = ['tennis', 'futsal'];",
+]
 
 
 def check_sport_grade_label_hardcode() -> None:
+    labels = forbidden_labels()
+
+    for sample in GUARD_MUST_BLOCK:
+        if not label_violations_in_line(sample, labels):
+            fail(f"라벨 가드 자가검증 실패 — 잡아야 할 형태를 놓쳤다: {sample}")
+    for sample in GUARD_MUST_ALLOW:
+        found = label_violations_in_line(sample, labels)
+        if found:
+            fail(f"라벨 가드 자가검증 실패 — 정상 코드를 막았다({found}): {sample}")
+
     violations: list[str] = []
     for relative_root, pattern in LABEL_SCAN_ROOTS:
         for path in (ROOT / relative_root).rglob(pattern):
             relative = path.relative_to(ROOT).as_posix()
             if relative in LABEL_SSOT_FILES or relative in LABEL_SCAN_EXEMPT_FILES:
                 continue
-            if relative.startswith(LABEL_SCAN_EXEMPT_DIRS):
-                continue
             if path.name.endswith(("_test.dart", "_test.ts")) or "/tests/" in relative:
                 continue
             for line_number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), start=1
             ):
-                for match in STRING_LITERAL.finditer(line):
-                    literal = match.group(1) if match.group(1) is not None else match.group(2)
-                    if literal in FORBIDDEN_LABELS:
-                        violations.append(f"{relative}:{line_number}: '{literal}' — {line.strip()}")
+                for literal in label_violations_in_line(line, labels):
+                    violations.append(f"{relative}:{line_number}: '{literal}' — {line.strip()}")
     if violations:
         fail(
             "라벨 재하드코딩(JY-146): 종목·등급 라벨을 코드에 직접 적었다.\n"
             "Dart 는 sportLabel*/gradeLabel/anyGradeLabel, TS 는 SPORT_LABELS/GRADE_LABELS 를 쓴다.\n"
             + "\n".join(violations)
         )
-    print("✓ 종목·등급 라벨이 정본 파일에서만 정의된다")
+    print(f"✓ 종목·등급 라벨이 정본 파일에서만 정의된다 (금지 라벨 {len(labels)}개, 자가검증 통과)")
 
 
 def main() -> int:

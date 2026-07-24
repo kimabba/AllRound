@@ -821,6 +821,7 @@ class _TeamRecruitingDraftSheetState
     try {
       await ref.read(apiProvider).createTeamRecruitingPost(
             clubId: _selectedClub.id,
+            sport: sportFromString(_selectedClub.sport),
             title: title,
             place: place,
             schedule: '$date $time',
