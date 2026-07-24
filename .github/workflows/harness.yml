@@ -16,6 +16,7 @@ jobs:
           python-version: '3.12'
       - run: python3 scripts/harness/check_enums.py
       - run: python3 scripts/harness/check_static_rules.py
+      - run: python3 scripts/qa/verify_ranking_rules.py
       - run: bash scripts/harness/check_secrets.sh
 
   flutter:

@@ -9,13 +9,16 @@ cd "$ROOT"
 printf '\n'; echo "[1/5] enum consistency"
 python3 scripts/harness/check_enums.py
 
-printf '\n'; echo "[2/5] static repository rules"
+printf '\n'; echo "[2/6] static repository rules"
 python3 scripts/harness/check_static_rules.py
 
-printf '\n'; echo "[3/5] secret scan"
+printf '\n'; echo "[3/6] ranking-rules data (배점표 드리프트)"
+python3 scripts/qa/verify_ranking_rules.py
+
+printf '\n'; echo "[4/6] secret scan"
 bash scripts/harness/check_secrets.sh
 
-printf '\n'; echo "[4/5] Flutter analyze/test"
+printf '\n'; echo "[5/6] Flutter analyze/test"
 if ! command -v flutter >/dev/null 2>&1; then
   echo "flutter not found" >&2
   exit 1
@@ -27,7 +30,7 @@ fi
   flutter test
 )
 
-printf '\n'; echo "[5/5] Deno Edge Function checks"
+printf '\n'; echo "[6/6] Deno Edge Function checks"
 if ! command -v deno >/dev/null 2>&1; then
   echo "deno not found" >&2
   exit 1
