@@ -243,12 +243,14 @@ mixin ClubApi on ApiBase {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
-    // skill_level 은 free-text 라 DB 가 값을 막지 못한다. 등급 정본에서 파생된
-    // 선택지 밖의 값(폐기된 부수체계 등)이 새로 유입되면 여기서 잡는다(JY-146).
-    assert(
-      isAllowedSkillLevelLabel(skillLevel),
-      '등급 정본에 없는 skill_level: $skillLevel',
-    );
+    // skill_level 은 free-text 라 DB 가 길이만 검사한다. 등급 정본에서 파생된
+    // 선택지 밖의 값(폐기된 부수체계 등)이 새로 유입되면 여기서 막는다(JY-146).
+    // assert 가 아니라 예외인 이유: assert 는 릴리스 빌드에서 제거돼 정작 운영에서
+    // 무력해지고, 디버그와 릴리스의 동작이 갈린다. 이 앱을 거치지 않는 경로(PostgREST
+    // 직접 호출)는 여전히 열려 있다 — 근본 차단은 P3 의 데이터 정규화 후 DB 제약.
+    if (!isAllowedSkillLevelLabel(skillLevel)) {
+      throw ArgumentError.value(skillLevel, 'skillLevel', '등급 정본에 없는 값');
+    }
 
     final Object raw = await supabase
         .from('club_recruiting_posts')

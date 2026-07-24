@@ -4,6 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
 
 void main() {
+  group('skill_level 허용집합', () {
+    test('등급 라벨과 무관은 통과한다', () {
+      for (final grade in [...tennisGrades, ...futsalGrades]) {
+        expect(isAllowedSkillLevelLabel(gradeLabel(grade)), isTrue,
+            reason: '$grade 라벨이 거부됐다');
+      }
+      expect(isAllowedSkillLevelLabel(anyGradeLabel), isTrue);
+    });
+
+    test('폐기된 부수체계와 등급 코드 자체는 거부한다', () {
+      // 마이그 010 에서 폐기된 옛 라벨이 다시 유입되는 걸 막는다(JY-146).
+      for (final stale in ['신입', '5부', '1부']) {
+        expect(isAllowedSkillLevelLabel(stale), isFalse, reason: '$stale 이 통과됐다');
+      }
+      // 라벨 자리에 코드가 들어오는 실수도 거른다.
+      expect(isAllowedSkillLevelLabel('under1y'), isFalse);
+      expect(isAllowedSkillLevelLabel(''), isFalse);
+    });
+  });
+
   group('grade_labels', () {
     test('tennis grade order: under1y → over5y', () {
       expect(tennisGrades, ['under1y', 'y1to3', 'y3to5', 'over5y']);
