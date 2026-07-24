@@ -22,10 +22,12 @@ if ! psql "$DB_URL" -tAc 'select 1' >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "== DB 테스트 부트스트랩 =="
-psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f supabase/qa/platform_grants.sql
+# 권한 baseline 은 더 이상 여기서 보충하지 않는다.
+# 20260724060000_codify_api_role_grants.sql 이 마이그레이션 체인 안에서 부여하므로,
+# 이 러너가 통과한다는 것 자체가 "마이그레이션만으로 동작하는 DB 가 재현된다"는 증명이다.
+echo "== DB 테스트 부트스트랩 (QA 페르소나) =="
 psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f supabase/qa/personas.sql
-echo "권한 baseline · QA 페르소나 준비 완료"
+echo "QA 페르소나 준비 완료"
 
 failed=0
 total_ok=0

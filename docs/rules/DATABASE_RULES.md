@@ -8,6 +8,18 @@ Load this when touching `supabase/migrations/`, SQL functions, RLS, RPC, pg_cron
 - Prefer `text` over `varchar` unless there is a specific constraint reason.
 - Reusable enums should use `create type`.
 - New tables must enable RLS and include policies in the same migration.
+- **New tables and functions must declare their grants in the same migration.**
+  Do not rely on the platform's default privileges — they differ between production
+  and freshly created databases, so a migration that omits grants produces a database
+  where the app cannot read or write. Supabase is removing the automatic grant for
+  existing projects on 2026-10-30, after which production behaves like a fresh database.
+  - Tables: `grant select, insert, update, delete on <table> to anon, authenticated, service_role;`
+    then narrow it if the table should be server-write-only (see `club_inquiry_*`).
+  - Functions: trigger/internal functions revoked from `public` also lose `service_role`,
+    so grant it explicitly: `grant execute on function <fn> to service_role;`
+  - Guard: `supabase/tests/database/011_api_role_grants.test.sql` fails when a grant is missing.
+  - Baseline for existing objects: `20260724060000_codify_api_role_grants.sql`.
+    Compare two databases with `scripts/db/grant_fingerprint.sql`.
 - Add indexes for expected search/filter paths.
 
 ## RLS and authorization
