@@ -3,7 +3,7 @@
 
 import { requireUser } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { hashCode, hashPhone, normalizeE164Kr } from '../_shared/phone.ts';
+import { hashCode, hashPhone, normalizeE164Kr, stringFieldOf } from '../_shared/phone.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 const MAX_ATTEMPTS = 5;
@@ -20,9 +20,9 @@ Deno.serve(async (req) => {
   let raw = '';
   let code = '';
   try {
-    const body = await req.json();
-    raw = typeof body?.phone === 'string' ? body.phone : '';
-    code = typeof body?.code === 'string' ? body.code : '';
+    const body: unknown = await req.json();
+    raw = stringFieldOf(body, 'phone');
+    code = stringFieldOf(body, 'code');
   } catch {
     return errorResponse('Invalid JSON body', 400);
   }
@@ -55,7 +55,12 @@ Deno.serve(async (req) => {
     return errorResponse('Verification temporarily unavailable', 503);
   }
 
-  const result = data as { status: string; remaining?: number };
+  // RPC 결과를 단언하지 않고 검증한다. 형태가 다르면 성공으로 처리하지 않는다.
+  const row = data as Record<string, unknown> | null;
+  const result = {
+    status: typeof row?.status === 'string' ? row.status : 'UNKNOWN',
+    remaining: typeof row?.remaining === 'number' ? row.remaining : undefined,
+  };
   switch (result.status) {
     case 'OK':
       return jsonResponse({ ok: true });

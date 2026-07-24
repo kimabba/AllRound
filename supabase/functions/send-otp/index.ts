@@ -8,6 +8,7 @@ import {
   hashCode,
   hashPhone,
   normalizeE164Kr,
+  stringFieldOf,
   toDomesticKr,
 } from '../_shared/phone.ts';
 import { sendSms, sensConfigFromEnv } from '../_shared/sens.ts';
@@ -30,8 +31,8 @@ Deno.serve(async (req) => {
 
   let raw = '';
   try {
-    const body = await req.json();
-    raw = typeof body?.phone === 'string' ? body.phone : '';
+    const body: unknown = await req.json();
+    raw = stringFieldOf(body, 'phone');
   } catch {
     return errorResponse('Invalid JSON body', 400);
   }
@@ -70,12 +71,13 @@ Deno.serve(async (req) => {
     return errorResponse('Verification temporarily unavailable', 503);
   }
 
-  const result = data as { allowed: boolean; reason: string; retry_after?: number };
-  if (!result.allowed) {
-    const res = errorResponse('요청이 제한되었습니다. 잠시 후 다시 시도하세요.', 429, {
-      reason: result.reason,
-    });
-    if (result.retry_after) res.headers.set('Retry-After', String(result.retry_after));
+  // RPC 결과를 단언하지 않고 검증한다. 형태가 다르면 발송하지 않는다(fail-closed).
+  const result = data as Record<string, unknown> | null;
+  if (!result || result.allowed !== true) {
+    const reason = typeof result?.reason === 'string' ? result.reason : 'DENIED';
+    const retryAfter = typeof result?.retry_after === 'number' ? result.retry_after : null;
+    const res = errorResponse('요청이 제한되었습니다. 잠시 후 다시 시도하세요.', 429, { reason });
+    if (retryAfter) res.headers.set('Retry-After', String(retryAfter));
     return res;
   }
 

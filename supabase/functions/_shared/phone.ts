@@ -43,6 +43,13 @@ export const hashPhone = (e164: string, pepper: string): Promise<string> =>
 export const hashCode = (code: string, pepper: string): Promise<string> =>
   hmacHex(pepper, `code:${code}`);
 
+/** JSON body 에서 문자열 필드를 안전하게 꺼낸다(암묵적 any 유입 차단). */
+export function stringFieldOf(body: unknown, key: string): string {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return '';
+  const value = (body as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
+}
+
 /** 암호학적 난수 6자리 OTP. */
 export function generateOtp(): string {
   // ponytail: 2^32 % 10^6 로 인한 modulo bias 는 6자리 OTP 엔 무의미(공격 방어선은 attempts 잠금).

@@ -285,6 +285,20 @@ revoke execute on function public.verify_phone_otp(uuid, text, text, int, int)
   from public, anon, authenticated;
 grant execute on function public.verify_phone_otp(uuid, text, text, int, int) to service_role;
 
+-- ── RLS 의도 명시 ──────────────────────────────────────────────────
+-- 아래 4개 테이블은 "정책 0개 = 전면 거부"가 의도된 설계다. 인증 챌린지와
+-- rate-limit 카운터는 사용자·anon 이 읽거나 쓸 이유가 전혀 없고, 접근은 오직
+-- SECURITY DEFINER RPC(request/verify_phone_otp)와 service_role 을 통해서만 이뤄진다.
+-- 허용 정책을 추가하면 OTP 챌린지·발송 한도가 클라이언트에 노출된다.
+comment on table public.phone_otp is
+  'OTP 챌린지 + 번호별 rate limit. RLS 정책 없음(전면 거부) — RPC/service_role 전용.';
+comment on table public.phone_otp_daily is
+  '글로벌 일일 발송 상한 카운터. RLS 정책 없음(전면 거부) — RPC/service_role 전용.';
+comment on table public.phone_otp_user_daily is
+  '계정별 일일 발송 상한 카운터. RLS 정책 없음(전면 거부) — RPC/service_role 전용.';
+comment on table public.phone_verification_log is
+  '전화번호 해시 인증·탈퇴 이력(어뷰징 추적). RLS 정책 없음(전면 거부) — service_role 전용.';
+
 -- ── cleanup: 기존 pg_cron 재사용 (하루 1회 만료 OTP·오래된 일일카운터 정리) ─
 select cron.schedule('phone-otp-cleanup', '17 4 * * *', $$
   delete from public.phone_otp where expires_at < now() - interval '1 day';

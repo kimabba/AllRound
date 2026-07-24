@@ -1,5 +1,5 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { requireUser } from '../_shared/auth.ts';
+import { requireEligibleMember } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { embedText, toVectorLiteral } from '../_shared/embedding.ts';
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
 
-  const auth = await requireUser(req);
+  const auth = await requireEligibleMember(req);
   if ('error' in auth) return auth.error;
   const { supabase, user } = auth;
 

@@ -97,6 +97,9 @@ begin
     'club_events',
     'club_event_attendees',
     'club_recruiting_posts',
+    -- 신청자는 직접 UPDATE 권한이 없고(정책상 admin·매니저만) 취소는 Edge 경유라,
+    -- 게이트를 걸어도 이탈 경로가 막히지 않는다. 미인증 매니저의 직접 조작만 차단된다.
+    'club_join_requests',
     'chat_messages',
     'schedule_shares',
     'match_entries',

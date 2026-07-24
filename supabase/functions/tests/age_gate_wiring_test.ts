@@ -23,6 +23,7 @@ Deno.test('participation and cost endpoints require server-side eligibility', as
       '../chat/index.ts',
       '../clubs-create/index.ts',
       '../tournaments-submit/index.ts',
+      '../semantic-search/index.ts', // Gemini 비용 발생 → 자격 필요
     ]
   ) {
     const endpoint = await source(path);
