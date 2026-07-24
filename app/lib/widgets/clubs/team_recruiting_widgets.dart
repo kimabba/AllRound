@@ -13,20 +13,16 @@ import 'club_tiles.dart';
 
 class TeamRecruitingBoard extends StatelessWidget {
   final List<RecruitingPostPreview> posts;
-  final bool showOpenOnly;
   final bool isLoading;
   final Set<String> managedClubIds;
-  final ValueChanged<bool> onShowOpenOnlyChanged;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
 
   const TeamRecruitingBoard({
     super.key,
     required this.posts,
-    required this.showOpenOnly,
     required this.isLoading,
     required this.managedClubIds,
-    required this.onShowOpenOnlyChanged,
     required this.onClosePost,
     required this.onOpenPost,
   });
@@ -35,7 +31,6 @@ class TeamRecruitingBoard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final openCount = posts.where((post) => !post.isClosed).length;
 
     return Container(
       width: double.infinity,
@@ -54,19 +49,10 @@ class TeamRecruitingBoard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            showOpenOnly ? '모집중인 글만 보고 있어요.' : '모집중 글과 마감글을 함께 보여줘요.',
+            '팀원 모집글을 확인하세요.',
             style: tt.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilterChip(
-              selected: showOpenOnly,
-              label: Text('모집중만 $openCount'),
-              onSelected: onShowOpenOnlyChanged,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
