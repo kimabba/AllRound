@@ -125,3 +125,29 @@ begin
   end loop;
 end;
 $$;
+
+-- ── DELETE 게이트: "남의 콘텐츠를 지우는 권한"에만 건다 ───────────────
+-- 이 세 테이블은 매니저가 타인의 글·이벤트·모집글을 삭제할 수 있어 권한 행위다.
+-- 반대로 이탈성 삭제(이벤트 참석 취소, 일정 공유 해제, 즐겨찾기 해제 등)는
+-- 막으면 사용자를 가두게 되므로 게이트하지 않는다.
+-- 작성자 본인 삭제도 함께 걸리지만, 콘텐츠 생성 자체가 이미 자격을 요구하므로
+-- 자격 없는 작성자는 생기지 않는다. 관리자는 술어에서 면제된다.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'club_posts',
+    'club_events',
+    'club_recruiting_posts'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_requires_eligible_del', t);
+    execute format(
+      'create policy %I on public.%I as restrictive for delete to authenticated
+         using ((select public.is_eligible_member()))',
+      t || '_requires_eligible_del', t
+    );
+  end loop;
+end;
+$$;
