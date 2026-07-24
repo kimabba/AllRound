@@ -77,6 +77,24 @@ export async function reviewJoin(
   // (상태를 먼저 approved 로 바꾸면, 멤버 추가 실패 시 'Already reviewed' 409 로
   //  재시도가 막혀 멤버가 영영 추가되지 않는 교착이 발생한다.)
   if (action === 'approve') {
+    // 검토자뿐 아니라 신청자도 자격을 갖춰야 한다. 이 경로는 service-role 로
+    // 멤버를 넣어 RLS 를 우회하므로, 여기서 막지 않으면 승인 한 번으로
+    // 전화번호 인증을 건너뛴 활성 멤버가 만들어진다.
+    const { data: applicantEligible, error: eligibilityErr } = await supa.rpc(
+      'is_eligible_member_id',
+      { p_user_id: jr.user_id },
+    );
+    if (eligibilityErr) {
+      return { ok: false, status: 500, message: 'ELIGIBILITY_CHECK_FAILED' };
+    }
+    if (applicantEligible !== true) {
+      return {
+        ok: false,
+        status: 409,
+        message: '신청자가 전화번호 인증을 완료하지 않아 승인할 수 없습니다.',
+      };
+    }
+
     const { error: memberErr } = await supa
       .from('club_members')
       .upsert({

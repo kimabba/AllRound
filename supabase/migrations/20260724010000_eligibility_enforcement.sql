@@ -10,8 +10,61 @@
 --             OTP 발송/검증, 공개 데이터 읽기, 신고·차단(안전 기능),
 --             알림·기기토큰(본인 상태), 즐겨찾기(무해), 가입취소·탈퇴.
 
--- ── 단일 술어: 연령·전화인증 정본을 재사용(정의 분산 금지) ──────────
+-- ── 단일 술어 ──────────────────────────────────────────────────────
+-- 규칙은 user_id 파라미터 버전에만 두고, 무인자 버전은 auth.uid() 로 위임한다.
+-- 서버가 "제3자"의 자격을 판정해야 하는 경우(예: 클럽 가입 승인 시 신청자)가
+-- 있어 파라미터 버전이 필요하며, 규칙이 두 벌로 갈라지는 것을 막는다.
+
+-- 연령 규칙 정본을 파라미터화. 기존 무인자 버전은 여기에 위임한다.
+create or replace function public.has_verified_signup_age_id(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.users
+    where id = p_user_id
+      and birth_date is not null
+      and birth_date <= (current_date - interval '14 years')::date
+  );
+$$;
+-- 타인 연령 조회가 가능하므로 서버 전용.
+revoke execute on function public.has_verified_signup_age_id(uuid) from public, anon, authenticated;
+grant execute on function public.has_verified_signup_age_id(uuid) to service_role;
+
+create or replace function public.has_verified_signup_age()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.has_verified_signup_age_id((select auth.uid()));
+$$;
+
 -- 관리자는 별개 신뢰축이므로 면제(모더레이션이 자격 게이트에 묶이지 않게).
+create or replace function public.is_eligible_member_id(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.users where id = p_user_id and role = 'admin')
+    or (
+      public.has_verified_signup_age_id(p_user_id)
+      and exists (
+        select 1 from public.users
+        where id = p_user_id and phone_verified_at is not null
+      )
+    );
+$$;
+revoke execute on function public.is_eligible_member_id(uuid) from public, anon, authenticated;
+grant execute on function public.is_eligible_member_id(uuid) to service_role;
+
 create or replace function public.is_eligible_member()
 returns boolean
 language sql
@@ -19,14 +72,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select public.is_admin() or (
-    public.has_verified_signup_age()
-    and exists (
-      select 1 from public.users
-      where id = (select auth.uid())
-        and phone_verified_at is not null
-    )
-  );
+  select public.is_eligible_member_id((select auth.uid()));
 $$;
 
 comment on function public.is_eligible_member is

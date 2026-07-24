@@ -25,6 +25,7 @@ Deno.test('normalizeE164Kr: 형식 오류·비휴대폰 번호는 throw', () => 
     '02-1234-5678', // 유선(서울) — SMS 불가
     '070-1234-5678', // 인터넷전화
     '015-1234-5678', // 이동통신 접두 아님
+    '010-123-4567', // 010 은 가입자번호 8자리여야 함
   ];
   for (const value of bad) {
     assertThrows(() => normalizeE164Kr(value), Error, 'INVALID_PHONE');

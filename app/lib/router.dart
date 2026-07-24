@@ -259,6 +259,9 @@ class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {
     ref.listen(authStateProvider, (_, __) => notifyListeners());
     ref.listen(userSportsProvider, (_, __) => notifyListeners());
+    // 온보딩·전화인증 게이트가 프로필을 읽으므로, 로딩이 끝나면 redirect 를
+    // 다시 평가해야 한다(로딩 중엔 게이트가 통과시키기 때문).
+    ref.listen(myProfileProvider, (_, __) => notifyListeners());
     ref.listen(isAdminProvider, (_, __) => notifyListeners());
     ref.listen(recoveryModeProvider, (_, __) => notifyListeners());
   }

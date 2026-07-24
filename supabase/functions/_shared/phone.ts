@@ -15,7 +15,8 @@ export function normalizeE164Kr(raw: string): string {
   let d = raw.replace(/[^\d]/g, '');
   if (d.startsWith('82')) d = d.slice(2);
   if (d.startsWith('0')) d = d.slice(1);
-  if (!/^1[016789]\d{7,8}$/.test(d)) throw new Error('INVALID_PHONE');
+  // 010 은 가입자번호 8자리 고정(11자리), 구 접두(011·016~019)만 7~8자리 허용.
+  if (!/^(10\d{8}|1[16789]\d{7,8})$/.test(d)) throw new Error('INVALID_PHONE');
   return `+82${d}`;
 }
 

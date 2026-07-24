@@ -13,15 +13,36 @@ type Terminal = { data?: unknown; error: { message: string } | null };
 class FakeDb {
   tables: Record<string, Row[]>;
   failOn: Set<string>;
+  /** is_eligible_member_id 대역. null 이면 전원 자격 있음으로 취급. */
+  ineligibleUserIds: Set<string>;
 
-  constructor(tables: Record<string, Row[]>, failOn: string[] = []) {
+  constructor(
+    tables: Record<string, Row[]>,
+    failOn: string[] = [],
+    ineligibleUserIds: string[] = [],
+  ) {
     this.tables = tables;
     this.failOn = new Set(failOn);
+    this.ineligibleUserIds = new Set(ineligibleUserIds);
   }
 
   from(table: string): FakeBuilder {
     if (!this.tables[table]) this.tables[table] = [];
     return new FakeBuilder(this, table);
+  }
+
+  rpc(fn: string, args: Record<string, unknown>): Promise<Terminal> {
+    if (this.failOn.has(`rpc.${fn}`)) {
+      return Promise.resolve({ data: null, error: { message: `${fn} failed` } });
+    }
+    if (fn === 'is_eligible_member_id') {
+      const userId = String(args.p_user_id);
+      return Promise.resolve({
+        data: !this.ineligibleUserIds.has(userId),
+        error: null,
+      });
+    }
+    return Promise.resolve({ data: null, error: { message: `unknown rpc ${fn}` } });
   }
 }
 
@@ -179,6 +200,37 @@ Deno.test('canReviewClub: status 가 active 가 아닌 owner 는 거부', async 
 });
 
 // ── reviewJoin: 승인/거절 플로우 ──────────────────────────────────
+
+// service-role 로 멤버를 넣는 경로라 RLS 가 안 걸린다. 신청자 자격을 여기서
+// 막지 않으면 승인 한 번으로 전화번호 인증을 건너뛴 활성 멤버가 생긴다.
+Deno.test('reviewJoin: 미인증 신청자는 승인 거부(멤버 미추가·신청 pending 유지)', async () => {
+  const db = new FakeDb(baseTables(), [], ['req-user']);
+  const result = await reviewJoin(asClient(db), {
+    requestId: 'req-1',
+    action: 'approve',
+    reviewerId: 'manager-1',
+  });
+
+  assertEquals(result.ok, false);
+  assertEquals(result.ok === false ? result.status : 0, 409);
+  assertEquals(
+    db.tables.club_members.some((m) => m.user_id === 'req-user'),
+    false,
+  );
+  assertEquals(db.tables.club_join_requests[0].status, 'pending');
+});
+
+Deno.test('reviewJoin: 미인증 신청자라도 거절은 가능', async () => {
+  const db = new FakeDb(baseTables(), [], ['req-user']);
+  const result = await reviewJoin(asClient(db), {
+    requestId: 'req-1',
+    action: 'reject',
+    reviewerId: 'manager-1',
+  });
+
+  assertEquals(result.ok, true);
+  assertEquals(db.tables.club_join_requests[0].status, 'rejected');
+});
 
 Deno.test('reviewJoin: manager 승인 시 멤버 추가·상태 approved·알림 생성', async () => {
   const db = new FakeDb(baseTables());
