@@ -249,6 +249,14 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                         "seed 파서가 계산식을 평가하지 못하므로 리터럴로 써라."
                     )
             if not new_label and not new_active and not new_order:
+                # 대상 컬럼이 SET 절에 나왔는데 하나도 못 읽었다면 지원하지 않는 대입 형태다
+                # (예: 행 대입 `set (label_ko, sort_order) = ('x', 9)`). 조용히 넘기면
+                # DB 카탈로그만 바뀌고 폴백과의 드리프트를 게이트가 놓친다.
+                if re.search(r"\b(label_ko|is_active|sort_order)\b", setters, re.I):
+                    raise AssertionError(
+                        f"{path.name}: grades UPDATE 의 SET '{setters.strip()}' 를 해석하지 "
+                        "못했다. `컬럼 = 리터럴` 형태로 써라(행 대입은 지원하지 않는다)."
+                    )
                 continue
             if not single_row_where.match(where.strip()):
                 raise AssertionError(

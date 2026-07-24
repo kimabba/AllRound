@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(22);
+SELECT plan(23);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -151,6 +151,17 @@ SELECT is(
      FROM public.user_sports WHERE user_id = '00000000-0000-4000-8000-000000000005'),
   'futsal',
   '목록에서 빠진 종목만 삭제된다'
+);
+-- 동시 저장 직렬화. 두 기기·재시도로 같은 사용자가 동시에 주 종목을 바꾸면, 뒤 요청의
+-- 스냅샷이 앞 요청의 새 primary 행을 못 봐 부분 유니크 인덱스에서 23505 로 죽는다.
+-- pgTAP 은 단일 세션이라 경합 자체는 재현할 수 없으므로, 락을 실제로 잡는지까지 고정한다
+-- (직렬화 동작은 두 세션 스크립트로 별도 확인했다: 선행 락 해제까지 대기).
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM pg_locks
+     WHERE locktype = 'advisory' AND granted
+  ),
+  'RPC 가 사용자 단위 advisory lock 을 잡는다(동시 저장 직렬화)'
 );
 RESET ROLE;
 

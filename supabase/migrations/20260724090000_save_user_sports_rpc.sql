@@ -27,6 +27,14 @@ begin
     raise exception 'p_sports 는 JSON 배열이어야 합니다' using errcode = '22023';
   end if;
 
+  -- 같은 사용자의 저장을 직렬화한다. 트랜잭션 스코프라 커밋·롤백 시 자동 해제된다.
+  -- 없으면: 두 기기(또는 재시도)가 동시에 주 종목을 바꿀 때, 뒤 요청의 문장 스냅샷이
+  -- 앞 요청이 새로 올린 primary 행을 보지 못해 upsert 가 부분 유니크 인덱스에서
+  -- 23505 로 실패한다. 배열 순서가 다른 동시 호출끼리는 행 잠금 교착도 가능하다.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(uid::text, 0)
+  );
+
   -- 주 종목 교체를 순서에 무관하게 만든다(부분 유니크 인덱스 회피).
   -- is_primary 만 바뀌므로 `before update of sport, grade` 트리거는 발동하지 않는다.
   update public.user_sports

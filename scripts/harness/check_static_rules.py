@@ -146,15 +146,19 @@ RETIRED_LABELS = {"신입", "5부", "4부", "3부", "2부", "1부"}
 LABEL_SCAN_IGNORED = {"무관"}
 
 
-def string_literals(source: str) -> list[tuple[int, str]]:
-    """소스에서 문자열 리터럴을 (시작 줄, 내용)으로 뽑는다.
+def string_literals(source: str) -> list[tuple[int, str, int, int]]:
+    """소스에서 문자열 리터럴을 (시작 줄, 내용, 시작 오프셋, 끝 오프셋)으로 뽑는다.
 
     줄 주석(`//`) 이후는 코드가 아니므로 무시하고, 따옴표 **안**의 `//`(URL 등)는
     주석으로 오인하지 않는다. Dart 의 `'''` 블록과 TS 의 백틱 template literal 처럼
     여러 줄에 걸친 문자열도 끝까지 따라간다 — 줄 단위로만 보면 라벨을 여러 줄 문자열
     안에 넣는 것만으로 가드를 피할 수 있었다.
+
+    오프셋을 함께 주는 이유: 인접 문자열 연결('테' '니스')을 판정하려면 두 리터럴
+    사이에 공백뿐인지 원문에서 확인해야 한다. 줄 번호만으로 묶으면 `{'테': 1, '니스': 2}`
+    같은 맵 리터럴을 오탐한다.
     """
-    literals: list[tuple[int, str]] = []
+    literals: list[tuple[int, str, int, int]] = []
     index, length, line_no = 0, len(source), 1
     while index < length:
         char = source[index]
@@ -203,15 +207,28 @@ def string_literals(source: str) -> list[tuple[int, str]]:
                     continue
                 # TS 템플릿 보간 `${…}` 안은 문자열이 아니라 코드다. 통째로 리터럴 취급하면
                 # `${ok ? '테니스' : '풋살'}` 처럼 감싸는 것만으로 가드를 피할 수 있다.
-                # (보간 안 문자열에 중괄호가 들어가는 경우까지는 세지 않는다 — 실코드에 없다.)
+                # 중괄호를 셀 때 문자열 안의 것은 빼야 한다 — `${ok ? '}' : '테니스'}` 는
+                # 따옴표 안의 `}` 를 식 종료로 오인하면 나머지가 통째로 빠져나간다.
                 if delim == "`" and source.startswith("${", cursor):
                     depth, scan, expr_line = 1, cursor + 2, line_no
                     while scan < length and depth:
-                        if source[scan] == "{":
+                        inner_char = source[scan]
+                        if inner_char in "'\"`":
+                            scan += 1
+                            while scan < length and source[scan] != inner_char:
+                                if source[scan] == "\\":
+                                    scan += 2
+                                    continue
+                                if source[scan] == "\n":
+                                    line_no += 1
+                                scan += 1
+                            scan += 1
+                            continue
+                        if inner_char == "{":
                             depth += 1
-                        elif source[scan] == "}":
+                        elif inner_char == "}":
                             depth -= 1
-                        elif source[scan] == "\n":
+                        elif inner_char == "\n":
                             line_no += 1
                         scan += 1
                     embedded.append((expr_line, source[cursor + 2 : max(scan - 1, cursor + 2)]))
@@ -227,11 +244,13 @@ def string_literals(source: str) -> list[tuple[int, str]]:
             if not closed:
                 index += 1
                 continue
-            literals.append((start_line, "".join(buffer)))
+            end = cursor + len(delim)
+            literals.append((start_line, "".join(buffer), index, end))
             for expr_line, expression in embedded:
-                for inner_line, inner in string_literals(expression):
-                    literals.append((expr_line + inner_line - 1, inner))
-            index = cursor + len(delim)
+                # 보간식 안의 리터럴은 원문 오프셋을 물려주지 않는다(인접 판정 대상이 아니다).
+                for inner_line, inner, _s, _e in string_literals(expression):
+                    literals.append((expr_line + inner_line - 1, inner, -1, -1))
+            index = end
             continue
         index += 1
     return literals
@@ -264,22 +283,30 @@ def label_violations(source: str, labels: set[str]) -> list[tuple[int, str]]:
     통째로 비교하면 `'''\\n입문\\n'''` 처럼 감싸는 것만으로 빠져나간다."""
     found: list[tuple[int, str]] = []
     literals = string_literals(source)
-    for start_line, literal in literals:
+    for start_line, literal, _start, _end in literals:
         for offset, piece in enumerate(literal.split("\n")):
             if piece.strip() in labels:
                 found.append((start_line + offset, piece.strip()))
-    # Dart 는 인접한 문자열을 컴파일 시 하나로 합친다('테' '니스' == '테니스').
-    # 같은 줄의 연속 리터럴을 이어붙인 것도 검사한다.
-    per_line: dict[int, list[str]] = {}
-    for start_line, literal in literals:
-        if "\n" not in literal:
-            per_line.setdefault(start_line, []).append(literal)
-    for line_number, pieces in per_line.items():
-        for start in range(len(pieces)):
-            for end in range(start + 2, len(pieces) + 1):
-                joined = "".join(pieces[start:end]).strip()
+    # Dart 는 **인접한** 문자열을 컴파일 시 하나로 합친다('테' '니스' == '테니스').
+    # 인접의 기준은 같은 줄이 아니라 "사이에 공백뿐"이다 — 줄을 나눠도 합쳐지고,
+    # 반대로 `{'테': 1, '니스': 2}` 는 사이에 코드가 있어 합쳐지지 않는다.
+    runs: list[list[tuple[int, str]]] = []
+    previous_end = -1
+    for start_line, literal, start, end in literals:
+        if start < 0 or "\n" in literal:
+            previous_end = -1
+            continue
+        if previous_end >= 0 and source[previous_end:start].strip() == "":
+            runs[-1].append((start_line, literal))
+        else:
+            runs.append([(start_line, literal)])
+        previous_end = end
+    for run in runs:
+        for start in range(len(run)):
+            for end in range(start + 2, len(run) + 1):
+                joined = "".join(piece for _line, piece in run[start:end]).strip()
                 if joined in labels:
-                    found.append((line_number, joined))
+                    found.append((run[start][0], joined))
     return found
 
 
@@ -296,8 +323,11 @@ GUARD_MUST_BLOCK = [
     "const tpl = `\n테니스\n`;",
     # TS 템플릿 보간 안은 코드다. 통째로 리터럴 취급하면 감싸는 것만으로 빠져나갔다.
     "const z = `${ok ? '입문' : '초급'}`;",
-    # Dart 인접 문자열 연결은 컴파일 시 하나로 합쳐진다.
+    # Dart 인접 문자열 연결은 컴파일 시 하나로 합쳐진다. 줄을 나눠도 마찬가지다.
     "const s = '테' '니스';",
+    "const s = '테'\n    '니스';",
+    # 보간식 안 문자열의 중괄호를 식 종료로 오인하면 나머지가 통째로 빠져나간다.
+    "const z = `${ok ? '}' : '테니스'}`;",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
@@ -311,6 +341,9 @@ GUARD_MUST_ALLOW = [
     "/* 바깥 /* 안쪽 */ 아직 주석 '테니스' */ const x = 1;",
     # 보간 밖의 정적 부분은 문장이므로 부분 포함이다.
     "const msg = `${count}명이 테니스 대회에 참가`;",
+    # 사이에 코드가 있으면 인접이 아니다 — 합쳐서 검사하면 맵 리터럴을 오탐한다.
+    "const m = {'테': 1, '니스': 2};",
+    "const pair = ['테', '니스'];",
 ]
 
 
