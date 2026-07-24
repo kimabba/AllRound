@@ -1,0 +1,97 @@
+{
+  "_meta": {
+    "org_code": "gj",
+    "org_name": "광주광역시테니스협회",
+    "season_year": 2026,
+    "effective_from": "2026-03-17",
+    "source_url": "https://gjtennis.kr/sub4_1.php",
+    "source_doc": "광주광역시 생활체육 랭킹관리 규정 (제1~27조 + 부칙)",
+    "captured_at": "2026-07-24",
+    "captured_from": "docs/research/tennis-ranking-point-rules.md §3",
+    "status": "pilot_reference",
+    "note": "제휴 전 참고용 정형화. org_point_rules 테이블은 2단계(제휴 성사 후)에 생성하며 이 파일이 그 시드가 된다. 아직 라이브 계산에 연결되지 않는다."
+  },
+
+  "point_tables": {
+    "winner": {
+      "_applies_to_divisions": ["coach", "gold", "gukhwa", "geumbae"],
+      "_applies_to_label": "지도자부 · 골드부 · 여자 국화부 · 여자 금배부",
+      "_rounds": ["champion", "runner_up", "semi", "quarter", "r16", "r32", "entry"],
+      "by_grade": {
+        "A": { "champion": 1000, "runner_up": 700, "semi": 455, "quarter": 182, "r16": 60, "r32": 30, "entry": 5 },
+        "1": { "champion": 800,  "runner_up": 560, "semi": 364, "quarter": 146, "r16": 48, "r32": 24, "entry": 5 },
+        "2": { "champion": 700,  "runner_up": 490, "semi": 319, "quarter": 127, "r16": 42, "r32": 21, "entry": 5 },
+        "3": { "champion": 500,  "runner_up": 350, "semi": 228, "quarter": 91,  "r16": 30, "r32": 15, "entry": 5 }
+      }
+    },
+    "non_winner": {
+      "_applies_to_divisions": ["m_general", "w_rookie"],
+      "_applies_to_label": "남자 일반부 · 여자 신인부",
+      "_rounds": ["champion", "runner_up", "semi", "quarter", "r16", "r32", "r64", "entry"],
+      "by_grade": {
+        "A": { "champion": 800, "runner_up": 560, "semi": 364, "quarter": 146, "r16": 48, "r32": 24, "r64": 12, "entry": 3 },
+        "1": { "champion": 700, "runner_up": 490, "semi": 319, "quarter": 127, "r16": 42, "r32": 21, "r64": 10, "entry": 3 },
+        "2": { "champion": 500, "runner_up": 350, "semi": 228, "quarter": 91,  "r16": 30, "r32": 15, "r64": 8,  "entry": 3 },
+        "3": { "champion": 360, "runner_up": 252, "semi": 163, "quarter": 65,  "r16": 21, "r32": 11, "r64": 6,  "entry": 3 }
+      }
+    }
+  },
+
+  "tournament_grades": {
+    "_note": "그레이드 A/1/2/3 은 선수 등급이 아니라 대회가 여는 경기 부수로 정해진다 (제11조). 특례·최종확정은 협회 심의 → 자동확정 불가.",
+    "source": "division_count",
+    "levels": [
+      { "code": "A", "min_divisions": 5 },
+      { "code": "1", "min_divisions": 4 },
+      { "code": "2", "min_divisions": 3 },
+      { "code": "3", "min_divisions": 2 }
+    ],
+    "overrides": [
+      { "match": "광주광역시장배", "grade": "A" },
+      { "match": "광주협회장배", "grade": "A" },
+      { "match": "여성위원회 주최·주관", "grade": "2" }
+    ]
+  },
+
+  "aggregation": {
+    "reset": "annual",
+    "reset_note": "2026년 1월부터 포인트 리셋 (호남 3개권역 공통)",
+    "ranking_best_n": 25,
+    "award_best_n": 15,
+    "conflict": "제13조 4항은 랭킹순위=베스트25, 제27조는 종합시상=베스트15. 규정이 둘을 명시 구분하지 않음. 협회 확인 전까지 계산 켜지 말 것.",
+    "divisions_ranked_independently": true
+  },
+
+  "eligibility": {
+    "min_teams_for_points": 32,
+    "min_teams_exempt_divisions": ["coach"],
+    "no_point_divisions": ["m_open_seed_base", "veteran", "couple", "non_placer", "beginner"],
+    "no_point_note": "베테랑부·부부부·비입상자부·초급자부는 배점 없음(13-5-5). 대회 등급 산정 기준부서도 배점 안 함(13-6-8).",
+    "min_round_for_points": null,
+    "min_round_note": "광주는 32강 미달 '부서'를 배점 제외(13-10)하지 배점 시작 라운드를 자르지 않음. 참가점수는 32강 미달 참가자에게도 부여될 수 있음 — 협회 질문지 8번."
+  },
+
+  "cross_org_recognition": {
+    "recognizes": ["kta", "kato"],
+    "excludes": ["jn", "kata"],
+    "since": "2026-03-17",
+    "note": "2026년 광주·전남 랭킹대회 분리. 광주는 전남 우승자를 인정하지 않음. 전남은 광주를 계속 인정한다고 공지 → 비대칭 가능성, 협회 질문지 4번."
+  },
+
+  "grade_validity_months": {
+    "_note": "등급·부서 판정은 자동화 불가(연령·선수출신·심의 전제). 아래는 유효기간 계산에 필요한 시간값만 발췌.",
+    "placement_to_winner_window": 24,
+    "promotion_hold": 12,
+    "gold_placement_valid": 12
+  },
+
+  "manual_only": [
+    "대회 그룹(그레이드) 최종 확정 — 협회 최종심의 (제11조)",
+    "선수출신 / 지도자 판정 — 레벨 테스트 (제17·18조)",
+    "부서·등급 이동 통보 — 미통보 시 DB 와 실제 등급이 어긋남이 규정상 전제 (13-5-2)",
+    "고의 우승 회피 판정 (13-14)",
+    "부정선수 사후 포인트 박탈 — 확정 랭킹 소급 변경 가능 (13-15)",
+    "명시 안 된 사항은 협회 유권해석 — 계산이 규정대로여도 협회와 달라질 수 있음",
+    "이중 적립 — 우승 당해년도 성적이 두 부서에 동시 적립 (13-2). 부서별 독립 집계이나 판정 필요."
+  ]
+}
