@@ -110,11 +110,19 @@ mixin UserApi on ApiBase {
     if (userId == null) throw StateError('Not authenticated');
 
     await supabase.rpc('ensure_profile');
-    await supabase.from('user_sports').delete().eq('user_id', userId);
+    // 전체 삭제 후 재삽입하면 DELETE 와 INSERT 가 별도 트랜잭션이라, INSERT 가 거부될 때
+    // (폐기 등급 보유자 등) 종목 정보가 통째로 사라진다. 제거된 종목만 지우고 나머지는
+    // upsert 해서, 실패해도 기존 행이 남게 한다.
+    final keep = sports.map((s) => s.sport).toList();
+    final removed = supabase.from('user_sports').delete().eq('user_id', userId);
+    await (keep.isEmpty
+        ? removed
+        : removed.not('sport', 'in', '(${keep.join(',')})'));
     if (sports.isNotEmpty) {
-      await supabase
-          .from('user_sports')
-          .insert(sports.map((s) => s.toInsert(userId)).toList());
+      await supabase.from('user_sports').upsert(
+            sports.map((s) => s.toInsert(userId)).toList(),
+            onConflict: 'user_id,sport',
+          );
     }
   }
 

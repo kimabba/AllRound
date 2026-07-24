@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(15);
+SELECT plan(17);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -90,6 +90,27 @@ SELECT lives_ok(
   $$UPDATE public.user_sports SET grade = grade, is_primary = is_primary
      WHERE user_id = '00000000-0000-4000-8000-000000000005' AND sport = 'futsal'$$,
   '폐기 등급을 가진 기존 행은 값이 그대로면 재저장할 수 있다'
+);
+-- 앱의 실제 저장 경로는 UPDATE 가 아니라 upsert 다(saveUserSports). Postgres 는 충돌
+-- 해소 전에 BEFORE INSERT 를 먼저 발동시키므로, UPDATE 경로만 검증하면 실사용에서
+-- 막히는 걸 놓친다. 예전 delete+insert 구현에서는 DELETE 만 커밋된 채 INSERT 가 거부돼
+-- 사용자의 종목 정보가 통째로 사라졌다.
+SELECT lives_ok(
+  $$INSERT INTO public.user_sports (user_id, sport, grade, is_primary)
+    VALUES ('00000000-0000-4000-8000-000000000005', 'futsal', 'beginner', false)
+    ON CONFLICT (user_id, sport) DO UPDATE
+      SET grade = excluded.grade, is_primary = excluded.is_primary$$,
+  '폐기 등급 보유자가 upsert 로 프로필을 재저장할 수 있다(앱 실제 경로)'
+);
+-- 보존은 "그 사용자가 이미 갖고 있던 값"에만 적용된다. 폐기 등급을 남에게 새로
+-- 붙이는 건 여전히 막혀야 한다 — 그러지 않으면 트리거가 무력화된다.
+SELECT throws_ok(
+  $$INSERT INTO public.user_sports (user_id, sport, grade, is_primary)
+    VALUES ('00000000-0000-4000-8000-000000000006', 'futsal', 'beginner', false)
+    ON CONFLICT (user_id, sport) DO UPDATE SET grade = excluded.grade$$,
+  '23514',
+  NULL,
+  '폐기 등급은 보유자가 아닌 사용자에게 새로 배정할 수 없다'
 );
 UPDATE public.grades SET is_active = true WHERE sport = 'futsal';
 

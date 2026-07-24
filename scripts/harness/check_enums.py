@@ -119,8 +119,37 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
         r"update\s+public\.grades\s+set\s+(.*?)\s+where\s+(.*?);",
         re.I | re.S,
     )
+    # grades 를 건드리는 문장은 전부 이 파서가 소화해야 한다. 지원하지 않는 문법을
+    # 조용히 넘기면 카탈로그가 갈라져도 게이트가 PASS 한다 — 가장 위험한 실패다.
+    # (예: INSERT ... SELECT 로 등급을 추가하면 seed 에 안 잡혀 폴백과 어긋난다.)
+    grades_stmt = re.compile(
+        r"\b(insert\s+into|update|delete\s+from|merge\s+into)\s+public\.grades\b(.{0,200})",
+        re.I | re.S,
+    )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
         migration = read(path)
+        updates_seen = 0
+        for kind, tail in grades_stmt.findall(migration):
+            kind = re.sub(r"\s+", " ", kind).lower()
+            if kind == "insert into":
+                if not re.search(r"\)\s*values\b", tail, re.I):
+                    raise AssertionError(
+                        f"{path.name}: public.grades INSERT 가 VALUES 형식이 아니다. "
+                        "seed 파서가 반영하지 못하므로 VALUES 로 쓰거나 파서를 확장하라."
+                    )
+            elif kind == "update":
+                updates_seen += 1
+            else:
+                raise AssertionError(
+                    f"{path.name}: public.grades 에 대한 {kind.upper()} 는 seed 파서가 "
+                    "반영하지 못한다(폐기는 is_active=false 정책이다)."
+                )
+        if updates_seen != len(setter_update.findall(migration)):
+            raise AssertionError(
+                f"{path.name}: public.grades UPDATE {updates_seen} 건 중 "
+                f"{len(setter_update.findall(migration))} 건만 해석했다 "
+                "(`update public.grades set … where …;` 형식으로 맞춰라)."
+            )
         for block in insert_pattern.finditer(migration):
             values = block.group(1)
             parsed = value_pattern.findall(values)
@@ -145,7 +174,14 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
             setters, where = match.group(1), match.group(2)
             new_label = re.search(rf"label_ko\s*=\s*{quoted}", setters)
             new_active = re.search(r"is_active\s*=\s*(true|false)", setters, re.I)
-            if not new_label and not new_active:
+            new_order = re.search(r"sort_order\s*=\s*(\d+)", setters, re.I)
+            # 키(sport·code) 자체를 옮기는 UPDATE 는 누적 규칙이 달라진다. 반영한 척하지 말고 막는다.
+            if re.search(r"\b(sport|code)\s*=", setters, re.I):
+                raise AssertionError(
+                    f"{path.name}: grades UPDATE 가 sport·code 를 바꾼다. "
+                    "seed 파서가 키 이동을 추적하지 못하므로 새 행 INSERT 로 표현하라."
+                )
+            if not new_label and not new_active and not new_order:
                 continue
             sport = re.search(r"sport\s*=\s*'([^']+)'", where)
             code = re.search(r"code\s*=\s*'([^']+)'", where)
@@ -160,6 +196,8 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                     label_v = new_label.group(1).replace("''", "'")
                 if new_active:
                     active_v = new_active.group(1).lower() != "false"
+                if new_order:
+                    order_v = int(new_order.group(1))
                 rows[key] = (sport_v, code_v, label_v, order_v, active_v)
     if not rows:
         raise AssertionError("public.grades seed 를 한 건도 찾지 못했다")

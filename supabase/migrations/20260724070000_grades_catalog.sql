@@ -30,6 +30,11 @@ create table if not exists public.grades (
 -- code 단일 키 맵으로 들고 있어(gradeLabels), 종목 간 code 가 겹치면 한쪽 라벨이
 -- 다른 종목까지 덮어쓴다. 등급 관리가 관리자 INSERT 로 이뤄지는 이상 이 규칙은
 -- 하네스(seed 검사)만으로는 부족하고 DB 가 지켜야 한다.
+--
+-- ponytail: 이건 데이터 불변식이 아니라 현재 Flutter 구현(Map<String,String>)의 천장이다.
+-- 3번째 종목이 'beginner' 같은 자연스러운 code 를 재사용해야 하면 관리자 INSERT 가
+-- 23505 로 막힌다. 그때는 gradeLabel(code) 를 (sport, code) 복합 키로 바꾸고
+-- 이 제약을 drop 하는 게 정공법이다(JY-146 P4, 종목 확장 시).
 alter table public.grades
   drop constraint if exists grades_code_unique;
 alter table public.grades
@@ -75,22 +80,15 @@ on conflict (sport, code) do update
   set label_ko = excluded.label_ko,
       sort_order = excluded.sort_order;
 
--- CHECK → FK 교체. 이 시점에 위반 행이 있으면 마이그레이션이 실패해야 한다
--- (조용히 통과시키면 정본이 두 개가 된다).
-do $$
-declare
-  violations int;
-begin
-  select count(*) into violations
-  from public.user_sports us
-  where not exists (
-    select 1 from public.grades g
-    where g.sport = us.sport and g.code = us.grade
-  );
-  if violations > 0 then
-    raise exception 'user_sports 에 grades 사전에 없는 등급이 % 건 있다. 먼저 정규화하라.', violations;
-  end if;
-end $$;
+-- CHECK → FK 교체.
+--
+-- 부착과 검증을 분리한다. 검증형 ADD FOREIGN KEY 는 user_sports 전체를 스캔하는 동안
+-- 쓰기와 충돌하는 락을 잡으므로, 장기 트랜잭션 뒤에서 배포가 무기한 대기하거나
+-- 락 획득 후 프로필 저장이 큐잉·타임아웃된다. NOT VALID 부착은 스캔이 없어 락 구간이
+-- 짧고, VALIDATE 는 ShareUpdateExclusiveLock 이라 쓰기를 막지 않는다.
+-- SET LOCAL 이 아니라 SET 이다 — 마이그레이션은 트랜잭션 블록으로 실행되지 않아
+-- SET LOCAL 이 조용히 무시된다(25P01 경고만 남는다). 아래에서 default 로 되돌린다.
+set lock_timeout = '3s';
 
 alter table public.user_sports
   drop constraint if exists user_sports_grade_check;
@@ -100,7 +98,16 @@ alter table public.user_sports
 
 alter table public.user_sports
   add constraint user_sports_grade_fkey
-  foreign key (sport, grade) references public.grades (sport, code);
+  foreign key (sport, grade) references public.grades (sport, code)
+  not valid;
+
+set lock_timeout = default;
+
+-- 위반 행이 있으면 여기서 예외가 난다(조용히 통과시키면 정본이 두 개가 된다).
+-- 운영 데이터 확인(2026-07-24) 기준 위반 0 이지만, 배포 시점에 신규 데이터가
+-- 생겼을 수 있으므로 검증을 생략하지 않는다.
+alter table public.user_sports
+  validate constraint user_sports_grade_fkey;
 
 -- FK 는 (sport, code) 의 "존재"만 본다. 관리자가 등급을 폐기(is_active=false)해도
 -- 사용자가 PostgREST 로 직접 그 등급을 배정할 수 있어, 클라이언트 선택지 필터가
@@ -112,14 +119,26 @@ language plpgsql
 set search_path = ''
 as $func$
 begin
-  if not exists (
+  if exists (
     select 1 from public.grades g
     where g.sport = new.sport and g.code = new.grade and g.is_active
   ) then
-    raise exception '비활성 등급은 배정할 수 없습니다: % / %', new.sport, new.grade
-      using errcode = '23514';
+    return new;
   end if;
-  return new;
+  -- 폐기 등급이라도 **그 사용자가 이미 갖고 있던 값**이면 재저장을 허용한다.
+  -- 프로필 저장은 upsert(ON CONFLICT DO UPDATE)인데 Postgres 는 충돌 해소 전에
+  -- BEFORE INSERT 를 먼저 발동시킨다. INSERT 경로에서 기존 행을 보지 않으면
+  -- 폐기 등급 보유자가 프로필을 저장할 수 없다("신규 배정만 제한" 의도와 어긋난다).
+  if exists (
+    select 1 from public.user_sports us
+    where us.user_id = new.user_id
+      and us.sport = new.sport
+      and us.grade = new.grade
+  ) then
+    return new;
+  end if;
+  raise exception '비활성 등급은 배정할 수 없습니다: % / %', new.sport, new.grade
+    using errcode = '23514';
 end;
 $func$;
 

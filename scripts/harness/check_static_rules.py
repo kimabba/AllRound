@@ -146,31 +146,60 @@ RETIRED_LABELS = {"신입", "5부", "4부", "3부", "2부", "1부"}
 LABEL_SCAN_IGNORED = {"무관"}
 
 
-def string_literals(line: str) -> list[str]:
-    """한 줄에서 문자열 리터럴(작은/큰따옴표·백틱)을 뽑는다.
+def string_literals(source: str) -> list[tuple[int, str]]:
+    """소스에서 문자열 리터럴을 (시작 줄, 내용)으로 뽑는다.
 
     줄 주석(`//`) 이후는 코드가 아니므로 무시하고, 따옴표 **안**의 `//`(URL 등)는
-    주석으로 오인하지 않는다. 닫히지 않은 따옴표(여러 줄 문자열)를 만나면 그 줄은 포기한다.
+    주석으로 오인하지 않는다. Dart 의 `'''` 블록과 TS 의 백틱 template literal 처럼
+    여러 줄에 걸친 문자열도 끝까지 따라간다 — 줄 단위로만 보면 라벨을 여러 줄 문자열
+    안에 넣는 것만으로 가드를 피할 수 있었다.
     """
-    literals: list[str] = []
-    index, length = 0, len(line)
+    literals: list[tuple[int, str]] = []
+    index, length, line_no = 0, len(source), 1
     while index < length:
-        char = line[index]
-        if char == "/" and index + 1 < length and line[index + 1] == "/":
-            break
+        char = source[index]
+        if char == "\n":
+            line_no += 1
+            index += 1
+            continue
+        if char == "/" and index + 1 < length and source[index + 1] == "/":
+            while index < length and source[index] != "\n":
+                index += 1
+            continue
+        if char == "/" and index + 1 < length and source[index + 1] == "*":
+            end = source.find("*/", index + 2)
+            end = length if end < 0 else end + 2
+            line_no += source.count("\n", index, end)
+            index = end
+            continue
         if char in "'\"`":
-            cursor = index + 1
+            # Dart 의 삼중 따옴표는 경계 자체가 세 글자다.
+            delim = char * 3 if source.startswith(char * 3, index) else char
+            multiline = len(delim) == 3 or delim == "`"
+            start_line = line_no
+            cursor = index + len(delim)
             buffer: list[str] = []
-            while cursor < length and line[cursor] != char:
-                if line[cursor] == "\\":
+            closed = False
+            while cursor < length:
+                if source.startswith(delim, cursor):
+                    closed = True
+                    break
+                current = source[cursor]
+                if current == "\\":
                     cursor += 2
                     continue
-                buffer.append(line[cursor])
+                if current == "\n":
+                    # 한 줄 문자열은 줄을 넘지 않는다 — 따옴표가 아니라 아포스트로피다.
+                    if not multiline:
+                        break
+                    line_no += 1
+                buffer.append(current)
                 cursor += 1
-            if cursor >= length:
-                break
-            literals.append("".join(buffer))
-            index = cursor + 1
+            if not closed:
+                index += 1
+                continue
+            literals.append((start_line, "".join(buffer)))
+            index = cursor + len(delim)
             continue
         index += 1
     return literals
@@ -198,8 +227,15 @@ def forbidden_labels() -> set[str]:
     return (labels | RETIRED_LABELS) - LABEL_SCAN_IGNORED
 
 
-def label_violations_in_line(line: str, labels: set[str]) -> list[str]:
-    return [literal for literal in string_literals(line) if literal in labels]
+def label_violations(source: str, labels: set[str]) -> list[tuple[int, str]]:
+    """(줄 번호, 금지 라벨) 목록. 여러 줄 문자열은 줄 단위로 쪼개 비교한다 —
+    통째로 비교하면 `'''\\n입문\\n'''` 처럼 감싸는 것만으로 빠져나간다."""
+    found: list[tuple[int, str]] = []
+    for start_line, literal in string_literals(source):
+        for offset, piece in enumerate(literal.split("\n")):
+            if piece.strip() in labels:
+                found.append((start_line + offset, piece.strip()))
+    return found
 
 
 # 가드가 잡아야 하는 형태 / 통과시켜야 하는 형태. 규칙을 바꾸면 여기서 먼저 깨진다.
@@ -210,6 +246,9 @@ GUARD_MUST_BLOCK = [
     "  return '테니스';",
     "const heading = `풋살`;",
     "static const _tennisGrades = ['무관', '신입', '5부', '4부', '3부', '2부', '1부'];",
+    # 여러 줄 문자열에 숨긴 라벨. 줄 단위 스캔의 구멍이었다.
+    "const doc = '''\n입문\n''';",
+    "const tpl = `\n테니스\n`;",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
@@ -217,6 +256,8 @@ GUARD_MUST_ALLOW = [
     "const u = {'url': 'https://x.test/a', 'name': '광주 오픈'};",
     "if (/(테니스|tennis)/i.test(text)) return 'tennis';",
     "const sports = ['tennis', 'futsal'];",
+    # 여러 줄 문자열이어도 라벨이 문장 일부면 정상이다(부분 포함은 막지 않는다).
+    "const doc = '''\n서울 오픈 테니스 대회 안내\n''';",
 ]
 
 
@@ -224,10 +265,10 @@ def check_sport_grade_label_hardcode() -> None:
     labels = forbidden_labels()
 
     for sample in GUARD_MUST_BLOCK:
-        if not label_violations_in_line(sample, labels):
+        if not label_violations(sample, labels):
             fail(f"라벨 가드 자가검증 실패 — 잡아야 할 형태를 놓쳤다: {sample}")
     for sample in GUARD_MUST_ALLOW:
-        found = label_violations_in_line(sample, labels)
+        found = label_violations(sample, labels)
         if found:
             fail(f"라벨 가드 자가검증 실패 — 정상 코드를 막았다({found}): {sample}")
 
@@ -239,11 +280,11 @@ def check_sport_grade_label_hardcode() -> None:
                 continue
             if path.name.endswith(("_test.dart", "_test.ts")) or "/tests/" in relative:
                 continue
-            for line_number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), start=1
-            ):
-                for literal in label_violations_in_line(line, labels):
-                    violations.append(f"{relative}:{line_number}: '{literal}' — {line.strip()}")
+            source = path.read_text(encoding="utf-8")
+            lines = source.splitlines()
+            for line_number, literal in label_violations(source, labels):
+                context = lines[line_number - 1].strip() if line_number <= len(lines) else ""
+                violations.append(f"{relative}:{line_number}: '{literal}' — {context}")
     if violations:
         fail(
             "라벨 재하드코딩(JY-146): 종목·등급 라벨을 코드에 직접 적었다.\n"
