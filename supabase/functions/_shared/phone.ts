@@ -7,12 +7,15 @@ const enc = new TextEncoder();
  * 한국 휴대폰 번호를 E.164(+8210XXXXXXXX)로 정규화한다.
  * 010-1234-5678 / 01012345678 / +821012345678 이 모두 같은 값이 되어야
  * phone_hash unique 제약이 의미를 갖는다. 형식이 어긋나면 throw.
+ *
+ * SMS 수신이 가능한 이동통신 번호(010 및 구 011·016·017·018·019)만 허용한다.
+ * 유선번호를 통과시키면 발송은 실패하면서 발송 한도만 소모된다.
  */
 export function normalizeE164Kr(raw: string): string {
   let d = raw.replace(/[^\d]/g, '');
   if (d.startsWith('82')) d = d.slice(2);
   if (d.startsWith('0')) d = d.slice(1);
-  if (!/^\d{9,10}$/.test(d)) throw new Error('INVALID_PHONE');
+  if (!/^1[016789]\d{7,8}$/.test(d)) throw new Error('INVALID_PHONE');
   return `+82${d}`;
 }
 

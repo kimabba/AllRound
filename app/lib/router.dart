@@ -93,13 +93,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.value ?? const [];
-      if (sports.isEmpty) {
+      final profileAsync = ref.read(myProfileProvider);
+      if (profileAsync.isLoading) return null;
+      final profile = profileAsync.value;
+
+      // 생년월일이 없으면 온보딩으로 되돌린다. 전화인증 화면으로 보내면
+      // send-otp 의 연령 게이트에 막혀 빠져나올 수 없는 교착이 된다.
+      final onboardingIncomplete = sports.isEmpty || profile?.birthDate == null;
+      if (onboardingIncomplete) {
         if (loc != '/onboarding') return '/onboarding';
-      } else {
-        final profileAsync = ref.read(myProfileProvider);
-        if (profileAsync.isLoading) return null;
-        final phoneVerified = profileAsync.value?.phoneVerifiedAt != null;
-        if (!phoneVerified && loc != '/verify-phone') return '/verify-phone';
+      } else if (profile?.phoneVerifiedAt == null) {
+        if (loc != '/verify-phone') return '/verify-phone';
       }
 
       // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.

@@ -267,7 +267,14 @@ begin
     return jsonb_build_object('status', 'ALREADY_USED');
   end;
 
-  delete from public.phone_otp where phone_hash = p_phone_hash;
+  -- 챌린지만 소멸시키고 rate-limit 카운터 행은 남긴다.
+  -- 행을 지우면 "가입→인증→탈퇴→재가입" 회전으로 번호별 한도가 리셋된다.
+  -- 빈 code_hash 는 어떤 HMAC 과도 일치하지 않고, 만료 처리로 재시도도 막힌다.
+  -- (오래된 행은 cleanup cron 이 정리)
+  update public.phone_otp
+    set code_hash = '', expires_at = now()
+    where phone_hash = p_phone_hash;
+
   insert into public.phone_verification_log (phone_hash, event, user_id)
     values (p_phone_hash, 'verified', p_user_id);
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { requireUser } from '../_shared/auth.ts';
+import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -195,6 +195,12 @@ Deno.serve(async (req) => {
 
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
+
+  // serviceClient 로 쓰므로 RLS 우회 → 읽기는 열고 쓰기만 자격 게이트.
+  if (req.method !== 'GET') {
+    const eligibilityError = await requireEligibility(auth.supabase);
+    if (eligibilityError) return eligibilityError;
+  }
 
   const supabase = serviceClient();
   if (req.method === 'GET') {

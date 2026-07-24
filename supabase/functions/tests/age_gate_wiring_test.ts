@@ -47,16 +47,31 @@ Deno.test('otp endpoints must not require eligibility (would be circular)', asyn
   );
 });
 
-Deno.test('club join request checks eligibility without blocking cancel or leave', async () => {
+// clubs-join 은 serviceClient 로 쓰므로 RLS 가 우회된다 → Edge 가 경계다.
+// 게이트는 fail-closed(예외 목록 외 전부 차단)여야 새 action 이 자동 보호된다.
+Deno.test('club join gates every action except reads and self-exit', async () => {
   const endpoint = await source('../clubs-join/index.ts');
-  const requestBranch = endpoint.indexOf("if (action === 'request')");
-  const cancelBranch = endpoint.indexOf("if (action === 'cancel')");
-  const guard = endpoint.indexOf('requireEligibility(auth.supabase)', requestBranch);
 
-  if (requestBranch < 0 || cancelBranch < 0 || guard < 0) {
-    throw new Error('clubs-join request eligibility guard wiring is missing');
-  }
-  if (guard >= cancelBranch) {
-    throw new Error('eligibility guard must stay scoped to the join request branch');
+  assertStringIncludes(endpoint, "new Set(['list_members', 'cancel', 'leave'])");
+  assertStringIncludes(endpoint, 'if (!ungatedActions.has(action))');
+  assertStringIncludes(endpoint, 'requireEligibility(auth.supabase)');
+
+  // 가드가 개별 분기보다 앞서야 이후 추가되는 action 이 기본 차단된다.
+  const guard = endpoint.indexOf('ungatedActions.has(action)');
+  const firstBranch = endpoint.indexOf("if (action === '");
+  assert(
+    guard >= 0 && firstBranch >= 0 && guard < firstBranch,
+    'eligibility gate must run before the action branches (fail-closed)',
+  );
+});
+
+// serviceClient 로 쓰는 나머지 클럽 endpoint 도 쓰기 경로에 자격 게이트가 있어야 한다.
+Deno.test('service-role club endpoints gate writes but keep reads open', async () => {
+  for (
+    const path of ['../clubs-inquiries/index.ts', '../clubs-review-join/index.ts']
+  ) {
+    const endpoint = await source(path);
+    assertStringIncludes(endpoint, "req.method !== 'GET'");
+    assertStringIncludes(endpoint, 'requireEligibility(auth.supabase)');
   }
 });

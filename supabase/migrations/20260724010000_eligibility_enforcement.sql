@@ -51,6 +51,7 @@ begin
     'club_events',
     'club_event_attendees',
     'club_recruiting_posts',
+    'chat_messages',
     'schedule_shares',
     'match_entries',
     'match_rounds',

@@ -15,10 +15,25 @@ Deno.test('normalizeE164Kr: 표기가 달라도 같은 번호는 같은 E.164', 
   }
 });
 
-Deno.test('normalizeE164Kr: 형식 오류는 throw', () => {
-  for (const bad of ['', '123', '010-1234', 'abcd', '0108212345678901']) {
-    assertThrows(() => normalizeE164Kr(bad), Error, 'INVALID_PHONE');
+Deno.test('normalizeE164Kr: 형식 오류·비휴대폰 번호는 throw', () => {
+  const bad = [
+    '',
+    '123',
+    '010-1234',
+    'abcd',
+    '0108212345678901',
+    '02-1234-5678', // 유선(서울) — SMS 불가
+    '070-1234-5678', // 인터넷전화
+    '015-1234-5678', // 이동통신 접두 아님
+  ];
+  for (const value of bad) {
+    assertThrows(() => normalizeE164Kr(value), Error, 'INVALID_PHONE');
   }
+});
+
+Deno.test('normalizeE164Kr: 구 이동통신 접두(011·016~019)도 허용', () => {
+  assertEquals(normalizeE164Kr('011-234-5678'), '+82112345678');
+  assertEquals(normalizeE164Kr('019-123-4567'), '+82191234567');
 });
 
 Deno.test('toDomesticKr: E.164 → 국내 발송 형식', () => {
