@@ -17,6 +17,7 @@ import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
+import '../../utils/google_calendar.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
@@ -2720,6 +2721,7 @@ class _EventsTab extends ConsumerWidget {
                   itemBuilder: (context, i) => _EventCard(
                     event: events[i],
                     members: members,
+                    canManage: canCreateEvent,
                     onChanged: onChanged,
                   ),
                 );
@@ -2755,10 +2757,12 @@ class _EventsTab extends ConsumerWidget {
 class _EventCard extends ConsumerStatefulWidget {
   final ClubEvent event;
   final List<ClubMember> members;
+  final bool canManage;
   final VoidCallback onChanged;
   const _EventCard({
     required this.event,
     required this.members,
+    required this.canManage,
     required this.onChanged,
   });
 
@@ -2817,6 +2821,68 @@ class _EventCardState extends ConsumerState<_EventCard> {
     if (blocked) widget.onChanged();
   }
 
+  Future<void> _manageEvent({required bool delete}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(delete ? '일정을 삭제할까요?' : '일정을 조기 종료할까요?'),
+        content: Text(
+          delete
+              ? '삭제한 일정은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
+              : '종료한 일정은 목록에서 내려가고 예정 알림도 발송되지 않습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(delete ? '삭제' : '종료'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final api = ref.read(apiProvider);
+      if (delete) {
+        await api.deleteClubEvent(widget.event.clubId, widget.event.id);
+      } else {
+        await api.endClubEvent(widget.event.clubId, widget.event.id);
+      }
+      widget.onChanged();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(delete ? '일정 삭제에 실패했습니다.' : '일정 종료에 실패했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _addToGoogleCalendar() async {
+    final event = widget.event;
+    final opened = await launchUrl(
+      buildGoogleCalendarUrl(
+        title: event.title,
+        startsAt: event.startsAt,
+        description: event.description,
+        location: event.locationText,
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google 캘린더를 열지 못했습니다.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2866,16 +2932,40 @@ class _EventCardState extends ConsumerState<_EventCard> {
                     ],
                   ),
                 ),
-                if (canModerateAuthor)
+                if (widget.canManage || canModerateAuthor)
                   PopupMenuButton<String>(
                     tooltip: '모임 더보기',
                     onSelected: (value) {
+                      if (value == 'end') {
+                        unawaited(_manageEvent(delete: false));
+                      }
+                      if (value == 'delete') {
+                        unawaited(_manageEvent(delete: true));
+                      }
                       if (value == 'report') unawaited(_reportEvent());
                       if (value == 'block') unawaited(_blockEventAuthor());
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'report', child: Text('모임 신고')),
-                      PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+                    itemBuilder: (_) => [
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'end',
+                          child: Text('모임 조기 종료'),
+                        ),
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('모임 삭제'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('모임 신고'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('작성자 차단'),
+                        ),
                     ],
                   ),
               ],
@@ -2912,6 +3002,15 @@ class _EventCardState extends ConsumerState<_EventCard> {
               const SizedBox(height: AppSpacing.sm),
               Text(e.description!, style: tt.bodyMedium),
             ],
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _addToGoogleCalendar,
+                icon: const Icon(Icons.add_to_photos_outlined, size: 18),
+                label: const Text('Google 캘린더에 추가'),
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [

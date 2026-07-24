@@ -540,12 +540,38 @@ mixin ClubApi on ApiBase {
         .from('club_events')
         .select('*, club_event_attendees(user_id, status)')
         .eq('club_id', clubId)
+        .isFilter('ended_early_at', null)
         .gte('starts_at', nowIso)
         .order('starts_at');
     final uid = supabase.auth.currentUser?.id;
     return List<Map<String, dynamic>>.from(rows)
         .map((j) => ClubEvent.fromJson(j, currentUserId: uid))
         .toList();
+  }
+
+  Future<void> endClubEvent(String clubId, String eventId) async {
+    await _manageClubEvent(clubId, eventId, 'end');
+  }
+
+  Future<void> deleteClubEvent(String clubId, String eventId) async {
+    await _manageClubEvent(clubId, eventId, 'delete');
+  }
+
+  Future<void> _manageClubEvent(
+    String clubId,
+    String eventId,
+    String action,
+  ) async {
+    final response = await httpPost(
+      uri('clubs-events'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'action': action,
+        'club_id': clubId,
+        'event_id': eventId,
+      }),
+    );
+    check(response);
   }
 
   Future<void> createClubEvent({
@@ -557,20 +583,25 @@ mixin ClubApi on ApiBase {
     int? fee,
     int? capacity,
   }) async {
-    final uid = supabase.auth.currentUser?.id;
-    if (uid == null) throw StateError('Not authenticated');
-    await supabase.from('club_events').insert({
-      'club_id': clubId,
-      'created_by': uid,
-      'title': title,
-      if (description != null && description.isNotEmpty)
-        'description': description,
-      if (locationText != null && locationText.isNotEmpty)
-        'location_text': locationText,
-      'starts_at': startsAt.toUtc().toIso8601String(),
-      if (fee != null) 'fee': fee,
-      if (capacity != null) 'capacity': capacity,
-    });
+    if (supabase.auth.currentUser == null) {
+      throw StateError('Not authenticated');
+    }
+    final response = await httpPost(
+      uri('clubs-events'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'title': title,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        if (locationText != null && locationText.isNotEmpty)
+          'location_text': locationText,
+        'starts_at': startsAt.toUtc().toIso8601String(),
+        if (fee != null) 'fee': fee,
+        if (capacity != null) 'capacity': capacity,
+      }),
+    );
+    check(response);
   }
 
   Future<void> respondEvent(String eventId, {required bool going}) async {
