@@ -16,7 +16,20 @@ jobs:
           python-version: '3.12'
       - run: python3 scripts/harness/check_enums.py
       - run: python3 scripts/harness/check_static_rules.py
+      - run: python3 scripts/qa/verify_ranking_rules.py
       - run: bash scripts/harness/check_secrets.sh
+
+  database:
+    name: Database pgTAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.108.0
+      # DB 테스트에 불필요한 서비스는 제외해 기동 시간을 줄인다.
+      - run: supabase start -x edge-runtime,imgproxy,vector,logflare,studio
+      - run: bash scripts/qa/run_db_tests.sh
 
   flutter:
     name: Flutter analyze/test
