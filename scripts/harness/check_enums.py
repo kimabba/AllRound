@@ -103,13 +103,54 @@ def seed_grades() -> list[tuple[str, str, str, int]]:
         r"insert\s+into\s+public\.grades\s*\([^)]*\)\s*values\s*(.*?)(?:on\s+conflict|;)",
         re.I | re.S,
     )
-    value_pattern = re.compile(r"\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*\)")
+    # (sport, code, label, sort_order[, ...]) — 뒤에 컬럼이 더 붙어도(is_active 등) 읽는다.
+    value_pattern = re.compile(
+        r"\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*[,)]"
+    )
+    tuple_start = re.compile(r"\(\s*'")
+    label_update = re.compile(
+        r"update\s+public\.grades\s+set\s+label_ko\s*=\s*'([^']+)'(.*?);",
+        re.I | re.S,
+    )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
-        for block in insert_pattern.finditer(read(path)):
-            for sport, code, label, order in value_pattern.findall(block.group(1)):
+        migration = read(path)
+        for block in insert_pattern.finditer(migration):
+            values = block.group(1)
+            parsed = value_pattern.findall(values)
+            # 인식 못 한 튜플이 있으면 조용히 빠뜨리지 말고 실패한다. seed 형식이 바뀌면
+            # 새 등급이 통째로 무시된 채 게이트가 PASS 하는 게 가장 위험하다.
+            if len(parsed) != len(tuple_start.findall(values)):
+                raise AssertionError(
+                    f"{path.name}: public.grades seed 튜플을 전부 해석하지 못했다 "
+                    f"(해석 {len(parsed)} / 발견 {len(tuple_start.findall(values))})"
+                )
+            for sport, code, label, order in parsed:
                 rows[(sport, code)] = (sport, code, label, int(order))
+        # 라벨만 바꾸는 후속 마이그레이션도 정본이다.
+        for match in label_update.finditer(migration):
+            new_label, where = match.group(1), match.group(2)
+            sport = re.search(r"sport\s*=\s*'([^']+)'", where)
+            code = re.search(r"code\s*=\s*'([^']+)'", where)
+            if not sport or not code:
+                raise AssertionError(
+                    f"{path.name}: grades 라벨 UPDATE 의 대상을 (sport, code) 로 특정하지 못했다"
+                )
+            key = (sport.group(1), code.group(1))
+            if key in rows:
+                existing = rows[key]
+                rows[key] = (existing[0], existing[1], new_label, existing[3])
     if not rows:
         raise AssertionError("public.grades seed 를 한 건도 찾지 못했다")
+    # 앱은 라벨을 code 단일 키로 들고 있다(gradeLabels). 종목 간 code 가 겹치면 한쪽
+    # 라벨이 다른 종목까지 덮어쓰므로 정본 단계에서 막는다.
+    codes: dict[str, str] = {}
+    for sport, code, _label, _order in rows.values():
+        if code in codes and codes[code] != sport:
+            raise AssertionError(
+                f"grades: code '{code}' 가 {codes[code]}·{sport} 두 종목에 있다 "
+                "(앱 라벨 맵이 code 단일 키라 서로 덮어쓴다)"
+            )
+        codes[code] = sport
     return sorted(rows.values(), key=lambda row: (row[0], row[3]))
 
 

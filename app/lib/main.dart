@@ -57,6 +57,10 @@ Future<void> initializeAllRoundServices({
     if (event.session != null) {
       DivisionCatalog.instance.load(Supabase.instance.client);
       GradeCatalog.instance.load(Supabase.instance.client);
+    } else if (event.event == AuthChangeEvent.signedOut) {
+      // 세션이 끊기면 등급 카탈로그를 비운다. 재로그인 로드가 실패했을 때 이전 세션의
+      // 스냅샷이 그대로 쓰이는 걸 막는다(in-flight 로드도 세대 증가로 무효화).
+      GradeCatalog.instance.reset();
     }
   });
 
@@ -235,6 +239,12 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
     if (Supabase.instance.client.auth.currentSession != null) {
       waits.add(
         DivisionCatalog.instance.whenReady
+            .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
+      );
+      // 등급 라벨도 같은 이유로 기다린다 — 늦게 도착하면 첫 화면이 번들 폴백 라벨로
+      // 그려지고, 값이 교체돼도 리빌드되지 않아 옛 이름이 남는다.
+      waits.add(
+        GradeCatalog.instance.whenReady
             .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
       );
     }

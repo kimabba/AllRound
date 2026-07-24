@@ -90,3 +90,32 @@ alter table public.user_sports
 alter table public.user_sports
   add constraint user_sports_grade_fkey
   foreign key (sport, grade) references public.grades (sport, code);
+
+-- FK 는 (sport, code) 의 "존재"만 본다. 관리자가 등급을 폐기(is_active=false)해도
+-- 사용자가 PostgREST 로 직접 그 등급을 배정할 수 있어, 클라이언트 선택지 필터가
+-- 유일한 방어가 된다. 신규 배정만 막고 기존 행은 그대로 두어야 하므로(폐기해도
+-- 과거 데이터는 남는다) FK 로는 표현할 수 없고 트리거로 강제한다.
+create or replace function public.enforce_active_grade()
+returns trigger
+language plpgsql
+set search_path = ''
+as $func$
+begin
+  if not exists (
+    select 1 from public.grades g
+    where g.sport = new.sport and g.code = new.grade and g.is_active
+  ) then
+    raise exception '비활성 등급은 배정할 수 없습니다: % / %', new.sport, new.grade
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$func$;
+
+comment on function public.enforce_active_grade() is
+  'user_sports 신규 배정을 활성 등급으로 제한한다(JY-146). 기존 행은 건드리지 않는다.';
+
+drop trigger if exists user_sports_active_grade on public.user_sports;
+create trigger user_sports_active_grade
+  before insert or update of sport, grade on public.user_sports
+  for each row execute function public.enforce_active_grade();

@@ -35,17 +35,34 @@ class GradeCatalog {
   GradeCatalog._();
   static final GradeCatalog instance = GradeCatalog._();
 
-  Map<Sport, List<String>>? _codes;
+  // 선택지는 활성 등급만, 라벨은 폐기 등급까지. 폐기해도 그 등급을 쓰던 사용자의
+  // 프로필에는 코드가 아니라 이름이 보여야 한다.
+  Map<Sport, List<String>>? _activeCodes;
   Map<String, String>? _labels;
+
+  // 로드 세대. 세션 전환(reset)이 in-flight 로드를 무효화해, 늦게 도착한 이전 계정의
+  // 결과가 새 상태를 오염시키지 않게 한다(DivisionCatalog 와 같은 이유).
   int _generation = 0;
+  Completer<void> _ready = Completer<void>();
 
-  bool get isLoaded => _codes != null;
+  /// 로드 시도(성공·실패 무관) 완료 신호. 스플래시 게이트가 이걸 기다려 첫 화면이
+  /// 폴백 라벨로 그려졌다가 바뀌는 걸 막는다.
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
 
-  List<String> codesFor(Sport sport) =>
-      _codes?[sport] ??
-      (sport == Sport.tennis ? _kFallbackTennisGrades : _kFallbackFutsalGrades);
+  bool get isLoaded => _activeCodes != null;
 
-  String? labelFor(String code) => (_labels ?? _kFallbackGradeLabels)[code];
+  List<String> codesFor(Sport sport) {
+    final loaded = _activeCodes;
+    // 로드됐으면 그 결과가 정본이다. 한 종목의 활성 등급이 0개면 빈 목록이 맞고,
+    // 폴백을 되살리면 DB 의 폐기 결정을 앱이 뒤집는 꼴이 된다.
+    if (loaded != null) return loaded[sport] ?? const [];
+    return sport == Sport.tennis
+        ? _kFallbackTennisGrades
+        : _kFallbackFutsalGrades;
+  }
 
   Map<String, String> get labels => _labels ?? _kFallbackGradeLabels;
 
@@ -55,10 +72,10 @@ class GradeCatalog {
   Future<void> load(SupabaseClient client) async {
     final gen = ++_generation;
     try {
+      // 폐기 등급까지 받아 라벨을 채운다. 선택지 필터는 is_active 로 아래에서 한다.
       final rows = await client
           .from('grades')
-          .select('sport, code, label_ko')
-          .eq('is_active', true)
+          .select('sport, code, label_ko, is_active')
           .order('sport')
           .order('sort_order');
       if (gen == _generation) {
@@ -66,29 +83,39 @@ class GradeCatalog {
       }
     } catch (_) {
       // 폴백 유지.
+    } finally {
+      if (gen == _generation) _markReady();
     }
   }
 
   /// DB row(또는 테스트 픽스처) → 카탈로그. 정렬은 쿼리(sort_order)가 보장한다.
   @visibleForTesting
   void ingestRows(List<Map<String, dynamic>> rows) {
-    if (rows.isEmpty) return; // 빈 응답으로 선택지를 지우지 않는다.
+    if (rows.isEmpty) {
+      // 빈 응답으로 선택지를 통째로 지우지 않는다(권한·필터 사고 방어).
+      _markReady();
+      return;
+    }
     final codes = <Sport, List<String>>{};
     final labels = <String, String>{};
     for (final row in rows) {
       final sport = sportFromString(row['sport'] as String);
       final code = row['code'] as String;
-      (codes[sport] ??= <String>[]).add(code);
       labels[code] = row['label_ko'] as String;
+      if (row['is_active'] as bool? ?? true) {
+        (codes[sport] ??= <String>[]).add(code);
+      }
     }
-    _codes = codes;
+    _activeCodes = codes;
     _labels = labels;
+    _markReady();
   }
 
-  @visibleForTesting
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다. in-flight 로드도 무효화된다.
   void reset() {
-    _codes = null;
+    _activeCodes = null;
     _labels = null;
+    _ready = Completer<void>();
     _generation++;
   }
 }

@@ -15,9 +15,14 @@ void main() {
 
     test('DB 결과가 폴백을 대체한다 — 등급 추가·개명이 INSERT 만으로 반영된다', () {
       GradeCatalog.instance.ingestRows([
-        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문'},
-        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로'},
-        {'sport': 'tennis', 'code': 'under1y', 'label_ko': '1년 미만'},
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': true},
+        {
+          'sport': 'tennis',
+          'code': 'under1y',
+          'label_ko': '1년 미만',
+          'is_active': true
+        },
       ]);
       expect(futsalGrades, ['intro', 'pro']);
       expect(gradeLabel('pro'), '프로');
@@ -26,10 +31,49 @@ void main() {
       expect(isAllowedSkillLevelLabel(Sport.futsal, '프로'), isTrue);
     });
 
+    test('폐기 등급은 선택지에서 빠지되 라벨은 남는다', () {
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': false},
+      ]);
+      expect(futsalGrades, ['intro'], reason: '폐기 등급이 선택지에 남았다');
+      // 그 등급을 쓰던 사용자의 프로필에 코드가 그대로 노출되면 안 된다.
+      expect(gradeLabel('pro'), '프로');
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '프로'), isFalse);
+    });
+
+    test('한 종목의 활성 등급이 0개면 폴백을 되살리지 않는다', () {
+      // 폴백으로 되돌리면 앱이 DB 의 폐기 결정을 뒤집는 꼴이 된다.
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'tennis', 'code': 'under1y', 'label_ko': '1년 미만', 'is_active': true},
+      ]);
+      expect(futsalGrades, isEmpty);
+      expect(tennisGrades, ['under1y']);
+    });
+
     test('빈 응답은 무시한다 — 선택지가 통째로 사라지면 안 된다', () {
       GradeCatalog.instance.ingestRows([]);
       expect(GradeCatalog.instance.isLoaded, isFalse);
       expect(futsalGrades.length, 5);
+    });
+
+    test('ingest 는 whenReady 를 완료시키고 reset 은 재무장한다', () async {
+      var ready = false;
+      unawaited(GradeCatalog.instance.whenReady.then((_) => ready = true));
+      await pumpEventQueue();
+      expect(ready, isFalse, reason: '로드 전에 스플래시가 열리면 폴백 라벨이 보인다');
+
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+      ]);
+      await pumpEventQueue();
+      expect(ready, isTrue);
+
+      GradeCatalog.instance.reset();
+      var readyAgain = false;
+      unawaited(GradeCatalog.instance.whenReady.then((_) => readyAgain = true));
+      await pumpEventQueue();
+      expect(readyAgain, isFalse, reason: '세션 전환 후에도 이전 완료 신호가 남았다');
     });
   });
 
