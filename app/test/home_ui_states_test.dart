@@ -66,6 +66,8 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
+    expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
+    expect(find.text('나의 일정'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
