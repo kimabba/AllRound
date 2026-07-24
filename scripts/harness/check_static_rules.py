@@ -121,6 +121,61 @@ def check_pureform_literal_contracts() -> None:
     print("✓ Pureform radius and fixed-control literals use shared tokens")
 
 
+# 종목·등급의 한글 라벨은 정본 두 파일에만 있어야 한다. 코드값 옆에 라벨을 직접
+# 적으면(삼항·if 분기) 등급 개편 때 그 줄만 남아 조용히 갈라진다(JY-146).
+LABEL_SSOT_FILES = {
+    "app/lib/utils/grade_labels.dart",
+    "supabase/functions/_shared/enums.ts",
+}
+# 사용자 발화에서 종목을 알아내는 키워드 매칭. 라벨 사용이 아니라 입력 파싱이다.
+LABEL_SCAN_EXEMPT = {
+    "supabase/functions/_shared/intent.ts",
+}
+LABEL_SCAN_ROOTS = [("app/lib", "*.dart"), ("supabase/functions", "*.ts")]
+CODE_LABEL_PAIRS = [
+    (
+        "종목",
+        re.compile(r"'(?:tennis|futsal)'"),
+        re.compile(r"테니스|풋살"),
+    ),
+    (
+        "등급",
+        re.compile(r"'(?:under1y|y1to3|y3to5|over5y|intro|beginner|intermediate|advanced|elite)'"),
+        re.compile(r"1년 미만|1~3년|3~5년|5년 이상|입문|초급|중급|고급|선출"),
+    ),
+]
+
+
+def strip_line_comment(line: str) -> str:
+    index = line.find("//")
+    return line if index < 0 else line[:index]
+
+
+def check_sport_grade_label_hardcode() -> None:
+    violations: list[str] = []
+    for relative_root, pattern in LABEL_SCAN_ROOTS:
+        for path in (ROOT / relative_root).rglob(pattern):
+            relative = path.relative_to(ROOT).as_posix()
+            if relative in LABEL_SSOT_FILES or relative in LABEL_SCAN_EXEMPT:
+                continue
+            if "test" in path.name or "/tests/" in relative:
+                continue
+            for line_number, raw in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                line = strip_line_comment(raw)
+                for kind, code_pattern, label_pattern in CODE_LABEL_PAIRS:
+                    if code_pattern.search(line) and label_pattern.search(line):
+                        violations.append(f"{relative}:{line_number}: [{kind}] {raw.strip()}")
+    if violations:
+        fail(
+            "라벨 재하드코딩(JY-146): 코드값 옆에 한글 라벨을 직접 적었다.\n"
+            "Dart 는 sportLabel*/gradeLabel, TS 는 SPORT_LABELS/GRADE_LABELS 를 쓴다.\n"
+            + "\n".join(violations)
+        )
+    print("✓ 종목·등급 라벨이 정본 파일에서만 정의된다")
+
+
 def main() -> int:
     check_root_file_lengths()
     check_required_rule_docs()
@@ -128,6 +183,7 @@ def main() -> int:
     check_github_templates()
     check_no_shell_background_wrappers_in_harness()
     check_pureform_literal_contracts()
+    check_sport_grade_label_hardcode()
     print("✅ static repository rules passed")
     return 0
 

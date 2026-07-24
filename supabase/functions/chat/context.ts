@@ -2,7 +2,13 @@
  * chat/context.ts — User context hashing, system prompt building, context prompt builder.
  */
 
-import { GRADE_LABELS, REGION_LABELS, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
+import {
+  GRADE_LABELS,
+  REGION_LABELS,
+  type Sport,
+  SPORT_LABELS,
+  TENNIS_ORG_LABELS,
+} from '../_shared/enums.ts';
 import { buildRegulationContextLines } from '../_shared/regulation.ts';
 import type {
   SemanticRule,
@@ -60,9 +66,9 @@ export function buildProfileContext(
 ): string {
   const profile = sports.length === 0 ? '아직 종목·등급을 등록하지 않았습니다.' : sports
     .map((s) =>
-      `- ${SPORT_LABELS[s.sport as 'tennis' | 'futsal'] ?? s.sport}: ${
-        GRADE_LABELS[s.grade] ?? s.grade
-      }${s.is_primary ? ' (주요 관심 종목)' : ''}`
+      `- ${SPORT_LABELS[s.sport as Sport] ?? s.sport}: ${GRADE_LABELS[s.grade] ?? s.grade}${
+        s.is_primary ? ' (주요 관심 종목)' : ''
+      }`
     )
     .join('\n');
 
@@ -166,7 +172,7 @@ export function buildContextPrompt(
     });
     const bodyTopIds = new Set(top.slice(0, REGULATION_BODY_TOP_N).map((t) => t.id));
     for (const sport of sortedSports) {
-      const label = SPORT_LABELS[sport as 'tennis' | 'futsal'] ?? sport;
+      const label = SPORT_LABELS[sport as Sport] ?? sport;
       parts.push(`[관련 대회 — ${label}]`);
       for (const t of bySport.get(sport)!) {
         parts.push(
@@ -207,7 +213,7 @@ export function buildContextPrompt(
       return oa !== ob ? oa - ob : a.localeCompare(b);
     });
     for (const sport of sortedRuleSports) {
-      const label = SPORT_LABELS[sport as 'tennis' | 'futsal'] ?? sport;
+      const label = SPORT_LABELS[sport as Sport] ?? sport;
       parts.push(`[관련 룰북 — ${label}]`);
       for (const r of rulesBySport.get(sport)!) {
         const snippet = r.body.length > 1500 ? r.body.slice(0, 1500) + '\u2026' : r.body;

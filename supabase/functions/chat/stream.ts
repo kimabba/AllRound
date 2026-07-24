@@ -5,6 +5,7 @@
 import type { ChatTurn, GeminiUsage } from '../_shared/gemini.ts';
 import { streamChat } from '../_shared/gemini.ts';
 import { buildTournamentCards, type TournamentCardRow } from '../_shared/chat_cards.ts';
+import type { Sport } from '../_shared/enums.ts';
 import { normalizeRegulationFields } from '../_shared/regulation.ts';
 import type { DbCitation, SemanticRule, SemanticTournament, VenueRow } from './types.ts';
 
@@ -48,7 +49,7 @@ export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): un
       null;
     return {
       id: t.id,
-      sport: t.sport as 'tennis' | 'futsal',
+      sport: t.sport as Sport,
       title: t.title,
       start_date: t.start_date,
       end_date: null,

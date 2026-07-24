@@ -20,6 +20,14 @@ const gradeLabels = <String, String>{
   'elite': '선출',
 };
 
+/// 등급 무관. 등급 코드가 아니라 "가리지 않음"을 뜻하는 선택지 라벨이다.
+const anyGradeLabel = '무관';
+
+/// 팀 모집글 `skill_level` 에 저장 가능한 라벨(등급 라벨 ∪ 무관).
+/// free-text 컬럼이라 DB 가 막지 못하는 오염을 코드 경계에서 거른다.
+bool isAllowedSkillLevelLabel(String value) =>
+    value == anyGradeLabel || gradeLabels.containsValue(value);
+
 const futsalEventCategoryLabels = <String, String>{
   'regional_federation': '지역 풋살연맹',
   'sports_for_all': '생활체육대회',

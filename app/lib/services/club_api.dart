@@ -9,6 +9,7 @@ import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
+import '../utils/grade_labels.dart';
 import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
@@ -242,6 +243,12 @@ mixin ClubApi on ApiBase {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
+    // skill_level 은 free-text 라 DB 가 값을 막지 못한다. 등급 정본에서 파생된
+    // 선택지 밖의 값(폐기된 부수체계 등)이 새로 유입되면 여기서 잡는다(JY-146).
+    assert(
+      isAllowedSkillLevelLabel(skillLevel),
+      '등급 정본에 없는 skill_level: $skillLevel',
+    );
 
     final Object raw = await supabase
         .from('club_recruiting_posts')
