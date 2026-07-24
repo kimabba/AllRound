@@ -8,7 +8,7 @@
  *
  * 슬롯 추출 (`extractSlots`) 은 의도와 독립적으로 항상 시도.
  *   - region: 한국어 별칭 → REGION_CODES
- *   - sport:  한국어/영어 키워드 → 'tennis' | 'futsal'
+ *   - sport:  한국어/영어 키워드 → Sport
  *   - date_range: 한국어 자연어 → ISO 8601 (KST/Asia/Seoul 기준)
  *
  * 주의: 이 모듈은 한국어 동호인 도메인 한정. 다국어 확장 시 별도 모듈로 분리.
@@ -21,7 +21,7 @@
  *     높음) 개선 전까지 임베딩 라우팅은 켜지 않는다. 상세는 chat/types.ts 게이트 주석 참고.
  */
 
-import { REGION_CODES, type RegionCode } from './enums.ts';
+import { REGION_CODES, type RegionCode, type Sport } from './enums.ts';
 
 // =========================
 // 타입
@@ -56,7 +56,7 @@ export interface DateRange {
 
 export interface Slots {
   region?: RegionCode;
-  sport?: 'tennis' | 'futsal';
+  sport?: Sport;
   date_range?: DateRange;
 }
 
@@ -128,7 +128,7 @@ function extractRegion(text: string): RegionCode | undefined {
 // =========================
 // 종목 별칭
 // =========================
-function extractSport(text: string): 'tennis' | 'futsal' | undefined {
+function extractSport(text: string): Sport | undefined {
   if (/(테니스|tennis)/i.test(text)) return 'tennis';
   if (/(풋살|futsal)/i.test(text)) return 'futsal';
   return undefined;

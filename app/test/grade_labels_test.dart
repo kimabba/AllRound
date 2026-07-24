@@ -4,6 +4,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
 
 void main() {
+  group('skill_level 허용집합', () {
+    test('해당 종목의 등급 라벨과 무관은 통과한다', () {
+      for (final sport in Sport.values) {
+        for (final grade in gradesFor(sport)) {
+          expect(isAllowedSkillLevelLabel(sport, gradeLabel(grade)), isTrue,
+              reason: '$sport 의 $grade 라벨이 거부됐다');
+        }
+        expect(isAllowedSkillLevelLabel(sport, anyGradeLabel), isTrue);
+      }
+    });
+
+    test('다른 종목의 등급 라벨은 거부한다', () {
+      // 합집합으로 검사하면 풋살 모집글에 테니스 등급이 들어가도 통과한다.
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '1년 미만'), isFalse);
+      expect(isAllowedSkillLevelLabel(Sport.tennis, '입문'), isFalse);
+    });
+
+    test('폐기된 부수체계와 등급 코드 자체는 거부한다', () {
+      // 마이그 010 에서 폐기된 옛 라벨이 다시 유입되는 걸 막는다(JY-146).
+      for (final stale in ['신입', '5부', '1부']) {
+        expect(isAllowedSkillLevelLabel(Sport.tennis, stale), isFalse,
+            reason: '$stale 이 통과됐다');
+      }
+      // 라벨 자리에 코드가 들어오는 실수도 거른다.
+      expect(isAllowedSkillLevelLabel(Sport.tennis, 'under1y'), isFalse);
+      expect(isAllowedSkillLevelLabel(Sport.futsal, ''), isFalse);
+    });
+  });
+
   group('grade_labels', () {
     test('tennis grade order: under1y → over5y', () {
       expect(tennisGrades, ['under1y', 'y1to3', 'y3to5', 'over5y']);
