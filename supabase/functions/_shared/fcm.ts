@@ -7,6 +7,11 @@ export interface FcmNotificationInput {
   clubId?: string | null;
 }
 
+export interface FcmTarget {
+  token: string;
+  soundEnabled: boolean;
+}
+
 export interface FcmBatchResult {
   status: 'sent' | 'failed' | 'skipped';
   sentCount: number;
@@ -86,10 +91,11 @@ export function parseFirebaseCredentials(raw: string | undefined): FirebaseCrede
   }
 }
 
-export function buildFcmPayload(token: string, input: FcmNotificationInput) {
+export function buildFcmPayload(target: FcmTarget, input: FcmNotificationInput) {
+  const aps = target.soundEnabled ? { sound: 'default' } : {};
   return {
     message: {
-      token,
+      token: target.token,
       notification: {
         title: input.title,
         body: input.body?.trim() ?? '',
@@ -101,7 +107,7 @@ export function buildFcmPayload(token: string, input: FcmNotificationInput) {
         club_id: input.clubId ?? '',
       },
       android: { priority: 'HIGH' },
-      apns: { payload: { aps: { sound: 'default' } } },
+      apns: { payload: { aps } },
     },
   };
 }
@@ -167,15 +173,22 @@ async function getAccessToken(
 }
 
 export async function sendFcm(
-  tokens: string[],
+  targets: FcmTarget[],
   input: FcmNotificationInput,
   options: {
     serviceAccountJson?: string;
     fetcher?: Fetcher;
   } = {},
 ): Promise<FcmBatchResult> {
-  const uniqueTokens = [...new Set(tokens.map((token) => token.trim()).filter(Boolean))];
-  if (uniqueTokens.length === 0) {
+  const uniqueTargets = [
+    ...new Map(
+      targets
+        .map((target) => ({ ...target, token: target.token.trim() }))
+        .filter((target) => target.token.length > 0)
+        .map((target) => [target.token, target]),
+    ).values(),
+  ];
+  if (uniqueTargets.length === 0) {
     return { status: 'skipped', sentCount: 0, failedCount: 0, error: 'no_device_tokens' };
   }
 
@@ -186,7 +199,7 @@ export async function sendFcm(
     return {
       status: 'failed',
       sentCount: 0,
-      failedCount: uniqueTokens.length,
+      failedCount: uniqueTargets.length,
       error: 'firebase_credentials_missing_or_invalid',
     };
   }
@@ -194,7 +207,7 @@ export async function sendFcm(
   const fetcher = options.fetcher ?? fetch;
   try {
     const accessToken = await getAccessToken(credentials, fetcher);
-    const results = await Promise.all(uniqueTokens.map(async (token) => {
+    const results = await Promise.all(uniqueTargets.map(async (target) => {
       const response = await fetcher(
         `https://fcm.googleapis.com/v1/projects/${
           encodeURIComponent(credentials.projectId)
@@ -205,7 +218,7 @@ export async function sendFcm(
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(buildFcmPayload(token, input)),
+          body: JSON.stringify(buildFcmPayload(target, input)),
         },
       );
       return response.ok;
@@ -222,7 +235,7 @@ export async function sendFcm(
     return {
       status: 'failed',
       sentCount: 0,
-      failedCount: uniqueTokens.length,
+      failedCount: uniqueTargets.length,
       error: error instanceof Error ? error.message : 'fcm_unknown_error',
     };
   }
