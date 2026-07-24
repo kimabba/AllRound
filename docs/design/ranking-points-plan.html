@@ -153,11 +153,12 @@ erDiagram
     <ul class="check" data-phase="p0">
       <li><label><input type="checkbox"><span><code>match_entries_self</code> RLS에 <code>points_earned=0 AND source='manual'</code> 강제</span></label></li>
       <li><label><input type="checkbox"><span><code>UNIQUE(user_id, tournament_id, division)</code> 중복 등록 차단</span></label></li>
-      <li><label><input type="checkbox"><span>pgTAP 4케이스(조작·위조·정상·중복) 통과</span></label></li>
-      <li><label><input type="checkbox"><span>커밋 <code>ab755e8</code> · 브랜치 <code>fix/lock-selfreported-match-points</code></span></label></li>
-      <li><label><input type="checkbox"><span>PR 생성 → CI 통과 → codex 리뷰 GATE PASS → 머지 <span class="tag">남은 일</span></span></label></li>
+      <li><label><input type="checkbox"><span><b>[codex GATE FAIL→수정]</b> self 정책을 command별 분리 — 검증된 행(admin/crawl)을 유저가 DELETE로 세탁하거나 UPDATE로 무력화하던 구멍 차단. 수정/삭제는 admin·service_role 전용</span></label></li>
+      <li><label><input type="checkbox"><span>pgTAP 10케이스(조작·위조·정상·중복 + 검증행 DELETE/UPDATE 보호 + 긍정대조) 통과. red→green 확인</span></label></li>
+      <li><label><input type="checkbox"><span>PR 생성 → CI 통과 → codex 재리뷰 GATE PASS → 머지 <span class="tag">남은 일</span></span></label></li>
     </ul>
-    <p class="crit">위 4항 코드는 완료. 마지막 항목(머지)만 미결. 관리자·service_role 경로는 그대로라 나중에 검증 점수 넣는 길은 열려 있음.</p>
+    <p class="crit">코드·테스트 완료. 마지막 항목(재리뷰·머지)만 미결. 관리자·service_role 경로는 그대로라 검증 점수 넣는 길은 열려 있음.</p>
+    <p class="crit" style="display:block"><b>별건 이슈(codex 중):</b> pgTAP 10개 파일이 CI 어디에도 연결 안 됨 — 로컬 수동 실행뿐. DB 정책 자동 게이트가 없다는 뜻. 별도 이슈로 관리.</p>
   </div>
 </div>
 
