@@ -110,20 +110,13 @@ mixin UserApi on ApiBase {
     if (userId == null) throw StateError('Not authenticated');
 
     await supabase.rpc('ensure_profile');
-    // 전체 삭제 후 재삽입하면 DELETE 와 INSERT 가 별도 트랜잭션이라, INSERT 가 거부될 때
-    // (폐기 등급 보유자 등) 종목 정보가 통째로 사라진다. 제거된 종목만 지우고 나머지는
-    // upsert 해서, 실패해도 기존 행이 남게 한다.
-    final keep = sports.map((s) => s.sport).toList();
-    final removed = supabase.from('user_sports').delete().eq('user_id', userId);
-    await (keep.isEmpty
-        ? removed
-        : removed.not('sport', 'in', '(${keep.join(',')})'));
-    if (sports.isNotEmpty) {
-      await supabase.from('user_sports').upsert(
-            sports.map((s) => s.toInsert(userId)).toList(),
-            onConflict: 'user_id,sport',
-          );
-    }
+    // 단일 트랜잭션 RPC. PostgREST 로 delete + insert 를 따로 보내면 delete 만 커밋된 채
+    // insert 가 거부될 때 종목이 사라지고(부분 적용), 배치 upsert 는 주 종목 교체가
+    // 행 순서에 의존한다(one_primary_per_user 부분 유니크 인덱스).
+    // user_id 는 서버가 auth.uid() 로 정한다 — payload 의 값은 무시된다.
+    await supabase.rpc('save_user_sports', params: {
+      'p_sports': sports.map((s) => s.toInsert(userId)).toList(),
+    });
   }
 
   Future<List<Region>> listRegions() async {

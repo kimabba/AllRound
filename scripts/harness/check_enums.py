@@ -26,6 +26,43 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def strip_sql_comments(sql: str) -> str:
+    """SQL 주석(`--`, `/* */`)을 지운다. 문자열 리터럴 안의 내용은 그대로 둔다.
+
+    주석에 적힌 문장 예시("-- update public.grades set …")를 실제 문장으로 오인하면
+    게이트가 엉뚱한 곳에서 실패한다. 줄 수를 보존하려고 개행은 남긴다.
+    """
+    out: list[str] = []
+    index, length = 0, len(sql)
+    while index < length:
+        char = sql[index]
+        if char == "'":  # 문자열 리터럴 — '' 이스케이프까지 통과시킨다.
+            cursor = index + 1
+            while cursor < length:
+                if sql[cursor] == "'":
+                    if cursor + 1 < length and sql[cursor + 1] == "'":
+                        cursor += 2
+                        continue
+                    break
+                cursor += 1
+            out.append(sql[index : cursor + 1])
+            index = cursor + 1
+            continue
+        if sql.startswith("--", index):
+            while index < length and sql[index] != "\n":
+                index += 1
+            continue
+        if sql.startswith("/*", index):
+            end = sql.find("*/", index + 2)
+            end = length if end < 0 else end + 2
+            out.append("\n" * sql.count("\n", index, end))
+            index = end
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
 def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
 
@@ -116,18 +153,26 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
     )
     tuple_start = re.compile(r"\(\s*'")
     setter_update = re.compile(
-        r"update\s+public\.grades\s+set\s+(.*?)\s+where\s+(.*?);",
+        r"update\s+(?:only\s+)?public\.grades\s+set\s+(.*?)\s+where\s+(.*?);",
         re.I | re.S,
+    )
+    # WHERE 는 정확히 한 행을 지목해야 한다. `sport='x' or code='y'` 처럼 여러 행을 건드리면
+    # 한 행만 반영한 셈이 돼 나머지가 조용히 어긋난다.
+    single_row_where = re.compile(
+        rf"^\s*sport\s*=\s*{quoted}\s+and\s+code\s*=\s*{quoted}\s*$", re.I
     )
     # grades 를 건드리는 문장은 전부 이 파서가 소화해야 한다. 지원하지 않는 문법을
     # 조용히 넘기면 카탈로그가 갈라져도 게이트가 PASS 한다 — 가장 위험한 실패다.
     # (예: INSERT ... SELECT 로 등급을 추가하면 seed 에 안 잡혀 폴백과 어긋난다.)
+    # `only` 는 상속 테이블용 수식어이고, truncate 는 행을 통째로 지운다. 둘 다 흘리면 안 된다.
     grades_stmt = re.compile(
-        r"\b(insert\s+into|update|delete\s+from|merge\s+into)\s+public\.grades\b(.{0,200})",
+        r"\b(insert\s+into|update|delete\s+from|merge\s+into|truncate(?:\s+table)?)"
+        r"\s+(?:only\s+)?public\.grades\b(.{0,200})",
         re.I | re.S,
     )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
-        migration = read(path)
+        # SQL 주석 안의 문장 예시를 실제 문장으로 오인하지 않는다(문자열 리터럴은 보존).
+        migration = strip_sql_comments(read(path))
         updates_seen = 0
         for kind, tail in grades_stmt.findall(migration):
             kind = re.sub(r"\s+", " ", kind).lower()
@@ -139,6 +184,11 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                     )
             elif kind == "update":
                 updates_seen += 1
+            elif kind.startswith("truncate"):
+                raise AssertionError(
+                    f"{path.name}: public.grades 를 TRUNCATE 한다. seed 파서가 반영하지 "
+                    "못하며, user_sports 의 FK 도 깨진다(폐기는 is_active=false 정책이다)."
+                )
             else:
                 raise AssertionError(
                     f"{path.name}: public.grades 에 대한 {kind.upper()} 는 seed 파서가 "
@@ -181,15 +231,33 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                     f"{path.name}: grades UPDATE 가 sport·code 를 바꾼다. "
                     "seed 파서가 키 이동을 추적하지 못하므로 새 행 INSERT 로 표현하라."
                 )
+            # 값이 리터럴이 아니면(sort_order = sort_order + 1, label_ko = upper(...))
+            # 파서가 결과를 계산할 수 없다. 반영한 척하는 대신 실패한다.
+            for column in ("label_ko", "is_active", "sort_order"):
+                assigned = re.search(rf"\b{column}\s*=\s*([^,]+?)(?:,|$)", setters, re.I | re.S)
+                if not assigned:
+                    continue
+                value = assigned.group(1).strip()
+                literal = {
+                    "label_ko": re.fullmatch(quoted, value),
+                    "is_active": re.fullmatch(r"true|false", value, re.I),
+                    "sort_order": re.fullmatch(r"\d+", value),
+                }[column]
+                if not literal:
+                    raise AssertionError(
+                        f"{path.name}: grades UPDATE 의 {column} 값 '{value}' 이 리터럴이 아니다. "
+                        "seed 파서가 계산식을 평가하지 못하므로 리터럴로 써라."
+                    )
             if not new_label and not new_active and not new_order:
                 continue
-            sport = re.search(r"sport\s*=\s*'([^']+)'", where)
-            code = re.search(r"code\s*=\s*'([^']+)'", where)
-            if not sport or not code:
+            if not single_row_where.match(where.strip()):
                 raise AssertionError(
-                    f"{path.name}: grades UPDATE 의 대상을 (sport, code) 로 특정하지 못했다"
+                    f"{path.name}: grades UPDATE 의 WHERE '{where.strip()}' 가 "
+                    "`sport = '…' and code = '…'` 형태가 아니다(여러 행을 건드리면 "
+                    "일부만 반영돼 조용히 어긋난다)."
                 )
-            key = (sport.group(1), code.group(1))
+            matched = single_row_where.match(where.strip())
+            key = (matched.group(1), matched.group(2))
             if key in rows:
                 sport_v, code_v, label_v, order_v, active_v = rows[key]
                 if new_label:

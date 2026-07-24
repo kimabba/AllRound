@@ -84,11 +84,13 @@ on conflict (sport, code) do update
 --
 -- 부착과 검증을 분리한다. 검증형 ADD FOREIGN KEY 는 user_sports 전체를 스캔하는 동안
 -- 쓰기와 충돌하는 락을 잡으므로, 장기 트랜잭션 뒤에서 배포가 무기한 대기하거나
--- 락 획득 후 프로필 저장이 큐잉·타임아웃된다. NOT VALID 부착은 스캔이 없어 락 구간이
--- 짧고, VALIDATE 는 ShareUpdateExclusiveLock 이라 쓰기를 막지 않는다.
--- SET LOCAL 이 아니라 SET 이다 — 마이그레이션은 트랜잭션 블록으로 실행되지 않아
--- SET LOCAL 이 조용히 무시된다(25P01 경고만 남는다). 아래에서 default 로 되돌린다.
-set lock_timeout = '3s';
+-- 락 획득 후 프로필 저장이 큐잉·타임아웃된다. NOT VALID 부착은 스캔이 없어 락 구간이 짧다.
+-- VALIDATE 는 **다음 마이그레이션 파일**에서 한다 — 같은 파일(=같은 트랜잭션)에 두면
+-- 여기서 잡은 ACCESS EXCLUSIVE 락이 스캔 내내 유지돼 분리한 의미가 사라진다.
+-- 마이그레이션 파일은 한 트랜잭션이라(실측: 두 문장이 같은 pg_current_xact_id 를 본다)
+-- SET LOCAL 이 트랜잭션 끝에 자동 복구된다 — 세션에 남는 SET 보다 안전하다.
+-- 25P01 경고가 뜨지만 값은 실제로 적용된다(암묵 트랜잭션이라 Postgres 가 경고만 낸다).
+set local lock_timeout = '3s';
 
 alter table public.user_sports
   drop constraint if exists user_sports_grade_check;
@@ -101,13 +103,7 @@ alter table public.user_sports
   foreign key (sport, grade) references public.grades (sport, code)
   not valid;
 
-set lock_timeout = default;
-
--- 위반 행이 있으면 여기서 예외가 난다(조용히 통과시키면 정본이 두 개가 된다).
--- 운영 데이터 확인(2026-07-24) 기준 위반 0 이지만, 배포 시점에 신규 데이터가
--- 생겼을 수 있으므로 검증을 생략하지 않는다.
-alter table public.user_sports
-  validate constraint user_sports_grade_fkey;
+set local lock_timeout = default;
 
 -- FK 는 (sport, code) 의 "존재"만 본다. 관리자가 등급을 폐기(is_active=false)해도
 -- 사용자가 PostgREST 로 직접 그 등급을 배정할 수 있어, 클라이언트 선택지 필터가

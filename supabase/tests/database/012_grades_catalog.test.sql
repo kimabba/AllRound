@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(17);
+SELECT plan(22);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -112,6 +112,48 @@ SELECT throws_ok(
   NULL,
   '폐기 등급은 보유자가 아닌 사용자에게 새로 배정할 수 없다'
 );
+-- 앱의 실제 저장 진입점은 save_user_sports RPC 다(단일 트랜잭션).
+-- 폐기 등급 보유자가 이 경로로 프로필을 저장할 수 있어야 한다.
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"00000000-0000-4000-8000-000000000005","role":"authenticated"}',
+  true
+);
+SELECT lives_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"tennis","grade":"y1to3","is_primary":true},
+        {"sport":"futsal","grade":"beginner","is_primary":false}]'::jsonb)$$,
+  '폐기 등급 보유자가 RPC 로 프로필을 저장할 수 있다(앱 실제 경로)'
+);
+-- 주 종목 교체는 행 순서에 무관해야 한다. one_primary_per_user 는 (user_id) WHERE
+-- is_primary 부분 유니크 인덱스라, 새 주 종목을 먼저 올리는 배치는 23505 로 죽었다.
+SELECT lives_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner","is_primary":true},
+        {"sport":"tennis","grade":"y1to3","is_primary":false}]'::jsonb)$$,
+  '새 주 종목이 배열 앞에 와도 주 종목을 교체할 수 있다'
+);
+SELECT is(
+  (SELECT sport::text FROM public.user_sports
+    WHERE user_id = '00000000-0000-4000-8000-000000000005' AND is_primary),
+  'futsal',
+  '주 종목이 실제로 교체됐다'
+);
+-- 목록에서 빠진 종목만 지운다.
+SELECT lives_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner","is_primary":true}]'::jsonb)$$,
+  '종목을 하나로 줄일 수 있다'
+);
+SELECT is(
+  (SELECT string_agg(sport::text, ',' ORDER BY sport::text)
+     FROM public.user_sports WHERE user_id = '00000000-0000-4000-8000-000000000005'),
+  'futsal',
+  '목록에서 빠진 종목만 삭제된다'
+);
+RESET ROLE;
+
 UPDATE public.grades SET is_active = true WHERE sport = 'futsal';
 
 -- 5) RLS — 선택지 표시는 되어야 하고, 사전 수정은 관리자만.

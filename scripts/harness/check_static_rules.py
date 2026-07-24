@@ -167,10 +167,22 @@ def string_literals(source: str) -> list[tuple[int, str]]:
                 index += 1
             continue
         if char == "/" and index + 1 < length and source[index + 1] == "*":
-            end = source.find("*/", index + 2)
-            end = length if end < 0 else end + 2
-            line_no += source.count("\n", index, end)
-            index = end
+            # Dart 는 블록 주석 중첩을 허용한다. 첫 `*/` 에서 멈추면 아직 주석인 구간을
+            # 코드로 오인해 오탐이 난다.
+            depth, cursor = 1, index + 2
+            while cursor < length and depth:
+                if source.startswith("/*", cursor):
+                    depth += 1
+                    cursor += 2
+                    continue
+                if source.startswith("*/", cursor):
+                    depth -= 1
+                    cursor += 2
+                    continue
+                if source[cursor] == "\n":
+                    line_no += 1
+                cursor += 1
+            index = cursor
             continue
         if char in "'\"`":
             # Dart 의 삼중 따옴표는 경계 자체가 세 글자다.
@@ -179,6 +191,7 @@ def string_literals(source: str) -> list[tuple[int, str]]:
             start_line = line_no
             cursor = index + len(delim)
             buffer: list[str] = []
+            embedded: list[tuple[int, str]] = []
             closed = False
             while cursor < length:
                 if source.startswith(delim, cursor):
@@ -187,6 +200,22 @@ def string_literals(source: str) -> list[tuple[int, str]]:
                 current = source[cursor]
                 if current == "\\":
                     cursor += 2
+                    continue
+                # TS 템플릿 보간 `${…}` 안은 문자열이 아니라 코드다. 통째로 리터럴 취급하면
+                # `${ok ? '테니스' : '풋살'}` 처럼 감싸는 것만으로 가드를 피할 수 있다.
+                # (보간 안 문자열에 중괄호가 들어가는 경우까지는 세지 않는다 — 실코드에 없다.)
+                if delim == "`" and source.startswith("${", cursor):
+                    depth, scan, expr_line = 1, cursor + 2, line_no
+                    while scan < length and depth:
+                        if source[scan] == "{":
+                            depth += 1
+                        elif source[scan] == "}":
+                            depth -= 1
+                        elif source[scan] == "\n":
+                            line_no += 1
+                        scan += 1
+                    embedded.append((expr_line, source[cursor + 2 : max(scan - 1, cursor + 2)]))
+                    cursor = scan
                     continue
                 if current == "\n":
                     # 한 줄 문자열은 줄을 넘지 않는다 — 따옴표가 아니라 아포스트로피다.
@@ -199,6 +228,9 @@ def string_literals(source: str) -> list[tuple[int, str]]:
                 index += 1
                 continue
             literals.append((start_line, "".join(buffer)))
+            for expr_line, expression in embedded:
+                for inner_line, inner in string_literals(expression):
+                    literals.append((expr_line + inner_line - 1, inner))
             index = cursor + len(delim)
             continue
         index += 1
@@ -231,10 +263,23 @@ def label_violations(source: str, labels: set[str]) -> list[tuple[int, str]]:
     """(줄 번호, 금지 라벨) 목록. 여러 줄 문자열은 줄 단위로 쪼개 비교한다 —
     통째로 비교하면 `'''\\n입문\\n'''` 처럼 감싸는 것만으로 빠져나간다."""
     found: list[tuple[int, str]] = []
-    for start_line, literal in string_literals(source):
+    literals = string_literals(source)
+    for start_line, literal in literals:
         for offset, piece in enumerate(literal.split("\n")):
             if piece.strip() in labels:
                 found.append((start_line + offset, piece.strip()))
+    # Dart 는 인접한 문자열을 컴파일 시 하나로 합친다('테' '니스' == '테니스').
+    # 같은 줄의 연속 리터럴을 이어붙인 것도 검사한다.
+    per_line: dict[int, list[str]] = {}
+    for start_line, literal in literals:
+        if "\n" not in literal:
+            per_line.setdefault(start_line, []).append(literal)
+    for line_number, pieces in per_line.items():
+        for start in range(len(pieces)):
+            for end in range(start + 2, len(pieces) + 1):
+                joined = "".join(pieces[start:end]).strip()
+                if joined in labels:
+                    found.append((line_number, joined))
     return found
 
 
@@ -249,6 +294,10 @@ GUARD_MUST_BLOCK = [
     # 여러 줄 문자열에 숨긴 라벨. 줄 단위 스캔의 구멍이었다.
     "const doc = '''\n입문\n''';",
     "const tpl = `\n테니스\n`;",
+    # TS 템플릿 보간 안은 코드다. 통째로 리터럴 취급하면 감싸는 것만으로 빠져나갔다.
+    "const z = `${ok ? '입문' : '초급'}`;",
+    # Dart 인접 문자열 연결은 컴파일 시 하나로 합쳐진다.
+    "const s = '테' '니스';",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
@@ -258,6 +307,10 @@ GUARD_MUST_ALLOW = [
     "const sports = ['tennis', 'futsal'];",
     # 여러 줄 문자열이어도 라벨이 문장 일부면 정상이다(부분 포함은 막지 않는다).
     "const doc = '''\n서울 오픈 테니스 대회 안내\n''';",
+    # 중첩 블록 주석. 첫 */ 에서 멈추면 아직 주석인 구간을 코드로 오인한다.
+    "/* 바깥 /* 안쪽 */ 아직 주석 '테니스' */ const x = 1;",
+    # 보간 밖의 정적 부분은 문장이므로 부분 포함이다.
+    "const msg = `${count}명이 테니스 대회에 참가`;",
 ]
 
 
