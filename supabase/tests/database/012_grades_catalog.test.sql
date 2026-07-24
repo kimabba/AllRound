@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(14);
+SELECT plan(15);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -125,6 +125,15 @@ SELECT lives_ok(
   $$INSERT INTO public.grades (sport, code, label_ko, sort_order)
     VALUES ('futsal', 'qa_probe', 'QA', 99)$$,
   '관리자는 등급을 추가할 수 있다(운영 경로 — 등급 관리가 INSERT 로 끝난다)'
+);
+-- 관리자 INSERT 가 운영 경로인 이상, 종목 간 code 중복은 DB 가 막아야 한다.
+-- 클라이언트 라벨 맵이 code 단일 키라 겹치면 한쪽이 다른 종목 라벨을 덮어쓴다.
+SELECT throws_ok(
+  $$INSERT INTO public.grades (sport, code, label_ko, sort_order)
+    VALUES ('tennis', 'advanced', '상급', 9)$$,
+  '23505',
+  NULL,
+  '다른 종목이 이미 쓰는 code 는 추가할 수 없다'
 );
 
 SELECT * FROM finish();

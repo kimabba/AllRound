@@ -26,8 +26,19 @@ create table if not exists public.grades (
   primary key (sport, code)
 );
 
+-- PK 는 (sport, code) 지만 code 자체도 전역 유일해야 한다. 클라이언트는 라벨을
+-- code 단일 키 맵으로 들고 있어(gradeLabels), 종목 간 code 가 겹치면 한쪽 라벨이
+-- 다른 종목까지 덮어쓴다. 등급 관리가 관리자 INSERT 로 이뤄지는 이상 이 규칙은
+-- 하네스(seed 검사)만으로는 부족하고 DB 가 지켜야 한다.
+alter table public.grades
+  drop constraint if exists grades_code_unique;
+alter table public.grades
+  add constraint grades_code_unique unique (code);
+
 comment on table public.grades is
   '종목별 등급 사전(JY-146). user_sports.grade 의 정본이며 라벨까지 보유한다.';
+comment on constraint grades_code_unique on public.grades is
+  'code 는 종목을 가로질러 유일해야 한다 — 클라 라벨 맵이 code 단일 키다.';
 comment on column public.grades.is_active is
   '폐기 등급은 false. 행을 지우면 과거 user_sports 행의 FK 가 깨지므로 삭제하지 않는다.';
 
