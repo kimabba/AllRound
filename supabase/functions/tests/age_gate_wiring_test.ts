@@ -1,4 +1,4 @@
-import { assertStringIncludes } from 'std/assert/mod.ts';
+import { assert, assertStringIncludes } from 'std/assert/mod.ts';
 
 async function source(relativePath: string): Promise<string> {
   return await Deno.readTextFile(
@@ -12,7 +12,12 @@ Deno.test('shared age guard uses the database age source of truth', async () => 
   assertStringIncludes(auth, 'verified !== true');
 });
 
-Deno.test('cost and UGC endpoints require server-side verified age', async () => {
+Deno.test('eligibility guard uses the database standing predicate', async () => {
+  const auth = await source('../_shared/auth.ts');
+  assertStringIncludes(auth, "rpc('is_eligible_member')");
+});
+
+Deno.test('participation and cost endpoints require server-side eligibility', async () => {
   for (
     const path of [
       '../chat/index.ts',
@@ -21,20 +26,37 @@ Deno.test('cost and UGC endpoints require server-side verified age', async () =>
     ]
   ) {
     const endpoint = await source(path);
-    assertStringIncludes(endpoint, 'requireVerifiedUser(req)');
+    assertStringIncludes(endpoint, 'requireEligibleMember(req)');
   }
 });
 
-Deno.test('club join request checks age without blocking cancel or leave', async () => {
+// 순환 의존 회귀 가드: 전화번호 인증을 "얻는" 경로가 자격을 요구하면
+// 아무도 인증을 시작할 수 없게 된다. OTP endpoint 는 연령 게이트까지만 쓴다.
+Deno.test('otp endpoints must not require eligibility (would be circular)', async () => {
+  const sendOtp = await source('../send-otp/index.ts');
+  assertStringIncludes(sendOtp, 'requireVerifiedUser(req)');
+  assert(
+    !sendOtp.includes('requireEligibleMember'),
+    'send-otp must not require eligibility: verifying a phone would require an already verified phone',
+  );
+
+  const verifyOtp = await source('../verify-otp/index.ts');
+  assert(
+    !verifyOtp.includes('requireEligibleMember'),
+    'verify-otp must not require eligibility: it is the path that grants eligibility',
+  );
+});
+
+Deno.test('club join request checks eligibility without blocking cancel or leave', async () => {
   const endpoint = await source('../clubs-join/index.ts');
   const requestBranch = endpoint.indexOf("if (action === 'request')");
   const cancelBranch = endpoint.indexOf("if (action === 'cancel')");
-  const ageGuard = endpoint.indexOf('requireVerifiedAge(auth.supabase)', requestBranch);
+  const guard = endpoint.indexOf('requireEligibility(auth.supabase)', requestBranch);
 
-  if (requestBranch < 0 || cancelBranch < 0 || ageGuard < 0) {
-    throw new Error('clubs-join request age guard wiring is missing');
+  if (requestBranch < 0 || cancelBranch < 0 || guard < 0) {
+    throw new Error('clubs-join request eligibility guard wiring is missing');
   }
-  if (ageGuard >= cancelBranch) {
-    throw new Error('age guard must stay scoped to the join request branch');
+  if (guard >= cancelBranch) {
+    throw new Error('eligibility guard must stay scoped to the join request branch');
   }
 });
