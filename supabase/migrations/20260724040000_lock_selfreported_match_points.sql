@@ -28,13 +28,13 @@ drop policy if exists match_entries_self_delete on public.match_entries;
 -- 읽기: 본인 행 전체. 검증된 결과(내 대회 성적)도 본인은 봐야 한다.
 create policy match_entries_self_read on public.match_entries
   for select
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 -- 삽입: 자기신고는 points_earned = 0, source = 'manual' 만 허용.
 create policy match_entries_self_insert on public.match_entries
   for insert
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and points_earned = 0
     and source = 'manual'
   );
@@ -44,12 +44,12 @@ create policy match_entries_self_insert on public.match_entries
 create policy match_entries_self_modify on public.match_entries
   for update
   using (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and points_earned = 0
     and source = 'manual'
   )
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and points_earned = 0
     and source = 'manual'
   );
@@ -58,7 +58,7 @@ create policy match_entries_self_modify on public.match_entries
 create policy match_entries_self_delete on public.match_entries
   for delete
   using (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and points_earned = 0
     and source = 'manual'
   );

@@ -25,6 +25,9 @@ GJ_2026_SPOT = {
         ("2", "quarter"): 91, ("3", "champion"): 360, ("3", "r64"): 6,
     },
 }
+# 규정상 반드시 있어야 하는 그레이드 세트. 통째로 빠지면(예: '3' 삭제) 검증기가
+# 그 grade 를 순회 안 해 조용히 통과하던 완전성 구멍을 여기서 막는다.
+GJ_REQUIRED_GRADES = {"A", "1", "2", "3"}
 # 우승자표에는 r64 가 없고(2026 개정으로 삭제), 비우승자표에만 있다.
 GJ_WINNER_ROUNDS = ["champion", "runner_up", "semi", "quarter", "r16", "r32", "entry"]
 GJ_NON_WINNER_ROUNDS = GJ_WINNER_ROUNDS[:-1] + ["r64", "entry"]
@@ -40,6 +43,14 @@ fail.count = 0
 
 def check_table(name, table, rounds):
     by_grade = table["by_grade"]
+    # 완전성: 기대 그레이드가 통째로 빠지면 잡는다 (없는 grade 는 순회 대상이 아니라
+    # 스팟 검증만으론 안 걸린다).
+    missing = GJ_REQUIRED_GRADES - set(by_grade)
+    if missing:
+        fail(f"[{name}] 그레이드 누락: {sorted(missing)}")
+    extra = set(by_grade) - GJ_REQUIRED_GRADES
+    if extra:
+        fail(f"[{name}] 예상 밖 그레이드: {sorted(extra)}")
     for grade, row in by_grade.items():
         keys = [r for r in DESC if r in row]
         for r in rounds:
