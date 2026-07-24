@@ -128,13 +128,16 @@ $$;
 
 -- ── DELETE 게이트: "남의 콘텐츠를 지우는 권한"에만 건다 ───────────────
 -- 이 세 테이블은 매니저가 타인의 글·이벤트·모집글을 삭제할 수 있어 권한 행위다.
--- 반대로 이탈성 삭제(이벤트 참석 취소, 일정 공유 해제, 즐겨찾기 해제 등)는
--- 막으면 사용자를 가두게 되므로 게이트하지 않는다.
--- 작성자 본인 삭제도 함께 걸리지만, 콘텐츠 생성 자체가 이미 자격을 요구하므로
--- 자격 없는 작성자는 생기지 않는다. 관리자는 술어에서 면제된다.
+-- 반대로 이탈성 삭제(이벤트 참석 취소, 일정 공유 해제, 즐겨찾기 해제 등)에는
+-- 이 정책을 붙이지 않는다 — 막으면 사용자를 가두게 된다(해당 테이블들엔 기존
+-- DELETE 정책이 그대로 살아 있고, 여기서 자격 조건을 덧대지 않을 뿐이다).
+--
+-- 작성자 본인 삭제는 자기 정리라 항상 허용한다. 자격을 잃은(또는 아직 갖추지
+-- 못한) 사용자가 자기 글을 못 지우고 갇히는 상황을 만들지 않기 위해서다.
 do $$
 declare
   t text;
+  author_col text;
 begin
   foreach t in array array[
     'club_posts',
@@ -142,11 +145,144 @@ begin
     'club_recruiting_posts'
   ]
   loop
+    author_col := case t when 'club_posts' then 'author_id' else 'created_by' end;
     execute format('drop policy if exists %I on public.%I', t || '_requires_eligible_del', t);
     execute format(
       'create policy %I on public.%I as restrictive for delete to authenticated
-         using ((select public.is_eligible_member()))',
-      t || '_requires_eligible_del', t
+         using ((select public.is_eligible_member()) or %I = (select auth.uid()))',
+      t || '_requires_eligible_del', t, author_col
+    );
+  end loop;
+end;
+$$;
+
+-- ── schedule_shares: 수신자의 "거절"은 이탈이므로 자격 없이도 가능해야 한다 ─
+-- 위 generic UPDATE 게이트가 거절까지 막으므로, 이 테이블은 대상에서 제외하고
+-- (아래 drop) 공유 "생성"만 자격을 요구한다. 거절·수락 응답은 기존 정책대로.
+drop policy if exists schedule_shares_requires_eligible_upd on public.schedule_shares;
+
+-- ── respond_club_event: SECURITY DEFINER 라 RLS 를 우회한다 ──────────
+-- club_event_attendees 에 붙인 restrictive 정책이 이 경로엔 적용되지 않으므로
+-- 함수 안에서 직접 막는다. 참석('going')은 참여 행위라 자격이 필요하고,
+-- 불참('not_going')은 이탈이므로 자격 없이도 허용한다.
+-- 본문은 기존 정의에 자격 검사 한 블록만 덧댄 것이다.
+create or replace function public.respond_club_event(p_event_id uuid, p_status text)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_capacity integer;
+  v_going integer;
+  v_current text;
+begin
+  if p_status not in ('going', 'not_going') then
+    raise exception 'invalid attendance status';
+  end if;
+
+  if not public.is_event_club_member(p_event_id) then
+    raise exception 'club membership required';
+  end if;
+
+  -- 참석 기록은 참여 행위 → 자격 필요. 불참(이탈)은 그대로 허용.
+  -- (아래는 기존 정의 원문 그대로다. 이 블록 외에는 바꾸지 않는다.)
+  if p_status = 'going' and not public.is_eligible_member() then
+    raise exception 'phone verification required';
+  end if;
+
+  select capacity
+  into v_capacity
+  from public.club_events
+  where id = p_event_id
+  for update;
+
+  select status
+  into v_current
+  from public.club_event_attendees
+  where event_id = p_event_id
+    and user_id = auth.uid();
+
+  if p_status = 'going'
+    and v_current is distinct from 'going'
+    and v_capacity is not null
+  then
+    select count(*)
+    into v_going
+    from public.club_event_attendees
+    where event_id = p_event_id
+      and status = 'going';
+
+    if v_going >= v_capacity then
+      raise exception 'event capacity reached';
+    end if;
+  end if;
+
+  insert into public.club_event_attendees (
+    event_id,
+    user_id,
+    status,
+    responded_at
+  )
+  values (p_event_id, auth.uid(), p_status, now())
+  on conflict (event_id, user_id) do update
+    set status = excluded.status,
+        responded_at = excluded.responded_at;
+end;
+$function$;
+
+revoke execute on function public.respond_club_event(uuid, text) from public, anon;
+grant execute on function public.respond_club_event(uuid, text) to authenticated;
+
+-- ── Storage 업로드: 콘텐츠 업로드도 참여 행위 → 자격으로 승격 ────────
+-- 기존 정책은 연령만 검증했다. is_eligible_member() 가 연령 검증을 포함하므로
+-- 교체해도 연령 게이트는 유지되고 전화 인증만 추가된다.
+-- 제외 대상(그대로 연령만 유지):
+--   profile-avatars  → 온보딩 단계에서 올린다. 게이트하면 자격 획득 경로가 막힌다.
+--   ugc-report-evidence → 신고는 안전 기능이라 자격과 무관하게 열어둔다.
+-- 원본 정책의 bucket·소유자 조건과 USING/CHECK 구성은 그대로 두고 술어만 바꾼다.
+do $$
+declare
+  b text;
+  p text;
+begin
+  -- INSERT 전용 버킷
+  foreach b in array array['club-posts', 'tournament-posters']
+  loop
+    p := case b when 'club-posts' then 'club_posts_storage_insert'
+                else 'tournament_posters_owner_insert' end;
+    execute format('drop policy if exists %I on storage.objects', p);
+    execute format(
+      'create policy %I on storage.objects for insert to authenticated
+         with check (bucket_id = %L
+           and owner_id = (select (auth.uid())::text)
+           and (select public.is_eligible_member()))',
+      p, b
+    );
+  end loop;
+
+  -- INSERT + UPDATE 버킷
+  foreach b in array array['club-logos', 'club-intro-images']
+  loop
+    p := case b when 'club-logos' then 'club_logos_owner' else 'club_intro_images_owner' end;
+
+    execute format('drop policy if exists %I on storage.objects', p || '_insert');
+    execute format(
+      'create policy %I on storage.objects for insert to authenticated
+         with check (bucket_id = %L
+           and owner_id = (select (auth.uid())::text)
+           and (select public.is_eligible_member()))',
+      p || '_insert', b
+    );
+
+    execute format('drop policy if exists %I on storage.objects', p || '_update');
+    execute format(
+      'create policy %I on storage.objects for update to authenticated
+         using (bucket_id = %L and owner_id = (select (auth.uid())::text))
+         with check (bucket_id = %L
+           and owner_id = (select (auth.uid())::text)
+           and (select public.is_eligible_member()))',
+      p || '_update', b, b
     );
   end loop;
 end;
