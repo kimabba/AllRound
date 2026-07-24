@@ -5,10 +5,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum Sport { tennis, futsal }
 
-const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
-const futsalGrades = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'];
+// 등급 정본은 DB public.grades 다(JY-146 P3-a). 아래 const 는 미로드 시 쓰이는
+// 오프라인 폴백이며, harness 게이트(check_enums.py)가 seed 와의 일치를 강제한다.
+// 부서 카탈로그(DivisionCatalog)와 같은 구조다.
+const _kFallbackTennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
+const _kFallbackFutsalGrades = [
+  'intro',
+  'beginner',
+  'intermediate',
+  'advanced',
+  'elite'
+];
 
-const gradeLabels = <String, String>{
+const _kFallbackGradeLabels = <String, String>{
   'under1y': '1년 미만',
   'y1to3': '1~3년',
   'y3to5': '3~5년',
@@ -19,6 +28,104 @@ const gradeLabels = <String, String>{
   'advanced': '고급',
   'elite': '선출',
 };
+
+/// 등급 카탈로그: 미로드 시 const 폴백, load 성공 시 DB 결과로 교체.
+/// 등급 추가·개명이 grades INSERT/UPDATE 만으로 앱에 반영된다.
+class GradeCatalog {
+  GradeCatalog._();
+  static final GradeCatalog instance = GradeCatalog._();
+
+  // 선택지는 활성 등급만, 라벨은 폐기 등급까지. 폐기해도 그 등급을 쓰던 사용자의
+  // 프로필에는 코드가 아니라 이름이 보여야 한다.
+  Map<Sport, List<String>>? _activeCodes;
+  Map<String, String>? _labels;
+
+  // 로드 세대. 세션 전환(reset)이 in-flight 로드를 무효화해, 늦게 도착한 이전 계정의
+  // 결과가 새 상태를 오염시키지 않게 한다(DivisionCatalog 와 같은 이유).
+  int _generation = 0;
+  Completer<void> _ready = Completer<void>();
+
+  /// 로드 시도(성공·실패 무관) 완료 신호. 스플래시 게이트가 이걸 기다려 첫 화면이
+  /// 폴백 라벨로 그려졌다가 바뀌는 걸 막는다.
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
+  bool get isLoaded => _activeCodes != null;
+
+  List<String> codesFor(Sport sport) {
+    final loaded = _activeCodes;
+    // 로드됐으면 그 결과가 정본이다. 한 종목의 활성 등급이 0개면 빈 목록이 맞고,
+    // 폴백을 되살리면 DB 의 폐기 결정을 앱이 뒤집는 꼴이 된다.
+    if (loaded != null) return loaded[sport] ?? const [];
+    return sport == Sport.tennis
+        ? _kFallbackTennisGrades
+        : _kFallbackFutsalGrades;
+  }
+
+  Map<String, String> get labels => _labels ?? _kFallbackGradeLabels;
+
+  /// grades 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다 — 등급 선택지가
+  /// 비어 앱이 막히는 것보다 낫다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      // 폐기 등급까지 받아 라벨을 채운다. 선택지 필터는 is_active 로 아래에서 한다.
+      final rows = await client
+          .from('grades')
+          .select('sport, code, label_ko, is_active')
+          .order('sport')
+          .order('sort_order');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지.
+    } finally {
+      if (gen == _generation) _markReady();
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그. 정렬은 쿼리(sort_order)가 보장한다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) {
+      // 빈 응답으로 선택지를 통째로 지우지 않는다(권한·필터 사고 방어).
+      _markReady();
+      return;
+    }
+    final codes = <Sport, List<String>>{};
+    final labels = <String, String>{};
+    for (final row in rows) {
+      final sport = sportFromString(row['sport'] as String);
+      final code = row['code'] as String;
+      labels[code] = row['label_ko'] as String;
+      if (row['is_active'] as bool? ?? true) {
+        (codes[sport] ??= <String>[]).add(code);
+      }
+    }
+    _activeCodes = codes;
+    _labels = labels;
+    _markReady();
+  }
+
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다. in-flight 로드도 무효화된다.
+  void reset() {
+    _activeCodes = null;
+    _labels = null;
+    _ready = Completer<void>();
+    _generation++;
+  }
+}
+
+/// 종목별 등급 코드(표시 순서). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get tennisGrades => GradeCatalog.instance.codesFor(Sport.tennis);
+List<String> get futsalGrades => GradeCatalog.instance.codesFor(Sport.futsal);
+
+/// 등급 코드 → 라벨 맵.
+Map<String, String> get gradeLabels => GradeCatalog.instance.labels;
 
 /// 등급 무관. 등급 코드가 아니라 "가리지 않음"을 뜻하는 선택지 라벨이다.
 const anyGradeLabel = '무관';
