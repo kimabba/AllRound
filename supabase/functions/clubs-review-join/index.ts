@@ -3,7 +3,7 @@
 // POST { request_id, action: 'approve'|'reject', reason? }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { requireUser } from '../_shared/auth.ts';
+import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { canReviewClub, reviewJoin } from './review.ts';
 
@@ -27,6 +27,12 @@ Deno.serve(async (req) => {
 
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
+
+  // serviceClient 로 쓰므로 RLS 우회 → 읽기는 열고 쓰기만 자격 게이트.
+  if (req.method !== 'GET') {
+    const eligibilityError = await requireEligibility(auth.supabase);
+    if (eligibilityError) return eligibilityError;
+  }
 
   const supa = serviceClient();
   const reviewerId = auth.user.id;

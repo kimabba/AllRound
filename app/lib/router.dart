@@ -12,6 +12,7 @@ import 'screens/admin/moderation_screen.dart';
 import 'screens/admin/tournament_edit_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
+import 'screens/auth/verify_phone_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
@@ -86,11 +87,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         return (adminAsync.value ?? false) ? null : '/';
       }
 
-      // 앱: 기존 로직
+      // 앱: 온보딩 → 전화번호 인증 순차 게이트.
+      // 종목 미등록이면 온보딩(연령·종목 설정)부터, 완료 후 전화번호 미인증이면
+      // 인증 화면으로. 이 순서라야 verify-otp(requireVerifiedUser=연령 선행)가 성립한다.
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
       final sports = sportsAsync.value ?? const [];
-      if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
+      final profileAsync = ref.read(myProfileProvider);
+      if (profileAsync.isLoading) return null;
+      final profile = profileAsync.value;
+
+      // 생년월일이 없으면 온보딩으로 되돌린다. 전화인증 화면으로 보내면
+      // send-otp 의 연령 게이트에 막혀 빠져나올 수 없는 교착이 된다.
+      final onboardingIncomplete = sports.isEmpty || profile?.birthDate == null;
+      if (onboardingIncomplete) {
+        if (loc != '/onboarding') return '/onboarding';
+      } else if (profile?.phoneVerifiedAt == null) {
+        if (loc != '/verify-phone') return '/verify-phone';
+      }
 
       // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.
       if (loc.startsWith('/admin')) return '/';
@@ -107,6 +121,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         builder: (_, __) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/verify-phone',
+        builder: (_, __) => const VerifyPhoneScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
@@ -241,6 +259,9 @@ class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {
     ref.listen(authStateProvider, (_, __) => notifyListeners());
     ref.listen(userSportsProvider, (_, __) => notifyListeners());
+    // 온보딩·전화인증 게이트가 프로필을 읽으므로, 로딩이 끝나면 redirect 를
+    // 다시 평가해야 한다(로딩 중엔 게이트가 통과시키기 때문).
+    ref.listen(myProfileProvider, (_, __) => notifyListeners());
     ref.listen(isAdminProvider, (_, __) => notifyListeners());
     ref.listen(recoveryModeProvider, (_, __) => notifyListeners());
   }

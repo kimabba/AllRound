@@ -2,7 +2,7 @@
 // POST { sport, name, region?, address?, logo_url?, intro_image_urls?, contact?, website?, description? }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { requireVerifiedUser } from '../_shared/auth.ts';
+import { requireEligibleMember } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
 import { notifyAdminsOfPendingClub } from './notifications.ts';
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
 
-  const auth = await requireVerifiedUser(req);
+  const auth = await requireEligibleMember(req);
   if ('error' in auth) return auth.error;
 
   let rawBody: unknown;

@@ -9,7 +9,7 @@
 // }
 
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
-import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
+import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -82,6 +82,14 @@ Deno.serve(async (req) => {
   if (!clubId) return errorResponse('club_id is required', 400);
   if (!action) return errorResponse('action is required', 400);
 
+  // 이 endpoint 는 serviceClient 로 쓰므로 RLS 가 우회된다 → 자격 강제는 여기서 한다.
+  // fail-closed: 아래 목록(읽기·본인 이탈)만 예외이고, 새 action 은 기본 게이트된다.
+  const ungatedActions = new Set(['list_members', 'cancel', 'leave']);
+  if (!ungatedActions.has(action)) {
+    const eligibilityError = await requireEligibility(auth.supabase);
+    if (eligibilityError) return eligibilityError;
+  }
+
   const supa = serviceClient();
   const userId = auth.user.id;
 
@@ -153,9 +161,6 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'request') {
-    const ageError = await requireVerifiedAge(auth.supabase);
-    if (ageError) return ageError;
-
     const accessError = await ugcAccessError(supa, userId, 'club_join');
     if (accessError) return errorResponse(accessError, 403);
 

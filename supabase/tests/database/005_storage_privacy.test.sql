@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(14);
+SELECT plan(15);
 
 SELECT is(
   (SELECT count(*) FROM storage.buckets
@@ -31,6 +31,8 @@ SELECT is(
   '공개 URL과 별개로 객체 목록 전체를 노출하는 SELECT 정책은 제거됐다'
 );
 
+-- 콘텐츠 업로드는 참여 행위라 자격(is_eligible_member = 연령 + 전화번호 인증)을
+-- 요구한다. 신고 증거는 안전 기능이라 자격 게이트 없이 연령 확인만 유지한다.
 SELECT is(
   (SELECT count(*) FROM pg_policies
    WHERE schemaname = 'storage'
@@ -39,13 +41,24 @@ SELECT is(
      AND policyname IN (
        'club_logos_owner_insert',
        'club_intro_images_owner_insert',
-       'club_posts_storage_insert',
-       'ugc_report_evidence_insert'
+       'club_posts_storage_insert'
      )
      AND with_check LIKE '%owner_id%'
+     AND with_check LIKE '%is_eligible_member%'),
+  3::bigint,
+  '콘텐츠 이미지 업로드는 JWT 소유권과 서버 계정 자격을 함께 요구한다'
+);
+
+SELECT is(
+  (SELECT count(*) FROM pg_policies
+   WHERE schemaname = 'storage'
+     AND tablename = 'objects'
+     AND cmd = 'INSERT'
+     AND policyname = 'ugc_report_evidence_insert'
+     AND with_check LIKE '%owner_id%'
      AND with_check LIKE '%has_verified_signup_age%'),
-  4::bigint,
-  '모든 이미지 업로드는 JWT 소유권과 서버 연령 확인을 함께 요구한다'
+  1::bigint,
+  '신고 증거 업로드는 자격 게이트 없이 소유권·연령만 요구한다(안전 기능)'
 );
 
 SELECT is(
