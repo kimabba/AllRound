@@ -90,6 +90,38 @@ def sql_enum_after_history(text: str, name: str) -> list[str]:
     return values
 
 
+def seed_grades() -> list[tuple[str, str, str, int]]:
+    """마이그레이션의 public.grades seed 를 누적해 (sport, code, label, sort_order) 로.
+
+    등급 추가·개명은 이제 CHECK 교체가 아니라 이 테이블의 INSERT 로 한다(JY-146 P3-a).
+    같은 (sport, code) 가 여러 마이그레이션에 나오면 나중 것이 정본이다.
+    한계: DELETE·개별 UPDATE 는 반영하지 않는다(폐기는 is_active=false 정책이라
+    행이 사라지지 않는다).
+    """
+    rows: dict[tuple[str, str], tuple[str, str, str, int]] = {}
+    insert_pattern = re.compile(
+        r"insert\s+into\s+public\.grades\s*\([^)]*\)\s*values\s*(.*?)(?:on\s+conflict|;)",
+        re.I | re.S,
+    )
+    value_pattern = re.compile(r"\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*\)")
+    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
+        for block in insert_pattern.finditer(read(path)):
+            for sport, code, label, order in value_pattern.findall(block.group(1)):
+                rows[(sport, code)] = (sport, code, label, int(order))
+    if not rows:
+        raise AssertionError("public.grades seed 를 한 건도 찾지 못했다")
+    return sorted(rows.values(), key=lambda row: (row[0], row[3]))
+
+
+def seed_grade_codes(sport: str) -> list[str]:
+    return [row[1] for row in seed_grades() if row[0] == sport]
+
+
+def seed_grade_label_entries() -> list[str]:
+    """Dart/TS 라벨 맵과 같은 표기('code=label')로. 순서는 종목·sort_order."""
+    return [f"{row[1]}={row[2]}" for row in seed_grades()]
+
+
 def dart_const_map(text: str, name: str) -> list[str]:
     pattern = rf"const\s+{re.escape(name)}\s*=\s*<String,\s*String>\{{(.*?)\}};"
     match = re.search(pattern, text, re.S)
@@ -123,36 +155,11 @@ def ts_record(text: str, name: str) -> list[str]:
     return [f"{key}={value}" for key, value in entries]
 
 
-def sql_grade_check(text: str, sport: str) -> list[str]:
-    # 마이그레이션 history 를 후순위 ALTER 가 덮어쓸 수 있으므로 가장 마지막 매치를 사용.
-    # 예: 002 에서 정의 → 010 에서 ALTER 로 enum 교체된 경우, 010 의 정의가 운영 schema.
-    pattern = rf"sport\s*=\s*'{re.escape(sport)}'\s+and\s+grade\s+in\s*\((.*?)\)"
-    matches = re.findall(pattern, text, re.I | re.S)
-    if not matches:
-        raise AssertionError(f"SQL grade check not found for sport: {sport}")
-    return quoted_values(matches[-1])
-
-
 def sql_entry_fee_units(text: str) -> list[str]:
     match = re.search(r"entry_fee_unit\s+text\s+not\s+null\s+default\s+'[^']+'\s+check\s*\(\s*entry_fee_unit\s+in\s*\((.*?)\)\s*\)", text, re.I | re.S)
     if not match:
         raise AssertionError("SQL entry_fee_unit check not found")
     return quoted_values(match.group(1))
-
-
-def user_sports_grade_constraint_history() -> str:
-    sql_parts: list[str] = [read(SQL_USERS)]
-    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
-        if path == SQL_USERS:
-            continue
-        text = read(path)
-        matches = re.finditer(
-            r"alter\s+table[^;]+?add\s+constraint\s+user_sports_grade_check\s+check\s*\((.*?)\)\s*;",
-            text,
-            re.I | re.S,
-        )
-        sql_parts.extend(match.group(0) for match in matches)
-    return "\n".join(sql_parts)
 
 
 def seed_region_codes(text: str) -> list[str]:
@@ -180,9 +187,7 @@ def assert_same(name: str, *values: tuple[str, list[str]]) -> None:
 def main() -> int:
     dart = read(DART_ENUMS)
     ts = read(TS_ENUMS)
-    # 마이그레이션 history 정합: 후속 migration 의 ADD CONSTRAINT 가 기존
-    # user_sports_grade_check 를 덮어쓰므로 최신 정의를 기준으로 비교한다.
-    sql_users = user_sports_grade_constraint_history()
+    sql_users = read(SQL_USERS)
     sql_orgs = read(SQL_ORGS)
     seed = read(SQL_SEED)
 
@@ -192,12 +197,15 @@ def main() -> int:
         ("TypeScript SPORTS", ts_const_array(ts, "SPORTS")),
         ("SQL sport", sql_enum_after_history(sql_users, "sport")),
     )
-    # 등급 라벨은 DB 에 없다(코드가 정본). Dart↔TS 두 벌이 어긋나면 같은 등급이
-    # 화면마다 다른 이름으로 보이므로 여기서 막는다.
+    # 등급 라벨의 정본은 public.grades 다(JY-146 P3-a). 클라 상수는 캐시이므로
+    # seed 와 어긋나면 같은 등급이 화면마다 다른 이름으로 보인다.
+    # 맵 자체의 나열 순서는 화면에 영향이 없어(등급 순서는 아래 코드 목록이 결정)
+    # 정렬해 비교한다. 값이 다르거나 키가 빠지면 그대로 걸린다.
     assert_same(
         "grade labels",
-        ("Dart gradeLabels", dart_const_map(dart, "gradeLabels")),
-        ("TypeScript GRADE_LABELS", ts_record(ts, "GRADE_LABELS")),
+        ("seed public.grades", sorted(seed_grade_label_entries())),
+        ("Dart 폴백 gradeLabels", sorted(dart_const_map(dart, "_kFallbackGradeLabels"))),
+        ("TypeScript GRADE_LABELS", sorted(ts_record(ts, "GRADE_LABELS"))),
     )
     assert_same(
         "sport labels",
@@ -206,15 +214,15 @@ def main() -> int:
     )
     assert_same(
         "tennis grades",
-        ("Dart tennisGrades", dart_const_list(dart, "tennisGrades")),
+        ("Dart 폴백 tennisGrades", dart_const_list(dart, "_kFallbackTennisGrades")),
         ("TypeScript TENNIS_GRADES", ts_const_array(ts, "TENNIS_GRADES")),
-        ("SQL tennis grade check", sql_grade_check(sql_users, "tennis")),
+        ("seed public.grades (tennis)", seed_grade_codes("tennis")),
     )
     assert_same(
         "futsal grades",
-        ("Dart futsalGrades", dart_const_list(dart, "futsalGrades")),
+        ("Dart 폴백 futsalGrades", dart_const_list(dart, "_kFallbackFutsalGrades")),
         ("TypeScript FUTSAL_GRADES", ts_const_array(ts, "FUTSAL_GRADES")),
-        ("SQL futsal grade check", sql_grade_check(sql_users, "futsal")),
+        ("seed public.grades (futsal)", seed_grade_codes("futsal")),
     )
     assert_same(
         "tennis orgs",
@@ -239,11 +247,17 @@ def main() -> int:
         "grade label coverage",
         (
             "grade codes",
-            sorted(dart_const_list(dart, "tennisGrades") + dart_const_list(dart, "futsalGrades")),
+            sorted(
+                dart_const_list(dart, "_kFallbackTennisGrades")
+                + dart_const_list(dart, "_kFallbackFutsalGrades")
+            ),
         ),
         (
             "gradeLabels keys",
-            sorted(entry.split("=", 1)[0] for entry in dart_const_map(dart, "gradeLabels")),
+            sorted(
+                entry.split("=", 1)[0]
+                for entry in dart_const_map(dart, "_kFallbackGradeLabels")
+            ),
         ),
     )
     return 0

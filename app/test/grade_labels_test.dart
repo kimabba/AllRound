@@ -4,6 +4,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
 
 void main() {
+  tearDown(GradeCatalog.instance.reset);
+
+  group('GradeCatalog DB 로드', () {
+    test('로드 전에는 폴백 등급을 쓴다', () {
+      expect(GradeCatalog.instance.isLoaded, isFalse);
+      expect(futsalGrades, ['intro', 'beginner', 'intermediate', 'advanced', 'elite']);
+      expect(gradeLabel('elite'), '선출');
+    });
+
+    test('DB 결과가 폴백을 대체한다 — 등급 추가·개명이 INSERT 만으로 반영된다', () {
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문'},
+        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로'},
+        {'sport': 'tennis', 'code': 'under1y', 'label_ko': '1년 미만'},
+      ]);
+      expect(futsalGrades, ['intro', 'pro']);
+      expect(gradeLabel('pro'), '프로');
+      expect(gradesFor(Sport.tennis), ['under1y']);
+      // 새 등급이 곧바로 모집글 허용집합에 들어간다.
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '프로'), isTrue);
+    });
+
+    test('빈 응답은 무시한다 — 선택지가 통째로 사라지면 안 된다', () {
+      GradeCatalog.instance.ingestRows([]);
+      expect(GradeCatalog.instance.isLoaded, isFalse);
+      expect(futsalGrades.length, 5);
+    });
+  });
+
   group('skill_level 허용집합', () {
     test('해당 종목의 등급 라벨과 무관은 통과한다', () {
       for (final sport in Sport.values) {

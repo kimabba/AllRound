@@ -180,10 +180,15 @@ def forbidden_labels() -> set[str]:
     """정본(grade_labels.dart)의 등급·종목 라벨 + 폐기 라벨."""
     text = read(LABEL_SSOT_DART)
     labels: set[str] = set()
-    grade_block = re.search(r"const gradeLabels\s*=\s*<String, String>\{(.*?)\};", text, re.S)
+    grade_block = re.search(
+        r"const _kFallbackGradeLabels\s*=\s*<String, String>\{(.*?)\};", text, re.S
+    )
     sport_block = re.search(r"const sportLabels\s*=\s*<Sport, String>\{(.*?)\};", text, re.S)
     if not grade_block or not sport_block:
-        fail(f"{LABEL_SSOT_DART}: gradeLabels/sportLabels 선언을 찾지 못했다 (가드가 무력해진다)")
+        fail(
+            f"{LABEL_SSOT_DART}: _kFallbackGradeLabels/sportLabels 선언을 찾지 못했다"
+            " (가드가 무력해진다)"
+        )
     labels |= {m.group(2) for m in re.finditer(r"'([^']+)'\s*:\s*'([^']+)'", grade_block.group(1))}
     labels |= {
         m.group(2) for m in re.finditer(r"Sport\.(\w+)\s*:\s*'([^']+)'", sport_block.group(1))

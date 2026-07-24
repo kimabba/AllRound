@@ -53,9 +53,10 @@ Future<void> initializeAllRoundServices({
       initNotifications(ApiService(Supabase.instance.client));
     }
     // signedIn(신규 로그인) + initialSession(복원 세션) 모두에서 로드.
-    // RLS(tennis_divisions_read = authenticated) 이므로 세션 존재 시에만.
+    // RLS(tennis_divisions_read / grades_read = authenticated) 이므로 세션 존재 시에만.
     if (event.session != null) {
       DivisionCatalog.instance.load(Supabase.instance.client);
+      GradeCatalog.instance.load(Supabase.instance.client);
     }
   });
 

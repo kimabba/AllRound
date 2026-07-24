@@ -5,10 +5,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum Sport { tennis, futsal }
 
-const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
-const futsalGrades = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'];
+// 등급 정본은 DB public.grades 다(JY-146 P3-a). 아래 const 는 미로드 시 쓰이는
+// 오프라인 폴백이며, harness 게이트(check_enums.py)가 seed 와의 일치를 강제한다.
+// 부서 카탈로그(DivisionCatalog)와 같은 구조다.
+const _kFallbackTennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
+const _kFallbackFutsalGrades = [
+  'intro',
+  'beginner',
+  'intermediate',
+  'advanced',
+  'elite'
+];
 
-const gradeLabels = <String, String>{
+const _kFallbackGradeLabels = <String, String>{
   'under1y': '1년 미만',
   'y1to3': '1~3년',
   'y3to5': '3~5년',
@@ -19,6 +28,77 @@ const gradeLabels = <String, String>{
   'advanced': '고급',
   'elite': '선출',
 };
+
+/// 등급 카탈로그: 미로드 시 const 폴백, load 성공 시 DB 결과로 교체.
+/// 등급 추가·개명이 grades INSERT/UPDATE 만으로 앱에 반영된다.
+class GradeCatalog {
+  GradeCatalog._();
+  static final GradeCatalog instance = GradeCatalog._();
+
+  Map<Sport, List<String>>? _codes;
+  Map<String, String>? _labels;
+  int _generation = 0;
+
+  bool get isLoaded => _codes != null;
+
+  List<String> codesFor(Sport sport) =>
+      _codes?[sport] ??
+      (sport == Sport.tennis ? _kFallbackTennisGrades : _kFallbackFutsalGrades);
+
+  String? labelFor(String code) => (_labels ?? _kFallbackGradeLabels)[code];
+
+  Map<String, String> get labels => _labels ?? _kFallbackGradeLabels;
+
+  /// grades 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다 — 등급 선택지가
+  /// 비어 앱이 막히는 것보다 낫다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      final rows = await client
+          .from('grades')
+          .select('sport, code, label_ko')
+          .eq('is_active', true)
+          .order('sport')
+          .order('sort_order');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지.
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그. 정렬은 쿼리(sort_order)가 보장한다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) return; // 빈 응답으로 선택지를 지우지 않는다.
+    final codes = <Sport, List<String>>{};
+    final labels = <String, String>{};
+    for (final row in rows) {
+      final sport = sportFromString(row['sport'] as String);
+      final code = row['code'] as String;
+      (codes[sport] ??= <String>[]).add(code);
+      labels[code] = row['label_ko'] as String;
+    }
+    _codes = codes;
+    _labels = labels;
+  }
+
+  @visibleForTesting
+  void reset() {
+    _codes = null;
+    _labels = null;
+    _generation++;
+  }
+}
+
+/// 종목별 등급 코드(표시 순서). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get tennisGrades => GradeCatalog.instance.codesFor(Sport.tennis);
+List<String> get futsalGrades => GradeCatalog.instance.codesFor(Sport.futsal);
+
+/// 등급 코드 → 라벨 맵.
+Map<String, String> get gradeLabels => GradeCatalog.instance.labels;
 
 /// 등급 무관. 등급 코드가 아니라 "가리지 않음"을 뜻하는 선택지 라벨이다.
 const anyGradeLabel = '무관';
