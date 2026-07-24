@@ -22,6 +22,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 import 'club_inquiry_screen.dart';
+import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
@@ -920,7 +921,7 @@ class _IntroTab extends StatelessWidget {
               ),
               if (club.introImageUrls.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                _ClubIntroPhotoStrip(imageUrls: club.introImageUrls),
+                ClubIntroPhotoStrip(imageUrls: club.introImageUrls),
               ],
             ],
           ),
@@ -1134,50 +1135,6 @@ class _ClubFlatSection extends StatelessWidget {
         ),
       ),
       child: child,
-    );
-  }
-}
-
-class _ClubIntroPhotoStrip extends StatelessWidget {
-  const _ClubIntroPhotoStrip({required this.imageUrls});
-
-  final List<String> imageUrls;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final urls = imageUrls
-        .map((url) => url.trim())
-        .where((url) => url.isNotEmpty)
-        .toList(growable: false);
-    if (urls.isEmpty) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: 132,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: urls.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          return Container(
-            width: 168,
-            height: 132,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Image.network(
-              urls[index],
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.image_not_supported_outlined,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }
