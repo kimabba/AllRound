@@ -27,6 +27,24 @@ begin
     raise exception 'p_sports 는 JSON 배열이어야 합니다' using errcode = '22023';
   end if;
 
+  -- 쓰기 전에 배열 자체의 불변식을 검사한다. 안 하면 같은 sport 중복은 ON CONFLICT 가
+  -- 한 행을 두 번 갱신해 21000 으로, primary 가 둘이면 부분 유니크 인덱스가 23505 로
+  -- 죽는다 — 둘 다 원인을 알 수 없는 내부 오류라 클라이언트가 고칠 수 없다.
+  if exists (
+    select 1 from jsonb_array_elements(p_sports) e
+     where jsonb_typeof(e) <> 'object' or e ->> 'sport' is null or e ->> 'grade' is null
+  ) then
+    raise exception '각 원소는 sport·grade 를 가진 객체여야 합니다' using errcode = '22023';
+  end if;
+  if (select count(*) from jsonb_array_elements(p_sports) e)
+     <> (select count(distinct e ->> 'sport') from jsonb_array_elements(p_sports) e) then
+    raise exception '같은 종목이 두 번 들어왔습니다' using errcode = '22023';
+  end if;
+  if (select count(*) from jsonb_array_elements(p_sports) e
+       where coalesce((e ->> 'is_primary')::boolean, false)) > 1 then
+    raise exception '주 종목은 하나만 지정할 수 있습니다' using errcode = '22023';
+  end if;
+
   -- 같은 사용자의 저장을 직렬화한다. 트랜잭션 스코프라 커밋·롤백 시 자동 해제된다.
   -- 없으면: 두 기기(또는 재시도)가 동시에 주 종목을 바꿀 때, 뒤 요청의 문장 스냅샷이
   -- 앞 요청이 새로 올린 primary 행을 보지 못해 upsert 가 부분 유니크 인덱스에서

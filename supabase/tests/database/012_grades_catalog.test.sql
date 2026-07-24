@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(23);
+SELECT plan(26);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -156,12 +156,41 @@ SELECT is(
 -- 스냅샷이 앞 요청의 새 primary 행을 못 봐 부분 유니크 인덱스에서 23505 로 죽는다.
 -- pgTAP 은 단일 세션이라 경합 자체는 재현할 수 없으므로, 락을 실제로 잡는지까지 고정한다
 -- (직렬화 동작은 두 세션 스크립트로 별도 확인했다: 선행 락 해제까지 대기).
+-- 이 세션(pid)에서, uid 로 계산한 바로 그 키의 락인지까지 본다. granted advisory lock 이
+-- 하나라도 있으면 통과하게 두면 다른 세션의 무관한 락이나 상수 키 락도 통과한다.
 SELECT ok(
   EXISTS (
     SELECT 1 FROM pg_locks
-     WHERE locktype = 'advisory' AND granted
+     WHERE locktype = 'advisory'
+       AND pid = pg_backend_pid()
+       AND granted
+       AND ((classid::bigint << 32) | objid::bigint)
+           = hashtextextended('00000000-0000-4000-8000-000000000005', 0)
   ),
-  'RPC 가 사용자 단위 advisory lock 을 잡는다(동시 저장 직렬화)'
+  'RPC 가 uid 로 계산한 키의 advisory lock 을 이 세션에서 잡는다(동시 저장 직렬화)'
+);
+-- 배열 불변식은 쓰기 전에 검사한다. 안 하면 21000/23505 같은 내부 오류로 끝나
+-- 클라이언트가 무엇을 고쳐야 할지 알 수 없다.
+SELECT throws_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner"},{"sport":"futsal","grade":"intro"}]'::jsonb)$$,
+  '22023',
+  NULL,
+  '같은 종목이 두 번 들어오면 거부된다'
+);
+SELECT throws_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner","is_primary":true},
+        {"sport":"tennis","grade":"y1to3","is_primary":true}]'::jsonb)$$,
+  '22023',
+  NULL,
+  '주 종목이 둘이면 거부된다'
+);
+SELECT throws_ok(
+  $$SELECT public.save_user_sports('[{"grade":"beginner"}]'::jsonb)$$,
+  '22023',
+  NULL,
+  'sport 가 없는 원소는 거부된다'
 );
 RESET ROLE;
 

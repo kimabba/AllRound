@@ -115,6 +115,14 @@ language plpgsql
 set search_path = ''
 as $func$
 begin
+  -- ponytail: 활성 여부를 잠금 없이 읽는다. 관리자가 등급을 폐기하는 **바로 그 순간**
+  -- 같은 등급으로 저장하면 폐기 직전 스냅샷으로 배정될 수 있다(codex 8차 지적).
+  -- FOR SHARE 로 순서를 정하려 했지만 되돌렸다 — Postgres 는 SELECT … FOR SHARE 에
+  -- SELECT 정책 외에 UPDATE 정책까지 요구하는데, grades 의 UPDATE 는 관리자 전용이라
+  -- 일반 사용자에게 행이 통째로 안 보여 **모든 종목 등록이 깨졌다**(pgTAP 003 이 잡았다).
+  -- 막으려면 트리거를 SECURITY DEFINER 로 올려야 하는데, 등급 폐기가 아직 한 번도
+  -- 없었던 운영 행위이고 경합 결과도 "기존 보유자"와 같은 상태라 이득보다 비용이 크다.
+  -- 실제로 등급 폐기를 운영에 도입할 때 다시 판단한다(JY-146 후속).
   if exists (
     select 1 from public.grades g
     where g.sport = new.sport and g.code = new.grade and g.is_active

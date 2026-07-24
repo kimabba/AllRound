@@ -231,22 +231,23 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                     f"{path.name}: grades UPDATE 가 sport·code 를 바꾼다. "
                     "seed 파서가 키 이동을 추적하지 못하므로 새 행 INSERT 로 표현하라."
                 )
-            # 값이 리터럴이 아니면(sort_order = sort_order + 1, label_ko = upper(...))
-            # 파서가 결과를 계산할 수 없다. 반영한 척하는 대신 실패한다.
-            for column in ("label_ko", "is_active", "sort_order"):
-                assigned = re.search(rf"\b{column}\s*=\s*([^,]+?)(?:,|$)", setters, re.I | re.S)
-                if not assigned:
-                    continue
-                value = assigned.group(1).strip()
-                literal = {
-                    "label_ko": re.fullmatch(quoted, value),
-                    "is_active": re.fullmatch(r"true|false", value, re.I),
-                    "sort_order": re.fullmatch(r"\d+", value),
-                }[column]
-                if not literal:
+            # 대상 컬럼의 **모든 출현**이 `컬럼 = 리터럴` 로 소비돼야 한다. 하나라도 다른
+            # 형태면(계산식 `sort_order + 1`, 행 대입 `(sort_order, is_active) = (9, false)`)
+            # 파서가 결과를 계산할 수 없다. 스칼라 하나만 인식됐다고 넘어가면, 같은 SET 절에
+            # 섞인 행 대입이 통째로 무시된 채 게이트가 PASS 한다.
+            patterns = {
+                "label_ko": rf"label_ko\s*=\s*{quoted}",
+                "is_active": r"is_active\s*=\s*(?:true|false)\b",
+                "sort_order": r"sort_order\s*=\s*\d+",
+            }
+            for column, supported in patterns.items():
+                mentions = len(re.findall(rf"\b{column}\b", setters, re.I))
+                consumed = len(re.findall(supported, setters, re.I))
+                if mentions != consumed:
                     raise AssertionError(
-                        f"{path.name}: grades UPDATE 의 {column} 값 '{value}' 이 리터럴이 아니다. "
-                        "seed 파서가 계산식을 평가하지 못하므로 리터럴로 써라."
+                        f"{path.name}: grades UPDATE 의 SET '{setters.strip()}' 에서 "
+                        f"{column} 을 해석하지 못했다(출현 {mentions} / 해석 {consumed}). "
+                        "`컬럼 = 리터럴` 형태로만 써라(계산식·행 대입은 지원하지 않는다)."
                     )
             if not new_label and not new_active and not new_order:
                 # 대상 컬럼이 SET 절에 나왔는데 하나도 못 읽었다면 지원하지 않는 대입 형태다

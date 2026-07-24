@@ -205,11 +205,12 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 if current == "\\":
                     cursor += 2
                     continue
-                # TS 템플릿 보간 `${…}` 안은 문자열이 아니라 코드다. 통째로 리터럴 취급하면
+                # 보간 `${…}` 안은 문자열이 아니라 코드다. 통째로 리터럴 취급하면
                 # `${ok ? '테니스' : '풋살'}` 처럼 감싸는 것만으로 가드를 피할 수 있다.
-                # 중괄호를 셀 때 문자열 안의 것은 빼야 한다 — `${ok ? '}' : '테니스'}` 는
-                # 따옴표 안의 `}` 를 식 종료로 오인하면 나머지가 통째로 빠져나간다.
-                if delim == "`" and source.startswith("${", cursor):
+                # Dart 는 '…' / "…" 에도 보간이 있으므로 백틱 전용이 아니다.
+                # 중괄호를 셀 때 문자열과 주석 안의 것은 빼야 한다 — `${ok ? '}' : '테니스'}`,
+                # `${/* } */ ok ? '테니스' : '풋살'}` 가 식 종료를 오인시킨다.
+                if source.startswith("${", cursor):
                     depth, scan, expr_line = 1, cursor + 2, line_no
                     while scan < length and depth:
                         inner_char = source[scan]
@@ -223,6 +224,25 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                                     line_no += 1
                                 scan += 1
                             scan += 1
+                            continue
+                        if source.startswith("//", scan):
+                            while scan < length and source[scan] != "\n":
+                                scan += 1
+                            continue
+                        if source.startswith("/*", scan):
+                            comment_depth, scan = 1, scan + 2
+                            while scan < length and comment_depth:
+                                if source.startswith("/*", scan):
+                                    comment_depth += 1
+                                    scan += 2
+                                    continue
+                                if source.startswith("*/", scan):
+                                    comment_depth -= 1
+                                    scan += 2
+                                    continue
+                                if source[scan] == "\n":
+                                    line_no += 1
+                                scan += 1
                             continue
                         if inner_char == "{":
                             depth += 1
@@ -296,7 +316,9 @@ def label_violations(source: str, labels: set[str]) -> list[tuple[int, str]]:
         if start < 0 or "\n" in literal:
             previous_end = -1
             continue
-        if previous_end >= 0 and source[previous_end:start].strip() == "":
+        # 주석은 공백과 같다 — `'테' /* gap */ '니스'` 도 Dart 가 하나로 합친다.
+        gap = re.sub(r"/\*.*?\*/|//[^\n]*", "", source[previous_end:start], flags=re.S)
+        if previous_end >= 0 and gap.strip() == "":
             runs[-1].append((start_line, literal))
         else:
             runs.append([(start_line, literal)])
@@ -328,6 +350,12 @@ GUARD_MUST_BLOCK = [
     "const s = '테'\n    '니스';",
     # 보간식 안 문자열의 중괄호를 식 종료로 오인하면 나머지가 통째로 빠져나간다.
     "const z = `${ok ? '}' : '테니스'}`;",
+    # Dart 는 작은/큰따옴표 문자열에도 보간이 있다 — 백틱 전용으로 보면 놓친다.
+    "final s = \"${ok ? '테니스' : '풋살'}\";",
+    # 보간식 안 주석의 중괄호도 식 종료로 오인하면 안 된다.
+    "const w = `${/* } */ ok ? '테니스' : '풋살'}`;",
+    # 인접 판정에서 주석은 공백이다.
+    "const c = '테' /* gap */ '니스';",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
