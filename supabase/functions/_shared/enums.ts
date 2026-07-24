@@ -1,4 +1,11 @@
-export type Sport = 'tennis' | 'futsal';
+// 정본은 DB `sport` enum. 타입을 배열에서 파생시켜, 종목이 늘 때 리터럴 유니온을
+// 여기저기 다시 적는 일이 없게 한다(JY-146).
+export const SPORTS = ['tennis', 'futsal'] as const;
+export type Sport = typeof SPORTS[number];
+
+export function isValidSport(value: unknown): value is Sport {
+  return typeof value === 'string' && (SPORTS as readonly string[]).includes(value);
+}
 
 export const TENNIS_GRADES = ['under1y', 'y1to3', 'y3to5', 'over5y'] as const;
 export const FUTSAL_GRADES = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'] as const;
