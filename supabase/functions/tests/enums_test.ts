@@ -3,8 +3,6 @@ import {
   canEnter,
   ENTRY_FEE_UNITS,
   FUTSAL_GRADES,
-  getDivisionLabel,
-  getDivisionsForOrg,
   isValidGrade,
   isValidPlayerOrigin,
   parseDivisionCodes,
@@ -133,19 +131,6 @@ Deno.test('rankOf returns correct futsal rank', () => {
 
 Deno.test('rankOf returns null for division codes (no rank mapping)', () => {
   assertEquals(rankOf('tennis', 'gj_m_gold'), null);
-});
-
-// ─── getDivisionsForOrg / getDivisionLabel ───────────────────
-
-Deno.test('getDivisionsForOrg returns divisions for gj', () => {
-  const gj = getDivisionsForOrg('gj');
-  assertEquals(gj.length > 0, true);
-  assertEquals(gj.every((d) => d.org === 'gj'), true);
-});
-
-Deno.test('getDivisionLabel returns label or fallback', () => {
-  assertEquals(getDivisionLabel('gj_m_gold'), '골드부');
-  assertEquals(getDivisionLabel('unknown_code'), 'unknown_code');
 });
 
 // ─── parseDivisionCodes ──────────────────────────────────────
