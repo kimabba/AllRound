@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(13);
+SELECT plan(14);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -81,8 +81,15 @@ SELECT throws_ok(
   '폐기된(is_active=false) 등급은 새로 배정할 수 없다'
 );
 SELECT lives_ok(
-  $$UPDATE public.grades SET is_active = false WHERE sport = 'futsal' AND code = 'intro'$$,
+  $$UPDATE public.grades SET is_active = false WHERE sport = 'futsal' AND code = 'beginner'$$,
   '이미 그 등급을 쓰는 사용자가 있어도 폐기 처리는 가능하다(기존 행 보존)'
+);
+-- 폐기된 등급을 이미 가진 사용자가 프로필의 다른 값을 저장해도 막히면 안 된다.
+-- (트리거 WHEN 절이 없으면 값이 그대로여도 발동해 저장 자체가 실패한다.)
+SELECT lives_ok(
+  $$UPDATE public.user_sports SET grade = grade, is_primary = is_primary
+     WHERE user_id = '00000000-0000-4000-8000-000000000005' AND sport = 'futsal'$$,
+  '폐기 등급을 가진 기존 행은 값이 그대로면 재저장할 수 있다'
 );
 UPDATE public.grades SET is_active = true WHERE sport = 'futsal';
 

@@ -90,26 +90,33 @@ def sql_enum_after_history(text: str, name: str) -> list[str]:
     return values
 
 
-def seed_grades() -> list[tuple[str, str, str, int]]:
+def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
     """마이그레이션의 public.grades seed 를 누적해 (sport, code, label, sort_order) 로.
 
     등급 추가·개명은 이제 CHECK 교체가 아니라 이 테이블의 INSERT 로 한다(JY-146 P3-a).
-    같은 (sport, code) 가 여러 마이그레이션에 나오면 나중 것이 정본이다.
-    한계: DELETE·개별 UPDATE 는 반영하지 않는다(폐기는 is_active=false 정책이라
-    행이 사라지지 않는다).
+    같은 (sport, code) 가 여러 마이그레이션에 나오면 나중 것이 정본이고,
+    `is_active` 는 seed 의 5번째 컬럼과 후속 UPDATE 를 반영한다.
+
+    active_only=True 면 폐기 등급을 뺀다 — 클라 폴백의 선택지 목록과 맞추기 위해서다.
+    라벨 비교는 폐기분까지 포함해야 하므로 False 로 부른다.
+    한계: DELETE 는 반영하지 않는다(폐기는 is_active=false 정책이라 행이 사라지지 않는다).
     """
-    rows: dict[tuple[str, str], tuple[str, str, str, int]] = {}
+    rows: dict[tuple[str, str], tuple[str, str, str, int, bool]] = {}
     insert_pattern = re.compile(
         r"insert\s+into\s+public\.grades\s*\([^)]*\)\s*values\s*(.*?)(?:on\s+conflict|;)",
         re.I | re.S,
     )
-    # (sport, code, label, sort_order[, ...]) — 뒤에 컬럼이 더 붙어도(is_active 등) 읽는다.
+    # (sport, code, label, sort_order[, is_active]) — 라벨 안의 이스케이프된 작은따옴표('')도
+    # 허용한다. 다섯 번째 컬럼이 있으면 활성 여부로 읽는다.
+    quoted = r"'((?:[^']|'')*)'"
     value_pattern = re.compile(
-        r"\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*[,)]"
+        rf"\(\s*{quoted}\s*,\s*{quoted}\s*,\s*{quoted}\s*,\s*(\d+)"
+        r"(?:\s*,\s*(true|false))?\s*[,)]",
+        re.I,
     )
     tuple_start = re.compile(r"\(\s*'")
-    label_update = re.compile(
-        r"update\s+public\.grades\s+set\s+label_ko\s*=\s*'([^']+)'(.*?);",
+    setter_update = re.compile(
+        r"update\s+public\.grades\s+set\s+(.*?)\s+where\s+(.*?);",
         re.I | re.S,
     )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
@@ -122,45 +129,62 @@ def seed_grades() -> list[tuple[str, str, str, int]]:
             if len(parsed) != len(tuple_start.findall(values)):
                 raise AssertionError(
                     f"{path.name}: public.grades seed 튜플을 전부 해석하지 못했다 "
-                    f"(해석 {len(parsed)} / 발견 {len(tuple_start.findall(values))})"
+                    f"(해석 {len(parsed)} / 발견 {len(tuple_start.findall(values))}). "
+                    "컬럼 순서를 (sport, code, label_ko, sort_order[, is_active]) 로 맞춰라."
                 )
-            for sport, code, label, order in parsed:
-                rows[(sport, code)] = (sport, code, label, int(order))
-        # 라벨만 바꾸는 후속 마이그레이션도 정본이다.
-        for match in label_update.finditer(migration):
-            new_label, where = match.group(1), match.group(2)
+            for sport, code, label, order, active in parsed:
+                rows[(sport, code)] = (
+                    sport,
+                    code,
+                    label.replace("''", "'"),
+                    int(order),
+                    active.lower() != "false",
+                )
+        # 라벨 개명·폐기 처리도 정본이다.
+        for match in setter_update.finditer(migration):
+            setters, where = match.group(1), match.group(2)
+            new_label = re.search(rf"label_ko\s*=\s*{quoted}", setters)
+            new_active = re.search(r"is_active\s*=\s*(true|false)", setters, re.I)
+            if not new_label and not new_active:
+                continue
             sport = re.search(r"sport\s*=\s*'([^']+)'", where)
             code = re.search(r"code\s*=\s*'([^']+)'", where)
             if not sport or not code:
                 raise AssertionError(
-                    f"{path.name}: grades 라벨 UPDATE 의 대상을 (sport, code) 로 특정하지 못했다"
+                    f"{path.name}: grades UPDATE 의 대상을 (sport, code) 로 특정하지 못했다"
                 )
             key = (sport.group(1), code.group(1))
             if key in rows:
-                existing = rows[key]
-                rows[key] = (existing[0], existing[1], new_label, existing[3])
+                sport_v, code_v, label_v, order_v, active_v = rows[key]
+                if new_label:
+                    label_v = new_label.group(1).replace("''", "'")
+                if new_active:
+                    active_v = new_active.group(1).lower() != "false"
+                rows[key] = (sport_v, code_v, label_v, order_v, active_v)
     if not rows:
         raise AssertionError("public.grades seed 를 한 건도 찾지 못했다")
     # 앱은 라벨을 code 단일 키로 들고 있다(gradeLabels). 종목 간 code 가 겹치면 한쪽
     # 라벨이 다른 종목까지 덮어쓰므로 정본 단계에서 막는다.
     codes: dict[str, str] = {}
-    for sport, code, _label, _order in rows.values():
+    for sport, code, _label, _order, _active in rows.values():
         if code in codes and codes[code] != sport:
             raise AssertionError(
                 f"grades: code '{code}' 가 {codes[code]}·{sport} 두 종목에 있다 "
                 "(앱 라벨 맵이 code 단일 키라 서로 덮어쓴다)"
             )
         codes[code] = sport
-    return sorted(rows.values(), key=lambda row: (row[0], row[3]))
+    selected = [row[:4] for row in rows.values() if row[4] or not active_only]
+    return sorted(selected, key=lambda row: (row[0], row[3]))
 
 
 def seed_grade_codes(sport: str) -> list[str]:
+    """활성 등급만 — 클라 폴백의 선택지 목록과 대응한다."""
     return [row[1] for row in seed_grades() if row[0] == sport]
 
 
 def seed_grade_label_entries() -> list[str]:
-    """Dart/TS 라벨 맵과 같은 표기('code=label')로. 순서는 종목·sort_order."""
-    return [f"{row[1]}={row[2]}" for row in seed_grades()]
+    """라벨은 폐기 등급까지 필요하다(과거 데이터 표시). 표기는 'code=label'."""
+    return [f"{row[1]}={row[2]}" for row in seed_grades(active_only=False)]
 
 
 def dart_const_map(text: str, name: str) -> list[str]:

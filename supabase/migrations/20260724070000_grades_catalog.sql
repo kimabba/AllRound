@@ -115,7 +115,24 @@ $func$;
 comment on function public.enforce_active_grade() is
   'user_sports 신규 배정을 활성 등급으로 제한한다(JY-146). 기존 행은 건드리지 않는다.';
 
+-- 신규 함수 권한은 같은 마이그레이션에서 명시한다(docs/rules/DATABASE_RULES.md).
+-- PUBLIC 기본 EXECUTE 에 기대면 그게 회수되는 순간 트리거가 조용히 죽는다.
+grant execute on function public.enforce_active_grade() to anon, authenticated, service_role;
+
 drop trigger if exists user_sports_active_grade on public.user_sports;
-create trigger user_sports_active_grade
-  before insert or update of sport, grade on public.user_sports
+drop trigger if exists user_sports_active_grade_insert on public.user_sports;
+drop trigger if exists user_sports_active_grade_update on public.user_sports;
+
+create trigger user_sports_active_grade_insert
+  before insert on public.user_sports
   for each row execute function public.enforce_active_grade();
+
+-- UPDATE 는 값이 **실제로 바뀔 때만** 검사한다. `UPDATE OF grade` 는 값이 그대로여도
+-- SET 목록에 컬럼이 있기만 하면 발동하는데, 그러면 폐기 등급을 쓰던 사용자가 프로필을
+-- 재저장할 때 막힌다 — "신규 배정만 제한하고 기존 행은 보존" 이라는 의도와 어긋난다.
+-- (WHEN 절에서는 tg_op 를 쓸 수 없어 INSERT 와 트리거를 나눈다.)
+create trigger user_sports_active_grade_update
+  before update of sport, grade on public.user_sports
+  for each row
+  when (new.grade is distinct from old.grade or new.sport is distinct from old.sport)
+  execute function public.enforce_active_grade();
