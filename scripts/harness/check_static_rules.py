@@ -200,6 +200,13 @@ def _regex_context(source: str, slash: int) -> bool:
         k = j
         while k >= 0 and (source[k].isalnum() or source[k] in "_$"):
             k -= 1
+        # 단어 앞이 `.` 이면 멤버 접근(프로퍼티)이라 키워드가 아니라 값 → 나눗셈.
+        # `stats.default / total` 의 default 는 키워드가 아니다(codex 15차).
+        before = k
+        while before >= 0 and source[before] in " \t":
+            before -= 1
+        if before >= 0 and source[before] == ".":
+            return False
         word = source[k + 1 : j + 1]
         return word in _REGEX_PREFIX_KEYWORDS  # 키워드 뒤면 정규식, 값이면 나눗셈
     return True
@@ -480,6 +487,8 @@ GUARD_MUST_BLOCK = [
     "function f(){ return /'/.test(x); } const l = '입문';",
     # 라인 주석을 U+2028 로 끊고 그 뒤에 둔 라벨(codex 13차 low).
     "// c\u2028const label = '입문';",
+    # 멤버 접근(.default) 뒤 나눗셈을 정규식으로 오판하면 뒤 라벨을 놓친다(codex 15차).
+    "const label = stats.default / stats.total > 0.5 ? '테니스' : x;",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
