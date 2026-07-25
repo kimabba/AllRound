@@ -190,10 +190,26 @@ def _regex_context(source: str, slash: int) -> bool:
     if j < 0:
         return True  # 파일·식 맨 앞.
     prev = source[j]
-    # 값의 끝이면 나눗셈. (`)`·`]` 는 그룹/인덱싱 종료라 값, 식별자·숫자·`_`·`$` 도 값.)
-    if prev.isalnum() or prev in "_$)]":
+    # `)`·`]` 는 그룹/인덱싱 종료라 값 → 나눗셈.
+    if prev in ")]":
         return False
+    # 식별자로 끝나면 단어를 뽑아 본다. 값(변수)이면 나눗셈이지만, 키워드
+    # (`return /re/`, `typeof /re/`) 뒤는 정규식이다 — 키워드도 알파벳으로 끝나
+    # 직전 문자만 보면 오판한다(codex 14차).
+    if prev.isalnum() or prev in "_$":
+        k = j
+        while k >= 0 and (source[k].isalnum() or source[k] in "_$"):
+            k -= 1
+        word = source[k + 1 : j + 1]
+        return word in _REGEX_PREFIX_KEYWORDS  # 키워드 뒤면 정규식, 값이면 나눗셈
     return True
+
+
+# 뒤에 정규식 리터럴이 올 수 있는 JS/TS 키워드·연산자 단어.
+_REGEX_PREFIX_KEYWORDS = {
+    "return", "typeof", "instanceof", "in", "of", "new", "delete", "void",
+    "do", "else", "yield", "await", "case", "throw", "default",
+}
 
 
 def string_literals(source: str) -> list[tuple[int, str, int, int]]:
@@ -253,7 +269,7 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 if rc == "\\":
                     cursor += 2
                     continue
-                if rc in "\n\r  ":
+                if rc in "\n\r\u2028\u2029":
                     break  # 정규식은 줄을 넘지 않는다 — 나눗셈이었다.
                 if rc == "[":
                     in_class = True
