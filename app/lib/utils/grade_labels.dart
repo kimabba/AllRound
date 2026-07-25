@@ -1,9 +1,33 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum Sport { tennis, futsal }
+
+/// 카탈로그(등급·부서) 교체 알림. 값 자체는 의미 없고 "바뀌었다"는 신호만 쓴다.
+///
+/// 두 카탈로그는 plain singleton 이라 라벨을 읽는 화면에 리빌드 트리거가 없다.
+/// 스플래시 게이트가 콜드스타트는 막지만, 로그아웃 상태로 시작해 로그인하거나
+/// 로드가 3초를 넘기면 화면이 폴백 라벨로 그려진 뒤 그대로 굳는다(#318).
+/// router.dart 의 `_catalogAware` 가 이걸 듣고 라우트 화면을 새로 만들어 그 경로를 덮는다.
+final catalogRevision = ValueNotifier<int>(0);
+
+/// 카탈로그 라벨을 읽는 화면을 감싼다. revision 이 바뀌면 `build` 를 다시 호출해
+/// 화면을 **새로 만든다**.
+///
+/// 화면을 새로 만드는 게 핵심이다 — 같은 인스턴스를 돌려주면 Flutter 가
+/// `identical()` 패스트패스로 하위 트리 갱신을 통째로 건너뛴다. 그래서
+/// `catalogAware(() => const XScreen())` 처럼 클로저 안에 `const` 를 두면
+/// **감싸도 갱신되지 않는다**(const 표현식은 canonicalize 되어 매번 같은 객체다).
+/// 위젯 타입·위치가 같으므로 State(스크롤 위치·입력값)는 보존된다.
+///
+/// 라우트는 router.dart 가 일괄로 감싼다. 라우트가 아닌 표면(showModalBottomSheet·
+/// showDialog 로 뜨는 시트·다이얼로그)은 그 위젯 트리의 자손이 아니므로 각자 감싸야 한다.
+Widget catalogAware(Widget Function() build) => ListenableBuilder(
+      listenable: catalogRevision,
+      builder: (_, __) => build(),
+    );
 
 // 등급 정본은 DB public.grades 다(JY-146 P3-a). 아래 const 는 미로드 시 쓰이는
 // 오프라인 폴백이며, harness 게이트(check_enums.py)가 seed 와의 일치를 강제한다.
@@ -109,6 +133,7 @@ class GradeCatalog {
     _activeCodes = codes;
     _labels = labels;
     _markReady();
+    catalogRevision.value++;
   }
 
   /// 세션 전환(로그아웃·계정 변경) 시 호출한다. in-flight 로드도 무효화된다.
@@ -117,6 +142,7 @@ class GradeCatalog {
     _labels = null;
     _ready = Completer<void>();
     _generation++;
+    catalogRevision.value++;
   }
 }
 
@@ -325,8 +351,7 @@ class DivisionCatalog {
   /// 로드됐으면 DB 결과, 아니면 const fallback.
   List<TennisDivision> get all => _ordered ?? _kFallbackDivisions;
 
-  TennisDivision? byCode(String code) =>
-      (_byCode ?? _kFallbackByCode)[code];
+  TennisDivision? byCode(String code) => (_byCode ?? _kFallbackByCode)[code];
 
   /// tennis_divisions 를 읽어 카탈로그를 교체한다(멱등).
   /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 기존 상태를 유지한다.
@@ -364,14 +389,17 @@ class DivisionCatalog {
     _ordered = ordered;
     _byCode = {for (final d in ordered) d.code: d};
     _markReady();
+    catalogRevision.value++;
   }
 
-  @visibleForTesting
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다. GradeCatalog.reset 과 같은 이유로,
+  /// 재로그인 로드가 실패했을 때 이전 계정의 부서 스냅샷이 남는 걸 막는다(#318).
   void reset() {
     _ordered = null;
     _byCode = null;
     _ready = Completer<void>();
     _generation++;
+    catalogRevision.value++;
   }
 
   /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
