@@ -25,19 +25,20 @@ select is(
   'authenticated 가 SELECT 못 하는 public 테이블이 없다'
 );
 
--- 2) 클럽 문의 2개 테이블은 쓰기를 서버(Edge) 경로로만 연다.
+-- 2) 쓰기를 서버 경로로만 여는 테이블에 클라이언트 DML 권한이 없어야 한다.
+--    club_inquiry_*: Edge 전용. user_sports: save_user_sports RPC 전용(#320).
 select is(
   (select coalesce(string_agg(format('%s:%s', c.relname, r.who), ', '
                               order by c.relname, r.who), '(없음)')
      from pg_class c join pg_namespace n on n.oid = c.relnamespace
      cross join (values ('anon'),('authenticated')) as r(who)
     where n.nspname = 'public'
-      and c.relname in ('club_inquiry_threads','club_inquiry_messages')
+      and c.relname in ('club_inquiry_threads','club_inquiry_messages','user_sports')
       and (has_table_privilege(r.who, c.oid, 'INSERT')
         or has_table_privilege(r.who, c.oid, 'UPDATE')
         or has_table_privilege(r.who, c.oid, 'DELETE'))),
   '(없음)',
-  '클럽 문의 테이블에 anon/authenticated 쓰기 권한이 없다'
+  '서버 경로 전용 테이블에 anon/authenticated 쓰기 권한이 없다'
 );
 
 -- 3) 모든 public 함수(확장 제외)를 service_role 이 실행할 수 있어야 한다.
