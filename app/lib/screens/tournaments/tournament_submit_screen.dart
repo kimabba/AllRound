@@ -229,16 +229,16 @@ class _TournamentSubmitScreenState
             _Label('종목 *'),
             const SizedBox(height: AppSpacing.sm),
             SegmentedButton<Sport>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: Sport.tennis,
-                  icon: Icon(Icons.sports_tennis_rounded),
-                  label: Text('테니스'),
+                  icon: const Icon(Icons.sports_tennis_rounded),
+                  label: Text(sportLabel(Sport.tennis)),
                 ),
                 ButtonSegment(
                   value: Sport.futsal,
-                  icon: Icon(Icons.sports_soccer_rounded),
-                  label: Text('풋살'),
+                  icon: const Icon(Icons.sports_soccer_rounded),
+                  label: Text(sportLabel(Sport.futsal)),
                 ),
               ],
               selected: {_sport},

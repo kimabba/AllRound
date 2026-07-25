@@ -26,6 +26,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+
 def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
 
@@ -123,36 +124,11 @@ def ts_record(text: str, name: str) -> list[str]:
     return [f"{key}={value}" for key, value in entries]
 
 
-def sql_grade_check(text: str, sport: str) -> list[str]:
-    # 마이그레이션 history 를 후순위 ALTER 가 덮어쓸 수 있으므로 가장 마지막 매치를 사용.
-    # 예: 002 에서 정의 → 010 에서 ALTER 로 enum 교체된 경우, 010 의 정의가 운영 schema.
-    pattern = rf"sport\s*=\s*'{re.escape(sport)}'\s+and\s+grade\s+in\s*\((.*?)\)"
-    matches = re.findall(pattern, text, re.I | re.S)
-    if not matches:
-        raise AssertionError(f"SQL grade check not found for sport: {sport}")
-    return quoted_values(matches[-1])
-
-
 def sql_entry_fee_units(text: str) -> list[str]:
     match = re.search(r"entry_fee_unit\s+text\s+not\s+null\s+default\s+'[^']+'\s+check\s*\(\s*entry_fee_unit\s+in\s*\((.*?)\)\s*\)", text, re.I | re.S)
     if not match:
         raise AssertionError("SQL entry_fee_unit check not found")
     return quoted_values(match.group(1))
-
-
-def user_sports_grade_constraint_history() -> str:
-    sql_parts: list[str] = [read(SQL_USERS)]
-    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
-        if path == SQL_USERS:
-            continue
-        text = read(path)
-        matches = re.finditer(
-            r"alter\s+table[^;]+?add\s+constraint\s+user_sports_grade_check\s+check\s*\((.*?)\)\s*;",
-            text,
-            re.I | re.S,
-        )
-        sql_parts.extend(match.group(0) for match in matches)
-    return "\n".join(sql_parts)
 
 
 def seed_region_codes(text: str) -> list[str]:
@@ -180,9 +156,7 @@ def assert_same(name: str, *values: tuple[str, list[str]]) -> None:
 def main() -> int:
     dart = read(DART_ENUMS)
     ts = read(TS_ENUMS)
-    # 마이그레이션 history 정합: 후속 migration 의 ADD CONSTRAINT 가 기존
-    # user_sports_grade_check 를 덮어쓰므로 최신 정의를 기준으로 비교한다.
-    sql_users = user_sports_grade_constraint_history()
+    sql_users = read(SQL_USERS)
     sql_orgs = read(SQL_ORGS)
     seed = read(SQL_SEED)
 
@@ -192,29 +166,13 @@ def main() -> int:
         ("TypeScript SPORTS", ts_const_array(ts, "SPORTS")),
         ("SQL sport", sql_enum_after_history(sql_users, "sport")),
     )
-    # 등급 라벨은 DB 에 없다(코드가 정본). Dart↔TS 두 벌이 어긋나면 같은 등급이
-    # 화면마다 다른 이름으로 보이므로 여기서 막는다.
-    assert_same(
-        "grade labels",
-        ("Dart gradeLabels", dart_const_map(dart, "gradeLabels")),
-        ("TypeScript GRADE_LABELS", ts_record(ts, "GRADE_LABELS")),
-    )
+    # 등급(grades)의 정본↔폴백 대조는 check_grades_parity.py 가 **실제 DB** 로 한다.
+    # 마이그레이션을 정규식 파싱하면 유효 SQL 문법으로 grades 쓰기를 숨길 수 있어
+    # fail-open 우회가 반복됐다(codex 5~11차). 파싱을 버리고 적용된 DB 를 직접 읽는다(JY-321).
     assert_same(
         "sport labels",
         ("Dart sportLabels", dart_sport_label_map(dart)),
         ("TypeScript SPORT_LABELS", ts_record(ts, "SPORT_LABELS")),
-    )
-    assert_same(
-        "tennis grades",
-        ("Dart tennisGrades", dart_const_list(dart, "tennisGrades")),
-        ("TypeScript TENNIS_GRADES", ts_const_array(ts, "TENNIS_GRADES")),
-        ("SQL tennis grade check", sql_grade_check(sql_users, "tennis")),
-    )
-    assert_same(
-        "futsal grades",
-        ("Dart futsalGrades", dart_const_list(dart, "futsalGrades")),
-        ("TypeScript FUTSAL_GRADES", ts_const_array(ts, "FUTSAL_GRADES")),
-        ("SQL futsal grade check", sql_grade_check(sql_users, "futsal")),
     )
     assert_same(
         "tennis orgs",
@@ -232,19 +190,6 @@ def main() -> int:
         "entry fee units",
         ("TypeScript ENTRY_FEE_UNITS", ts_const_array(ts, "ENTRY_FEE_UNITS")),
         ("SQL entry_fee_unit check", sql_entry_fee_units(sql_orgs)),
-    )
-    # 라벨은 등급 코드 전체를 덮어야 한다. 등급을 추가하고 라벨을 빠뜨리면 화면에
-    # 코드가 그대로 노출되고, 폐기 등급이 라벨에만 남으면 유령 선택지가 된다.
-    assert_same(
-        "grade label coverage",
-        (
-            "grade codes",
-            sorted(dart_const_list(dart, "tennisGrades") + dart_const_list(dart, "futsalGrades")),
-        ),
-        (
-            "gradeLabels keys",
-            sorted(entry.split("=", 1)[0] for entry in dart_const_map(dart, "gradeLabels")),
-        ),
     )
     return 0
 

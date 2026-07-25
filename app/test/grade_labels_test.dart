@@ -4,6 +4,108 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
 
 void main() {
+  tearDown(GradeCatalog.instance.reset);
+
+  group('GradeCatalog DB 로드', () {
+    test('로드 전에는 폴백 등급을 쓴다', () {
+      expect(GradeCatalog.instance.isLoaded, isFalse);
+      expect(futsalGrades, ['intro', 'beginner', 'intermediate', 'advanced', 'elite']);
+      expect(gradeLabel('elite'), '선출');
+    });
+
+    test('DB 결과가 폴백을 대체한다 — 등급 추가·개명이 INSERT 만으로 반영된다', () {
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': true},
+        {
+          'sport': 'tennis',
+          'code': 'under1y',
+          'label_ko': '1년 미만',
+          'is_active': true
+        },
+      ]);
+      expect(futsalGrades, ['intro', 'pro']);
+      expect(gradeLabel('pro'), '프로');
+      expect(gradesFor(Sport.tennis), ['under1y']);
+      // 새 등급이 곧바로 모집글 허용집합에 들어간다.
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '프로'), isTrue);
+    });
+
+    test('폐기 등급은 선택지에서 빠지되 라벨은 남는다', () {
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': false},
+      ]);
+      expect(futsalGrades, ['intro'], reason: '폐기 등급이 선택지에 남았다');
+      // 그 등급을 쓰던 사용자의 프로필에 코드가 그대로 노출되면 안 된다.
+      expect(gradeLabel('pro'), '프로');
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '프로'), isFalse);
+    });
+
+    test('한 종목의 활성 등급이 0개면 폴백을 되살리지 않는다', () {
+      // 폴백으로 되돌리면 앱이 DB 의 폐기 결정을 뒤집는 꼴이 된다.
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'tennis', 'code': 'under1y', 'label_ko': '1년 미만', 'is_active': true},
+      ]);
+      expect(futsalGrades, isEmpty);
+      expect(tennisGrades, ['under1y']);
+    });
+
+    test('빈 응답은 무시한다 — 선택지가 통째로 사라지면 안 된다', () {
+      GradeCatalog.instance.ingestRows([]);
+      expect(GradeCatalog.instance.isLoaded, isFalse);
+      expect(futsalGrades.length, 5);
+    });
+
+    test('ingest 는 whenReady 를 완료시키고 reset 은 재무장한다', () async {
+      var ready = false;
+      unawaited(GradeCatalog.instance.whenReady.then((_) => ready = true));
+      await pumpEventQueue();
+      expect(ready, isFalse, reason: '로드 전에 스플래시가 열리면 폴백 라벨이 보인다');
+
+      GradeCatalog.instance.ingestRows([
+        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+      ]);
+      await pumpEventQueue();
+      expect(ready, isTrue);
+
+      GradeCatalog.instance.reset();
+      var readyAgain = false;
+      unawaited(GradeCatalog.instance.whenReady.then((_) => readyAgain = true));
+      await pumpEventQueue();
+      expect(readyAgain, isFalse, reason: '세션 전환 후에도 이전 완료 신호가 남았다');
+    });
+  });
+
+  group('skill_level 허용집합', () {
+    test('해당 종목의 등급 라벨과 무관은 통과한다', () {
+      for (final sport in Sport.values) {
+        for (final grade in gradesFor(sport)) {
+          expect(isAllowedSkillLevelLabel(sport, gradeLabel(grade)), isTrue,
+              reason: '$sport 의 $grade 라벨이 거부됐다');
+        }
+        expect(isAllowedSkillLevelLabel(sport, anyGradeLabel), isTrue);
+      }
+    });
+
+    test('다른 종목의 등급 라벨은 거부한다', () {
+      // 합집합으로 검사하면 풋살 모집글에 테니스 등급이 들어가도 통과한다.
+      expect(isAllowedSkillLevelLabel(Sport.futsal, '1년 미만'), isFalse);
+      expect(isAllowedSkillLevelLabel(Sport.tennis, '입문'), isFalse);
+    });
+
+    test('폐기된 부수체계와 등급 코드 자체는 거부한다', () {
+      // 마이그 010 에서 폐기된 옛 라벨이 다시 유입되는 걸 막는다(JY-146).
+      for (final stale in ['신입', '5부', '1부']) {
+        expect(isAllowedSkillLevelLabel(Sport.tennis, stale), isFalse,
+            reason: '$stale 이 통과됐다');
+      }
+      // 라벨 자리에 코드가 들어오는 실수도 거른다.
+      expect(isAllowedSkillLevelLabel(Sport.tennis, 'under1y'), isFalse);
+      expect(isAllowedSkillLevelLabel(Sport.futsal, ''), isFalse);
+    });
+  });
+
   group('grade_labels', () {
     test('tennis grade order: under1y → over5y', () {
       expect(tennisGrades, ['under1y', 'y1to3', 'y3to5', 'over5y']);

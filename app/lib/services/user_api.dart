@@ -110,12 +110,13 @@ mixin UserApi on ApiBase {
     if (userId == null) throw StateError('Not authenticated');
 
     await supabase.rpc('ensure_profile');
-    await supabase.from('user_sports').delete().eq('user_id', userId);
-    if (sports.isNotEmpty) {
-      await supabase
-          .from('user_sports')
-          .insert(sports.map((s) => s.toInsert(userId)).toList());
-    }
+    // 단일 트랜잭션 RPC. PostgREST 로 delete + insert 를 따로 보내면 delete 만 커밋된 채
+    // insert 가 거부될 때 종목이 사라지고(부분 적용), 배치 upsert 는 주 종목 교체가
+    // 행 순서에 의존한다(one_primary_per_user 부분 유니크 인덱스).
+    // user_id 는 서버가 auth.uid() 로 정한다 — payload 의 값은 무시된다.
+    await supabase.rpc('save_user_sports', params: {
+      'p_sports': sports.map((s) => s.toInsert(userId)).toList(),
+    });
   }
 
   Future<List<Region>> listRegions() async {

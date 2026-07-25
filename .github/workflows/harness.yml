@@ -27,9 +27,20 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.108.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       # DB 테스트에 불필요한 서비스는 제외해 기동 시간을 줄인다.
       - run: supabase start -x edge-runtime,imgproxy,vector,logflare,studio
       - run: bash scripts/qa/run_db_tests.sh
+      # 등급 정본↔폴백 대조는 **적용된 DB** 를 직접 읽는다(JY-321). 마이그레이션 정규식
+      # 파싱은 유효 SQL 문법으로 우회됐다(codex 5~11차). psql 은 supabase CLI 가 제공한다.
+      - run: psql "$DATABASE_URL" -c 'select 1' >/dev/null
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - run: python3 scripts/harness/check_grades_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   flutter:
     name: Flutter analyze/test
