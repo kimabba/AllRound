@@ -240,10 +240,23 @@ Deno.serve(async (req) => {
   if (!Array.isArray(body.eligible_grades) || body.eligible_grades.length === 0) {
     return errorResponse('eligible_grades required (non-empty array)');
   }
+  // 등급 정본은 DB public.grades — TS 사본을 보면 관리자가 추가한 등급을 여기서만 거부한다(#319).
+  const { data: gradeRows, error: gradeErr } = await supabase
+    .from('grades')
+    .select('code')
+    .eq('sport', body.sport)
+    .eq('is_active', true);
+  if (gradeErr) return errorResponse(`grade catalog unavailable: ${gradeErr.message}`, 503);
+  const activeGrades = new Set<string>((gradeRows ?? []).map((r) => r.code as string));
   for (const g of body.eligible_grades) {
-    if (!isValidGrade(body.sport, g)) {
-      return errorResponse(`Invalid grade for ${body.sport}: ${g}`);
+    if (isValidGrade(body.sport, g, activeGrades)) continue;
+    // 카탈로그가 비었으면 원인은 제보 내용이 아니라 DB 상태(정책·seed 누락)다 → 503 으로 구분한다.
+    // 판정 뒤에 보는 이유: 테니스 부서 코드(gj_m_gold)는 grades 와 무관하게 통과해야 하는데,
+    // 빈 목록을 먼저 막으면 그 경로까지 함께 죽는다(codex 1차).
+    if (activeGrades.size === 0) {
+      return errorResponse(`grade catalog empty for ${body.sport}`, 503);
     }
+    return errorResponse(`Invalid grade for ${body.sport}: ${g}`);
   }
 
   // Phase 2 신규 필드 검증
