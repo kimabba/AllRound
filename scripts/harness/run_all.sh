@@ -40,7 +40,7 @@ fi
   flutter test
 )
 
-printf '\n'; echo "[6/6] Deno Edge Function checks"
+printf '\n'; echo "[7/7] Deno Edge Function checks"
 if ! command -v deno >/dev/null 2>&1; then
   echo "deno not found" >&2
   exit 1

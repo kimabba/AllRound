@@ -176,6 +176,26 @@ def decode_string_escapes(text: str) -> str:
     )
 
 
+def _regex_context(source: str, slash: int) -> bool:
+    """`source[slash]` 의 `/` 가 정규식 리터럴 시작인지(나눗셈이 아닌지) 보수적으로 본다.
+
+    JS/TS 에서 `/` 는 값 뒤면 나눗셈, 그 외엔 정규식 시작이다. 직전 유의미 문자가
+    값의 끝(식별자·닫는 괄호·숫자·따옴표)이 아니면 정규식으로 간주한다. Dart 에는 정규식
+    리터럴이 없지만, Dart 의 나눗셈은 늘 값 뒤라 여기서 정규식으로 오인되지 않는다."""
+    if slash + 1 < len(source) and source[slash + 1] in "/*":
+        return False  # 주석이지 정규식이 아니다.
+    j = slash - 1
+    while j >= 0 and source[j] in " \t":
+        j -= 1
+    if j < 0:
+        return True  # 파일·식 맨 앞.
+    prev = source[j]
+    # 값의 끝이면 나눗셈. (`)`·`]` 는 그룹/인덱싱 종료라 값, 식별자·숫자·`_`·`$` 도 값.)
+    if prev.isalnum() or prev in "_$)]":
+        return False
+    return True
+
+
 def string_literals(source: str) -> list[tuple[int, str, int, int]]:
     """소스에서 문자열 리터럴을 (시작 줄, 내용, 시작 오프셋, 끝 오프셋)으로 뽑는다.
 
@@ -197,7 +217,9 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
             index += 1
             continue
         if char == "/" and index + 1 < length and source[index + 1] == "/":
-            while index < length and source[index] != "\n":
+            # 라인 주석. 종료는 ECMAScript 줄종료 전부다 — LF 만 보면 U+2028 로 주석을
+            # 끊고 그 뒤에 라벨을 둬 우회할 수 있다(codex 13차).
+            while index < length and source[index] not in "\n\r\u2028\u2029":
                 index += 1
             continue
         if char == "/" and index + 1 < length and source[index + 1] == "*":
@@ -218,6 +240,33 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 cursor += 1
             index = cursor
             continue
+        if char == "/" and _regex_context(source, index):
+            # JS/TS 정규식 리터럴 `/…/flags`. 안에 따옴표가 들어가면(`/'/`, `/['"]/`)
+            # 스캐너가 그걸 문자열 시작으로 오인해, 다음 진짜 따옴표(라벨의 여는 따옴표)까지
+            # 삼켜 라벨 검출이 통째로 깨진다(codex 13차). 정규식은 값 문맥이 아닌 곳에서만
+            # 시작하므로 직전 유의미 문자로 보수적으로 판별한다(나눗셈과 구분).
+            cursor = index + 1
+            in_class = False
+            closed = False
+            while cursor < length:
+                rc = source[cursor]
+                if rc == "\\":
+                    cursor += 2
+                    continue
+                if rc in "\n\r  ":
+                    break  # 정규식은 줄을 넘지 않는다 — 나눗셈이었다.
+                if rc == "[":
+                    in_class = True
+                elif rc == "]":
+                    in_class = False
+                elif rc == "/" and not in_class:
+                    closed = True
+                    break
+                cursor += 1
+            if closed:
+                index = cursor + 1
+                continue
+            # 닫는 `/` 를 못 찾았으면 정규식이 아니라 나눗셈이었다 — 원위치로 진행.
         if char in "'\"`":
             # Dart raw 문자열 `r'…'` 은 백슬래시가 리터럴이라 이스케이프·보간이 없다.
             # 디코드하면 `r'테…'`(런타임 값은 문자 그대로) 를 라벨로 오탐한다(codex 10차).
