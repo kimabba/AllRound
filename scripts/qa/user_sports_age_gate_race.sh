@@ -27,14 +27,32 @@ if [ "$(psql "$DB_URL" -tAc "select count(*) from public.users where id = '$U'")
   echo "QA 페르소나가 없습니다. 먼저 bash scripts/qa/run_db_tests.sh 를 실행하세요." >&2
   exit 1
 fi
+# 이 검사는 "연령 미검증 계정" 이 필요하다. 008 에 생년월일이 채워져 있으면 되돌릴 수 없다
+# (enforce_min_signup_age 가 한 번 저장된 생년월일의 삭제를 막는다) → 시드 재생성이 답이다.
+if [ -n "$(psql "$DB_URL" -tAc "select birth_date from public.users where id = '$U'")" ]; then
+  echo "페르소나 $U 에 생년월일이 채워져 있어 이 검사를 돌릴 수 없습니다." >&2
+  echo "supabase db reset 으로 시드를 재생성한 뒤 다시 실행하세요." >&2
+  exit 1
+fi
+
+# 실행 전 상태를 저장해 두고 그대로 되돌린다("정본일 것" 이라고 가정하지 않는다).
+# users.updated_at 만은 되돌릴 수 없다 — users_touch_updated_at 트리거가 매 UPDATE 에
+# 새 값을 넣기 때문이다(002_init_users_sports.sql).
+prior_birth=$(psql "$DB_URL" -tAc "select coalesce(birth_date::text, '') from public.users where id = '$U'")
+prior_sports=$(psql "$DB_URL" -tAc "select coalesce(json_agg(json_build_object(
+    'sport', sport, 'grade', grade, 'is_primary', is_primary))::text, '[]')
+  from public.user_sports where user_id = '$U'")
 
 holder_pid=""
 cleanup() {
   [ -n "$holder_pid" ] && kill "$holder_pid" 2>/dev/null
-  # personas.sql 의 정본 상태(birth_date NULL·종목 없음)로 되돌린다.
   psql "$DB_URL" -q \
     -c "delete from public.user_sports where user_id = '$U'" \
-    -c "update public.users set birth_date = null where id = '$U'" 2>/dev/null
+    -c "insert into public.user_sports (user_id, sport, grade, is_primary)
+        select '$U', (e ->> 'sport')::public.sport, e ->> 'grade', (e ->> 'is_primary')::boolean
+          from jsonb_array_elements('$prior_sports'::jsonb) e" \
+    -c "update public.users set birth_date = nullif('$prior_birth', '')::date where id = '$U'" \
+    2>/dev/null || echo "경고: 실행 전 상태로 되돌리지 못했습니다. run_db_tests.sh 로 시드를 복구하세요." >&2
 }
 trap cleanup EXIT
 
@@ -44,12 +62,31 @@ psql "$DB_URL" -q -v ON_ERROR_STOP=1 \
   -c "insert into public.user_sports (user_id, sport, grade, is_primary) values
         ('$U','futsal','intro',true), ('$U','tennis','y1to3',false)"
 
-# 세션 A: 락을 먼저 잡고 tennis 를 지운 뒤 잠시 뒤 커밋한다.
+# 세션 A: 락을 잡고 tennis 를 지운 뒤, **세션 B 가 같은 락을 기다리는 것을 확인하고** 커밋한다.
+# 고정 시간(pg_sleep)으로 커밋하면 러너가 느릴 때 B 가 시작하기도 전에 커밋이 끝나,
+# 게이트가 락 앞에 있는 결함 함수도 "이미 지워진 tennis" 를 보고 42501 을 내며 통과한다
+# (= 검사가 조용히 무력화된다). B 의 대기를 조건으로 삼으면 스케줄링과 무관해진다.
 psql "$DB_URL" -q -v ON_ERROR_STOP=1 >/dev/null <<SQL &
 begin;
 select pg_advisory_xact_lock(hashtextextended('$U', 0));
 delete from public.user_sports where user_id = '$U' and sport = 'tennis';
-select pg_sleep(5);
+do \$\$
+declare
+  waited int := 0;
+begin
+  while not exists (
+    select 1 from pg_locks
+     where locktype = 'advisory' and not granted
+       and ((classid::bigint << 32) | objid::bigint) = pg_catalog.hashtextextended('$U', 0)
+  ) loop
+    if waited > 600 then
+      raise exception '세션 B 가 락을 기다리지 않았다 — 검사가 무의미하다';
+    end if;
+    waited := waited + 1;
+    perform pg_sleep(0.05);
+  end loop;
+end
+\$\$;
 commit;
 SQL
 holder_pid=$!
