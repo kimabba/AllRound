@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 /// #318: 카탈로그는 plain singleton 이라 라벨을 읽는 화면에 리빌드 트리거가 없다.
-/// router.dart 의 `_catalogAware` 가 라우트 화면을 `catalogRevision` 마다 새로 만들어
+/// `catalogAware` 가 라우트 화면을 `catalogRevision` 마다 새로 만들어
 /// 이 문제를 덮는다. 여기서 검증하는 건 그 방식이 실제로 화면을 갱신하는가다.
 ///
 /// 실측으로 탈락한 대안 2개(같은 실수 반복 방지):
@@ -22,15 +22,8 @@ void main() {
   Widget appUnderTest(Widget Function() screen) {
     final router = GoRouter(
       routes: [
-        GoRoute(
-          path: '/',
-          // router.dart 가 쓰는 것과 같은 래핑. 화면을 builder 안에서 새로 만드는 게
-          // 핵심이다 — 같은 인스턴스를 돌려주면 Flutter 가 하위 트리를 건너뛴다.
-          builder: (_, __) => ListenableBuilder(
-            listenable: catalogRevision,
-            builder: (_, __) => screen(),
-          ),
-        ),
+        // 프로덕션과 같은 헬퍼를 쓴다(복제하면 헬퍼가 바뀌어도 테스트가 안 깨진다).
+        GoRoute(path: '/', builder: (_, __) => catalogAware(screen)),
       ],
     );
     return MaterialApp.router(routerConfig: router);
@@ -73,16 +66,26 @@ void main() {
   });
 
   // 위 테스트는 방식이 동작함을 보이지만 router.dart 에 실제로 연결됐는지는 못 본다.
-  // 새 라우트를 _catalogAware 없이 추가하면 그 화면만 조용히 stale 이 되므로 여기서 막는다.
-  test('router.dart 의 모든 라우트 화면이 _catalogAware 를 거친다', () {
-    final source = File('lib/router.dart').readAsStringSync();
-    final routeBuilders = RegExp(r'GoRoute\(').allMatches(source).length;
-    final wrapped = RegExp(r'_catalogAware\(').allMatches(source).length;
-    // 정의 1회 + 각 라우트 1회.
-    expect(wrapped, greaterThanOrEqualTo(routeBuilders + 1),
-        reason: '_catalogAware 로 감싸지 않은 라우트가 있다');
-    expect(source.contains('builder: (_, __) => const '), isFalse,
-        reason: 'const 화면은 인스턴스가 재사용돼 카탈로그 갱신이 반영되지 않는다');
+  // 새 라우트를 catalogAware 없이 추가하면 그 화면만 조용히 stale 이 되므로 여기서 막는다.
+  //
+  // 개수를 세는 방식(`GoRoute(` 수 vs `catalogAware(` 수)은 쓰지 않는다 — 감싸지 않은
+  // 라우트를 추가해도 다른 곳(주석 포함)에 `catalogAware(` 가 하나 더 있으면 통과한다.
+  // 라우트마다 자기 블록을 따로 검사한다.
+  test('router.dart 의 모든 라우트가 각자 catalogAware 를 거친다', () {
+    final blocks = _routeBlocks(File('lib/router.dart').readAsStringSync());
+
+    // 라우트가 통째로 사라져 검사가 공회전하는 상황을 막는다.
+    expect(blocks.length, greaterThanOrEqualTo(20),
+        reason: 'GoRoute 블록을 제대로 못 읽었다(파서 문제일 수 있음)');
+
+    for (final block in blocks) {
+      final head = block.split('\n').first.trim();
+      expect(block.contains('catalogAware('), isTrue,
+          reason: 'catalogAware 로 감싸지 않은 라우트: $head');
+      // 감싸도 클로저 안이 const 면 인스턴스가 재사용돼 갱신이 스킵된다.
+      expect(block.contains('const '), isFalse,
+          reason: 'const 화면은 인스턴스가 재사용돼 갱신되지 않는다: $head');
+    }
   });
 
   testWidgets('reset 도 화면을 폴백으로 되돌린다 — 로그아웃 후 이전 계정 라벨이 남지 않는다',
@@ -100,4 +103,41 @@ void main() {
 
     expect(find.text('선출'), findsOneWidget);
   });
+}
+
+/// `GoRoute(` 하나하나의 인자 블록을 괄호 균형으로 잘라낸다.
+///
+/// 줄 주석은 먼저 제거한다 — 주석 안의 `GoRoute(`/`catalogAware(` 가 검사를 흐리기
+/// 때문이다. 문자열 리터럴 안의 괄호까지 다루는 진짜 파서는 아니지만, 라우트 정의는
+/// 경로 문자열과 위젯 생성자뿐이라 이 범위로 충분하다. (원리적으로 견고한 소스 검사는
+/// #322 에서 dart custom_lint 로 옮긴다.)
+List<String> _routeBlocks(String source) {
+  final stripped = source.split('\n').map((line) {
+    final i = line.indexOf('//');
+    return i == -1 ? line : line.substring(0, i);
+  }).join('\n');
+
+  const marker = 'GoRoute(';
+  final blocks = <String>[];
+  var from = 0;
+  while (true) {
+    final start = stripped.indexOf(marker, from);
+    if (start == -1) break;
+    var depth = 0;
+    var end = start + marker.length - 1;
+    for (var i = start + marker.length - 1; i < stripped.length; i++) {
+      final c = stripped[i];
+      if (c == '(') depth++;
+      if (c == ')') {
+        depth--;
+        if (depth == 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    blocks.add(stripped.substring(start, end + 1));
+    from = start + marker.length;
+  }
+  return blocks;
 }

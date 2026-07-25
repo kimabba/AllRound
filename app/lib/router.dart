@@ -101,24 +101,24 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
-          path: '/login', builder: (_, __) => _catalogAware(LoginScreen.new)),
+          path: '/login', builder: (_, __) => catalogAware(LoginScreen.new)),
       GoRoute(
         path: '/reset-password',
-        builder: (_, __) => _catalogAware(ResetPasswordScreen.new),
+        builder: (_, __) => catalogAware(ResetPasswordScreen.new),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (_, __) => _catalogAware(OnboardingScreen.new),
+        builder: (_, __) => catalogAware(OnboardingScreen.new),
       ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, __) => _catalogAware(HomeScreen.new)),
+          GoRoute(path: '/', builder: (_, __) => catalogAware(HomeScreen.new)),
           GoRoute(
             path: '/chat',
             builder: (_, state) {
               final extra = state.extra;
-              return _catalogAware(
+              return catalogAware(
                 () => ChatScreen(
                   entryContext: extra is ChatEntryContext ? extra : null,
                 ),
@@ -127,37 +127,37 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/tournaments',
-            builder: (_, __) => _catalogAware(TournamentsScreen.new),
+            builder: (_, __) => catalogAware(TournamentsScreen.new),
           ),
           GoRoute(
             path: '/clubs',
-            builder: (_, __) => _catalogAware(ClubsScreen.new),
+            builder: (_, __) => catalogAware(ClubsScreen.new),
           ),
           GoRoute(
-              path: '/more', builder: (_, __) => _catalogAware(MoreScreen.new)),
+              path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
           GoRoute(
             path: '/rules',
-            builder: (_, __) => _catalogAware(RulesScreen.new),
+            builder: (_, __) => catalogAware(RulesScreen.new),
           ),
           GoRoute(
             path: '/profile',
-            builder: (_, __) => _catalogAware(ProfileScreen.new),
+            builder: (_, __) => catalogAware(ProfileScreen.new),
           ),
           GoRoute(
             path: '/notifications',
-            builder: (_, __) => _catalogAware(NotificationsScreen.new),
+            builder: (_, __) => catalogAware(NotificationsScreen.new),
           ),
           GoRoute(
             path: '/favorites',
-            builder: (_, __) => _catalogAware(FavoritesScreen.new),
+            builder: (_, __) => catalogAware(FavoritesScreen.new),
           ),
           GoRoute(
             path: '/blocked-users',
-            builder: (_, __) => _catalogAware(BlockedUsersScreen.new),
+            builder: (_, __) => catalogAware(BlockedUsersScreen.new),
           ),
           GoRoute(
             path: '/tournaments/submit',
-            builder: (_, __) => _catalogAware(TournamentSubmitScreen.new),
+            builder: (_, __) => catalogAware(TournamentSubmitScreen.new),
           ),
           GoRoute(
             path: '/clubs/:id',
@@ -165,7 +165,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               final club = state.extra as Club?;
               final openManagement =
                   state.uri.queryParameters['tab'] == 'manage';
-              return _catalogAware(
+              return catalogAware(
                 () => club != null
                     ? ClubDetailScreen(
                         club: club,
@@ -180,7 +180,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/tournaments/:id',
-            builder: (_, state) => _catalogAware(
+            builder: (_, state) => catalogAware(
               () => TournamentDetailScreen(
                 tournamentId: state.pathParameters['id']!,
               ),
@@ -191,7 +191,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 웹 전용
       GoRoute(
         path: '/no-access',
-        builder: (_, __) => _catalogAware(NoAccessScreen.new),
+        builder: (_, __) => catalogAware(NoAccessScreen.new),
       ),
 
       // Admin routes (AdminShell wrapping)
@@ -200,39 +200,39 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/admin',
-            builder: (_, __) => _catalogAware(AdminScreen.new),
+            builder: (_, __) => catalogAware(AdminScreen.new),
           ),
           GoRoute(
             path: '/admin/drafts',
-            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 1)),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 1)),
           ),
           GoRoute(
             path: '/admin/format-review',
-            builder: (_, __) => _catalogAware(FormatReviewScreen.new),
+            builder: (_, __) => catalogAware(FormatReviewScreen.new),
           ),
           GoRoute(
             path: '/admin/sources',
-            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 2)),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 2)),
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 3)),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 3)),
           ),
           GoRoute(
             path: '/admin/kb',
-            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 4)),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 4)),
           ),
           GoRoute(
             path: '/admin/tournaments',
-            builder: (_, __) => _catalogAware(_AdminTournamentListScreen.new),
+            builder: (_, __) => catalogAware(_AdminTournamentListScreen.new),
           ),
           GoRoute(
             path: '/admin/reports',
-            builder: (_, __) => _catalogAware(ModerationScreen.new),
+            builder: (_, __) => catalogAware(ModerationScreen.new),
           ),
           GoRoute(
             path: '/admin/edit/:id',
-            builder: (_, state) => _catalogAware(
+            builder: (_, state) => catalogAware(
               () => TournamentEditScreen(
                 tournamentId: state.pathParameters['id']!,
               ),
@@ -242,7 +242,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/manage',
-        builder: (_, state) => _catalogAware(
+        builder: (_, state) => catalogAware(
           () => ClubInquiryInboxScreen(
             clubId: state.pathParameters['id']!,
           ),
@@ -250,7 +250,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/:threadId',
-        builder: (_, state) => _catalogAware(
+        builder: (_, state) => catalogAware(
           () => ClubInquiryConversationScreen(
             clubId: state.pathParameters['id']!,
             threadId: state.pathParameters['threadId']!,
@@ -259,7 +259,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clubs/:id/inquiries',
-        builder: (_, state) => _catalogAware(
+        builder: (_, state) => catalogAware(
           () => ClubInquiryConversationScreen(
             clubId: state.pathParameters['id']!,
           ),
@@ -268,23 +268,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-/// #318: 등급·부서 카탈로그는 plain singleton 이라, 화면이 그려진 뒤 DB 로드가
-/// 끝나도 라벨을 다시 읽게 만들 트리거가 없다(로그아웃 상태 시작 → 로그인, 또는
-/// 스플래시 게이트 3초 초과 경로). 라우트 화면을 `catalogRevision` 마다 **새로 만들어**
-/// build 를 다시 태운다.
-///
-/// 화면을 새로 만드는 게 핵심이다 — 같은 인스턴스(특히 `const` 위젯)를 돌려주면
-/// Flutter 가 하위 트리 갱신을 통째로 건너뛴다(그래서 라우트에서 const 를 뺐다).
-/// 위젯 타입·위치가 같으므로 State(스크롤 위치·입력값)는 보존된다.
-///
-/// ponytail: 화면마다 provider 를 watch 시키는 전환(#318 원안) 대신 라우트 한 곳에서
-/// 처리한다. 화면 파일은 손대지 않는다. 세션당 1~2회 리빌드라 비용도 무시할 수준이다.
-/// 검증: test/catalog_rebuild_test.dart
-Widget _catalogAware(Widget Function() build) => ListenableBuilder(
-      listenable: catalogRevision,
-      builder: (_, __) => build(),
-    );
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {
