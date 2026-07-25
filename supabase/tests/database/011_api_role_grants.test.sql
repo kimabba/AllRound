@@ -34,8 +34,10 @@ select is(
      cross join (values ('anon'),('authenticated')) as r(who)
     where n.nspname = 'public'
       and c.relname in ('club_inquiry_threads','club_inquiry_messages','user_sports')
-      and (has_table_privilege(r.who, c.oid, 'INSERT')
-        or has_table_privilege(r.who, c.oid, 'UPDATE')
+      -- has_table_privilege 만 보면 컬럼 단위 grant(예: grant insert (grade) on ...)를
+      -- 놓친다. has_any_column_privilege 는 테이블 권한과 컬럼 권한을 함께 본다.
+      and (has_any_column_privilege(r.who, c.oid, 'INSERT')
+        or has_any_column_privilege(r.who, c.oid, 'UPDATE')
         or has_table_privilege(r.who, c.oid, 'DELETE'))),
   '(없음)',
   '서버 경로 전용 테이블에 anon/authenticated 쓰기 권한이 없다'

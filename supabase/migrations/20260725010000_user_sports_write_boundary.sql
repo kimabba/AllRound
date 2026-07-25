@@ -32,15 +32,6 @@ begin
     raise exception 'p_sports 는 JSON 배열이어야 합니다' using errcode = '22023';
   end if;
 
-  -- 연령 게이트(개인정보보호법 §22의2). DEFINER 라 RLS 정책이 걸리지 않으므로 여기서 건다.
-  -- 빈 배열은 면제한다 — RLS 에서도 delete 는 연령을 보지 않았고(user_sports_self_delete),
-  -- 게이트 도입(2026-07-18) 전 가입한 birth_date NULL 계정이 자기 종목을 지우는 길까지
-  -- 막으면 개인 데이터 삭제가 불가능해진다.
-  if jsonb_array_length(p_sports) > 0
-     and not (select public.has_verified_signup_age()) then
-    raise exception '연령 검증이 필요합니다' using errcode = '42501';
-  end if;
-
   -- 쓰기 전에 배열 자체의 불변식을 검사한다. 안 하면 같은 sport 중복은 ON CONFLICT 가
   -- 한 행을 두 번 갱신해 21000 으로, primary 가 둘이면 부분 유니크 인덱스가 23505 로
   -- 죽는다 — 둘 다 원인을 알 수 없는 내부 오류라 클라이언트가 고칠 수 없다.
@@ -74,6 +65,30 @@ begin
   if (select count(*) from jsonb_array_elements(p_sports) e
        where coalesce((e ->> 'is_primary')::boolean, false)) > 1 then
     raise exception '주 종목은 하나만 지정할 수 있습니다' using errcode = '22023';
+  end if;
+
+  -- 연령 게이트(개인정보보호법 §22의2). DEFINER 라 RLS 정책이 걸리지 않으므로 여기서 건다.
+  -- 배열 검증 뒤에 둔다 — 앞에 두면 잘못된 sport 값이 캐스팅 오류로 먼저 터진다.
+  --
+  -- "새로 넣거나 값을 바꾸는 원소가 하나라도 있을 때"만 건다. RLS 도 insert/update 에만
+  -- has_verified_signup_age 를 걸었고 delete 는 보지 않았다(user_sports_self_delete).
+  -- 무조건 걸면 게이트 도입(2026-07-18) 전 가입해 birth_date 가 비어 있는 계정이
+  -- 종목을 하나만 빼는 것까지 막힌다(운영 실측 3명). 전체 삭제는 되는데 부분 삭제만
+  -- 막히면, 지운 뒤 다시 넣을 수 없는 유실 경로가 된다.
+  if not (select public.has_verified_signup_age())
+     and exists (
+       select 1
+         from jsonb_array_elements(p_sports) e
+        where not exists (
+          select 1
+            from public.user_sports us
+           where us.user_id = uid
+             and us.sport = (e ->> 'sport')::public.sport
+             and us.grade = e ->> 'grade'
+             and us.is_primary = coalesce((e ->> 'is_primary')::boolean, false)
+        )
+     ) then
+    raise exception '연령 검증이 필요합니다' using errcode = '42501';
   end if;
 
   -- 같은 사용자의 저장을 직렬화한다. 트랜잭션 스코프라 커밋·롤백 시 자동 해제된다.
