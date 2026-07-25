@@ -2,13 +2,7 @@
  * chat/context.ts — User context hashing, system prompt building, context prompt builder.
  */
 
-import {
-  GRADE_LABELS,
-  REGION_LABELS,
-  type Sport,
-  SPORT_LABELS,
-  TENNIS_ORG_LABELS,
-} from '../_shared/enums.ts';
+import { REGION_LABELS, type Sport, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
 import { buildRegulationContextLines } from '../_shared/regulation.ts';
 import type {
   SemanticRule,
@@ -60,13 +54,23 @@ export async function computeUserContextHash(
     .join('');
 }
 
+/**
+ * 등급 표시 라벨. 정본은 DB grades.label_ko 이고 조회 시 임베드해 온다(#319).
+ * 임베드가 없으면(구 캐시·임베드 실패) 코드를 그대로 보여준다 — 사본 테이블을 두지 않는다.
+ */
+export function gradeLabelOf(sport: UserSport): string {
+  const embedded = sport.grades;
+  const row = Array.isArray(embedded) ? embedded[0] : embedded;
+  return row?.label_ko ?? sport.grade;
+}
+
 export function buildProfileContext(
   sports: UserSport[],
   orgs: UserTennisOrgRow[],
 ): string {
   const profile = sports.length === 0 ? '아직 종목·등급을 등록하지 않았습니다.' : sports
     .map((s) =>
-      `- ${SPORT_LABELS[s.sport as Sport] ?? s.sport}: ${GRADE_LABELS[s.grade] ?? s.grade}${
+      `- ${SPORT_LABELS[s.sport as Sport] ?? s.sport}: ${gradeLabelOf(s)}${
         s.is_primary ? ' (주요 관심 종목)' : ''
       }`
     )

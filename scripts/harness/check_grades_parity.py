@@ -98,20 +98,29 @@ def main() -> int:
         "grade labels",
         ("DB public.grades", label_entries),
         ("Dart 폴백 gradeLabels", sorted(ce.dart_const_map(dart, "_kFallbackGradeLabels"))),
-        ("TypeScript GRADE_LABELS", sorted(ce.ts_record(ts, "GRADE_LABELS"))),
     )
     assert_same(
         "tennis grades",
         ("DB public.grades (tennis)", active_codes("tennis")),
         ("Dart 폴백 tennisGrades", ce.dart_const_list(dart, "_kFallbackTennisGrades")),
-        ("TypeScript TENNIS_GRADES", ce.ts_const_array(ts, "TENNIS_GRADES")),
     )
     assert_same(
         "futsal grades",
         ("DB public.grades (futsal)", active_codes("futsal")),
         ("Dart 폴백 futsalGrades", ce.dart_const_list(dart, "_kFallbackFutsalGrades")),
-        ("TypeScript FUTSAL_GRADES", ce.ts_const_array(ts, "FUTSAL_GRADES")),
     )
+    # Edge 사본 재발 방지(#319): enums.ts 는 등급 목록·라벨 사본을 두지 않는다.
+    # 검증은 DB 조회(tournaments-submit), 표시는 grades(label_ko) 임베드(chat)로 한다.
+    # 심볼 이름 대조라 다른 이름의 사본은 못 잡는다 — 근본 방어는 "런타임 소비자가 없다"는
+    # 사실이고 이 검사는 되돌아가기(재하드코딩)를 눈에 띄게 만드는 용도다.
+    for banned in ("TENNIS_GRADES", "FUTSAL_GRADES", "GRADE_LABELS"):
+        if f"export const {banned}" in ts:
+            raise AssertionError(
+                f"_shared/enums.ts 에 등급 사본 {banned} 가 다시 생겼다 — "
+                "등급 정본은 public.grades 다(#319). DB 조회/임베드를 쓸 것."
+            )
+    print("✓ Edge 등급 사본 없음 (enums.ts)")
+
     # code 는 종목을 가로질러 유일해야 한다(앱 라벨 맵이 code 단일 키). DB 제약이 이미
     # 막지만(grades_code_unique), 게이트에서도 확인해 회귀를 조기에 잡는다.
     seen: dict[str, str] = {}

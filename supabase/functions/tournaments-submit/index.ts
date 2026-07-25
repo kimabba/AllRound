@@ -240,8 +240,20 @@ Deno.serve(async (req) => {
   if (!Array.isArray(body.eligible_grades) || body.eligible_grades.length === 0) {
     return errorResponse('eligible_grades required (non-empty array)');
   }
+  // 등급 정본은 DB public.grades — TS 사본을 보면 관리자가 추가한 등급을 여기서만 거부한다(#319).
+  const { data: gradeRows, error: gradeErr } = await supabase
+    .from('grades')
+    .select('code')
+    .eq('sport', body.sport)
+    .eq('is_active', true);
+  if (gradeErr) return errorResponse(`grade catalog unavailable: ${gradeErr.message}`, 503);
+  const activeGrades = new Set<string>((gradeRows ?? []).map((r) => r.code as string));
+  // 목록이 비면 전부 거부(fail-closed)가 되어 "Invalid grade" 로 오해를 부른다 → 원인을 그대로 알린다.
+  if (activeGrades.size === 0) {
+    return errorResponse(`grade catalog empty for ${body.sport}`, 503);
+  }
   for (const g of body.eligible_grades) {
-    if (!isValidGrade(body.sport, g)) {
+    if (!isValidGrade(body.sport, g, activeGrades)) {
       return errorResponse(`Invalid grade for ${body.sport}: ${g}`);
     }
   }
