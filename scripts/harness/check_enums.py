@@ -64,31 +64,70 @@ def strip_sql_comments(sql: str) -> str:
 
 
 def mask_string_literals(sql: str) -> str:
-    """작은따옴표 문자열을 같은 길이의 플레이스홀더로 바꾼다('' 이스케이프 포함).
+    """SQL 문자열 리터럴을 같은 길이의 플레이스홀더로 바꾼다. 리터럴 경계는 보존한다.
 
     정규식으로 SQL 을 다루면 문자열 리터럴 **안**의 텍스트를 코드로 오인한다. 예:
     `label_ko = 'sort_order=9'` 에서 리터럴 안 `sort_order=9` 를 setter 로 집어 정본을
-    오염시켰다(codex 9차). 마스킹된 텍스트에서 코드를 찾으면 리터럴 내부가 안 걸린다.
+    오염시켰고(codex 9차), `E'a\\';b'` 안의 `;` 가 문장 경계를 깨뜨렸다(codex 10차).
     길이를 보존하므로 원본과 오프셋이 일치해, 필요한 리터럴 값은 원본에서 다시 뽑는다.
-    """
+
+    처리: `'…'`('' 이스케이프), `E'…'`(백슬래시 이스케이프), `$tag$…$tag$`(dollar-quote).
+    dollar-quote 본문은 통째로 가려지므로, 그 안의 grades 쓰기는 별도로 검사한다
+    (mask 만으로는 함수·DO 본문의 카탈로그 변경을 놓친다)."""
     out: list[str] = []
     index, length = 0, len(sql)
     while index < length:
-        if sql[index] == "'":
-            cursor = index + 1
+        char = sql[index]
+        # dollar-quote: $tag$ … $tag$ (tag 는 비어 있거나 식별자)
+        dollar = re.match(r"\$[A-Za-z_]\w*\$|\$\$", sql[index:])
+        if char == "$" and dollar:
+            tag = dollar.group(0)
+            close = sql.find(tag, index + len(tag))
+            close = length if close < 0 else close
+            body = close - (index + len(tag))
+            out.append(tag + "\x01" * max(body, 0) + (tag if close < length else ""))
+            index = (close + len(tag)) if close < length else length
+            continue
+        # E'…' 는 백슬래시로 따옴표를 이스케이프한다. 일반 '…' 는 '' 로.
+        estring = char in "Ee" and index + 1 < length and sql[index + 1] == "'"
+        if char == "'" or estring:
+            quote_at = index + 1 if estring else index
+            cursor = quote_at + 1
             while cursor < length:
+                if estring and sql[cursor] == "\\":
+                    cursor += 2
+                    continue
                 if sql[cursor] == "'":
-                    if cursor + 1 < length and sql[cursor + 1] == "'":
+                    if not estring and cursor + 1 < length and sql[cursor + 1] == "'":
                         cursor += 2
                         continue
                     break
                 cursor += 1
-            out.append("'" + "\x01" * (cursor - index - 1) + "'")
+            prefix = "E" if estring else ""
+            out.append(prefix + "'" + "\x01" * (cursor - quote_at - 1) + "'")
             index = cursor + 1
             continue
-        out.append(sql[index])
+        out.append(char)
         index += 1
     return "".join(out)
+
+
+def dollar_quote_bodies(sql: str) -> list[str]:
+    """`$tag$…$tag$` 본문들을 원문에서 뽑는다(함수·DO 블록). 여는 태그부터 짝짓는다."""
+    bodies: list[str] = []
+    index, length = 0, len(sql)
+    while index < length:
+        opener = re.match(r"\$[A-Za-z_]\w*\$|\$\$", sql[index:])
+        if sql[index] == "$" and opener:
+            tag = opener.group(0)
+            close = sql.find(tag, index + len(tag))
+            if close < 0:
+                break
+            bodies.append(sql[index + len(tag) : close])
+            index = close + len(tag)
+            continue
+        index += 1
+    return bodies
 
 
 def split_sql_statements(sql: str) -> list[str]:
@@ -208,21 +247,31 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
         rf"^\s*sport\s*=\s*{quoted}\s+and\s+code\s*=\s*{quoted}\s*$", re.I
     )
     # grades 를 **쓰는** 문장은 전부 이 파서가 소화해야 한다. 지원하지 않는 문법을
-    # 조용히 넘기면 카탈로그가 갈라져도 게이트가 PASS 한다 — 가장 위험한 실패다.
-    # (예: INSERT ... SELECT 로 등급을 추가하면 seed 에 안 잡혀 폴백과 어긋난다.)
-    # 문장 시작 동사로 판별한다 — `... from public.grades` 같은 읽기는 대상이 아니다.
-    # `only` 는 상속 테이블용 수식어이고, truncate 는 행을 통째로 지운다. 둘 다 흘리면 안 된다.
-    write_stmt = re.compile(
-        r"^\s*(insert\s+into|update|delete\s+from|merge\s+into|truncate(?:\s+table)?)"
-        r"\s+(?:only\s+)?public\.grades\b",
+    # 조용히 넘기면 카탈로그가 갈라져도 게이트가 PASS 한다 — 가장 위험한 실패다(fail-open).
+    # 그래서 fail-closed 로 간다: 쓰기 동사 + grades 가 문장 어디에든 나오면(CTE·서브쿼리
+    # 포함) 검사하고, 인식 못 하는 형태는 거부한다. quoted identifier(`"grades"`,
+    # `"public"."grades"`)와 스키마 생략도 커버한다. `... from public.grades` 같은
+    # 읽기는 쓰기 동사가 아니라 대상이 아니다.
+    grades_write = re.compile(
+        r"\b(insert\s+into|update|delete\s+from|merge\s+into|truncate(?:\s+table)?)\s+"
+        r'(?:only\s+)?(?:"?public"?\s*\.\s*)?"?grades"?\b',
         re.I | re.S,
     )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
+        raw = read(path)
+        # dollar-quote(함수·DO) 본문은 mask 로 통째로 가려지므로 seed 문장 검사에서 빠진다.
+        # 그 안에서 grades 를 쓰면 파서가 반영 못 하니, 본문을 따로 훑어 fail-closed 한다.
+        for body in dollar_quote_bodies(strip_sql_comments(raw)):
+            if grades_write.search(mask_string_literals(body)):
+                raise AssertionError(
+                    f"{path.name}: dollar-quote(함수/DO) 본문에서 public.grades 를 쓴다. "
+                    "seed 파서가 반영하지 못하므로 마이그레이션 최상위 문장으로 표현하라."
+                )
         # SQL 주석 안의 문장 예시를 실제 문장으로 오인하지 않는다(문자열 리터럴은 보존).
-        migration = strip_sql_comments(read(path))
+        migration = strip_sql_comments(raw)
         updates_seen = 0
         for statement in split_sql_statements(migration):
-            match = write_stmt.match(statement)
+            match = grades_write.search(mask_string_literals(statement))
             if not match:
                 continue
             kind = re.sub(r"\s+", " ", match.group(1)).lower()

@@ -164,6 +164,9 @@ def decode_string_escapes(text: str) -> str:
             return match.group(0)
         return other
 
+    # 백슬래시+개행은 줄 연속 — 결과 문자열에서 사라진다. `'테\<LF>니스'` == `테니스`.
+    # 먼저 없애지 않으면 라벨이 개행으로 쪼개져 검출을 피한다(codex 10차).
+    text = re.sub(r"\\\r?\n", "", text)
     return re.sub(
         r"\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})|\\(.)",
         replace,
@@ -214,6 +217,13 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
             index = cursor
             continue
         if char in "'\"`":
+            # Dart raw 문자열 `r'…'` 은 백슬래시가 리터럴이라 이스케이프·보간이 없다.
+            # 디코드하면 `r'테…'`(런타임 값은 문자 그대로) 를 라벨로 오탐한다(codex 10차).
+            is_raw = (
+                index > 0
+                and source[index - 1] in "rR"
+                and not (index >= 2 and (source[index - 2].isalnum() or source[index - 2] == "_"))
+            )
             # Dart 의 삼중 따옴표는 경계 자체가 세 글자다.
             delim = char * 3 if source.startswith(char * 3, index) else char
             multiline = len(delim) == 3 or delim == "`"
@@ -227,7 +237,7 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                     closed = True
                     break
                 current = source[cursor]
-                if current == "\\":
+                if not is_raw and current == "\\":
                     # 이스케이프를 통째로 버린 게 아니라 보존해서 나중에 디코드한다 —
                     # `'입문'`(='입문')처럼 유니코드 이스케이프로 라벨을 숨기면
                     # 그냥 건너뛸 때 검출을 통째로 피했다(codex 9차).
@@ -239,7 +249,8 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 # Dart 는 '…' / "…" 에도 보간이 있으므로 백틱 전용이 아니다.
                 # 중괄호를 셀 때 문자열과 주석 안의 것은 빼야 한다 — `${ok ? '}' : '테니스'}`,
                 # `${/* } */ ok ? '테니스' : '풋살'}` 가 식 종료를 오인시킨다.
-                if source.startswith("${", cursor):
+                # raw 문자열은 `${…}` 도 리터럴이라 보간이 아니다.
+                if not is_raw and source.startswith("${", cursor):
                     depth, scan, expr_line = 1, cursor + 2, line_no
                     while scan < length and depth:
                         inner_char = source[scan]
@@ -294,7 +305,8 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 index += 1
                 continue
             end = cursor + len(delim)
-            literals.append((start_line, decode_string_escapes("".join(buffer)), index, end))
+            content = "".join(buffer) if is_raw else decode_string_escapes("".join(buffer))
+            literals.append((start_line, content, index, end))
             for expr_line, expression in embedded:
                 # 보간식 안의 리터럴은 원문 오프셋을 물려주지 않는다(인접 판정 대상이 아니다).
                 for inner_line, inner, _s, _e in string_literals(expression):
@@ -382,6 +394,8 @@ GUARD_MUST_BLOCK = [
     # 유니코드 이스케이프로 숨긴 라벨('입문' == '입문').
     "const a = '\\uc785\\ubb38';",
     "const b = '\\u{c785}\\u{bb38}';",
+    # 줄 연속(백슬래시+개행)으로 쪼갠 라벨. TS 에서 '테\<LF>니스' == '테니스'.
+    "const c = '테\\\n니스';",
     # Dart 는 작은/큰따옴표 문자열에도 보간이 있다 — 백틱 전용으로 보면 놓친다.
     "final s = \"${ok ? '테니스' : '풋살'}\";",
     # 보간식 안 주석의 중괄호도 식 종료로 오인하면 안 된다.
@@ -404,6 +418,8 @@ GUARD_MUST_ALLOW = [
     # 사이에 코드가 있으면 인접이 아니다 — 합쳐서 검사하면 맵 리터럴을 오탐한다.
     "const m = {'테': 1, '니스': 2};",
     "const pair = ['테', '니스'];",
+    # raw 문자열은 유니코드 이스케이프가 리터럴이라 런타임 값이 라벨이 아니다.
+    "const r = r'\\ud14c\\ub2c8\\uc2a4';",
 ]
 
 
