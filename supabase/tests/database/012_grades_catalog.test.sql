@@ -6,7 +6,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(26);
+SELECT plan(28);
 
 -- 1) 사전 내용 — 종목별 등급 수와 순서.
 SELECT is(
@@ -191,6 +191,20 @@ SELECT throws_ok(
   '22023',
   NULL,
   'sport 가 없는 원소는 거부된다'
+);
+-- 잘못된 sport·is_primary 타입은 내부 캐스팅 오류(22P02)가 아니라 안정적 22023 으로 거부한다.
+SELECT throws_ok(
+  $$SELECT public.save_user_sports('[{"sport":"badval","grade":"x"}]'::jsonb)$$,
+  '22023',
+  NULL,
+  '알 수 없는 종목은 안정적 오류로 거부된다(캐스팅 오류로 새지 않는다)'
+);
+SELECT throws_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner","is_primary":"yes"}]'::jsonb)$$,
+  '22023',
+  NULL,
+  'is_primary 가 boolean 이 아니면 거부된다'
 );
 RESET ROLE;
 

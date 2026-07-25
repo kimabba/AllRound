@@ -36,6 +36,23 @@ begin
   ) then
     raise exception '각 원소는 sport·grade 를 가진 객체여야 합니다' using errcode = '22023';
   end if;
+  -- sport enum·is_primary boolean 을 미리 검증한다. 안 하면 아래 캐스팅에서 22P02 로 죽어
+  -- 클라이언트가 받는 오류 계약이 흔들린다(의도한 22023 이 아니라 내부 캐스팅 오류).
+  -- enum 값은 enum_range 로 가져와 하드코딩하지 않는다.
+  if exists (
+    select 1 from jsonb_array_elements(p_sports) e
+     where (e ->> 'sport') <> all (
+       select unnest(enum_range(null::public.sport))::text
+     )
+  ) then
+    raise exception '알 수 없는 종목이 있습니다' using errcode = '22023';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_sports) e
+     where e ? 'is_primary' and jsonb_typeof(e -> 'is_primary') <> 'boolean'
+  ) then
+    raise exception 'is_primary 는 boolean 이어야 합니다' using errcode = '22023';
+  end if;
   if (select count(*) from jsonb_array_elements(p_sports) e)
      <> (select count(distinct e ->> 'sport') from jsonb_array_elements(p_sports) e) then
     raise exception '같은 종목이 두 번 들어왔습니다' using errcode = '22023';

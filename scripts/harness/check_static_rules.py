@@ -146,6 +146,31 @@ RETIRED_LABELS = {"신입", "5부", "4부", "3부", "2부", "1부"}
 LABEL_SCAN_IGNORED = {"무관"}
 
 
+def decode_string_escapes(text: str) -> str:
+    """Dart/TS 문자열 이스케이프를 실제 문자로 바꾼다. 라벨을 `\\uXXXX` 로 숨기는 우회 차단.
+
+    커버: `\\uXXXX`, `\\u{XX..}`(Dart/JS), `\\xXX`(JS). 나머지(`\\n` 등)는 뒷문자만 남긴다 —
+    라벨 매칭이 목적이라 정확한 제어문자 복원까지는 필요 없다. 잘못된 시퀀스는 원문 유지."""
+    def replace(match: "re.Match[str]") -> str:
+        brace, four, hexx, other = match.group(1), match.group(2), match.group(3), match.group(4)
+        try:
+            if brace is not None:
+                return chr(int(brace, 16))
+            if four is not None:
+                return chr(int(four, 16))
+            if hexx is not None:
+                return chr(int(hexx, 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+        return other
+
+    return re.sub(
+        r"\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})|\\(.)",
+        replace,
+        text,
+    )
+
+
 def string_literals(source: str) -> list[tuple[int, str, int, int]]:
     """소스에서 문자열 리터럴을 (시작 줄, 내용, 시작 오프셋, 끝 오프셋)으로 뽑는다.
 
@@ -203,6 +228,10 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                     break
                 current = source[cursor]
                 if current == "\\":
+                    # 이스케이프를 통째로 버린 게 아니라 보존해서 나중에 디코드한다 —
+                    # `'입문'`(='입문')처럼 유니코드 이스케이프로 라벨을 숨기면
+                    # 그냥 건너뛸 때 검출을 통째로 피했다(codex 9차).
+                    buffer.append(source[cursor : cursor + 2])
                     cursor += 2
                     continue
                 # 보간 `${…}` 안은 문자열이 아니라 코드다. 통째로 리터럴 취급하면
@@ -265,7 +294,7 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
                 index += 1
                 continue
             end = cursor + len(delim)
-            literals.append((start_line, "".join(buffer), index, end))
+            literals.append((start_line, decode_string_escapes("".join(buffer)), index, end))
             for expr_line, expression in embedded:
                 # 보간식 안의 리터럴은 원문 오프셋을 물려주지 않는다(인접 판정 대상이 아니다).
                 for inner_line, inner, _s, _e in string_literals(expression):
@@ -350,6 +379,9 @@ GUARD_MUST_BLOCK = [
     "const s = '테'\n    '니스';",
     # 보간식 안 문자열의 중괄호를 식 종료로 오인하면 나머지가 통째로 빠져나간다.
     "const z = `${ok ? '}' : '테니스'}`;",
+    # 유니코드 이스케이프로 숨긴 라벨('입문' == '입문').
+    "const a = '\\uc785\\ubb38';",
+    "const b = '\\u{c785}\\u{bb38}';",
     # Dart 는 작은/큰따옴표 문자열에도 보간이 있다 — 백틱 전용으로 보면 놓친다.
     "final s = \"${ok ? '테니스' : '풋살'}\";",
     # 보간식 안 주석의 중괄호도 식 종료로 오인하면 안 된다.

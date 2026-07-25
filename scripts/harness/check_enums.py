@@ -63,6 +63,52 @@ def strip_sql_comments(sql: str) -> str:
     return "".join(out)
 
 
+def mask_string_literals(sql: str) -> str:
+    """작은따옴표 문자열을 같은 길이의 플레이스홀더로 바꾼다('' 이스케이프 포함).
+
+    정규식으로 SQL 을 다루면 문자열 리터럴 **안**의 텍스트를 코드로 오인한다. 예:
+    `label_ko = 'sort_order=9'` 에서 리터럴 안 `sort_order=9` 를 setter 로 집어 정본을
+    오염시켰다(codex 9차). 마스킹된 텍스트에서 코드를 찾으면 리터럴 내부가 안 걸린다.
+    길이를 보존하므로 원본과 오프셋이 일치해, 필요한 리터럴 값은 원본에서 다시 뽑는다.
+    """
+    out: list[str] = []
+    index, length = 0, len(sql)
+    while index < length:
+        if sql[index] == "'":
+            cursor = index + 1
+            while cursor < length:
+                if sql[cursor] == "'":
+                    if cursor + 1 < length and sql[cursor + 1] == "'":
+                        cursor += 2
+                        continue
+                    break
+                cursor += 1
+            out.append("'" + "\x01" * (cursor - index - 1) + "'")
+            index = cursor + 1
+            continue
+        out.append(sql[index])
+        index += 1
+    return "".join(out)
+
+
+def split_sql_statements(sql: str) -> list[str]:
+    """`;` 로 문장을 나눈다. 문자열 리터럴 안의 `;` 는 경계가 아니다.
+
+    문장 종류를 tail 캡처로 훑으면 앞 문장의 tail 이 뒤 문장을 삼킨다 — 예: 한 줄에
+    `INSERT … VALUES (…); TRUNCATE public.grades;` 를 쓰면 TRUNCATE 가 앞 INSERT 의
+    200자 tail 안에 들어가 별도 문장으로 안 잡혔다(codex 9차). 문장 단위로 나누면 삼킴이
+    불가능하다. 주석은 호출 전에 제거한다(리터럴은 보존)."""
+    masked = mask_string_literals(sql)
+    statements: list[str] = []
+    start = 0
+    for match in re.finditer(r";", masked):
+        statements.append(sql[start : match.start()])
+        start = match.end()
+    if sql[start:].strip():
+        statements.append(sql[start:])
+    return statements
+
+
 def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
 
@@ -161,23 +207,27 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
     single_row_where = re.compile(
         rf"^\s*sport\s*=\s*{quoted}\s+and\s+code\s*=\s*{quoted}\s*$", re.I
     )
-    # grades 를 건드리는 문장은 전부 이 파서가 소화해야 한다. 지원하지 않는 문법을
+    # grades 를 **쓰는** 문장은 전부 이 파서가 소화해야 한다. 지원하지 않는 문법을
     # 조용히 넘기면 카탈로그가 갈라져도 게이트가 PASS 한다 — 가장 위험한 실패다.
     # (예: INSERT ... SELECT 로 등급을 추가하면 seed 에 안 잡혀 폴백과 어긋난다.)
+    # 문장 시작 동사로 판별한다 — `... from public.grades` 같은 읽기는 대상이 아니다.
     # `only` 는 상속 테이블용 수식어이고, truncate 는 행을 통째로 지운다. 둘 다 흘리면 안 된다.
-    grades_stmt = re.compile(
-        r"\b(insert\s+into|update|delete\s+from|merge\s+into|truncate(?:\s+table)?)"
-        r"\s+(?:only\s+)?public\.grades\b(.{0,200})",
+    write_stmt = re.compile(
+        r"^\s*(insert\s+into|update|delete\s+from|merge\s+into|truncate(?:\s+table)?)"
+        r"\s+(?:only\s+)?public\.grades\b",
         re.I | re.S,
     )
     for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
         # SQL 주석 안의 문장 예시를 실제 문장으로 오인하지 않는다(문자열 리터럴은 보존).
         migration = strip_sql_comments(read(path))
         updates_seen = 0
-        for kind, tail in grades_stmt.findall(migration):
-            kind = re.sub(r"\s+", " ", kind).lower()
+        for statement in split_sql_statements(migration):
+            match = write_stmt.match(statement)
+            if not match:
+                continue
+            kind = re.sub(r"\s+", " ", match.group(1)).lower()
             if kind == "insert into":
-                if not re.search(r"\)\s*values\b", tail, re.I):
+                if not re.search(r"\)\s*values\b", statement, re.I):
                     raise AssertionError(
                         f"{path.name}: public.grades INSERT 가 VALUES 형식이 아니다. "
                         "seed 파서가 반영하지 못하므로 VALUES 로 쓰거나 파서를 확장하라."
@@ -222,11 +272,14 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
         # 라벨 개명·폐기 처리도 정본이다.
         for match in setter_update.finditer(migration):
             setters, where = match.group(1), match.group(2)
+            # 리터럴을 마스킹한 뒤 코드를 찾는다 — 라벨 값 안의 `sort_order=9` 같은 텍스트를
+            # setter 로 오인하면 정본이 오염된다(codex 9차). 라벨 **값**은 원본에서 뽑는다.
+            masked = mask_string_literals(setters)
             new_label = re.search(rf"label_ko\s*=\s*{quoted}", setters)
-            new_active = re.search(r"is_active\s*=\s*(true|false)", setters, re.I)
-            new_order = re.search(r"sort_order\s*=\s*(\d+)", setters, re.I)
+            new_active = re.search(r"is_active\s*=\s*(true|false)", masked, re.I)
+            new_order = re.search(r"sort_order\s*=\s*(\d+)", masked, re.I)
             # 키(sport·code) 자체를 옮기는 UPDATE 는 누적 규칙이 달라진다. 반영한 척하지 말고 막는다.
-            if re.search(r"\b(sport|code)\s*=", setters, re.I):
+            if re.search(r"\b(sport|code)\s*=", masked, re.I):
                 raise AssertionError(
                     f"{path.name}: grades UPDATE 가 sport·code 를 바꾼다. "
                     "seed 파서가 키 이동을 추적하지 못하므로 새 행 INSERT 로 표현하라."
@@ -240,9 +293,11 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                 "is_active": r"is_active\s*=\s*(?:true|false)\b",
                 "sort_order": r"sort_order\s*=\s*\d+",
             }
+            # 마스킹된 텍스트에서 센다 — 리터럴 안의 컬럼명(`'sort_order=1'`)을 세면
+            # 출현·해석 카운트가 어긋나 오탐/누락이 난다.
             for column, supported in patterns.items():
-                mentions = len(re.findall(rf"\b{column}\b", setters, re.I))
-                consumed = len(re.findall(supported, setters, re.I))
+                mentions = len(re.findall(rf"\b{column}\b", masked, re.I))
+                consumed = len(re.findall(supported, masked, re.I))
                 if mentions != consumed:
                     raise AssertionError(
                         f"{path.name}: grades UPDATE 의 SET '{setters.strip()}' 에서 "
@@ -253,7 +308,7 @@ def seed_grades(active_only: bool = True) -> list[tuple[str, str, str, int]]:
                 # 대상 컬럼이 SET 절에 나왔는데 하나도 못 읽었다면 지원하지 않는 대입 형태다
                 # (예: 행 대입 `set (label_ko, sort_order) = ('x', 9)`). 조용히 넘기면
                 # DB 카탈로그만 바뀌고 폴백과의 드리프트를 게이트가 놓친다.
-                if re.search(r"\b(label_ko|is_active|sort_order)\b", setters, re.I):
+                if re.search(r"\b(label_ko|is_active|sort_order)\b", masked, re.I):
                     raise AssertionError(
                         f"{path.name}: grades UPDATE 의 SET '{setters.strip()}' 를 해석하지 "
                         "못했다. `컬럼 = 리터럴` 형태로 써라(행 대입은 지원하지 않는다)."
