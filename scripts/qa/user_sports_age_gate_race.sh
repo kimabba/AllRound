@@ -45,7 +45,9 @@ psql "$DB_URL" -q -v ON_ERROR_STOP=1 \
         email_change, email_change_token_new, email_change_token_current)
       values (
         '00000000-0000-0000-0000-000000000000', '$U', 'authenticated', 'authenticated',
-        'qa-race@allround.invalid', '', now(), now(), now(),
+        -- 이메일은 'qa-%@allround.invalid' 패턴을 피한다 — 001 의 QA 계정 수 단언에
+        -- 잡혀, 계정이 남는 상황에서 엉뚱한 테스트가 빨갛게 된다.
+        'race-check@allround.invalid', '', now(), now(), now(),
         '{\"provider\":\"email\",\"providers\":[\"email\"]}'::jsonb,
         '{\"display_name\":\"QA 경합검사\"}'::jsonb,
         false, '', '', '', '', '')" \
