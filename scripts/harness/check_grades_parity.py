@@ -15,6 +15,7 @@
 DB 접속은 $DATABASE_URL, 없으면 로컬 기본값.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -32,15 +33,22 @@ DEFAULT_DB_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
 
 def read_grades() -> list[tuple[str, str, str, bool]]:
-    """DB 에서 (sport, code, label_ko, is_active) 를 sort_order 순으로 읽는다."""
+    """DB 에서 (sport, code, label_ko, is_active) 를 sort_order 순으로 읽는다.
+
+    JSON 으로 받는다 — TSV 는 label_ko(무제약 text)에 탭·개행이 들어가면 컬럼 경계가
+    깨져, 조작된 라벨이 논리 행 수를 늘려 false-pass 를 만든다(codex 12차). psql 이
+    json_agg 로 출력하면 값의 특수문자가 이스케이프되므로 이 우회가 불가능하다.
+    정렬 tie-break 로 code 를 넣어(sort_order 는 non-unique) 결과가 결정적이게 한다.
+    """
     db_url = os.environ.get("DATABASE_URL", DEFAULT_DB_URL)
     query = (
-        "select sport, code, label_ko, is_active "
-        "from public.grades order by sport, sort_order"
+        "select coalesce(json_agg(json_build_object("
+        "'sport', sport, 'code', code, 'label', label_ko, 'active', is_active) "
+        "order by sport, sort_order, code), '[]') from public.grades"
     )
     try:
         out = subprocess.run(
-            ["psql", db_url, "-tAF", "\t", "-c", query],
+            ["psql", db_url, "-tAc", query],
             capture_output=True, text=True, check=True,
         ).stdout
     except FileNotFoundError:
@@ -48,15 +56,12 @@ def read_grades() -> list[tuple[str, str, str, bool]]:
     except subprocess.CalledProcessError as exc:
         raise AssertionError(f"grades 조회 실패: {exc.stderr.strip()}")
 
-    rows: list[tuple[str, str, str, bool]] = []
-    for line in out.splitlines():
-        if not line.strip():
-            continue
-        parts = line.split("\t")
-        if len(parts) != 4:
-            raise AssertionError(f"예상 못 한 grades 행 형식: {line!r}")
-        sport, code, label, active = parts
-        rows.append((sport, code, label, active == "t"))
+    try:
+        data = json.loads(out)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"grades JSON 파싱 실패: {exc} — 원문 {out[:200]!r}")
+
+    rows = [(r["sport"], r["code"], r["label"], r["active"]) for r in data]
     if not rows:
         raise AssertionError("public.grades 가 비어 있다 — 마이그레이션이 적용됐는지 확인하라")
     return rows
