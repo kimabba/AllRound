@@ -30,6 +30,7 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
+import 'utils/grade_labels.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
 
@@ -99,51 +100,64 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+          path: '/login', builder: (_, __) => _catalogAware(LoginScreen.new)),
       GoRoute(
         path: '/reset-password',
-        builder: (_, __) => const ResetPasswordScreen(),
+        builder: (_, __) => _catalogAware(ResetPasswordScreen.new),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (_, __) => const OnboardingScreen(),
+        builder: (_, __) => _catalogAware(OnboardingScreen.new),
       ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(path: '/', builder: (_, __) => _catalogAware(HomeScreen.new)),
           GoRoute(
             path: '/chat',
             builder: (_, state) {
               final extra = state.extra;
-              return ChatScreen(
-                entryContext: extra is ChatEntryContext ? extra : null,
+              return _catalogAware(
+                () => ChatScreen(
+                  entryContext: extra is ChatEntryContext ? extra : null,
+                ),
               );
             },
           ),
           GoRoute(
             path: '/tournaments',
-            builder: (_, __) => const TournamentsScreen(),
+            builder: (_, __) => _catalogAware(TournamentsScreen.new),
           ),
-          GoRoute(path: '/clubs', builder: (_, __) => const ClubsScreen()),
-          GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
-          GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
-          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+          GoRoute(
+            path: '/clubs',
+            builder: (_, __) => _catalogAware(ClubsScreen.new),
+          ),
+          GoRoute(
+              path: '/more', builder: (_, __) => _catalogAware(MoreScreen.new)),
+          GoRoute(
+            path: '/rules',
+            builder: (_, __) => _catalogAware(RulesScreen.new),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (_, __) => _catalogAware(ProfileScreen.new),
+          ),
           GoRoute(
             path: '/notifications',
-            builder: (_, __) => const NotificationsScreen(),
+            builder: (_, __) => _catalogAware(NotificationsScreen.new),
           ),
           GoRoute(
             path: '/favorites',
-            builder: (_, __) => const FavoritesScreen(),
+            builder: (_, __) => _catalogAware(FavoritesScreen.new),
           ),
           GoRoute(
             path: '/blocked-users',
-            builder: (_, __) => const BlockedUsersScreen(),
+            builder: (_, __) => _catalogAware(BlockedUsersScreen.new),
           ),
           GoRoute(
             path: '/tournaments/submit',
-            builder: (_, __) => const TournamentSubmitScreen(),
+            builder: (_, __) => _catalogAware(TournamentSubmitScreen.new),
           ),
           GoRoute(
             path: '/clubs/:id',
@@ -151,91 +165,126 @@ final routerProvider = Provider<GoRouter>((ref) {
               final club = state.extra as Club?;
               final openManagement =
                   state.uri.queryParameters['tab'] == 'manage';
-              return club != null
-                  ? ClubDetailScreen(
-                      club: club,
-                      openManagement: openManagement,
-                    )
-                  : ClubDetailScreen(
-                      clubId: state.pathParameters['id']!,
-                      openManagement: openManagement,
-                    );
+              return _catalogAware(
+                () => club != null
+                    ? ClubDetailScreen(
+                        club: club,
+                        openManagement: openManagement,
+                      )
+                    : ClubDetailScreen(
+                        clubId: state.pathParameters['id']!,
+                        openManagement: openManagement,
+                      ),
+              );
             },
           ),
           GoRoute(
             path: '/tournaments/:id',
-            builder: (_, state) => TournamentDetailScreen(
-              tournamentId: state.pathParameters['id']!,
+            builder: (_, state) => _catalogAware(
+              () => TournamentDetailScreen(
+                tournamentId: state.pathParameters['id']!,
+              ),
             ),
           ),
         ],
       ),
       // 웹 전용
-      GoRoute(path: '/no-access', builder: (_, __) => const NoAccessScreen()),
+      GoRoute(
+        path: '/no-access',
+        builder: (_, __) => _catalogAware(NoAccessScreen.new),
+      ),
 
       // Admin routes (AdminShell wrapping)
       ShellRoute(
         builder: (context, state, child) => AdminShell(child: child),
         routes: [
-          GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
+          GoRoute(
+            path: '/admin',
+            builder: (_, __) => _catalogAware(AdminScreen.new),
+          ),
           GoRoute(
             path: '/admin/drafts',
-            builder: (_, __) => const AdminScreen(initialTab: 1),
+            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 1)),
           ),
           GoRoute(
             path: '/admin/format-review',
-            builder: (_, __) => const FormatReviewScreen(),
+            builder: (_, __) => _catalogAware(FormatReviewScreen.new),
           ),
           GoRoute(
             path: '/admin/sources',
-            builder: (_, __) => const AdminScreen(initialTab: 2),
+            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 2)),
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => const AdminScreen(initialTab: 3),
+            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 3)),
           ),
           GoRoute(
             path: '/admin/kb',
-            builder: (_, __) => const AdminScreen(initialTab: 4),
+            builder: (_, __) => _catalogAware(() => AdminScreen(initialTab: 4)),
           ),
           GoRoute(
             path: '/admin/tournaments',
-            builder: (_, __) => const _AdminTournamentListScreen(),
+            builder: (_, __) => _catalogAware(_AdminTournamentListScreen.new),
           ),
           GoRoute(
             path: '/admin/reports',
-            builder: (_, __) => const ModerationScreen(),
+            builder: (_, __) => _catalogAware(ModerationScreen.new),
           ),
           GoRoute(
             path: '/admin/edit/:id',
-            builder: (_, state) => TournamentEditScreen(
-              tournamentId: state.pathParameters['id']!,
+            builder: (_, state) => _catalogAware(
+              () => TournamentEditScreen(
+                tournamentId: state.pathParameters['id']!,
+              ),
             ),
           ),
         ],
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/manage',
-        builder: (_, state) => ClubInquiryInboxScreen(
-          clubId: state.pathParameters['id']!,
+        builder: (_, state) => _catalogAware(
+          () => ClubInquiryInboxScreen(
+            clubId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/:threadId',
-        builder: (_, state) => ClubInquiryConversationScreen(
-          clubId: state.pathParameters['id']!,
-          threadId: state.pathParameters['threadId']!,
+        builder: (_, state) => _catalogAware(
+          () => ClubInquiryConversationScreen(
+            clubId: state.pathParameters['id']!,
+            threadId: state.pathParameters['threadId']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/clubs/:id/inquiries',
-        builder: (_, state) => ClubInquiryConversationScreen(
-          clubId: state.pathParameters['id']!,
+        builder: (_, state) => _catalogAware(
+          () => ClubInquiryConversationScreen(
+            clubId: state.pathParameters['id']!,
+          ),
         ),
       ),
     ],
   );
 });
+
+/// #318: 등급·부서 카탈로그는 plain singleton 이라, 화면이 그려진 뒤 DB 로드가
+/// 끝나도 라벨을 다시 읽게 만들 트리거가 없다(로그아웃 상태 시작 → 로그인, 또는
+/// 스플래시 게이트 3초 초과 경로). 라우트 화면을 `catalogRevision` 마다 **새로 만들어**
+/// build 를 다시 태운다.
+///
+/// 화면을 새로 만드는 게 핵심이다 — 같은 인스턴스(특히 `const` 위젯)를 돌려주면
+/// Flutter 가 하위 트리 갱신을 통째로 건너뛴다(그래서 라우트에서 const 를 뺐다).
+/// 위젯 타입·위치가 같으므로 State(스크롤 위치·입력값)는 보존된다.
+///
+/// ponytail: 화면마다 provider 를 watch 시키는 전환(#318 원안) 대신 라우트 한 곳에서
+/// 처리한다. 화면 파일은 손대지 않는다. 세션당 1~2회 리빌드라 비용도 무시할 수준이다.
+/// 검증: test/catalog_rebuild_test.dart
+Widget _catalogAware(Widget Function() build) => ListenableBuilder(
+      listenable: catalogRevision,
+      builder: (_, __) => build(),
+    );
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {

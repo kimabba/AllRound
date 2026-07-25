@@ -58,9 +58,10 @@ Future<void> initializeAllRoundServices({
       DivisionCatalog.instance.load(Supabase.instance.client);
       GradeCatalog.instance.load(Supabase.instance.client);
     } else if (event.event == AuthChangeEvent.signedOut) {
-      // 세션이 끊기면 등급 카탈로그를 비운다. 재로그인 로드가 실패했을 때 이전 세션의
+      // 세션이 끊기면 카탈로그를 비운다. 재로그인 로드가 실패했을 때 이전 세션의
       // 스냅샷이 그대로 쓰이는 걸 막는다(in-flight 로드도 세대 증가로 무효화).
       GradeCatalog.instance.reset();
+      DivisionCatalog.instance.reset();
     }
   });
 
