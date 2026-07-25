@@ -53,18 +53,74 @@ def ts_const_array(text: str, name: str) -> list[str]:
     return quoted_values(match.group(1))
 
 
-def ts_union(text: str, name: str) -> list[str]:
-    match = re.search(rf"export\s+type\s+{re.escape(name)}\s*=\s*([^;]+);", text, re.S)
-    if not match:
-        raise AssertionError(f"TypeScript union type not found: {name}")
-    return quoted_values(match.group(1))
-
-
 def sql_enum(text: str, name: str) -> list[str]:
-    match = re.search(rf"create\s+type\s+{re.escape(name)}\s+as\s+enum\s*\((.*?)\);", text, re.I | re.S)
+    pattern = rf"create\s+type\s+(?:public\.)?\"?{re.escape(name)}\"?\s+as\s+enum\s*\((.*?)\);"
+    match = re.search(pattern, text, re.I | re.S)
     if not match:
         raise AssertionError(f"SQL enum not found: {name}")
     return quoted_values(match.group(1))
+
+
+def sql_enum_after_history(text: str, name: str) -> list[str]:
+    """CREATE TYPE 이후의 ALTER TYPE ... ADD/RENAME VALUE 까지 반영한 최종 enum 값.
+
+    CREATE 만 읽으면 이후 마이그레이션이 값을 추가·개명해도 드리프트를 놓친다.
+    ADD VALUE BEFORE/AFTER 의 삽입 위치는 반영하지 않고 뒤에 붙인다(순서 비교 한계).
+    """
+    values = sql_enum(text, name)
+    quoted_name = rf"alter\s+type\s+(?:public\.)?\"?{re.escape(name)}\"?\s+"
+    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
+        migration = read(path)
+        added = re.finditer(
+            quoted_name + r"add\s+value\s+(?:if\s+not\s+exists\s+)?'([^']+)'",
+            migration,
+            re.I,
+        )
+        for match in added:
+            if match.group(1) not in values:
+                values.append(match.group(1))
+        renamed = re.finditer(
+            quoted_name + r"rename\s+value\s+'([^']+)'\s+to\s+'([^']+)'",
+            migration,
+            re.I,
+        )
+        for match in renamed:
+            old, new = match.group(1), match.group(2)
+            values = [new if value == old else value for value in values]
+    return values
+
+
+def dart_const_map(text: str, name: str) -> list[str]:
+    pattern = rf"const\s+{re.escape(name)}\s*=\s*<String,\s*String>\{{(.*?)\}};"
+    match = re.search(pattern, text, re.S)
+    if not match:
+        raise AssertionError(f"Dart const map not found: {name}")
+    entries = re.findall(r"'([^']+)'\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError(f"Dart const map is empty: {name}")
+    return [f"{key}={value}" for key, value in entries]
+
+
+def dart_sport_label_map(text: str) -> list[str]:
+    """`const sportLabels = <Sport, String>{ Sport.tennis: '테니스', ... }` — 키는 enum 멤버."""
+    match = re.search(r"const\s+sportLabels\s*=\s*<Sport,\s*String>\{(.*?)\};", text, re.S)
+    if not match:
+        raise AssertionError("Dart const map not found: sportLabels")
+    entries = re.findall(r"Sport\.([A-Za-z0-9_]+)\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError("Dart const map is empty: sportLabels")
+    return [f"{key}={value}" for key, value in entries]
+
+
+def ts_record(text: str, name: str) -> list[str]:
+    pattern = rf"export\s+const\s+{re.escape(name)}\s*:\s*Record<[^>]+>\s*=\s*\{{(.*?)\}};"
+    match = re.search(pattern, text, re.S)
+    if not match:
+        raise AssertionError(f"TypeScript record not found: {name}")
+    entries = re.findall(r"'?([A-Za-z0-9_]+)'?\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError(f"TypeScript record is empty: {name}")
+    return [f"{key}={value}" for key, value in entries]
 
 
 def sql_grade_check(text: str, sport: str) -> list[str]:
@@ -133,8 +189,20 @@ def main() -> int:
     assert_same(
         "sports",
         ("Dart Sport", dart_enum(dart, "Sport")),
-        ("TypeScript Sport", ts_union(ts, "Sport")),
-        ("SQL sport", sql_enum(sql_users, "sport")),
+        ("TypeScript SPORTS", ts_const_array(ts, "SPORTS")),
+        ("SQL sport", sql_enum_after_history(sql_users, "sport")),
+    )
+    # 등급 라벨은 DB 에 없다(코드가 정본). Dart↔TS 두 벌이 어긋나면 같은 등급이
+    # 화면마다 다른 이름으로 보이므로 여기서 막는다.
+    assert_same(
+        "grade labels",
+        ("Dart gradeLabels", dart_const_map(dart, "gradeLabels")),
+        ("TypeScript GRADE_LABELS", ts_record(ts, "GRADE_LABELS")),
+    )
+    assert_same(
+        "sport labels",
+        ("Dart sportLabels", dart_sport_label_map(dart)),
+        ("TypeScript SPORT_LABELS", ts_record(ts, "SPORT_LABELS")),
     )
     assert_same(
         "tennis grades",
@@ -164,6 +232,19 @@ def main() -> int:
         "entry fee units",
         ("TypeScript ENTRY_FEE_UNITS", ts_const_array(ts, "ENTRY_FEE_UNITS")),
         ("SQL entry_fee_unit check", sql_entry_fee_units(sql_orgs)),
+    )
+    # 라벨은 등급 코드 전체를 덮어야 한다. 등급을 추가하고 라벨을 빠뜨리면 화면에
+    # 코드가 그대로 노출되고, 폐기 등급이 라벨에만 남으면 유령 선택지가 된다.
+    assert_same(
+        "grade label coverage",
+        (
+            "grade codes",
+            sorted(dart_const_list(dart, "tennisGrades") + dart_const_list(dart, "futsalGrades")),
+        ),
+        (
+            "gradeLabels keys",
+            sorted(entry.split("=", 1)[0] for entry in dart_const_map(dart, "gradeLabels")),
+        ),
     )
     return 0
 
