@@ -472,6 +472,14 @@ GUARD_MUST_BLOCK = [
     "const w = `${/* } */ ok ? '테니스' : '풋살'}`;",
     # 인접 판정에서 주석은 공백이다.
     "const c = '테' /* gap */ '니스';",
+    # JS/TS 정규식 리터럴(따옴표 포함)로 스캐너를 헷갈리게 한 뒤 하드코딩한 라벨(codex 13차).
+    "const rx = /'/.test(s); const label = '테니스';",
+    # 공백 든 정규식이 조기 종료돼 나눗셈으로 오판되면 뒤 라벨을 놓친다(codex 14차).
+    "const ry = /a b/.test(s); const label = '테니스';",
+    # 키워드(return) 뒤 정규식을 나눗셈으로 오판하면 뒤 라벨을 놓친다(codex 14차).
+    "function f(){ return /'/.test(x); } const l = '입문';",
+    # 라인 주석을 U+2028 로 끊고 그 뒤에 둔 라벨(codex 13차 low).
+    "// c\u2028const label = '입문';",
 ]
 GUARD_MUST_ALLOW = [
     "const t = '서울 오픈 테니스';",
@@ -490,6 +498,11 @@ GUARD_MUST_ALLOW = [
     "const pair = ['테', '니스'];",
     # raw 문자열은 유니코드 이스케이프가 리터럴이라 런타임 값이 라벨이 아니다.
     "const r = r'\\ud14c\\ub2c8\\uc2a4';",
+    # 나눗셈은 정규식이 아니다 — 식별자·숫자·괄호 뒤 `/` 를 정규식으로 오인하면 안 된다.
+    "const ratio = width / height; log('경기 비율');",
+    "const q = (a + b) / c; log('점수');",
+    # 키워드 뒤 정규식이지만 라벨이 없으면(입력 매칭용) 통과한다.
+    "const ok = typeof x; if (/(테니스|tennis)/i.test(t)) return 'tennis';",
 ]
 
 
