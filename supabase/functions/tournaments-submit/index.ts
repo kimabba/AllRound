@@ -248,14 +248,15 @@ Deno.serve(async (req) => {
     .eq('is_active', true);
   if (gradeErr) return errorResponse(`grade catalog unavailable: ${gradeErr.message}`, 503);
   const activeGrades = new Set<string>((gradeRows ?? []).map((r) => r.code as string));
-  // 목록이 비면 전부 거부(fail-closed)가 되어 "Invalid grade" 로 오해를 부른다 → 원인을 그대로 알린다.
-  if (activeGrades.size === 0) {
-    return errorResponse(`grade catalog empty for ${body.sport}`, 503);
-  }
   for (const g of body.eligible_grades) {
-    if (!isValidGrade(body.sport, g, activeGrades)) {
-      return errorResponse(`Invalid grade for ${body.sport}: ${g}`);
+    if (isValidGrade(body.sport, g, activeGrades)) continue;
+    // 카탈로그가 비었으면 원인은 제보 내용이 아니라 DB 상태(정책·seed 누락)다 → 503 으로 구분한다.
+    // 판정 뒤에 보는 이유: 테니스 부서 코드(gj_m_gold)는 grades 와 무관하게 통과해야 하는데,
+    // 빈 목록을 먼저 막으면 그 경로까지 함께 죽는다(codex 1차).
+    if (activeGrades.size === 0) {
+      return errorResponse(`grade catalog empty for ${body.sport}`, 503);
     }
+    return errorResponse(`Invalid grade for ${body.sport}: ${g}`);
   }
 
   // Phase 2 신규 필드 검증

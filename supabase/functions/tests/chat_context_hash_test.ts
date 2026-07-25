@@ -74,3 +74,14 @@ Deno.test('gradeLabelOf falls back to the code when the embed is missing', () =>
     'y1to3',
   );
 });
+
+Deno.test('context hash changes when the DB grade label changes', async () => {
+  // 라벨은 프롬프트에 들어가므로 관리자가 grades.label_ko 를 고치면 캐시가 무효화돼야 한다.
+  const before = await computeUserContextHash('u1', [
+    { sport: 'futsal', grade: 'intro', is_primary: true, grades: { label_ko: '입문' } },
+  ], []);
+  const after = await computeUserContextHash('u1', [
+    { sport: 'futsal', grade: 'intro', is_primary: true, grades: { label_ko: '입문(신규)' } },
+  ], []);
+  assertNotEquals(before, after);
+});

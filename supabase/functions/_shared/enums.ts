@@ -202,10 +202,16 @@ export function isValidGrade(
   return sport === 'tennis' && isValidDivisionCode(grade);
 }
 
-/** Division code 유효성: {org}_{suffix} 패턴 (예: gj_m_gold, kta_m_open) */
+/**
+ * Division code 유효성: {org}_{suffix} (예: gj_m_gold, kta_m_open).
+ * org 는 TENNIS_ORGS 에 있어야 하고, 전체가 ^[a-z0-9_]+$ 이며 suffix 가 비면 안 된다.
+ * 형식 검사를 parseDivisionCodes 와 같은 규칙으로 맞춘다 — 조직 접두사만 보면
+ * `gj_`, `gj_NOT_REAL`, `gj_'); DROP` 같은 값이 eligible_grades 로 들어왔다(codex 1차).
+ */
 function isValidDivisionCode(code: string): boolean {
+  if (!DIVISION_CODE_PATTERN.test(code)) return false;
   const idx = code.indexOf('_');
-  if (idx < 1) return false;
+  if (idx < 1 || idx === code.length - 1) return false;
   const org = code.substring(0, idx);
   return (TENNIS_ORGS as readonly string[]).includes(org);
 }

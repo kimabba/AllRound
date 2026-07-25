@@ -34,8 +34,15 @@ export async function computeUserContextHash(
   sports: UserSport[],
   orgs: UserTennisOrgRow[],
 ): Promise<string> {
+  // grade_label 도 키에 넣는다: 라벨이 프롬프트에 들어가므로(buildProfileContext) 관리자가
+  // grades.label_ko 를 고치면 캐시가 무효화돼야 한다. 안 넣으면 TTL 동안 옛 라벨이 재사용된다.
   const normalizedSports = [...sports]
-    .map((s) => ({ sport: s.sport, grade: s.grade, is_primary: s.is_primary }))
+    .map((s) => ({
+      sport: s.sport,
+      grade: s.grade,
+      grade_label: gradeLabelOf(s),
+      is_primary: s.is_primary,
+    }))
     .sort((a, b) => a.sport.localeCompare(b.sport));
 
   const normalizedOrgs = [...orgs]

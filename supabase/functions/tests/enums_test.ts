@@ -103,6 +103,16 @@ Deno.test('isValidGrade rejects unknown codes', () => {
   assertEquals(isValidGrade('futsal', 'gj_m_gold', FUTSAL_ACTIVE), false);
 });
 
+Deno.test('isValidGrade rejects malformed tennis division codes', () => {
+  // 조직 접두사만 보던 시절엔 아래가 전부 통과해 eligible_grades 로 들어갔다(codex 1차).
+  assertEquals(isValidGrade('tennis', 'gj_', TENNIS_ACTIVE), false);
+  assertEquals(isValidGrade('tennis', 'gj_NOT_REAL', TENNIS_ACTIVE), false);
+  assertEquals(isValidGrade('tennis', "gj_'); DROP", TENNIS_ACTIVE), false);
+  assertEquals(isValidGrade('tennis', 'gj_m gold', TENNIS_ACTIVE), false);
+  assertEquals(isValidGrade('tennis', '_m_gold', TENNIS_ACTIVE), false);
+  assertEquals(isValidGrade('tennis', 'zz_m_gold', TENNIS_ACTIVE), false); // 미등록 조직
+});
+
 Deno.test('isValidGrade fails closed on an empty catalog', () => {
   const empty: ReadonlySet<string> = new Set();
   assertEquals(isValidGrade('futsal', 'intro', empty), false);

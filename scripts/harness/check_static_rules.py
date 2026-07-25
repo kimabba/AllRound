@@ -132,7 +132,12 @@ def check_pureform_literal_contracts() -> None:
 # 금지 목록은 **정본을 파싱해서 만든다**. 여기에 라벨을 다시 적으면 가드 자신이 또 하나의
 # 사본이 되어, 정본이 바뀔 때 가드만 뒤처진다.
 LABEL_SSOT_DART = "app/lib/utils/grade_labels.dart"
-LABEL_SSOT_FILES = {LABEL_SSOT_DART, "supabase/functions/_shared/enums.ts"}
+LABEL_SSOT_FILES = {LABEL_SSOT_DART}
+# enums.ts 는 종목 라벨(SPORT_LABELS)의 정본이라 그 라벨로는 검사할 수 없다. 그러나 등급 라벨
+# 사본(GRADE_LABELS)은 #319 로 없어졌으므로 **등급 라벨만** 검사해 재하드코딩을 잡는다.
+# 심볼 이름 대조(check_grades_parity)는 이름만 바꾸면 우회되지만, 이 검사는 라벨 문자열 자체를
+# 보므로 어떤 이름·형태로 되살려도 걸린다.
+LABEL_GRADE_ONLY_FILES = {"supabase/functions/_shared/enums.ts"}
 # 외부 텍스트(사용자 발화)를 한국어로 매칭해 코드값을 얻는 입력 파서. 라벨을 표시하는 게
 # 아니라 인식하는 쪽이라 정본 파생으로 대체할 수 없다. 크롤러 파서는 예외로 두지 않는다 —
 # 출력용 라벨 하드코딩이 거기 들어가도 잡아야 한다.
@@ -391,8 +396,9 @@ def string_literals(source: str) -> list[tuple[int, str, int, int]]:
     return literals
 
 
-def forbidden_labels() -> set[str]:
-    """정본(grade_labels.dart)의 등급·종목 라벨 + 폐기 라벨."""
+def forbidden_labels(*, grades_only: bool = False) -> set[str]:
+    """정본(grade_labels.dart)의 등급·종목 라벨 + 폐기 라벨.
+    grades_only=True 면 등급 라벨만 — 종목 라벨의 정본인 파일(enums.ts)을 검사할 때 쓴다."""
     text = read(LABEL_SSOT_DART)
     labels: set[str] = set()
     grade_block = re.search(
@@ -405,9 +411,10 @@ def forbidden_labels() -> set[str]:
             " (가드가 무력해진다)"
         )
     labels |= {m.group(2) for m in re.finditer(r"'([^']+)'\s*:\s*'([^']+)'", grade_block.group(1))}
-    labels |= {
-        m.group(2) for m in re.finditer(r"Sport\.(\w+)\s*:\s*'([^']+)'", sport_block.group(1))
-    }
+    if not grades_only:
+        labels |= {
+            m.group(2) for m in re.finditer(r"Sport\.(\w+)\s*:\s*'([^']+)'", sport_block.group(1))
+        }
     if not labels:
         fail(f"{LABEL_SSOT_DART}: 라벨을 한 건도 추출하지 못했다 (가드가 무력해진다)")
     return (labels | RETIRED_LABELS) - LABEL_SCAN_IGNORED
@@ -517,6 +524,7 @@ GUARD_MUST_ALLOW = [
 
 def check_sport_grade_label_hardcode() -> None:
     labels = forbidden_labels()
+    grade_labels = forbidden_labels(grades_only=True)
 
     for sample in GUARD_MUST_BLOCK:
         if not label_violations(sample, labels):
@@ -534,15 +542,17 @@ def check_sport_grade_label_hardcode() -> None:
                 continue
             if path.name.endswith(("_test.dart", "_test.ts")) or "/tests/" in relative:
                 continue
+            scan_labels = grade_labels if relative in LABEL_GRADE_ONLY_FILES else labels
             source = path.read_text(encoding="utf-8")
             lines = source.splitlines()
-            for line_number, literal in label_violations(source, labels):
+            for line_number, literal in label_violations(source, scan_labels):
                 context = lines[line_number - 1].strip() if line_number <= len(lines) else ""
                 violations.append(f"{relative}:{line_number}: '{literal}' — {context}")
     if violations:
         fail(
             "라벨 재하드코딩(JY-146): 종목·등급 라벨을 코드에 직접 적었다.\n"
-            "Dart 는 sportLabel*/gradeLabel/anyGradeLabel, TS 는 SPORT_LABELS/GRADE_LABELS 를 쓴다.\n"
+            "Dart 는 sportLabel*/gradeLabel/anyGradeLabel, TS 는 SPORT_LABELS 를 쓴다.\n"
+            "등급 라벨은 TS 사본이 없다(#319) — DB grades.label_ko 를 조회·임베드해 쓸 것.\n"
             + "\n".join(violations)
         )
     print(f"✓ 종목·등급 라벨이 정본 파일에서만 정의된다 (금지 라벨 {len(labels)}개, 자가검증 통과)")
