@@ -83,7 +83,9 @@ void main() {
       expect(block.contains('catalogAware('), isTrue,
           reason: 'catalogAware 로 감싸지 않은 라우트: $head');
       // 감싸도 클로저 안이 const 면 인스턴스가 재사용돼 갱신이 스킵된다.
-      expect(block.contains('const '), isFalse,
+      // `const ` 문자열이 아니라 토큰 경계로 본다 — `const` 뒤에 줄바꿈을 넣으면
+      // 문법상 유효하면서 문자열 검사만 피해간다(codex 재리뷰 실증).
+      expect(RegExp(r'\bconst\b').hasMatch(block), isFalse,
           reason: 'const 화면은 인스턴스가 재사용돼 갱신되지 않는다: $head');
     }
   });
@@ -107,12 +109,19 @@ void main() {
 
 /// `GoRoute(` 하나하나의 인자 블록을 괄호 균형으로 잘라낸다.
 ///
-/// 줄 주석은 먼저 제거한다 — 주석 안의 `GoRoute(`/`catalogAware(` 가 검사를 흐리기
-/// 때문이다. 문자열 리터럴 안의 괄호까지 다루는 진짜 파서는 아니지만, 라우트 정의는
-/// 경로 문자열과 위젯 생성자뿐이라 이 범위로 충분하다. (원리적으로 견고한 소스 검사는
-/// #322 에서 dart custom_lint 로 옮긴다.)
+/// 주석(줄·블록)은 먼저 제거한다 — 주석 안의 `GoRoute(`/`catalogAware(` 가 검사를
+/// 흐리기 때문이다.
+///
+/// **목표는 "실수 차단"이지 "의도적 우회 차단"이 아니다.** 문자열 매칭 기반이라
+/// 문자열 리터럴 안의 괄호·주석 흉내 같은 건 구분하지 못한다. 원리적으로 견고한
+/// 소스 검사는 #322(정규식 렉서 → analyzer AST) 범위다. 이 리포는 자작 렉서를
+/// 덧대다 사각지대를 반복 생산한 이력이 있어(JY-146 13~15차) 여기서 더 정교하게
+/// 만들지 않는다.
 List<String> _routeBlocks(String source) {
-  final stripped = source.split('\n').map((line) {
+  final stripped = source
+      .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+      .split('\n')
+      .map((line) {
     final i = line.indexOf('//');
     return i == -1 ? line : line.substring(0, i);
   }).join('\n');
