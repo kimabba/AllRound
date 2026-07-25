@@ -67,14 +67,28 @@ begin
     raise exception '주 종목은 하나만 지정할 수 있습니다' using errcode = '22023';
   end if;
 
+  -- 같은 사용자의 저장을 직렬화한다. 트랜잭션 스코프라 커밋·롤백 시 자동 해제된다.
+  -- 없으면: 두 기기(또는 재시도)가 동시에 주 종목을 바꿀 때, 뒤 요청의 문장 스냅샷이
+  -- 앞 요청이 새로 올린 primary 행을 보지 못해 upsert 가 부분 유니크 인덱스에서
+  -- 23505 로 실패한다. 배열 순서가 다른 동시 호출끼리는 행 잠금 교착도 가능하다.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(uid::text, 0)
+  );
+
   -- 연령 게이트(개인정보보호법 §22의2). DEFINER 라 RLS 정책이 걸리지 않으므로 여기서 건다.
-  -- 배열 검증 뒤에 둔다 — 앞에 두면 잘못된 sport 값이 캐스팅 오류로 먼저 터진다.
   --
   -- "새로 넣거나 값을 바꾸는 원소가 하나라도 있을 때"만 건다. RLS 도 insert/update 에만
   -- has_verified_signup_age 를 걸었고 delete 는 보지 않았다(user_sports_self_delete).
   -- 무조건 걸면 게이트 도입(2026-07-18) 전 가입해 birth_date 가 비어 있는 계정이
   -- 종목을 하나만 빼는 것까지 막힌다(운영 실측 3명). 전체 삭제는 되는데 부분 삭제만
   -- 막히면, 지운 뒤 다시 넣을 수 없는 유실 경로가 된다.
+  --
+  -- **위치는 advisory lock 뒤여야 한다.** 앞에 두면 미검증 계정이 종목 A·B 를 가진 채
+  -- [A] 와 [B] 를 동시에 호출할 때 둘 다 "기존 행과 같음"으로 게이트를 통과하고,
+  -- 먼저 잠근 쪽이 B 를 지우고 커밋한 뒤 뒤따르는 쪽이 사라진 B 를 새 행으로 INSERT 한다
+  -- (RLS 시절이면 연령 검사에 막혔을 쓰기다). 락 뒤에서 읽으면 READ COMMITTED 의 문장
+  -- 스냅샷이 앞 트랜잭션의 커밋 결과를 반영하므로 그 창이 닫힌다.
+  -- 배열 검증보다는 뒤다 — 앞에 두면 잘못된 sport 값이 캐스팅 오류로 먼저 터진다.
   if not (select public.has_verified_signup_age())
      and exists (
        select 1
@@ -90,14 +104,6 @@ begin
      ) then
     raise exception '연령 검증이 필요합니다' using errcode = '42501';
   end if;
-
-  -- 같은 사용자의 저장을 직렬화한다. 트랜잭션 스코프라 커밋·롤백 시 자동 해제된다.
-  -- 없으면: 두 기기(또는 재시도)가 동시에 주 종목을 바꿀 때, 뒤 요청의 문장 스냅샷이
-  -- 앞 요청이 새로 올린 primary 행을 보지 못해 upsert 가 부분 유니크 인덱스에서
-  -- 23505 로 실패한다. 배열 순서가 다른 동시 호출끼리는 행 잠금 교착도 가능하다.
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(uid::text, 0)
-  );
 
   -- 주 종목 교체를 순서에 무관하게 만든다(부분 유니크 인덱스 회피).
   -- is_primary 만 바뀌므로 `before update of sport, grade` 트리거는 발동하지 않는다.
