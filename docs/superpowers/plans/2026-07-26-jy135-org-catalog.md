@@ -10,6 +10,11 @@
 
 **설계 문서:** `docs/superpowers/specs/2026-07-26-jy135-org-catalog-db-load-design.md`
 
+> **파일명 정정(실행 후)**: 아래 태스크 1 이 지정한 `20260726020000_tennis_orgs_display_catalog.sql` ·
+> `014_tennis_orgs_catalog.test.sql` 은 실행 중 main 에 머지된 #329 와 **번호가 충돌**해
+> `20260726030000_...` · `015_...` 로 옮겼다. 마이그레이션 버전은 DB 기본키라 앞 14자리가
+> 같으면 파일명이 달라도 중복 키 오류가 난다. 아래 본문의 옛 번호는 실행 당시 기록이다.
+
 ## Global Constraints
 
 - 브랜치는 `feat/jy135-org-catalog`. **커밋 전 반드시 `git branch --show-current` 로 확인한다** — 이 저장소는 다른 세션과 공유돼 브랜치가 바뀌어 있을 수 있다.
