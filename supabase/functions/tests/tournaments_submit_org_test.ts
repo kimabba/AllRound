@@ -1,5 +1,5 @@
 import { assertEquals } from 'std/assert/mod.ts';
-import { assertKnownOrgs } from '../tournaments-submit/index.ts';
+import { assertKnownOrgs } from '../_shared/orgs.ts';
 
 // 협회 정본은 DB tennis_orgs 다(JY-135). 정적 목록으로 검증하면 DB 에 협회를
 // 추가해도 제보가 거절된다 — "행 INSERT 하나로 반영" 이 깨진다.
