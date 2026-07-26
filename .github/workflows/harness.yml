@@ -45,6 +45,10 @@ jobs:
       - run: python3 scripts/harness/check_grades_parity.py
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 협회 정본↔폴백 대조도 같은 이유로 DB 를 직접 읽는다(#330 3번, JY-135 후 공백).
+      - run: python3 scripts/harness/check_org_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   flutter:
     name: Flutter analyze/test
