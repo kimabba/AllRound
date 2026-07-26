@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(24);
+select plan(26);
 
 -- ── 표·권한 ────────────────────────────────────────────────────────────────
 select has_table('public', 'edge_invocations', 'edge_invocations 표가 있다');
@@ -249,6 +249,21 @@ select is(
      from public.edge_invocations where request_id = 900030),
   'newer-pending:response,older-lost:lost',
   '도착한 응답은 가장 최근 호출에만 붙는다 — 옛 실패 기록이 성공으로 둔갑하지 않는다'
+);
+
+-- 한 번의 스윕만 보면 부족하다. 응답 행은 pg_net 보존 동안 남아 다음 스윕에도 다시 보인다.
+-- 최신 행이 response 가 된 뒤 남은 옛 lost 가 새 최댓값이 되어 같은 응답을 또 집어가는지
+-- 확인해야 실제 10분 주기 동작을 검증한 것이다(codex 지적).
+select is(
+  (select public.sweep_edge_invocations()),
+  0,
+  '같은 응답이 남아 있어도 다음 스윕은 아무것도 새로 확정하지 않는다'
+);
+
+select is(
+  (select outcome from public.edge_invocations where request_id = 900030 and fn_name = 'older-lost'),
+  'lost',
+  '두 번째 스윕에서도 옛 실패 기록은 lost 로 남는다 — 응답 하나가 세대를 거슬러 재사용되지 않는다'
 );
 
 select setval('net.http_request_queue_id_seq',

@@ -176,10 +176,13 @@ begin
       from net._http_response r
      where r.id = e.request_id
        and e.outcome in ('pending', 'lost')
+       -- 내부 max 는 outcome 으로 거르지 않는다. 거르면 다음 스윕에서 뚫린다:
+       -- 최신 행이 response 가 된 뒤에는 남은 옛 lost 가 새로운 최댓값이 되어 같은 응답이
+       -- 다시 붙고, 10분마다 과거 실패가 하나씩 성공으로 둔갑한다. 응답은 그 번호의
+       -- **최신 세대**의 것이므로, 최신 행이 이미 응답을 받았다면 더 붙일 곳은 없다.
        and e.id = (
              select max(e2.id) from public.edge_invocations e2
               where e2.request_id = e.request_id
-                and e2.outcome in ('pending', 'lost')
            )
     returning 1
   )
