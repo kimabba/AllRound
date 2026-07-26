@@ -38,8 +38,16 @@
   덮어쓰기(`GJTA`→`광주협회`, `JNTA`→`전남협회`, `local` null→`시·군/클럽`).
   백필을 빼면 사용자 화면 문구가 바뀌고 `local` 은 코드가 노출된다.
 - `sort_order` 는 현재 Dart 배열 순서를 간격(10,20,…)으로 부여한다. 15개 추가 시 사이에 끼울 수 있다.
-- 정렬 계약: `order by sort_order, code`. `org_type`+code 조합은 결정적이지만 사용자에게 의미 있는
-  순서(전국→지역→기타)를 보장하지 못한다.
+  **`not null default 1000`** — 백과장이 값을 안 정해도 INSERT 가 되고, 지정 안 한 행은 끝으로 모인다.
+- 정렬 계약: **`order by sort_order, name_ko, code`**. 동률에서 비결정 정렬이 되지 않도록 tiebreak 을 명시한다.
+- `label_ko` 가 null 이면 `name_ko` 로 폴백한다(카탈로그에 규칙 고정). 백과장 INSERT 규칙은
+  **"`label_ko`·`short_label` 은 화면에 보일 문자열 그대로"** 한 줄로 문서화한다.
+
+> 페이블 반대 의견(기록): `sort_order` 없이 `org_type`+name_ko+code 로 자동 배치하면 백과장이
+> 순서값을 산정할 필요가 없다. 채택하지 않은 이유 — 현재 앱 순서(kta→kato→kata→ktfs→kstf→
+> kssta→kasta→gj→jn→local)는 **가나다순이 아니라 큐레이션된 순서**라, 자동 정렬로 바꾸면
+> 사용자 화면의 협회 나열이 바뀐다. `default 1000` + tiebreak 으로 "값을 안 정해도 INSERT 가능"
+> 이라는 반대 측 이점은 확보한다.
 - **RLS 는 건드리지 않는다.** 로그인 전 소비처가 없고(`main.dart:56-57` 이 세션 존재 시에만 로드),
   부서·등급도 같은 정책이다. 소비처 없이 권한만 넓히는 것은 최소권한 위반.
 
@@ -71,8 +79,14 @@
 `tournaments-submit` 의 org 검증을 정적 목록에서 **DB 조회**로 바꾼다(`tennis_orgs` 에 존재 +
 `is_active`). 제보는 쓰기 경로라 빈도가 낮아 조회 1회 비용이 무의미하다.
 
-`tournaments-search`(읽기·빈번)와 `chat` 라벨은 **이번 범위 밖**. 검색은 없는 협회를 넣어도
-결과가 0건이라 무해하다. TS `TENNIS_ORGS` 상수는 그 두 경로를 위해 유지한다.
+`tournaments-search`(읽기·빈번)와 `chat` 라벨은 **이번 범위 밖**. TS `TENNIS_ORGS` 상수는 그
+두 경로를 위해 유지한다.
+
+> **⚠ 후속 선행 조건(페이블 지적)**: `tournaments-search/index.ts:45` 도 `isValidTennisOrg` 로
+> **검증**해 `invalid org` 를 반환한다(실측 확인). 즉 TS 목록이 남아 있는 동안 새 협회의
+> 필터 칩을 누르면 **결과 0건이 아니라 에러**다. 따라서 `tournaments-search` 의 DB 전환은
+> **15개 실데이터 추가 전 필수 선행**이다. 후속 이슈에 이 조건을 명시한다.
+> (최초 스펙은 "검색은 0건이라 무해" 로 잘못 적었다 — 검증 축인 것을 확인하고 정정.)
 
 ### 5. 게이트 정리
 
@@ -98,7 +112,17 @@
 | Edge 배포 누락 → 제보 검증 불일치 | 머지 후 `tournaments-submit` 수동 배포(CI 자동배포 없음) |
 | 순서 정본 이원화 | `sort_order` 단일 정본, Dart 배열 순서 의존 제거 |
 
+## 구현 시 판단 남긴 것
+
+`OrgCatalog` 를 별도 싱글턴으로 둘지, 기존 `DivisionCatalog` 에 org 로드를 얹을지는 구현 단계
+판단이다. 별도 싱글턴은 경계가 깨끗하고 테스트가 격리되지만 생명주기 기계장치(`whenReady`·
+`reset`·세대 카운터) 사본과 `main.dart` 배선 3곳이 늘어난다(페이블 지적 — 숨은 비용). 확장은
+diff 가 작지만 한 싱글턴이 두 도메인을 갖는다. **기본은 별도 싱글턴**으로 가되, 구현하며
+중복이 실제로 크면 확장으로 바꾼다.
+
 ## 후속 (별도 이슈)
 
+- **`tournaments-search` org 검증의 DB 전환 — 15개 실데이터 추가 전 필수 선행**(위 ⚠ 참조).
+  안 하면 새 협회 필터 칩이 `invalid org` 에러를 낸다.
+- `chat` 협회 라벨의 DB 전환(우선순위 낮음 — 깨져도 코드 노출 수준).
 - 15개 시도협회 실데이터 + 부서 체계(백과장 선행).
-- `tournaments-search` org 검증·`chat` 협회 라벨의 DB 전환.
