@@ -22,3 +22,17 @@ Deno.test('DB 에 없는 협회는 거절한다', async () => {
   const err = await assertKnownOrgs(fakeClient([]), ['nope']);
   assertEquals(err, 'invalid org: nope');
 });
+
+Deno.test('DB 조회 실패 시 거절한다(fail-closed)', async () => {
+  const failing = {
+    from: () => ({
+      select: () => ({
+        in: () => ({
+          eq: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+        }),
+      }),
+    }),
+  } as unknown as Parameters<typeof assertKnownOrgs>[0];
+  const err = await assertKnownOrgs(failing, ['gj']);
+  assertEquals(err, 'org 검증에 실패했습니다');
+});
