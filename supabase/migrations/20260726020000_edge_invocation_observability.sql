@@ -18,30 +18,44 @@
 --   응답이 안 붙은 행은 유실로 확정한다 — 조용히 미해결로 남겨두면 "실패가 없다"로
 --   오독되기 때문이다.
 --
--- 하지 않은 것: 실패 시 알림 발송. 먼저 실패가 *보이는* 상태를 만들고, 실제 실패
---   패턴을 본 뒤에 정한다(현재 알려진 500 원인은 JWT 시계 오차로 자가 회복된다).
+-- 하지 않은 것:
+--   - 실패 시 알림 발송. 먼저 실패가 *보이는* 상태를 만들고, 실제 패턴을 본 뒤 정한다
+--     (현재 알려진 500 원인은 JWT 시계 오차로 자가 회복된다).
+--   - cron.job_run_details 정리. 운영 29,482행(2026-05-22~)으로 자동 삭제가 없는 것은
+--     사실이지만, 전역 보존 정책은 이 기능의 범위 밖이라 별도로 다룬다.
 
 begin;
 
 -- ── 1) 호출 기록 표 ────────────────────────────────────────────────────────
+-- PK 가 request_id 가 **아닌** 이유: net.http_request_queue 와 그 시퀀스는 UNLOGGED 라
+-- (실측 relpersistence='u') 비정상 종료 후 id 가 처음부터 다시 발급된다. request_id 를 PK 로
+-- 두면 재사용 번호마다 과거 기록을 덮어써 14일 보존이 거짓말이 된다. 대리키를 쓰고,
+-- 유일성은 "아직 응답을 못 받은 행"에만 건다(아래 인덱스).
 create table if not exists public.edge_invocations (
-  request_id  bigint primary key,          -- net.http_post 가 준 id (= net._http_response.id)
+  id          bigserial   primary key,
+  request_id  bigint      not null,     -- net.http_post 가 준 id (= net._http_response.id)
   fn_name     text        not null,
   invoked_at  timestamptz not null default now(),
-  status_code integer,                     -- 응답 도착 후 채워짐
+  -- pending  = 발사했고 응답 대기
+  -- response = 응답이 붙었다(전송 오류·타임아웃 응답 포함 — 그때 status_code 는 null 이다)
+  -- lost     = pg_net 보존이 지나도록 응답이 없었다
+  outcome     text        not null default 'pending'
+                          check (outcome in ('pending', 'response', 'lost')),
+  status_code integer,
   error_msg   text,
   timed_out   boolean,
-  settled_at  timestamptz                  -- null = 아직 응답 미확인
+  settled_at  timestamptz                -- outcome 이 pending 을 벗어난 시각
 );
 
 comment on table public.edge_invocations is
   'cron → Edge Function 호출 결과. invoke_edge_function 이 적고 sweep_edge_invocations 가 채운다. 보존 14일.';
 
--- 스윕이 찾는 것은 "아직 응답이 안 붙은 행"이다. settled_at 이 아니라 status_code 기준인
--- 이유는 아래 sweep 주석 참조(만료 확정된 행에도 응답이 늦게 도착할 수 있다).
-create index if not exists edge_invocations_pending_idx
-  on public.edge_invocations (invoked_at)
-  where status_code is null;
+-- 응답을 붙일 대상은 하나로 정해져야 한다 → "아직 응답을 못 받은" 행에 한해 request_id 유일.
+-- 응답을 받은 행은 중복 request_id 로 남아도 되고, 그래서 번호가 재사용돼도 과거 이력이
+-- 살아남는다. 스윕이 훑는 범위도 이 인덱스와 정확히 같다.
+create unique index if not exists edge_invocations_open_request_idx
+  on public.edge_invocations (request_id)
+  where outcome <> 'response';
 
 -- 운영 로그다. 앱에서 읽을 일이 없다 → RLS 를 켜고 **정책을 하나도 두지 않는다**.
 -- 권한을 회수하는 대신 이렇게 하는 이유: 이 프로젝트의 권한 모델은
@@ -65,7 +79,7 @@ as $function$
 declare
   invoke_url   constant text := 'https://bsjdgwmveokanclqwtvx.supabase.co/functions/v1';
   cron_jwt     text;
-  req_id   bigint;
+  req_id       bigint;
 begin
   select decrypted_secret into cron_jwt
   from vault.decrypted_secrets
@@ -87,16 +101,17 @@ begin
   -- 여기서 실패하면 cron 도 실패한다. 그게 맞다 — 기록이 안 되는 상태를
   -- 성공으로 넘기면 다시 관측 공백이 생긴다.
   --
-  -- 다만 PK 충돌만은 예외로 흡수한다. net.http_request_queue 와 그 시퀀스는 UNLOGGED 라
-  -- (실측: relpersistence='u') 비정상 종료 후 id 가 처음부터 다시 발급된다. 그러면 보존
-  -- 중인 14일치 기록과 번호가 겹칠 수 있고, 그때 PK 충돌로 예외를 던지면 **관측 때문에
-  -- 실제 전달이 취소된다** — 크롤·알림이 통째로 멈춘다. 관측이 기능을 죽이면 안 된다.
-  -- 재사용된 번호는 새 호출의 것이므로 옛 기록을 덮는다(옛 응답은 어차피 붙일 수 없다).
+  -- 유일 인덱스 충돌만 예외로 흡수한다. 번호가 재사용됐는데 같은 번호의 **미해결** 행이
+  -- 남아 있는 경우인데, 그 행은 어차피 응답을 붙일 수 없다(응답이 왔다면 response 였다).
+  -- 여기서 예외를 던지면 관측 때문에 실제 전달이 취소된다 — 크롤·알림이 통째로 멈춘다.
+  -- 응답을 받은 과거 기록은 인덱스 대상이 아니라 그대로 보존된다.
   insert into public.edge_invocations (request_id, fn_name)
   values (req_id, fn_name)
-  on conflict (request_id) do update
-    set fn_name    = excluded.fn_name,
-        invoked_at = now(),
+  on conflict (request_id) where outcome <> 'response'
+  do update
+    set fn_name     = excluded.fn_name,
+        invoked_at  = now(),
+        outcome     = 'pending',
         status_code = null,
         error_msg   = null,
         timed_out   = null,
@@ -123,19 +138,24 @@ declare
   settled integer;
   expired integer;
 begin
-  -- 도착한 응답 붙이기.
-  -- 조건이 `settled_at is null` 이 아니라 `status_code is null` 인 이유: 아래 만료 처리로
-  -- settled 된 행에도 응답이 늦게 도착할 수 있다(pg_net worker 정체 등). settled 기준으로
-  -- 거르면 그 행은 영원히 '유실'로 남아 실제 상태코드를 잃는다.
+  -- 응답 붙이기. 대상은 outcome <> 'response' — 아직 응답을 못 받은 행 전부다.
+  --
+  -- `status_code is null` 을 기준으로 삼지 않는 이유: pg_net 은 전송 오류·타임아웃도
+  -- **완료된 응답**으로 기록하며 그때 status_code 는 null 이고 error_msg 만 채워진다.
+  -- null 을 미해결로 보면 그런 행을 10분마다 영원히 다시 갱신한다.
+  --
+  -- lost 도 대상에 넣는 이유: 만료로 확정한 뒤에도 응답이 늦게 도착할 수 있다
+  -- (pg_net worker 정체 등). 만료가 최종 판정이 되면 실제 상태코드를 영구히 잃는다.
   with done as (
     update public.edge_invocations e
        set status_code = r.status_code,
            error_msg   = r.error_msg,
            timed_out   = r.timed_out,
+           outcome     = 'response',
            settled_at  = now()
       from net._http_response r
      where r.id = e.request_id
-       and e.status_code is null
+       and e.outcome <> 'response'
     returning 1
   )
   select count(*)::integer into settled from done;
@@ -144,20 +164,16 @@ begin
   -- 여유를 둬 8시간으로 잡는다(스윕이 몇 번 걸러도 놓치지 않게).
   with gone as (
     update public.edge_invocations
-       set error_msg  = coalesce(error_msg, 'no response row (pg_net retention passed)'),
+       set outcome    = 'lost',
+           error_msg  = coalesce(error_msg, 'no response row (pg_net retention passed)'),
            settled_at = now()
-     where settled_at is null
+     where outcome = 'pending'
        and invoked_at < now() - interval '8 hours'
     returning 1
   )
   select count(*)::integer into expired from gone;
 
   delete from public.edge_invocations where invoked_at < now() - interval '14 days';
-
-  -- pg_cron 은 job_run_details 를 스스로 지우지 않는다. 운영 실측 29,482행(2026-05-22~),
-  -- 연 18만행 추세다. 여기에 스윕이 하나 더 늘었으니 같이 정리한다. 90일이면 사후 조사에
-  -- 충분하고, 실패 여부는 이제 edge_invocations 가 보관한다.
-  delete from cron.job_run_details where end_time < now() - interval '90 days';
 
   return settled + expired;
 end;

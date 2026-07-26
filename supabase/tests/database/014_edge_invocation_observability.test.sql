@@ -1,11 +1,11 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(20);
+select plan(22);
 
 -- ── 표·권한 ────────────────────────────────────────────────────────────────
 select has_table('public', 'edge_invocations', 'edge_invocations 표가 있다');
-select col_is_pk('public', 'edge_invocations', 'request_id', 'request_id 가 PK — 같은 요청이 두 번 기록되지 않는다');
+select col_is_pk('public', 'edge_invocations', 'id', 'PK 는 대리키 id 다 — request_id 는 pg_net 시퀀스 리셋으로 재사용될 수 있다');
 
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.edge_invocations'::regclass),
@@ -15,7 +15,7 @@ select ok(
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'edge_invocations'),
   0,
-  '정책이 없다 — 운영 로그이므로 service_role 만 접근한다'
+  '정책이 없다 — 운영 로그이므로 클라이언트 역할에는 열지 않는다'
 );
 
 -- 권한은 지문대로 넓게 준다(011 가드). 실제 차단은 정책이 0개라는 사실이 한다.
@@ -37,6 +37,20 @@ select ok(
   'anon·authenticated 는 스윕을 실행할 수 없다'
 );
 
+-- CREATE OR REPLACE 는 ACL 을 보존하므로, 한 번 새면 재적용으로 복구되지 않는다.
+select ok(
+  not has_function_privilege('anon', 'public.invoke_edge_function(text,jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.invoke_edge_function(text,jsonb)', 'execute'),
+  'anon·authenticated 는 invoke_edge_function 을 실행할 수 없다 — Vault 의 내부 cron JWT 로 임의 Edge 함수를 호출할 수 있게 된다'
+);
+
+-- 부정 가드만 있으면 service_role grant 가 사라져도 녹색이다(011 지문 위반).
+select ok(
+  has_function_privilege('service_role', 'public.invoke_edge_function(text,jsonb)', 'execute')
+  and has_function_privilege('service_role', 'public.sweep_edge_invocations()', 'execute'),
+  'service_role 은 두 함수를 실행할 수 있다 — 권한 지문의 요구'
+);
+
 -- ── cron ───────────────────────────────────────────────────────────────────
 select is(
   (select count(*)::integer from cron.job where jobname = 'edge-invocation-sweep'),
@@ -51,11 +65,11 @@ select is(
 );
 
 -- ── 스윕 동작 ──────────────────────────────────────────────────────────────
--- 1) 응답이 도착한 호출: 상태코드가 붙고 settled 된다
+-- 1) 응답이 도착한 호출
 insert into public.edge_invocations (request_id, fn_name, invoked_at)
 values (900001, 'test-fn-failed', now() - interval '1 minute');
 -- error_msg·timed_out 을 non-null 로 둔다. null fixture 였을 때는 그 두 컬럼의 복사를
--- 통째로 지워도 테스트가 통과했다(codex 지적).
+-- 통째로 지워도 테스트가 통과했다.
 insert into net._http_response (id, status_code, error_msg, timed_out, created)
 values (900001, 500, 'boom from edge', true, now() - interval '1 minute');
 
@@ -68,10 +82,22 @@ insert into public.edge_invocations (request_id, fn_name, invoked_at)
 values (900003, 'test-fn-lost', now() - interval '9 hours');
 
 -- 4) 14일이 지난 기록: 삭제된다
-insert into public.edge_invocations (request_id, fn_name, invoked_at, status_code, settled_at)
-values (900004, 'test-fn-old', now() - interval '15 days', 200, now() - interval '15 days');
+insert into public.edge_invocations (request_id, fn_name, invoked_at, outcome, status_code, settled_at)
+values (900004, 'test-fn-old', now() - interval '15 days', 'response', 200, now() - interval '15 days');
 
-select lives_ok('select public.sweep_edge_invocations()', '스윕이 실행된다');
+-- 5) 전송 오류/타임아웃 응답: pg_net 은 이것도 **완료된 응답**으로 남기며 status_code 가 null 이다
+insert into public.edge_invocations (request_id, fn_name, invoked_at)
+values (900005, 'test-fn-transport-error', now() - interval '2 minutes');
+insert into net._http_response (id, status_code, error_msg, timed_out, created)
+values (900005, null, 'Timeout was reached', true, now() - interval '1 minute');
+
+-- 반환값 = 이번 스윕이 확정한 건수. lives_ok 로 두면 '몇 건을 건드렸는가'를 못 본다.
+-- 대상은 900001(응답)·900005(전송오류 응답)·900003(만료) 세 건이다.
+select is(
+  (select public.sweep_edge_invocations()),
+  3,
+  '스윕이 이번에 확정한 건수는 3 — 응답 2건 + 만료 1건'
+);
 
 select is(
   (select status_code from public.edge_invocations where request_id = 900001),
@@ -85,15 +111,16 @@ select is(
   '에러 메시지와 타임아웃 여부도 함께 복사된다 — 상태코드만으로는 원인을 못 좁힌다'
 );
 
-select ok(
-  (select settled_at is null from public.edge_invocations where request_id = 900002),
-  '아직 응답이 없는 최근 호출은 미해결로 남는다'
+select is(
+  (select outcome from public.edge_invocations where request_id = 900002),
+  'pending',
+  '아직 응답이 없는 최근 호출은 pending 으로 남는다'
 );
 
-select ok(
-  (select settled_at is not null and error_msg like 'no response row%'
-     from public.edge_invocations where request_id = 900003),
-  '8시간이 지난 미해결 호출은 유실로 확정된다 — 조용히 미해결로 두면 실패 없음으로 오독된다'
+select is(
+  (select format('%s|%s', outcome, error_msg) from public.edge_invocations where request_id = 900003),
+  'lost|no response row (pg_net retention passed)',
+  '8시간이 지난 미해결 호출은 유실로 확정된다 — 조용히 pending 으로 두면 실패 없음으로 오독된다'
 );
 
 select is(
@@ -102,16 +129,30 @@ select is(
   '14일이 지난 기록은 삭제된다'
 );
 
--- 5) 유실로 확정한 뒤 응답이 늦게 도착하면(pg_net worker 정체 등) 그때라도 붙어야 한다.
---    settled 기준으로 걸렀다면 이 행은 영원히 '유실'로 남는다.
+-- 전송 오류 응답은 status_code 가 null 이어도 '응답 받음'으로 확정돼야 한다.
+-- status_code is null 을 미해결로 보면 이 행을 10분마다 영원히 다시 갱신한다.
+select is(
+  (select outcome from public.edge_invocations where request_id = 900005),
+  'response',
+  'status_code 가 null 인 전송 오류 응답도 응답으로 확정된다'
+);
+
+-- 6) 유실로 확정한 뒤 응답이 늦게 도착하면(pg_net worker 정체 등) 그때라도 붙어야 한다.
 insert into net._http_response (id, status_code, error_msg, timed_out, created)
 values (900003, 200, null, false, now());
 
-select lives_ok('select public.sweep_edge_invocations()', '스윕이 다시 실행된다');
+-- 두 번째 스윕이 확정할 것은 900003(늦게 온 응답) 하나뿐이어야 한다.
+-- 이미 확정된 행을 다시 집으면 여기서 2 이상이 된다 — settled_at 비교로는 이 결함을 못 잡는다
+-- (같은 트랜잭션 안에서 now() 가 고정이라 두 번 갱신해도 값이 같다. 실제로 거짓 통과했다).
+select is(
+  (select public.sweep_edge_invocations()),
+  1,
+  '두 번째 스윕은 늦게 도착한 응답 1건만 확정한다 — 확정된 행을 다시 집지 않는다'
+);
 
 select is(
-  (select status_code from public.edge_invocations where request_id = 900003),
-  200,
+  (select format('%s|%s', outcome, status_code) from public.edge_invocations where request_id = 900003),
+  'response|200',
   '유실로 확정한 뒤 도착한 응답도 반영된다 — 만료가 최종 판정이 되면 안 된다'
 );
 
@@ -122,6 +163,11 @@ select is(
 select vault.create_secret('test-only-not-a-real-jwt', 'internal_cron_jwt')
 where not exists (select 1 from vault.secrets where name = 'internal_cron_jwt');
 
+-- 아래 재사용 테스트가 시퀀스를 되감으므로(setval 은 롤백되지 않는다) 원래 값을 보관했다가
+-- 파일 끝에서 되돌린다.
+create temp table seq_backup on commit drop as
+select last_value, is_called from net.http_request_queue_id_seq;
+
 create temp table invoke_probe on commit drop as
 select public.invoke_edge_function('observability-selftest') as request_id;
 
@@ -129,38 +175,29 @@ select ok(
   exists(
     select 1 from public.edge_invocations e
     join invoke_probe p on p.request_id = e.request_id
-    where e.fn_name = 'observability-selftest' and e.settled_at is null
+    where e.fn_name = 'observability-selftest' and e.outcome = 'pending'
   ),
   'invoke_edge_function 이 호출 즉시 request_id·함수명을 남긴다 — 이게 없으면 응답을 누구에게도 붙일 수 없다'
 );
 
--- 위 어서션만으로는 "기록은 남기되 발사는 하지 않는" 변이를 못 잡는다(codex 지적).
--- 큐에 실제 요청이 들어갔는지, 주소와 인증 헤더가 붙었는지까지 본다.
+-- 위 어서션만으로는 "기록은 남기되 발사는 하지 않는" 변이를 못 잡는다.
+-- 주소는 접미사가 아니라 전체를 맞춘다(호스트·프로젝트가 틀려도 통과하면 안 된다).
 select ok(
   exists(
     select 1 from net.http_request_queue q
     join invoke_probe p on p.request_id = q.id
-    where q.url like '%/functions/v1/observability-selftest'
-      and q.headers ? 'Authorization'
+    where q.url = 'https://bsjdgwmveokanclqwtvx.supabase.co/functions/v1/observability-selftest'
+      and q.headers ->> 'Authorization' like 'Bearer %'
+      and length(q.headers ->> 'Authorization') > length('Bearer ')
   ),
-  '기록과 함께 실제 요청이 큐에 들어간다(주소·Authorization 포함) — 기록만 남기는 변이를 잡는다'
-);
-
--- ── 권한 상승 가드 ─────────────────────────────────────────────────────────
--- CREATE OR REPLACE 는 ACL 을 보존하므로, 한 번 새면 재적용으로 복구되지 않는다.
-select ok(
-  not has_function_privilege('anon', 'public.invoke_edge_function(text,jsonb)', 'execute')
-  and not has_function_privilege('authenticated', 'public.invoke_edge_function(text,jsonb)', 'execute'),
-  'anon·authenticated 는 invoke_edge_function 을 실행할 수 없다 — Vault 의 내부 cron JWT 로 임의 Edge 함수를 호출할 수 있게 된다'
+  '기록과 함께 실제 요청이 큐에 들어간다(정확한 주소 + 비어 있지 않은 Bearer 토큰)'
 );
 
 -- ── 재사용된 request_id ────────────────────────────────────────────────────
--- net.http_request_queue 와 그 시퀀스는 UNLOGGED 라(실측 relpersistence='u') 비정상 종료 후
--- id 가 처음부터 다시 발급된다. 보존 중인 기록과 번호가 겹칠 때 예외를 던지면 관측 때문에
--- 전달이 취소된다. 시퀀스를 되감아 그 상황을 만든다(시퀀스 변경은 롤백되지 않지만,
--- 되감긴 번호는 아래 ON CONFLICT 로 흡수되므로 로컬 DB 에 해가 없다).
-insert into public.edge_invocations (request_id, fn_name, invoked_at, status_code, settled_at)
-values (900020, 'stale-owner-of-reused-id', now() - interval '3 days', 500, now() - interval '3 days');
+-- 시퀀스가 되감겨 과거 번호가 다시 나와도 (a) 예외로 전달을 취소하지 않고
+-- (b) 응답까지 받은 과거 기록을 파괴하지 않아야 한다.
+insert into public.edge_invocations (request_id, fn_name, invoked_at, outcome, status_code, settled_at)
+values (900020, 'old-settled-owner', now() - interval '3 days', 'response', 200, now() - interval '3 days');
 
 select setval('net.http_request_queue_id_seq', 900019, true);
 
@@ -168,11 +205,15 @@ create temp table reuse_probe on commit drop as
 select public.invoke_edge_function('reused-id-probe') as request_id;
 
 select is(
-  (select format('%s|%s|%s', fn_name, (status_code is null)::text, (settled_at is null)::text)
+  (select string_agg(format('%s:%s', fn_name, outcome), ',' order by fn_name)
      from public.edge_invocations where request_id = 900020),
-  'reused-id-probe|true|true',
-  '재사용된 request_id 는 예외 없이 새 호출로 덮인다 — 관측이 실제 전달을 막으면 안 된다'
+  'old-settled-owner:response,reused-id-probe:pending',
+  '번호가 재사용돼도 예외 없이 새 행이 생기고, 응답까지 받은 과거 기록은 보존된다'
 );
+
+select setval('net.http_request_queue_id_seq',
+              (select last_value from seq_backup),
+              (select is_called from seq_backup));
 
 select * from finish();
 rollback;
