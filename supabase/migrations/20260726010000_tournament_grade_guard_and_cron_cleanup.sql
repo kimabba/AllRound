@@ -49,6 +49,16 @@ begin
     return new;
   end if;
 
+  -- 차원: text[] 는 차원을 제약하지 않아 ARRAY[['y1to3','y3to5']] 같은 2차원 배열도 들어간다.
+  -- cardinality·unnest 는 차원을 평탄화해 형식·개수 검사를 통과시키지만, 클라이언트는
+  -- List<String> 으로 파싱하다 깨진다. 1차원만 허용한다.
+  -- (빈 배열 ARRAY[]::text[] 은 array_ndims 가 NULL 이므로 null 검사를 함께 둔다.)
+  if array_ndims(new.eligible_grades) is not null
+     and array_ndims(new.eligible_grades) <> 1 then
+    raise exception 'eligible_grades 는 1차원 배열이어야 합니다'
+      using errcode = '23514';
+  end if;
+
   -- cardinality: array_length(arr, 1) 은 **1차원 길이**만 세므로 ARRAY[['a',…],['b',…]] 로
   -- 상한을 우회할 수 있다. cardinality 는 전체 원소 수를 센다.
   if cardinality(new.eligible_grades) > 50 then
@@ -63,9 +73,11 @@ begin
       using errcode = '23514';
   end if;
 
+  -- collate "C": 정규식 문자 범위([a-z])의 해석은 collation 에 의존한다. 비-C collation 에서는
+  -- 비ASCII 문자가 범위 안으로 들어올 여지가 있어(동형문자 우회) 바이트 순서로 고정한다.
   select g into bad
   from unnest(new.eligible_grades) as g
-  where g !~ '^[a-z0-9_]+$' or length(g) > 64
+  where (g collate "C") !~ '^[a-z0-9_]+$' or length(g) > 64
   limit 1;
 
   if bad is not null then

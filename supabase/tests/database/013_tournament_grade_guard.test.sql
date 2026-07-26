@@ -8,7 +8,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(11);
+SELECT plan(16);
 
 -- ── 준비: 제출자 계정(트리거 검증에는 RLS 가 필요 없다 — 소유자 권한으로 직접 넣는다) ──
 INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -101,6 +101,60 @@ SELECT throws_ok(
   '23514',
   NULL,
   '다차원 배열로 원소 개수 상한을 우회할 수 없다'
+);
+
+-- 8c) 원소가 적어도 다차원이면 거부된다 — cardinality·unnest 는 차원을 평탄화하므로
+-- 개수·형식 검사만으로는 ARRAY[['y1to3','y3to5']] 가 통과했다(codex 2차).
+SELECT throws_ok(
+  $$INSERT INTO public.tournaments (sport, title, start_date, eligible_grades, status, source)
+    VALUES ('tennis', '가드테스트 중첩소형', current_date + 30,
+            ARRAY[ARRAY['y1to3','y3to5']], 'draft', 'user_submission')$$,
+  '23514',
+  NULL,
+  '원소가 적어도 2차원 배열은 거부된다'
+);
+
+-- 8d) 평면 51개도 거부된다(상한 자체의 회귀 검출).
+SELECT throws_ok(
+  format(
+    $$INSERT INTO public.tournaments (sport, title, start_date, eligible_grades, status, source)
+      VALUES ('tennis', '가드테스트 51개', current_date + 30, %s, 'draft', 'user_submission')$$,
+    (SELECT 'ARRAY[' || string_agg(quote_literal('e' || i), ',') || ']'
+       FROM generate_series(1, 51) AS i)
+  ),
+  '23514',
+  NULL,
+  '평면 배열 51개가 거부된다'
+);
+
+-- 8e) 빈 문자열 원소.
+SELECT throws_ok(
+  $$INSERT INTO public.tournaments (sport, title, start_date, eligible_grades, status, source)
+    VALUES ('tennis', '가드테스트 빈문자', current_date + 30,
+            ARRAY['y1to3',''], 'draft', 'user_submission')$$,
+  '23514',
+  NULL,
+  '빈 문자열 원소가 거부된다'
+);
+
+-- 8f) 후행 공백 — trim 해서 통과시키지 않는다(코드는 정확일치가 정본이다).
+SELECT throws_ok(
+  $$INSERT INTO public.tournaments (sport, title, start_date, eligible_grades, status, source)
+    VALUES ('tennis', '가드테스트 후행공백', current_date + 30,
+            ARRAY['y1to3 '], 'draft', 'user_submission')$$,
+  '23514',
+  NULL,
+  '후행 공백이 붙은 코드가 거부된다'
+);
+
+-- 8g) 동형문자(키릴 'а' U+0430)는 ASCII 'a' 가 아니다. collate "C" 로 범위를 고정했다.
+SELECT throws_ok(
+  $$INSERT INTO public.tournaments (sport, title, start_date, eligible_grades, status, source)
+    VALUES ('tennis', '가드테스트 동형문자', current_date + 30,
+            ARRAY['kt' || U&'\0430' || '_m_open'], 'draft', 'user_submission')$$,
+  '23514',
+  NULL,
+  '키릴 동형문자가 섞인 코드가 거부된다'
 );
 
 -- 9) UPDATE 경로도 막힌다 — INSERT 만 막으면 tournaments_self_draft_update 로 우회된다.
