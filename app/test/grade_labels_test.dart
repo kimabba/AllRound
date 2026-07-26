@@ -322,6 +322,23 @@ void main() {
       expect(orgs, ['gj', 'kta']); // OrgCatalog 순서(gj 가 앞)
     });
 
+    test('비활성 협회의 부서도 카탈로그 순서를 지킨다(뒤로 밀리지 않음)', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'ktfs', 'label_ko': 'KTFS', 'short_label': 'KTFS',
+         'name_ko': 'KTFS', 'is_active': false, 'sort_order': 10},
+        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
+         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {'code': 'ktfs_a', 'org_code': 'ktfs', 'label_ko': 'KTFS-A', 'gender': 'all'},
+      ]);
+      // ktfs 는 비활성이지만 sort_order 10 이라 kta(20)보다 앞이어야 한다.
+      // 활성 목록(tennisOrgs)만 보면 ktfs 가 unknown 으로 빠져 뒤로 밀린다.
+      expect(DivisionCatalog.instance.all.map((d) => d.org).toList(),
+          ['ktfs', 'kta']);
+    });
+
     test('reset 후 다시 fallback 으로 복귀', () {
       DivisionCatalog.instance.ingestRows([
         {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
