@@ -338,4 +338,58 @@ void main() {
       expect(ready, isFalse);
     });
   });
+
+  group('OrgCatalog', () {
+    tearDown(() => OrgCatalog.instance.reset());
+
+    test('미로드 시 폴백 목록·라벨을 쓴다', () {
+      expect(OrgCatalog.instance.isLoaded, isFalse);
+      expect(tennisOrgs.first, 'kta');
+      expect(tennisOrgLabel('kta'), '대한테니스협회 (KTA)');
+      expect(tennisOrgShortLabel('gj'), '광주협회');
+    });
+
+    test('ingestRows 는 sort_order 순으로 정렬하고 비활성은 목록에서 뺀다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'jn', 'label_ko': '전남', 'short_label': '전남협회',
+         'name_ko': '전라남도테니스협회', 'is_active': true, 'sort_order': 90},
+        {'code': 'kta', 'label_ko': 'KTA 라벨', 'short_label': 'KTA',
+         'name_ko': '대한테니스협회', 'is_active': true, 'sort_order': 10},
+        {'code': 'ktfs', 'label_ko': '폐지협회', 'short_label': 'KTFS',
+         'name_ko': '국민생활체육', 'is_active': false, 'sort_order': 40},
+      ]);
+      expect(tennisOrgs, ['kta', 'jn']); // 비활성 ktfs 제외, sort_order 순
+      expect(tennisOrgLabel('kta'), 'KTA 라벨');
+    });
+
+    test('비활성 협회도 라벨 조회는 된다(보유자 화면에 코드가 노출되면 안 됨)', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'ktfs', 'label_ko': '국민생활체육 전국테니스연합회 (KTFS)',
+         'short_label': 'KTFS', 'name_ko': '국민생활체육', 'is_active': false,
+         'sort_order': 40},
+      ]);
+      expect(tennisOrgs, isNot(contains('ktfs')));
+      expect(tennisOrgLabel('ktfs'), '국민생활체육 전국테니스연합회 (KTFS)');
+    });
+
+    test('label_ko 가 비면 name_ko 로 폴백한다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'new1', 'label_ko': null, 'short_label': null,
+         'name_ko': '새협회', 'is_active': true, 'sort_order': 1000},
+      ]);
+      expect(tennisOrgLabel('new1'), '새협회');
+      expect(tennisOrgShortLabel('new1'), '새협회');
+    });
+
+    test('reset 후 폴백으로 복귀한다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'kta', 'label_ko': 'X', 'short_label': 'X',
+         'name_ko': 'X', 'is_active': true, 'sort_order': 10},
+      ]);
+      expect(OrgCatalog.instance.isLoaded, isTrue);
+      OrgCatalog.instance.reset();
+      expect(OrgCatalog.instance.isLoaded, isFalse);
+      expect(tennisOrgLabel('kta'), '대한테니스협회 (KTA)');
+    });
+  });
 }
