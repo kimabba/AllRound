@@ -18,12 +18,13 @@ Deno.test('DB 에 있는 활성 협회는 통과한다', async () => {
   assertEquals(err, null);
 });
 
-Deno.test('DB 에 없는 협회는 거절한다', async () => {
+Deno.test('DB 에 없는 협회는 거절한다(400)', async () => {
   const err = await assertKnownOrgs(fakeClient([]), ['nope']);
-  assertEquals(err, 'invalid org: nope');
+  assertEquals(err?.message, 'invalid org: nope');
+  assertEquals(err?.status, 400);
 });
 
-Deno.test('DB 조회 실패 시 거절한다(fail-closed)', async () => {
+Deno.test('DB 조회 실패 시 거절한다(fail-closed, 503)', async () => {
   const failing = {
     from: () => ({
       select: () => ({
@@ -34,5 +35,6 @@ Deno.test('DB 조회 실패 시 거절한다(fail-closed)', async () => {
     }),
   } as unknown as Parameters<typeof assertKnownOrgs>[0];
   const err = await assertKnownOrgs(failing, ['gj']);
-  assertEquals(err, 'org 검증에 실패했습니다');
+  assertEquals(err?.message, 'org 검증에 실패했습니다');
+  assertEquals(err?.status, 503);
 });
