@@ -31,13 +31,15 @@ void main() {
   test('제보 화면은 필터 안 된 tennisOrgs 를 쓰지 않는다', () {
     final src = File('lib/screens/tournaments/tournament_submit_screen.dart')
         .readAsStringSync();
-    // 주석은 실제 사용이 아니므로 검사 전에 걷어낸다(설명용 "tennisOrgs" 언급까지
-    // 회귀로 잡으면 무관한 주석 한 줄에 테스트가 계속 깨진다).
-    final withoutLineComments =
-        src.replaceAll(RegExp(r'//[^\n]*'), '');
+    // 설명 주석이 심볼명을 언급해 오탐이 나므로 '줄 전체가 주석' 인 줄만 걷어낸다.
+    // 문자열 안의 '//'(예: 'https://...')를 자르지 않도록 줄 끝 주석은 제거하지 않는다.
+    final codeOnly = src
+        .split('\n')
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
     // tennisOrgsWithDivisions 는 허용, 맨 tennisOrgs 는 금지.
     final bareTennisOrgs = RegExp(r'tennisOrgs(?!WithDivisions)');
-    expect(bareTennisOrgs.hasMatch(withoutLineComments), isFalse,
+    expect(bareTennisOrgs.hasMatch(codeOnly), isFalse,
         reason: '제보 화면은 부서 있는 협회만 써야 한다(tennisOrgsWithDivisions) —'
             ' 부서 0개 협회가 선택지에 다시 노출되면 제보를 끝낼 수 없다');
   });
