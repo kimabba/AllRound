@@ -30,7 +30,7 @@ class _TournamentSubmitScreenState
   final _sourceUrl = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
-  String _tennisOrg = 'gj'; // 테니스 주최 협회
+  String _tennisOrg = _defaultOrg(); // 테니스 주최 협회
   DateTime? _startDate;
   final Set<String> _grades = {}; // eligible_grades ({org}_{div} 코드)
   bool _busy = false;
@@ -139,16 +139,15 @@ class _TournamentSubmitScreenState
     }
   }
 
-  // 테니스 협회 선택 목록 (제보에서 자주 쓰이는 협회만)
-  static const _tennisOrgOptions = <(String, String)>[
-    ('gj', '광주협회 (GJTA)'),
-    ('jn', '전남협회 (JNTA)'),
-    ('kta', 'KTA'),
-    ('kata', 'KATA'),
-    ('ktfs', 'KTFS'),
-    ('kstf', 'KSTF (시니어)'),
-    ('local', '지역/클럽 자체'),
-  ];
+  // 카탈로그가 비어 있을 일은 없지만(폴백 보장), 방어적으로 'gj' 를 남긴다.
+  static String _defaultOrg() => tennisOrgs.isNotEmpty ? tennisOrgs.first : 'gj';
+
+  // 협회 선택지는 OrgCatalog(정본 = DB tennis_orgs)를 그대로 쓴다.
+  // 별도 목록을 두면 협회 추가가 이 화면에서만 조용히 누락된다(JY-135).
+  List<DropdownMenuItem<String>> _orgItems() => [
+        for (final code in tennisOrgs)
+          DropdownMenuItem(value: code, child: Text(tennisOrgLabel(code))),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -247,7 +246,7 @@ class _TournamentSubmitScreenState
                 setState(() {
                   _sport = v.first;
                   _grades.clear();
-                  _tennisOrg = 'gj';
+                  _tennisOrg = _defaultOrg();
                 });
               },
             ),
@@ -314,11 +313,7 @@ class _TournamentSubmitScreenState
                 // ignore: deprecated_member_use
                 value: _tennisOrg,
                 decoration: _inputDeco('협회 선택'),
-                items: _tennisOrgOptions
-                    .map(
-                      (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)),
-                    )
-                    .toList(),
+                items: _orgItems(),
                 onChanged: (v) => setState(() {
                   _tennisOrg = v!;
                   _grades.clear();
