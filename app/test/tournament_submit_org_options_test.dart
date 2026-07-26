@@ -23,13 +23,23 @@ void main() {
   });
 
   // JY-135 codex P1-2: 부서가 0개인 협회(kssta/kasta)를 고르면 부서 칩이 하나도
-  // 없어 제보를 끝낼 수 없다. 드롭다운은 부서가 있는 협회로 한정돼야 한다.
-  test('협회 드롭다운·기본값이 부서 없는 협회를 제외한 목록(tennisOrgsWithDivisions)을 쓴다', () {
+  // 없어 제보를 끝낼 수 없다. 드롭다운·기본값 모두 부서가 있는 협회로 한정돼야
+  // 한다. `contains('tennisOrgsWithDivisions')` 만으로는 화면 어딘가(주석·다른
+  // 용처)에 그 문자열이 한 번만 있어도 통과해, 드롭다운(:160)만 몰래 다시
+  // `tennisOrgs` 로 되돌려도 못 잡는다(codex P2 재지적). 필터 안 된 맨
+  // `tennisOrgs` 사용이 화면에 단 한 번도 없는지를 검사한다.
+  test('제보 화면은 필터 안 된 tennisOrgs 를 쓰지 않는다', () {
     final src = File('lib/screens/tournaments/tournament_submit_screen.dart')
         .readAsStringSync();
-    expect(src.contains('tennisOrgsWithDivisions'), isTrue,
-        reason: '부서가 있는 협회로 필터링해야 한다 — 원 목록(tennisOrgs)을 그대로 쓰면'
-            ' 부서 0개 협회 선택 시 제보를 끝낼 수 없다');
+    // 주석은 실제 사용이 아니므로 검사 전에 걷어낸다(설명용 "tennisOrgs" 언급까지
+    // 회귀로 잡으면 무관한 주석 한 줄에 테스트가 계속 깨진다).
+    final withoutLineComments =
+        src.replaceAll(RegExp(r'//[^\n]*'), '');
+    // tennisOrgsWithDivisions 는 허용, 맨 tennisOrgs 는 금지.
+    final bareTennisOrgs = RegExp(r'tennisOrgs(?!WithDivisions)');
+    expect(bareTennisOrgs.hasMatch(withoutLineComments), isFalse,
+        reason: '제보 화면은 부서 있는 협회만 써야 한다(tennisOrgsWithDivisions) —'
+            ' 부서 0개 협회가 선택지에 다시 노출되면 제보를 끝낼 수 없다');
   });
 
   // 기본 협회는 광주(gj) 고정이어야 한다 — 카탈로그 정렬 1번(kta)으로
