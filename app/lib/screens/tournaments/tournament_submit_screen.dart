@@ -42,7 +42,8 @@ class _TournamentSubmitScreenState
   final _sourceUrl = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
-  String _tennisOrg = defaultTennisOrgFor(tennisOrgs); // 테니스 주최 협회
+  String _tennisOrg =
+      defaultTennisOrgFor(tennisOrgsWithDivisions); // 테니스 주최 협회
   DateTime? _startDate;
   final Set<String> _grades = {}; // eligible_grades ({org}_{div} 코드)
   bool _busy = false;
@@ -151,10 +152,12 @@ class _TournamentSubmitScreenState
     }
   }
 
-  // 협회 선택지는 OrgCatalog(정본 = DB tennis_orgs)를 그대로 쓴다.
-  // 별도 목록을 두면 협회 추가가 이 화면에서만 조용히 누락된다(JY-135).
+  // 협회 선택지는 OrgCatalog(정본 = DB tennis_orgs)에서 부서가 있는 협회만
+  // 뽑아 쓴다. 부서가 0개인 협회를 고르면 아래 부서 칩이 비어 제보를 끝낼 수
+  // 없다(JY-135 P1-2). 하드코딩 목록을 두지 않으므로 부서 추가는 여전히 DB
+  // INSERT 하나로 이 화면에 반영된다.
   List<DropdownMenuItem<String>> _orgItems() => [
-        for (final code in tennisOrgs)
+        for (final code in tennisOrgsWithDivisions)
           DropdownMenuItem(value: code, child: Text(tennisOrgLabel(code))),
       ];
 
@@ -255,7 +258,7 @@ class _TournamentSubmitScreenState
                 setState(() {
                   _sport = v.first;
                   _grades.clear();
-                  _tennisOrg = defaultTennisOrgFor(tennisOrgs);
+                  _tennisOrg = defaultTennisOrgFor(tennisOrgsWithDivisions);
                 });
               },
             ),

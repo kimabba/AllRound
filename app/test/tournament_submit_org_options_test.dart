@@ -22,6 +22,16 @@ void main() {
         reason: '협회 코드를 화면에 나열하지 말 것');
   });
 
+  // JY-135 codex P1-2: 부서가 0개인 협회(kssta/kasta)를 고르면 부서 칩이 하나도
+  // 없어 제보를 끝낼 수 없다. 드롭다운은 부서가 있는 협회로 한정돼야 한다.
+  test('협회 드롭다운·기본값이 부서 없는 협회를 제외한 목록(tennisOrgsWithDivisions)을 쓴다', () {
+    final src = File('lib/screens/tournaments/tournament_submit_screen.dart')
+        .readAsStringSync();
+    expect(src.contains('tennisOrgsWithDivisions'), isTrue,
+        reason: '부서가 있는 협회로 필터링해야 한다 — 원 목록(tennisOrgs)을 그대로 쓰면'
+            ' 부서 0개 협회 선택 시 제보를 끝낼 수 없다');
+  });
+
   // 기본 협회는 광주(gj) 고정이어야 한다 — 카탈로그 정렬 1번(kta)으로
   // 조용히 회귀하는 걸 막는다. 실제 OrgCatalog 상태와 무관하게 로직만 검증한다.
   group('defaultTennisOrgFor', () {

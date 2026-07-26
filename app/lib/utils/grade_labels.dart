@@ -547,7 +547,7 @@ const _kFallbackOrgEntries = <TennisOrgEntry>[
   TennisOrgEntry(code: 'kta', label: '대한테니스협회 (KTA)', shortLabel: 'KTA', isActive: true),
   TennisOrgEntry(code: 'kato', label: '한국테니스발전협의회 (KATO)', shortLabel: 'KATO', isActive: true),
   TennisOrgEntry(code: 'kata', label: '한국동호인테니스협회 (KATA)', shortLabel: 'KATA', isActive: true),
-  TennisOrgEntry(code: 'ktfs', label: '국민생활체육 전국테니스연합회 (KTFS)', shortLabel: 'KTFS', isActive: true),
+  TennisOrgEntry(code: 'ktfs', label: '국민생활체육 전국테니스연합회 (KTFS)', shortLabel: 'KTFS', isActive: false),
   TennisOrgEntry(code: 'kstf', label: '한국시니어테니스연맹 (KSTF, 60+)', shortLabel: 'KSTF', isActive: true),
   TennisOrgEntry(code: 'kssta', label: '한국슈퍼시니어테니스협회 (KSSTA)', shortLabel: 'KSSTA', isActive: true),
   TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
@@ -656,6 +656,12 @@ class OrgCatalog {
 
 /// 협회 코드(표시 순서, 활성만). 로드됐으면 DB, 아니면 const 폴백.
 List<String> get tennisOrgs => OrgCatalog.instance.activeCodes;
+
+/// 부서가 1개 이상 있는 활성 협회만(제보 화면용, JY-135 P1-2).
+/// eligible_grades 는 부서 코드가 필수라, 부서가 0개인 협회를 고르면 제보를
+/// 끝낼 수 없다. 부서 카탈로그에서 파생하므로 부서가 추가되면 자동 반영된다.
+List<String> get tennisOrgsWithDivisions =>
+    tennisOrgs.where((code) => divisionsForOrg(code).isNotEmpty).toList();
 
 /// 협회 코드 → 완성형 라벨.
 String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
