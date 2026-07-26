@@ -402,20 +402,23 @@ class DivisionCatalog {
     catalogRevision.value++;
   }
 
-  /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
+  /// OrgCatalog 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
   /// DB 는 order('code') 로 오지만 협회 그룹핑이 흐트러지므로 재그룹핑한다.
+  /// 비활성 협회의 부서도 순서를 가져야 하므로 activeCodes(tennisOrgs) 가 아니라
+  /// all 을 쓴다 — activeCodes 만 쓰면 비활성 협회 부서가 순서 없이 뒤로 밀린다.
   static List<TennisDivision> _sortByOrgPriority(List<TennisDivision> input) {
+    final orgOrder = OrgCatalog.instance.all.map((o) => o.code).toList();
     final buckets = <String, List<TennisDivision>>{};
     final unknown = <TennisDivision>[];
     for (final d in input) {
-      if (tennisOrgs.contains(d.org)) {
+      if (orgOrder.contains(d.org)) {
         (buckets[d.org] ??= <TennisDivision>[]).add(d);
       } else {
         unknown.add(d);
       }
     }
     final result = <TennisDivision>[];
-    for (final org in tennisOrgs) {
+    for (final org in orgOrder) {
       final bucket = buckets[org];
       if (bucket != null) result.addAll(bucket);
     }

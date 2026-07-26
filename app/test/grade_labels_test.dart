@@ -246,7 +246,10 @@ void main() {
 
   group('DivisionCatalog DB load', () {
     setUp(() => DivisionCatalog.instance.reset());
-    tearDown(() => DivisionCatalog.instance.reset());
+    tearDown(() {
+      DivisionCatalog.instance.reset();
+      OrgCatalog.instance.reset();
+    });
 
     test('미로드 시 all()은 const fallback 반환', () {
       expect(DivisionCatalog.instance.isLoaded, isFalse);
@@ -301,6 +304,22 @@ void main() {
           .map((d) => d.code)
           .toList();
       expect(gjCodes, ['gj_b', 'gj_a']);
+    });
+
+    test('부서 그룹 순서는 OrgCatalog 순서를 따른다(DB sort_order 반영)', () {
+      // 협회 순서를 뒤집어 로드하면 부서 그룹 순서도 따라 뒤집혀야 한다.
+      OrgCatalog.instance.ingestRows([
+        {'code': 'gj', 'label_ko': '광주', 'short_label': '광주협회',
+         'name_ko': '광주', 'is_active': true, 'sort_order': 10},
+        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
+         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {'code': 'gj_a', 'org_code': 'gj', 'label_ko': 'GJ-A', 'gender': 'all'},
+      ]);
+      final orgs = DivisionCatalog.instance.all.map((d) => d.org).toList();
+      expect(orgs, ['gj', 'kta']); // OrgCatalog 순서(gj 가 앞)
     });
 
     test('reset 후 다시 fallback 으로 복귀', () {
