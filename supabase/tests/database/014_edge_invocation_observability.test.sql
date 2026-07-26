@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(22);
+select plan(24);
 
 -- ── 표·권한 ────────────────────────────────────────────────────────────────
 select has_table('public', 'edge_invocations', 'edge_invocations 표가 있다');
@@ -64,6 +64,17 @@ select is(
   '스윕은 10분마다 돈다 — pg_net 보존(약 6시간)보다 훨씬 잦아야 응답을 놓치지 않는다'
 );
 
+-- 이름·주기만 보면 명령을 `select 1` 로 바꿔 자동 스윕을 끊어도 녹색이다.
+select ok(
+  exists(
+    select 1 from cron.job
+     where jobname = 'edge-invocation-sweep'
+       and active
+       and command like '%sweep_edge_invocations()%'
+  ),
+  'cron 이 실제로 sweep_edge_invocations() 를 호출한다 — 이름·주기만 보면 빈 명령도 통과한다'
+);
+
 -- ── 스윕 동작 ──────────────────────────────────────────────────────────────
 -- 1) 응답이 도착한 호출
 insert into public.edge_invocations (request_id, fn_name, invoked_at)
@@ -81,9 +92,13 @@ values (900002, 'test-fn-inflight', now() - interval '1 minute');
 insert into public.edge_invocations (request_id, fn_name, invoked_at)
 values (900003, 'test-fn-lost', now() - interval '9 hours');
 
--- 4) 14일이 지난 기록: 삭제된다
+-- 4) 14일이 지난 기록: outcome 과 무관하게 삭제된다.
+--    response 만 두면 '삭제를 response 전용으로' 망가뜨려도 통과한다 — 그러면 오래된
+--    pending·lost 가 영원히 쌓인다.
 insert into public.edge_invocations (request_id, fn_name, invoked_at, outcome, status_code, settled_at)
-values (900004, 'test-fn-old', now() - interval '15 days', 'response', 200, now() - interval '15 days');
+values (900004, 'test-fn-old-response', now() - interval '15 days', 'response', 200, now() - interval '15 days'),
+       (900006, 'test-fn-old-pending',  now() - interval '15 days', 'pending', null, null),
+       (900007, 'test-fn-old-lost',     now() - interval '16 days', 'lost',    null, now() - interval '16 days');
 
 -- 5) 전송 오류/타임아웃 응답: pg_net 은 이것도 **완료된 응답**으로 남기며 status_code 가 null 이다
 insert into public.edge_invocations (request_id, fn_name, invoked_at)
@@ -92,11 +107,12 @@ insert into net._http_response (id, status_code, error_msg, timed_out, created)
 values (900005, null, 'Timeout was reached', true, now() - interval '1 minute');
 
 -- 반환값 = 이번 스윕이 확정한 건수. lives_ok 로 두면 '몇 건을 건드렸는가'를 못 본다.
--- 대상은 900001(응답)·900005(전송오류 응답)·900003(만료) 세 건이다.
+-- 응답 2건(900001·900005 전송오류) + 만료 2건(900003 · 900006 은 15일 지난 pending 이라
+-- 만료로 세어진 뒤 같은 스윕의 14일 삭제로 사라진다).
 select is(
   (select public.sweep_edge_invocations()),
-  3,
-  '스윕이 이번에 확정한 건수는 3 — 응답 2건 + 만료 1건'
+  4,
+  '스윕이 이번에 확정한 건수는 4 — 응답 2건 + 만료 2건'
 );
 
 select is(
@@ -124,9 +140,9 @@ select is(
 );
 
 select is(
-  (select count(*)::integer from public.edge_invocations where request_id = 900004),
+  (select count(*)::integer from public.edge_invocations where request_id in (900004, 900006, 900007)),
   0,
-  '14일이 지난 기록은 삭제된다'
+  '14일이 지난 기록은 outcome 과 무관하게 삭제된다'
 );
 
 -- 전송 오류 응답은 status_code 가 null 이어도 '응답 받음'으로 확정돼야 한다.
@@ -195,9 +211,14 @@ select ok(
 
 -- ── 재사용된 request_id ────────────────────────────────────────────────────
 -- 시퀀스가 되감겨 과거 번호가 다시 나와도 (a) 예외로 전달을 취소하지 않고
--- (b) 응답까지 받은 과거 기록을 파괴하지 않아야 한다.
+-- (b) 과거 기록을 파괴하지 않아야 한다.
+--
+-- 같은 번호에 이미 끝난 행(response)과 아직 대기 중인 행(pending)을 **둘 다** 둔다.
+-- response 만 두면 충돌 경로 자체를 안 타서, DO UPDATE 를 DO NOTHING 으로 망가뜨려도
+-- 통과한다(codex 지적). pending 행이 있어야 자리 양보(superseded)가 실제로 검증된다.
 insert into public.edge_invocations (request_id, fn_name, invoked_at, outcome, status_code, settled_at)
-values (900020, 'old-settled-owner', now() - interval '3 days', 'response', 200, now() - interval '3 days');
+values (900020, 'old-settled-owner', now() - interval '3 days', 'response', 200, now() - interval '3 days'),
+       (900020, 'old-pending-owner', now() - interval '2 hours', 'pending', null, null);
 
 select setval('net.http_request_queue_id_seq', 900019, true);
 
@@ -207,8 +228,27 @@ select public.invoke_edge_function('reused-id-probe') as request_id;
 select is(
   (select string_agg(format('%s:%s', fn_name, outcome), ',' order by fn_name)
      from public.edge_invocations where request_id = 900020),
-  'old-settled-owner:response,reused-id-probe:pending',
-  '번호가 재사용돼도 예외 없이 새 행이 생기고, 응답까지 받은 과거 기록은 보존된다'
+  'old-pending-owner:superseded,old-settled-owner:response,reused-id-probe:pending',
+  '번호가 재사용되면 옛 pending 은 superseded 로 자리를 비키고 새 행이 생긴다 — 과거 기록은 지워지지 않는다'
+);
+
+-- 오귀속 방지: 같은 번호에 옛 lost 와 새 pending 이 함께 있을 때, 도착한 응답은
+-- **가장 최근 호출**의 것이다. 옛 실패 기록에 붙으면 실패가 성공으로 둔갑한다.
+insert into public.edge_invocations (request_id, fn_name, invoked_at, outcome, error_msg, settled_at)
+values (900030, 'older-lost', now() - interval '2 days', 'lost',
+        'no response row (pg_net retention passed)', now() - interval '2 days');
+insert into public.edge_invocations (request_id, fn_name, invoked_at)
+values (900030, 'newer-pending', now() - interval '3 minutes');
+insert into net._http_response (id, status_code, error_msg, timed_out, created)
+values (900030, 204, null, false, now());
+
+select public.sweep_edge_invocations();
+
+select is(
+  (select string_agg(format('%s:%s', fn_name, outcome), ',' order by fn_name)
+     from public.edge_invocations where request_id = 900030),
+  'newer-pending:response,older-lost:lost',
+  '도착한 응답은 가장 최근 호출에만 붙는다 — 옛 실패 기록이 성공으로 둔갑하지 않는다'
 );
 
 select setval('net.http_request_queue_id_seq',

@@ -36,11 +36,13 @@ create table if not exists public.edge_invocations (
   request_id  bigint      not null,     -- net.http_post 가 준 id (= net._http_response.id)
   fn_name     text        not null,
   invoked_at  timestamptz not null default now(),
-  -- pending  = 발사했고 응답 대기
-  -- response = 응답이 붙었다(전송 오류·타임아웃 응답 포함 — 그때 status_code 는 null 이다)
-  -- lost     = pg_net 보존이 지나도록 응답이 없었다
+  -- pending    = 발사했고 응답 대기
+  -- response   = 응답이 붙었다(전송 오류·타임아웃 응답 포함 — 그때 status_code 는 null 이다)
+  -- lost       = pg_net 보존이 지나도록 응답이 없었다
+  -- superseded = 같은 request_id 가 재사용돼 새 호출에 자리를 내줬다(아래 invoke 주석 참조).
+  --              결과를 끝내 모른다는 점은 lost 와 같지만 원인이 다르므로 구분한다.
   outcome     text        not null default 'pending'
-                          check (outcome in ('pending', 'response', 'lost')),
+                          check (outcome in ('pending', 'response', 'lost', 'superseded')),
   status_code integer,
   error_msg   text,
   timed_out   boolean,
@@ -50,12 +52,15 @@ create table if not exists public.edge_invocations (
 comment on table public.edge_invocations is
   'cron → Edge Function 호출 결과. invoke_edge_function 이 적고 sweep_edge_invocations 가 채운다. 보존 14일.';
 
--- 응답을 붙일 대상은 하나로 정해져야 한다 → "아직 응답을 못 받은" 행에 한해 request_id 유일.
--- 응답을 받은 행은 중복 request_id 로 남아도 되고, 그래서 번호가 재사용돼도 과거 이력이
--- 살아남는다. 스윕이 훑는 범위도 이 인덱스와 정확히 같다.
+-- 응답을 붙일 대상은 하나로 정해져야 한다 → **아직 응답을 기다리는 행**에 한해 request_id 유일.
+-- 끝난 행(response·lost·superseded)은 중복 번호로 남아도 되고, 그래서 번호가 재사용돼도
+-- 과거 이력이 살아남는다. 스윕이 응답을 붙일 범위도 이 인덱스와 같다.
+--
+-- lost 를 유일성 대상에서 빼는 이유: lost 는 "실패했다"는 결론이 난 기록이다. 그걸 재사용
+-- 번호가 덮으면 실패를 보이게 하려고 만든 표에서 실패가 사라진다.
 create unique index if not exists edge_invocations_open_request_idx
   on public.edge_invocations (request_id)
-  where outcome <> 'response';
+  where outcome = 'pending';
 
 -- 운영 로그다. 앱에서 읽을 일이 없다 → RLS 를 켜고 **정책을 하나도 두지 않는다**.
 -- 권한을 회수하는 대신 이렇게 하는 이유: 이 프로젝트의 권한 모델은
@@ -101,17 +106,27 @@ begin
   -- 여기서 실패하면 cron 도 실패한다. 그게 맞다 — 기록이 안 되는 상태를
   -- 성공으로 넘기면 다시 관측 공백이 생긴다.
   --
-  -- 유일 인덱스 충돌만 예외로 흡수한다. 번호가 재사용됐는데 같은 번호의 **미해결** 행이
-  -- 남아 있는 경우인데, 그 행은 어차피 응답을 붙일 수 없다(응답이 왔다면 response 였다).
-  -- 여기서 예외를 던지면 관측 때문에 실제 전달이 취소된다 — 크롤·알림이 통째로 멈춘다.
-  -- 응답을 받은 과거 기록은 인덱스 대상이 아니라 그대로 보존된다.
+  -- 번호가 재사용됐는데 같은 번호의 pending 행이 남아 있으면, 그 행은 이제 응답을 받을 수
+  -- 없다(도착할 응답은 새 호출의 것이다). 그렇다고 덮어쓰면 과거 기록이 사라지므로
+  -- **자리만 비켜준다** — superseded 로 확정하고 새 행을 따로 넣는다. 덮어쓰기였다면
+  -- 언제 무엇을 불렀는지가 통째로 지워졌을 것이다.
+  --
+  -- 예외를 던지지 않는 것도 중요하다. 여기서 실패하면 관측 때문에 실제 전달이 취소되어
+  -- 크롤·알림이 통째로 멈춘다. 관측이 기능을 죽이면 안 된다.
+  update public.edge_invocations
+     set outcome    = 'superseded',
+         settled_at = now()
+   where request_id = req_id
+     and outcome = 'pending';
+
   insert into public.edge_invocations (request_id, fn_name)
   values (req_id, fn_name)
-  on conflict (request_id) where outcome <> 'response'
+  -- 위 UPDATE 가 자리를 비웠으므로 정상 경로에서는 충돌하지 않는다. 극단적 경합
+  -- (같은 번호로 동시 invoke)에서도 예외로 전달을 취소하지 않도록 마지막 방어를 둔다.
+  on conflict (request_id) where outcome = 'pending'
   do update
     set fn_name     = excluded.fn_name,
         invoked_at  = now(),
-        outcome     = 'pending',
         status_code = null,
         error_msg   = null,
         timed_out   = null,
@@ -138,7 +153,8 @@ declare
   settled integer;
   expired integer;
 begin
-  -- 응답 붙이기. 대상은 outcome <> 'response' — 아직 응답을 못 받은 행 전부다.
+  -- 응답 붙이기. 대상은 pending·lost — 아직 응답을 못 받은 행이다.
+  -- superseded 는 제외한다: 그 번호로 도착할 응답은 자리를 이어받은 새 호출의 것이다.
   --
   -- `status_code is null` 을 기준으로 삼지 않는 이유: pg_net 은 전송 오류·타임아웃도
   -- **완료된 응답**으로 기록하며 그때 status_code 는 null 이고 error_msg 만 채워진다.
@@ -146,6 +162,10 @@ begin
   --
   -- lost 도 대상에 넣는 이유: 만료로 확정한 뒤에도 응답이 늦게 도착할 수 있다
   -- (pg_net worker 정체 등). 만료가 최종 판정이 되면 실제 상태코드를 영구히 잃는다.
+  --
+  -- 같은 request_id 를 가진 미해결 행이 둘 이상일 수 있다(번호 재사용으로 옛 lost·superseded
+  -- 가 남은 경우). 도착한 응답은 **가장 최근 호출**의 것이므로 id 가 가장 큰 행 하나에만
+  -- 붙인다. 그러지 않으면 과거 실패 기록이 새 응답으로 덮여 잘못 귀속된다.
   with done as (
     update public.edge_invocations e
        set status_code = r.status_code,
@@ -155,7 +175,12 @@ begin
            settled_at  = now()
       from net._http_response r
      where r.id = e.request_id
-       and e.outcome <> 'response'
+       and e.outcome in ('pending', 'lost')
+       and e.id = (
+             select max(e2.id) from public.edge_invocations e2
+              where e2.request_id = e.request_id
+                and e2.outcome in ('pending', 'lost')
+           )
     returning 1
   )
   select count(*)::integer into settled from done;
