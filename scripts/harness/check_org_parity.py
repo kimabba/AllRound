@@ -70,34 +70,64 @@ def read_orgs() -> list[dict]:
     return data
 
 
+# 줄 전체가 `//` 로 시작하는 줄만 제거한다(codex P1: 주석 처리로 항목을 지워도
+# 안 걷혀서 여전히 파싱되던 결함). 시작 위치가 줄 앞(공백 제외)이어야 하므로 문자열
+# 안의 `//`(예: 'https://...')는 건드리지 않는다 — 그 줄은 `//` 로 시작하지 않는다.
+_COMMENT_LINE_RE = re.compile(r"(?m)^[ \t]*//.*$")
+
 # 이름 있는 인자(code:/label:/shortLabel:/isActive:)를 순서대로 뽑는다. 라벨에
 # 괄호·쉼표가 있어(예: '(KSTF, 60+)') 항목 경계를 괄호 매칭으로 잡으면 깨진다 —
 # 따옴표로 감싼 값은 괄호 개수와 무관하게 다음 홑따옴표에서 끝나므로 이 방식이 안전하다.
+# 필드 값은 이스케이프(`\'`, `\\`)를 허용한다 — 안 그러면 값 안의 `\'` 에서 문자열이
+# 조기 종료돼 그 항목 전체가 매치 실패하고, 개수 검사가 없으면 조용히 누락된다.
+_FIELD = r"'((?:\\.|[^'\\])*)'"
 _ENTRY_RE = re.compile(
     r"TennisOrgEntry\(\s*"
-    r"code:\s*'([^']*)'\s*,\s*"
-    r"label:\s*'([^']*)'\s*,\s*"
-    r"shortLabel:\s*'([^']*)'\s*,\s*"
+    rf"code:\s*{_FIELD}\s*,\s*"
+    rf"label:\s*{_FIELD}\s*,\s*"
+    rf"shortLabel:\s*{_FIELD}\s*,\s*"
     r"isActive:\s*(true|false)\s*"
     r"\)",
 )
 
 
+def _unescape(value: str) -> str:
+    return re.sub(r"\\(.)", r"\1", value)
+
+
 def read_dart_fallback(text: str) -> list[dict]:
+    text = _COMMENT_LINE_RE.sub("", text)
     block_match = re.search(
         r"const\s+_kFallbackOrgEntries\s*=\s*<TennisOrgEntry>\s*\[(.*?)\];",
         text, re.S,
     )
     if not block_match:
         raise AssertionError("Dart _kFallbackOrgEntries 를 찾지 못했다")
+    block = block_match.group(1)
+
+    # "못 읽은 건 건너뛰지 말고 실패시킨다"(codex P1): TennisOrgEntry( 등장 횟수와
+    # 실제로 끝까지 매치된 항목 수가 다르면, 정규식이 이해 못 한 항목이 있다는 뜻이다.
+    # 조용히 누락시키는 대신 몇 번째 항목을 못 읽었는지 알려주고 실패한다.
+    occurrences = [m.start() for m in re.finditer(r"TennisOrgEntry\(", block)]
+    matches = list(_ENTRY_RE.finditer(block))
+    matched_starts = {m.start() for m in matches}
+    unparsed = [pos for pos in occurrences if pos not in matched_starts]
+    if unparsed:
+        snippets = [block[pos:pos + 80].splitlines()[0] for pos in unparsed]
+        raise AssertionError(
+            f"Dart _kFallbackOrgEntries: TennisOrgEntry( {len(occurrences)}건 중 "
+            f"{len(unparsed)}건을 파싱하지 못했다 — 못 읽은 항목은 통과가 아니라 실패다:\n"
+            + "\n".join(f"  - {s}" for s in snippets)
+        )
+
     entries = [
         {
-            "code": m.group(1),
-            "label": m.group(2),
-            "short_label": m.group(3),
+            "code": _unescape(m.group(1)),
+            "label": _unescape(m.group(2)),
+            "short_label": _unescape(m.group(3)),
             "active": m.group(4) == "true",
         }
-        for m in _ENTRY_RE.finditer(block_match.group(1))
+        for m in matches
     ]
     if not entries:
         raise AssertionError("Dart _kFallbackOrgEntries 항목을 하나도 파싱하지 못했다")
