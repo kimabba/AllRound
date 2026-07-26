@@ -402,20 +402,23 @@ class DivisionCatalog {
     catalogRevision.value++;
   }
 
-  /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
+  /// OrgCatalog 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
   /// DB 는 order('code') 로 오지만 협회 그룹핑이 흐트러지므로 재그룹핑한다.
+  /// 비활성 협회의 부서도 순서를 가져야 하므로 activeCodes(tennisOrgs) 가 아니라
+  /// all 을 쓴다 — activeCodes 만 쓰면 비활성 협회 부서가 순서 없이 뒤로 밀린다.
   static List<TennisDivision> _sortByOrgPriority(List<TennisDivision> input) {
+    final orgOrder = OrgCatalog.instance.all.map((o) => o.code).toList();
     final buckets = <String, List<TennisDivision>>{};
     final unknown = <TennisDivision>[];
     for (final d in input) {
-      if (tennisOrgs.contains(d.org)) {
+      if (orgOrder.contains(d.org)) {
         (buckets[d.org] ??= <TennisDivision>[]).add(d);
       } else {
         unknown.add(d);
       }
     }
     final result = <TennisDivision>[];
-    for (final org in tennisOrgs) {
+    for (final org in orgOrder) {
       final bucket = buckets[org];
       if (bucket != null) result.addAll(bucket);
     }
@@ -520,50 +523,151 @@ String futsalEventCategoryLabel(String? category) =>
     category == null ? '' : futsalEventCategoryLabels[category] ?? category;
 
 // =========================
-// Tennis Org (협회) — Edge Functions enums.ts 와 1:1 동기화
+// Tennis Org (협회) — 정본은 DB public.tennis_orgs (JY-135)
 // =========================
-const tennisOrgs = <String>[
-  'kta',
-  'kato',
-  'kata',
-  'ktfs',
-  'kstf',
-  'kssta',
-  'kasta',
-  'gj',
-  'jn',
-  'local',
+
+/// 협회 카탈로그 항목. 정본은 DB public.tennis_orgs 다(JY-135).
+class TennisOrgEntry {
+  const TennisOrgEntry({
+    required this.code,
+    required this.label,
+    required this.shortLabel,
+    required this.isActive,
+  });
+
+  final String code;
+  final String label;
+  final String shortLabel;
+  final bool isActive;
+}
+
+// 협회 정본은 DB public.tennis_orgs 다(JY-135). 아래 const 는 미로드 시 쓰는
+// 오프라인 폴백이며, 값은 마이그레이션 백필과 같아야 한다.
+const _kFallbackOrgEntries = <TennisOrgEntry>[
+  TennisOrgEntry(code: 'kta', label: '대한테니스협회 (KTA)', shortLabel: 'KTA', isActive: true),
+  TennisOrgEntry(code: 'kato', label: '한국테니스발전협의회 (KATO)', shortLabel: 'KATO', isActive: true),
+  TennisOrgEntry(code: 'kata', label: '한국동호인테니스협회 (KATA)', shortLabel: 'KATA', isActive: true),
+  TennisOrgEntry(code: 'ktfs', label: '국민생활체육 전국테니스연합회 (KTFS)', shortLabel: 'KTFS', isActive: false),
+  TennisOrgEntry(code: 'kstf', label: '한국시니어테니스연맹 (KSTF, 60+)', shortLabel: 'KSTF', isActive: true),
+  TennisOrgEntry(code: 'kssta', label: '한국슈퍼시니어테니스협회 (KSSTA)', shortLabel: 'KSSTA', isActive: true),
+  TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
+  TennisOrgEntry(code: 'gj', label: '광주광역시테니스협회 (GJTA)', shortLabel: '광주협회', isActive: true),
+  TennisOrgEntry(code: 'jn', label: '전라남도테니스협회 (JNTA)', shortLabel: '전남협회', isActive: true),
+  TennisOrgEntry(code: 'local', label: '시·군 또는 클럽 자체', shortLabel: '시·군/클럽', isActive: true),
 ];
 
-const tennisOrgLabels = <String, String>{
-  'kta': '대한테니스협회 (KTA)',
-  'kato': '한국테니스발전협의회 (KATO)',
-  'kata': '한국동호인테니스협회 (KATA)',
-  'ktfs': '국민생활체육 전국테니스연합회 (KTFS)',
-  'kstf': '한국시니어테니스연맹 (KSTF, 60+)',
-  'kssta': '한국슈퍼시니어테니스협회 (KSSTA)',
-  'kasta': '단식 테니스 (KASTA / 단테매)',
-  'gj': '광주광역시테니스협회 (GJTA)',
-  'jn': '전라남도테니스협회 (JNTA)',
-  'local': '시·군 또는 클럽 자체',
-};
+final _kFallbackOrgByCode = {for (final e in _kFallbackOrgEntries) e.code: e};
 
-const tennisOrgShortLabels = <String, String>{
-  'kta': 'KTA',
-  'kato': 'KATO',
-  'kata': 'KATA',
-  'ktfs': 'KTFS',
-  'kstf': 'KSTF',
-  'kssta': 'KSSTA',
-  'kasta': 'KASTA',
-  'gj': '광주협회',
-  'jn': '전남협회',
-  'local': '시·군/클럽',
-};
+/// 협회 목록·라벨 카탈로그. DivisionCatalog 와 같은 구조다(JY-120 선례).
+///
+/// 협회 추가는 tennis_orgs 에 행을 넣는 것만으로 끝난다 — 앱 재배포가 필요 없다.
+class OrgCatalog {
+  OrgCatalog._();
+  static final OrgCatalog instance = OrgCatalog._();
 
-bool isValidTennisOrg(String value) => tennisOrgs.contains(value);
-String tennisOrgLabel(String org) => tennisOrgLabels[org] ?? org;
-String tennisOrgShortLabel(String org) => tennisOrgShortLabels[org] ?? org;
+  // null = 미로드 → const 폴백 사용.
+  List<TennisOrgEntry>? _ordered;
+  Map<String, TennisOrgEntry>? _byCode;
+
+  Completer<void> _ready = Completer<void>();
+  int _generation = 0;
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
+  bool get isLoaded => _ordered != null;
+
+  List<TennisOrgEntry> get all => _ordered ?? _kFallbackOrgEntries;
+
+  /// 선택지에 노출할 활성 협회 코드(표시 순서).
+  List<String> get activeCodes =>
+      all.where((o) => o.isActive).map((o) => o.code).toList(growable: false);
+
+  /// 라벨 조회는 활성 여부와 무관하다 — 비활성 협회를 이미 가진 사용자의
+  /// 화면에 코드가 그대로 노출되면 안 된다.
+  String labelFor(String code) =>
+      (_byCode ?? _kFallbackOrgByCode)[code]?.label ?? code;
+
+  String shortLabelFor(String code) =>
+      (_byCode ?? _kFallbackOrgByCode)[code]?.shortLabel ?? code;
+
+  /// tennis_orgs 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      final rows = await client
+          .from('tennis_orgs')
+          .select('code, label_ko, short_label, name_ko, is_active, sort_order')
+          .order('sort_order')
+          .order('name_ko')
+          .order('code');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지 — 앱 진입을 막지 않는다.
+    } finally {
+      if (gen == _generation) _markReady();
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그.
+  /// label_ko 가 비면 name_ko 로, short_label 이 비면 label 로 폴백한다.
+  /// (sort_order, name_ko, code) 순으로 정렬한다 — load() 의 쿼리 order 와 동일한
+  /// 규칙을 여기서도 적용해, 테스트 픽스처처럼 정렬 안 된 입력이 와도 결과가 같다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    final sorted = [...rows]..sort((a, b) {
+        final sortOrderCmp = ((a['sort_order'] as num?) ?? 1000)
+            .compareTo((b['sort_order'] as num?) ?? 1000);
+        if (sortOrderCmp != 0) return sortOrderCmp;
+        final nameCmp = ((a['name_ko'] as String?) ?? '')
+            .compareTo((b['name_ko'] as String?) ?? '');
+        if (nameCmp != 0) return nameCmp;
+        return (a['code'] as String).compareTo(b['code'] as String);
+      });
+    final entries = sorted.map((r) {
+      final code = r['code'] as String;
+      final label = (r['label_ko'] as String?) ?? (r['name_ko'] as String?) ?? code;
+      return TennisOrgEntry(
+        code: code,
+        label: label,
+        shortLabel: (r['short_label'] as String?) ?? label,
+        isActive: (r['is_active'] as bool?) ?? true,
+      );
+    }).toList();
+    _ordered = entries;
+    _byCode = {for (final e in entries) e.code: e};
+    _markReady();
+    catalogRevision.value++;
+  }
+
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다.
+  void reset() {
+    _ordered = null;
+    _byCode = null;
+    _ready = Completer<void>();
+    _generation++;
+    catalogRevision.value++;
+  }
+}
+
+/// 협회 코드(표시 순서, 활성만). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get tennisOrgs => OrgCatalog.instance.activeCodes;
+
+/// 부서가 1개 이상 있는 활성 협회만(제보 화면용, JY-135 P1-2).
+/// eligible_grades 는 부서 코드가 필수라, 부서가 0개인 협회를 고르면 제보를
+/// 끝낼 수 없다. 부서 카탈로그에서 파생하므로 부서가 추가되면 자동 반영된다.
+List<String> get tennisOrgsWithDivisions =>
+    tennisOrgs.where((code) => divisionsForOrg(code).isNotEmpty).toList();
+
+/// 협회 코드 → 완성형 라벨.
+String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
+
+/// 협회 코드 → 짧은 라벨(칩·요약용).
+String tennisOrgShortLabel(String org) => OrgCatalog.instance.shortLabelFor(org);
 
 // =========================
 // Region (표준 17개 광역시도)

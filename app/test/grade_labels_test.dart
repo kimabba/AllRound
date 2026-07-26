@@ -246,7 +246,10 @@ void main() {
 
   group('DivisionCatalog DB load', () {
     setUp(() => DivisionCatalog.instance.reset());
-    tearDown(() => DivisionCatalog.instance.reset());
+    tearDown(() {
+      DivisionCatalog.instance.reset();
+      OrgCatalog.instance.reset();
+    });
 
     test('미로드 시 all()은 const fallback 반환', () {
       expect(DivisionCatalog.instance.isLoaded, isFalse);
@@ -303,6 +306,39 @@ void main() {
       expect(gjCodes, ['gj_b', 'gj_a']);
     });
 
+    test('부서 그룹 순서는 OrgCatalog 순서를 따른다(DB sort_order 반영)', () {
+      // 협회 순서를 뒤집어 로드하면 부서 그룹 순서도 따라 뒤집혀야 한다.
+      OrgCatalog.instance.ingestRows([
+        {'code': 'gj', 'label_ko': '광주', 'short_label': '광주협회',
+         'name_ko': '광주', 'is_active': true, 'sort_order': 10},
+        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
+         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {'code': 'gj_a', 'org_code': 'gj', 'label_ko': 'GJ-A', 'gender': 'all'},
+      ]);
+      final orgs = DivisionCatalog.instance.all.map((d) => d.org).toList();
+      expect(orgs, ['gj', 'kta']); // OrgCatalog 순서(gj 가 앞)
+    });
+
+    test('비활성 협회의 부서도 카탈로그 순서를 지킨다(뒤로 밀리지 않음)', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'ktfs', 'label_ko': 'KTFS', 'short_label': 'KTFS',
+         'name_ko': 'KTFS', 'is_active': false, 'sort_order': 10},
+        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
+         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {'code': 'ktfs_a', 'org_code': 'ktfs', 'label_ko': 'KTFS-A', 'gender': 'all'},
+      ]);
+      // ktfs 는 비활성이지만 sort_order 10 이라 kta(20)보다 앞이어야 한다.
+      // 활성 목록(tennisOrgs)만 보면 ktfs 가 unknown 으로 빠져 뒤로 밀린다.
+      expect(DivisionCatalog.instance.all.map((d) => d.org).toList(),
+          ['ktfs', 'kta']);
+    });
+
     test('reset 후 다시 fallback 으로 복귀', () {
       DivisionCatalog.instance.ingestRows([
         {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
@@ -336,6 +372,106 @@ void main() {
       unawaited(DivisionCatalog.instance.whenReady.then((_) => ready = true));
       await pumpEventQueue();
       expect(ready, isFalse);
+    });
+  });
+
+  group('OrgCatalog', () {
+    tearDown(() => OrgCatalog.instance.reset());
+
+    test('미로드 시 폴백 목록·라벨을 쓴다', () {
+      expect(OrgCatalog.instance.isLoaded, isFalse);
+      expect(tennisOrgs.first, 'kta');
+      expect(tennisOrgLabel('kta'), '대한테니스협회 (KTA)');
+      expect(tennisOrgShortLabel('gj'), '광주협회');
+    });
+
+    test('ingestRows 는 sort_order 순으로 정렬하고 비활성은 목록에서 뺀다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'jn', 'label_ko': '전남', 'short_label': '전남협회',
+         'name_ko': '전라남도테니스협회', 'is_active': true, 'sort_order': 90},
+        {'code': 'kta', 'label_ko': 'KTA 라벨', 'short_label': 'KTA',
+         'name_ko': '대한테니스협회', 'is_active': true, 'sort_order': 10},
+        {'code': 'ktfs', 'label_ko': '폐지협회', 'short_label': 'KTFS',
+         'name_ko': '국민생활체육', 'is_active': false, 'sort_order': 40},
+      ]);
+      expect(tennisOrgs, ['kta', 'jn']); // 비활성 ktfs 제외, sort_order 순
+      expect(tennisOrgLabel('kta'), 'KTA 라벨');
+    });
+
+    test('비활성 협회도 라벨 조회는 된다(보유자 화면에 코드가 노출되면 안 됨)', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'ktfs', 'label_ko': '국민생활체육 전국테니스연합회 (KTFS)',
+         'short_label': 'KTFS', 'name_ko': '국민생활체육', 'is_active': false,
+         'sort_order': 40},
+      ]);
+      expect(tennisOrgs, isNot(contains('ktfs')));
+      expect(tennisOrgLabel('ktfs'), '국민생활체육 전국테니스연합회 (KTFS)');
+    });
+
+    test('label_ko 가 비면 name_ko 로 폴백한다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'new1', 'label_ko': null, 'short_label': null,
+         'name_ko': '새협회', 'is_active': true, 'sort_order': 1000},
+      ]);
+      expect(tennisOrgLabel('new1'), '새협회');
+      expect(tennisOrgShortLabel('new1'), '새협회');
+    });
+
+    test('reset 후 폴백으로 복귀한다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'kta', 'label_ko': 'X', 'short_label': 'X',
+         'name_ko': 'X', 'is_active': true, 'sort_order': 10},
+      ]);
+      expect(OrgCatalog.instance.isLoaded, isTrue);
+      OrgCatalog.instance.reset();
+      expect(OrgCatalog.instance.isLoaded, isFalse);
+      expect(tennisOrgLabel('kta'), '대한테니스협회 (KTA)');
+    });
+
+    // JY-135 codex P1-1: 폴백의 ktfs 가 isActive:true 였을 때 DB(is_active=false)와
+    // 어긋나 온라인/오프라인에서 KTFS 노출 여부가 달라졌다.
+    test('폴백 ktfs 는 비활성 — DB 백필과 일치해야 온오프라인 동작이 같다', () {
+      expect(OrgCatalog.instance.isLoaded, isFalse);
+      expect(tennisOrgs, isNot(contains('ktfs')),
+          reason: 'ktfs 는 DB 에서 is_active=false 다');
+      // 비활성이어도 라벨 조회는 여전히 동작해야 한다(기존 사용자 화면 보호).
+      expect(tennisOrgLabel('ktfs'), '국민생활체육 전국테니스연합회 (KTFS)');
+    });
+  });
+
+  group('tennisOrgsWithDivisions (JY-135 P1-2)', () {
+    tearDown(() {
+      OrgCatalog.instance.reset();
+      DivisionCatalog.instance.reset();
+    });
+
+    test('부서가 0개인 협회는 빠지고 부서가 있는 협회만 남는다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
+         'name_ko': 'KTA', 'is_active': true, 'sort_order': 10},
+        {'code': 'kssta', 'label_ko': 'KSSTA', 'short_label': 'KSSTA',
+         'name_ko': 'KSSTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+      ]);
+      // kssta 는 부서가 없어 골랐을 때 부서 칩이 하나도 없어 제보를 끝낼 수 없다.
+      expect(tennisOrgsWithDivisions, ['kta']);
+      expect(tennisOrgsWithDivisions, isNot(contains('kssta')));
+    });
+
+    test('부서가 생기면(INSERT) 자동으로 선택지에 나타난다', () {
+      OrgCatalog.instance.ingestRows([
+        {'code': 'kssta', 'label_ko': 'KSSTA', 'short_label': 'KSSTA',
+         'name_ko': 'KSSTA', 'is_active': true, 'sort_order': 20},
+      ]);
+      DivisionCatalog.instance.ingestRows([]);
+      expect(tennisOrgsWithDivisions, isEmpty);
+
+      DivisionCatalog.instance.ingestRows([
+        {'code': 'kssta_a', 'org_code': 'kssta', 'label_ko': 'KSSTA-A', 'gender': 'all'},
+      ]);
+      expect(tennisOrgsWithDivisions, ['kssta']);
     });
   });
 }

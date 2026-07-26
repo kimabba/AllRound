@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -6,11 +7,34 @@ import {
   isValidEntryFeeUnit,
   isValidGrade,
   isValidRegionCode,
-  isValidTennisOrg,
   RegionCode,
   Sport,
   TennisOrg,
 } from '../_shared/enums.ts';
+
+/**
+ * 협회 코드가 DB(tennis_orgs)에 있고 활성인지 확인한다.
+ * 정적 목록(TENNIS_ORGS)으로 검증하면 협회를 DB 에 추가해도 제보가 거절된다(JY-135).
+ * 제보는 쓰기 경로라 빈도가 낮아 조회 1회 비용이 무의미하다.
+ *
+ * status 를 함께 반환하는 이유: DB 조회 자체 실패(장애)와 협회 미존재(입력 오류)는
+ * 원인이 다르다. grade 카탈로그 검증(#319)과 맞춰 전자는 503, 후자는 400 으로 구분한다.
+ */
+export async function assertKnownOrgs(
+  client: SupabaseClient,
+  orgs: string[],
+): Promise<{ message: string; status: number } | null> {
+  if (orgs.length === 0) return null;
+  const { data, error } = await client
+    .from('tennis_orgs')
+    .select('code')
+    .in('code', orgs)
+    .eq('is_active', true);
+  if (error) return { message: 'org 검증에 실패했습니다', status: 503 };
+  const known = new Set((data ?? []).map((r: { code: string }) => r.code));
+  const unknown = orgs.find((o) => !known.has(o));
+  return unknown ? { message: `invalid org: ${unknown}`, status: 400 } : null;
+}
 
 /**
  * POST /tournaments-submit
@@ -210,7 +234,9 @@ function normalizeOptionalUrl(
   return { value: trimmed };
 }
 
-Deno.serve(async (req) => {
+// import.meta.main 가드: 테스트가 이 모듈에서 assertKnownOrgs 를 import 할 때
+// Deno.serve 가 같이 실행되며 포트 바인딩을 시도하는 걸 막는다(embed-pending/index.ts 와 동일 패턴).
+async function handler(req: Request): Promise<Response> {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -267,11 +293,8 @@ Deno.serve(async (req) => {
     if (!Array.isArray(body.host_orgs)) {
       return errorResponse('host_orgs must be array');
     }
-    for (const o of body.host_orgs) {
-      if (!isValidTennisOrg(o)) {
-        return errorResponse(`Invalid tennis_org: ${o}`);
-      }
-    }
+    const orgError = await assertKnownOrgs(supabase, body.host_orgs);
+    if (orgError) return errorResponse(orgError.message, orgError.status);
   }
   if (body.entry_fee_unit && !isValidEntryFeeUnit(body.entry_fee_unit)) {
     return errorResponse(`Invalid entry_fee_unit: ${body.entry_fee_unit}`);
@@ -344,4 +367,8 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ tournament: data }, { status: 201 });
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}
