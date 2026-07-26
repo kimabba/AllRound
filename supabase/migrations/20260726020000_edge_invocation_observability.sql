@@ -37,16 +37,21 @@ create table if not exists public.edge_invocations (
 comment on table public.edge_invocations is
   'cron → Edge Function 호출 결과. invoke_edge_function 이 적고 sweep_edge_invocations 가 채운다. 보존 14일.';
 
--- 스윕이 매번 훑는 것은 미해결 행뿐이다.
-create index if not exists edge_invocations_unsettled_idx
+-- 스윕이 찾는 것은 "아직 응답이 안 붙은 행"이다. settled_at 이 아니라 status_code 기준인
+-- 이유는 아래 sweep 주석 참조(만료 확정된 행에도 응답이 늦게 도착할 수 있다).
+create index if not exists edge_invocations_pending_idx
   on public.edge_invocations (invoked_at)
-  where settled_at is null;
+  where status_code is null;
 
 -- 운영 로그다. 앱에서 읽을 일이 없다 → RLS 를 켜고 **정책을 하나도 두지 않는다**.
 -- 권한을 회수하는 대신 이렇게 하는 이유: 이 프로젝트의 권한 모델은
 -- "테이블 권한은 넓게 + RLS 가 행 단위로 통제"다(20260724060000_codify_api_role_grants.sql).
 -- 여기서만 권한을 회수하면 지문이 어긋나 클린 재생 시 011 가드가 깨진다.
--- 정책이 0개이므로 anon·authenticated 는 권한이 있어도 한 행도 보지 못한다(테스트로 확인).
+--
+-- 차단 범위를 정확히 적는다: 정책이 0개이므로 **anon·authenticated 는 한 행도 보지 못한다**.
+-- service_role 은 예외다 — Supabase 의 service_role 은 rolbypassrls=true 라(운영 실측)
+-- RLS 자체를 우회한다. 이 표에 한정된 이야기가 아니라 모든 표가 그렇고, 운영 조회는
+-- 그 경로로 한다. 즉 "아무도 못 본다"가 아니라 "클라이언트 역할은 못 본다"가 맞다.
 alter table public.edge_invocations enable row level security;
 grant all on public.edge_invocations to anon, authenticated, service_role;
 
@@ -60,7 +65,7 @@ as $function$
 declare
   invoke_url   constant text := 'https://bsjdgwmveokanclqwtvx.supabase.co/functions/v1';
   cron_jwt     text;
-  request_id   bigint;
+  req_id   bigint;
 begin
   select decrypted_secret into cron_jwt
   from vault.decrypted_secrets
@@ -77,16 +82,35 @@ begin
       'Authorization', 'Bearer ' || cron_jwt
     ),
     body    := body
-  ) into request_id;
+  ) into req_id;
 
   -- 여기서 실패하면 cron 도 실패한다. 그게 맞다 — 기록이 안 되는 상태를
   -- 성공으로 넘기면 다시 관측 공백이 생긴다.
+  --
+  -- 다만 PK 충돌만은 예외로 흡수한다. net.http_request_queue 와 그 시퀀스는 UNLOGGED 라
+  -- (실측: relpersistence='u') 비정상 종료 후 id 가 처음부터 다시 발급된다. 그러면 보존
+  -- 중인 14일치 기록과 번호가 겹칠 수 있고, 그때 PK 충돌로 예외를 던지면 **관측 때문에
+  -- 실제 전달이 취소된다** — 크롤·알림이 통째로 멈춘다. 관측이 기능을 죽이면 안 된다.
+  -- 재사용된 번호는 새 호출의 것이므로 옛 기록을 덮는다(옛 응답은 어차피 붙일 수 없다).
   insert into public.edge_invocations (request_id, fn_name)
-  values (request_id, fn_name);
+  values (req_id, fn_name)
+  on conflict (request_id) do update
+    set fn_name    = excluded.fn_name,
+        invoked_at = now(),
+        status_code = null,
+        error_msg   = null,
+        timed_out   = null,
+        settled_at  = null;
 
-  return request_id;
+  return req_id;
 end;
 $function$;
+
+-- CREATE OR REPLACE 는 기존 ACL 을 보존한다 → 누가 anon 에 EXECUTE 를 주면 이 마이그레이션을
+-- 재적용해도 복구되지 않는다. 이 함수는 Vault 의 내부 cron JWT 로 임의 Edge 함수를 호출할 수
+-- 있으므로(권한 상승) 여기서 ACL 을 명시적으로 다시 못박는다. 가드는 014 테스트.
+revoke all on function public.invoke_edge_function(text, jsonb) from public, anon, authenticated;
+grant execute on function public.invoke_edge_function(text, jsonb) to postgres, service_role;
 
 -- ── 3) 응답 수거 스윕 ──────────────────────────────────────────────────────
 create or replace function public.sweep_edge_invocations()
@@ -99,7 +123,10 @@ declare
   settled integer;
   expired integer;
 begin
-  -- 도착한 응답 붙이기
+  -- 도착한 응답 붙이기.
+  -- 조건이 `settled_at is null` 이 아니라 `status_code is null` 인 이유: 아래 만료 처리로
+  -- settled 된 행에도 응답이 늦게 도착할 수 있다(pg_net worker 정체 등). settled 기준으로
+  -- 거르면 그 행은 영원히 '유실'로 남아 실제 상태코드를 잃는다.
   with done as (
     update public.edge_invocations e
        set status_code = r.status_code,
@@ -108,7 +135,7 @@ begin
            settled_at  = now()
       from net._http_response r
      where r.id = e.request_id
-       and e.settled_at is null
+       and e.status_code is null
     returning 1
   )
   select count(*)::integer into settled from done;
@@ -126,6 +153,11 @@ begin
   select count(*)::integer into expired from gone;
 
   delete from public.edge_invocations where invoked_at < now() - interval '14 days';
+
+  -- pg_cron 은 job_run_details 를 스스로 지우지 않는다. 운영 실측 29,482행(2026-05-22~),
+  -- 연 18만행 추세다. 여기에 스윕이 하나 더 늘었으니 같이 정리한다. 90일이면 사후 조사에
+  -- 충분하고, 실패 여부는 이제 edge_invocations 가 보관한다.
+  delete from cron.job_run_details where end_time < now() - interval '90 days';
 
   return settled + expired;
 end;
