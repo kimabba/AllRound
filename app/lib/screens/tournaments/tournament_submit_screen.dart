@@ -11,6 +11,18 @@ import '../../utils/club_image_upload.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 
+// 제보 기본 협회는 광주협회다. 이 앱의 사용자·대회가 광주·전남에 몰려 있어,
+// 카탈로그 표시 순서 1번(전국 협회 kta)을 기본값으로 쓰면 매번 바꿔야 한다.
+// 목록 자체는 카탈로그(tennisOrgs)를 쓴다 — 협회 추가는 여전히 DB INSERT 하나로 반영된다.
+const _kDefaultOrg = 'gj';
+
+// 카탈로그에 gj 가 없으면(비활성화·삭제) 첫 항목으로, 그마저 없으면 gj 로 떨어진다.
+// 톱레벨 함수로 뽑아 실제 OrgCatalog 상태와 무관하게 회귀 테스트할 수 있게 한다.
+@visibleForTesting
+String defaultTennisOrgFor(List<String> catalog) => catalog.contains(_kDefaultOrg)
+    ? _kDefaultOrg
+    : (catalog.isNotEmpty ? catalog.first : _kDefaultOrg);
+
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
 
@@ -30,7 +42,7 @@ class _TournamentSubmitScreenState
   final _sourceUrl = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
-  String _tennisOrg = _defaultOrg(); // 테니스 주최 협회
+  String _tennisOrg = defaultTennisOrgFor(tennisOrgs); // 테니스 주최 협회
   DateTime? _startDate;
   final Set<String> _grades = {}; // eligible_grades ({org}_{div} 코드)
   bool _busy = false;
@@ -139,9 +151,6 @@ class _TournamentSubmitScreenState
     }
   }
 
-  // 카탈로그가 비어 있을 일은 없지만(폴백 보장), 방어적으로 'gj' 를 남긴다.
-  static String _defaultOrg() => tennisOrgs.isNotEmpty ? tennisOrgs.first : 'gj';
-
   // 협회 선택지는 OrgCatalog(정본 = DB tennis_orgs)를 그대로 쓴다.
   // 별도 목록을 두면 협회 추가가 이 화면에서만 조용히 누락된다(JY-135).
   List<DropdownMenuItem<String>> _orgItems() => [
@@ -246,7 +255,7 @@ class _TournamentSubmitScreenState
                 setState(() {
                   _sport = v.first;
                   _grades.clear();
-                  _tennisOrg = _defaultOrg();
+                  _tennisOrg = defaultTennisOrgFor(tennisOrgs);
                 });
               },
             ),
