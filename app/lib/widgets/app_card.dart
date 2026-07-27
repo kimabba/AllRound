@@ -9,6 +9,8 @@ class AppCard extends StatelessWidget {
   final AppCardVariant variant;
   final EdgeInsets padding;
   final BorderRadius? borderRadius;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   const AppCard({
     super.key,
@@ -17,6 +19,8 @@ class AppCard extends StatelessWidget {
     this.variant = AppCardVariant.filled,
     this.padding = AppSpacing.cardInner,
     this.borderRadius,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   @override
@@ -25,15 +29,16 @@ class AppCard extends StatelessWidget {
     final BorderRadius radius = borderRadius ?? AppRadius.card;
 
     final BoxDecoration decoration = BoxDecoration(
-      color: switch (variant) {
-        AppCardVariant.filled => cs.surfaceContainerLow,
-        AppCardVariant.outlined => cs.surface,
-        AppCardVariant.elevated => cs.surfaceContainerLowest,
-      },
+      color: backgroundColor ??
+          switch (variant) {
+            AppCardVariant.filled => cs.surfaceContainerLow,
+            AppCardVariant.outlined => cs.surface,
+            AppCardVariant.elevated => cs.surfaceContainerLowest,
+          },
       borderRadius: radius,
       border: variant == AppCardVariant.filled
           ? null
-          : Border.all(color: cs.outlineVariant),
+          : Border.all(color: borderColor ?? cs.outlineVariant),
     );
 
     final Widget content = Padding(padding: padding, child: child);

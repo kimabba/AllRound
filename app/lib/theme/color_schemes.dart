@@ -25,6 +25,29 @@ class AppPalette {
   static const Color appBackground = canvas;
 }
 
+/// 오늘·모임 화면의 다이어리형 정보 구분 팔레트.
+///
+/// 기능 상태를 대신하지 않고 일정 종류와 콘텐츠 묶음을 부드럽게 구분한다.
+class AppDiaryColors {
+  AppDiaryColors._();
+
+  static const Color roseLight = Color(0xFFFBE7EF);
+  static const Color roseDark = Color(0xFF563746);
+  static const Color lavenderLight = Color(0xFFEDE8FB);
+  static const Color lavenderDark = Color(0xFF403A59);
+  static const Color roseAccentLight = Color(0xFFB64270);
+  static const Color roseAccentDark = Color(0xFFFF9DBE);
+
+  static Color rose(Brightness brightness) =>
+      brightness == Brightness.dark ? roseDark : roseLight;
+
+  static Color lavender(Brightness brightness) =>
+      brightness == Brightness.dark ? lavenderDark : lavenderLight;
+
+  static Color roseAccent(Brightness brightness) =>
+      brightness == Brightness.dark ? roseAccentDark : roseAccentLight;
+}
+
 /// Light Color Scheme. 차가운 뉴트럴과 코발트 한 색으로 잠근다.
 const ColorScheme appLightScheme = ColorScheme(
   brightness: Brightness.light,
