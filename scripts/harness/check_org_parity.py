@@ -34,6 +34,33 @@ SNAPSHOT = ROOT / "app/test/fixtures/org_fallback.json"
 
 DEFAULT_DB_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
+_SCHEMA = {"code": str, "label": str, "shortLabel": str, "isActive": bool}
+
+
+def _validate_entries(data, source: str) -> None:
+    """스키마·타입을 강제한다. `1 == True` 라서 `isActive: 1` 이 DB 의 `true` 와 조용히
+    같다고 판정되는 구멍(codex 지적)을 막는다 — `isinstance(1, bool)` 은 False 라 이걸로
+    숫자 위장을 걸러낸다.
+    """
+    if not isinstance(data, list):
+        raise AssertionError(f"{source}: 최상위가 리스트가 아니다 (type={type(data).__name__})")
+    for i, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise AssertionError(f"{source}[{i}]: 객체가 아니다 (type={type(entry).__name__})")
+        extra = set(entry) - set(_SCHEMA)
+        missing = set(_SCHEMA) - set(entry)
+        if extra or missing:
+            raise AssertionError(
+                f"{source}[{i}]: 키가 어긋난다 — 누락 {sorted(missing)}, 여분 {sorted(extra)}"
+            )
+        for key, expected in _SCHEMA.items():
+            value = entry[key]
+            if not isinstance(value, expected):
+                raise AssertionError(
+                    f"{source}[{i}].{key}: {expected.__name__} 이어야 하는데 "
+                    f"{value!r} ({type(value).__name__})"
+                )
+
 
 def read_orgs() -> list[dict]:
     """DB 에서 (code, label, short_label, active) 를 sort_order, name_ko, code 순으로 읽는다.
@@ -71,6 +98,7 @@ def read_orgs() -> list[dict]:
 
     if not data:
         raise AssertionError("public.tennis_orgs 가 비어 있다 — 마이그레이션이 적용됐는지 확인하라")
+    _validate_entries(data, "DB public.tennis_orgs")
     return data
 
 
@@ -83,6 +111,7 @@ def read_snapshot() -> list[dict]:
         raise AssertionError(f"{SNAPSHOT.relative_to(ROOT)} JSON 파싱 실패: {exc}")
     if not data:
         raise AssertionError(f"{SNAPSHOT.relative_to(ROOT)} 가 비어 있다")
+    _validate_entries(data, str(SNAPSHOT.relative_to(ROOT)))
     return data
 
 
