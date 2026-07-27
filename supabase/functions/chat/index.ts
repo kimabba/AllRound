@@ -19,13 +19,7 @@ import { requireVerifiedUser } from '../_shared/auth.ts';
 import { EMBEDDING_MODEL, embedTextWithUsage, toVectorLiteral } from '../_shared/embedding.ts';
 import { type ChatTurn, GEMINI_MODEL } from '../_shared/gemini.ts';
 import { recordGeminiUsage } from '../_shared/usage.ts';
-import {
-  GRADE_LABELS,
-  REGION_LABELS,
-  type Sport,
-  SPORT_LABELS,
-  TENNIS_ORG_LABELS,
-} from '../_shared/enums.ts';
+import { REGION_LABELS, type Sport, SPORT_LABELS, TENNIS_ORG_LABELS } from '../_shared/enums.ts';
 import type { RegionCode } from '../_shared/enums.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
@@ -74,6 +68,7 @@ import {
   buildProfileContext,
   buildSystemPrompt,
   computeUserContextHash,
+  gradeLabelOf,
   hashUserId,
   wrapUntrustedData,
 } from './context.ts';
@@ -135,9 +130,10 @@ Deno.serve(async (req) => {
   const hashedUserId = await hashUserId(user.id);
 
   // User profile data
+  // grades(label_ko) 임베드: 등급 라벨 정본은 DB 다(#319). 복합 FK(sport, grade)로 조인된다.
   const { data: userSports } = await supabase
     .from('user_sports')
-    .select('sport, grade, is_primary')
+    .select('sport, grade, is_primary, grades(label_ko)')
     .eq('user_id', user.id);
 
   const { data: userOrgs } = await supabase
@@ -517,7 +513,7 @@ Deno.serve(async (req) => {
           } else {
             for (const s of sports) {
               const sportLabel = SPORT_LABELS[s.sport as Sport] ?? s.sport;
-              const gradeLabel = GRADE_LABELS[s.grade] ?? s.grade;
+              const gradeLabel = gradeLabelOf(s);
               profileLines.push(
                 `- ${sportLabel}: ${gradeLabel}${s.is_primary ? ' (주요 종목)' : ''}`,
               );

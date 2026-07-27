@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../models/chat_ui.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 
 /// 채팅 안에 렌더되는 클럽 카드. raw id 는 표시하지 않는다.
@@ -25,9 +26,8 @@ class ChatClubCard extends StatelessWidget {
     final isTennis = item.sport == 'tennis';
     final accent = isTennis ? cs.tertiary : cs.secondary;
 
-    final sportLabel = isTennis ? '테니스' : '풋살';
     final metaParts = <String>[
-      sportLabel,
+      sportLabelFromString(item.sport),
       if (item.region != null && item.region!.trim().isNotEmpty)
         item.region!.trim(),
       '멤버 ${item.memberCount}명',

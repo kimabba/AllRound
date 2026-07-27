@@ -18,6 +18,12 @@ export interface UserSport {
   sport: string;
   grade: string;
   is_primary: boolean;
+  /**
+   * user_sports 조회 시 `grades(label_ko)` 로 임베드한 등급 라벨(#319 — 라벨 정본은 DB).
+   * user_sports.grade 는 grades 로 복합 FK 가 걸려 있어 항상 한 행이 대응하지만,
+   * PostgREST 가 to-one 으로 못 좁히면 배열로 올 수 있어 두 형태를 모두 받는다(gradeLabelOf).
+   */
+  grades?: { label_ko: string } | { label_ko: string }[] | null;
 }
 
 export interface UserTennisOrgRow {

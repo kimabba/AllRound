@@ -95,12 +95,9 @@ async function onboard(
     detail: prof.ok ? 'name/nickname set' : JSON.stringify(prof.data).slice(0, 140),
   });
 
-  // 2) user_sports
-  const us = await rest(token, 'user_sports', 'POST', {
-    user_id: uid,
-    sport: p.sport,
-    grade: p.grade,
-    is_primary: true,
+  // 2) user_sports — 직접 DML 권한은 회수됐다(#320). 앱과 같은 RPC 경로로 저장한다.
+  const us = await rest(token, 'rpc/save_user_sports', 'POST', {
+    p_sports: [{ sport: p.sport, grade: p.grade, is_primary: true }],
   });
   logs.push({
     step: 'onboard.sport',

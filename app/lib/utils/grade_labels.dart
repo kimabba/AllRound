@@ -1,14 +1,47 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum Sport { tennis, futsal }
 
-const tennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
-const futsalGrades = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'];
+/// 카탈로그(등급·부서) 교체 알림. 값 자체는 의미 없고 "바뀌었다"는 신호만 쓴다.
+///
+/// 두 카탈로그는 plain singleton 이라 라벨을 읽는 화면에 리빌드 트리거가 없다.
+/// 스플래시 게이트가 콜드스타트는 막지만, 로그아웃 상태로 시작해 로그인하거나
+/// 로드가 3초를 넘기면 화면이 폴백 라벨로 그려진 뒤 그대로 굳는다(#318).
+/// router.dart 의 `_catalogAware` 가 이걸 듣고 라우트 화면을 새로 만들어 그 경로를 덮는다.
+final catalogRevision = ValueNotifier<int>(0);
 
-const gradeLabels = <String, String>{
+/// 카탈로그 라벨을 읽는 화면을 감싼다. revision 이 바뀌면 `build` 를 다시 호출해
+/// 화면을 **새로 만든다**.
+///
+/// 화면을 새로 만드는 게 핵심이다 — 같은 인스턴스를 돌려주면 Flutter 가
+/// `identical()` 패스트패스로 하위 트리 갱신을 통째로 건너뛴다. 그래서
+/// `catalogAware(() => const XScreen())` 처럼 클로저 안에 `const` 를 두면
+/// **감싸도 갱신되지 않는다**(const 표현식은 canonicalize 되어 매번 같은 객체다).
+/// 위젯 타입·위치가 같으므로 State(스크롤 위치·입력값)는 보존된다.
+///
+/// 라우트는 router.dart 가 일괄로 감싼다. 라우트가 아닌 표면(showModalBottomSheet·
+/// showDialog 로 뜨는 시트·다이얼로그)은 그 위젯 트리의 자손이 아니므로 각자 감싸야 한다.
+Widget catalogAware(Widget Function() build) => ListenableBuilder(
+      listenable: catalogRevision,
+      builder: (_, __) => build(),
+    );
+
+// 등급 정본은 DB public.grades 다(JY-146 P3-a). 아래 const 는 미로드 시 쓰이는
+// 오프라인 폴백이며, harness 게이트(check_enums.py)가 seed 와의 일치를 강제한다.
+// 부서 카탈로그(DivisionCatalog)와 같은 구조다.
+const _kFallbackTennisGrades = ['under1y', 'y1to3', 'y3to5', 'over5y'];
+const _kFallbackFutsalGrades = [
+  'intro',
+  'beginner',
+  'intermediate',
+  'advanced',
+  'elite'
+];
+
+const _kFallbackGradeLabels = <String, String>{
   'under1y': '1년 미만',
   'y1to3': '1~3년',
   'y3to5': '3~5년',
@@ -19,6 +52,115 @@ const gradeLabels = <String, String>{
   'advanced': '고급',
   'elite': '선출',
 };
+
+/// 등급 카탈로그: 미로드 시 const 폴백, load 성공 시 DB 결과로 교체.
+/// 등급 추가·개명이 grades INSERT/UPDATE 만으로 앱에 반영된다.
+class GradeCatalog {
+  GradeCatalog._();
+  static final GradeCatalog instance = GradeCatalog._();
+
+  // 선택지는 활성 등급만, 라벨은 폐기 등급까지. 폐기해도 그 등급을 쓰던 사용자의
+  // 프로필에는 코드가 아니라 이름이 보여야 한다.
+  Map<Sport, List<String>>? _activeCodes;
+  Map<String, String>? _labels;
+
+  // 로드 세대. 세션 전환(reset)이 in-flight 로드를 무효화해, 늦게 도착한 이전 계정의
+  // 결과가 새 상태를 오염시키지 않게 한다(DivisionCatalog 와 같은 이유).
+  int _generation = 0;
+  Completer<void> _ready = Completer<void>();
+
+  /// 로드 시도(성공·실패 무관) 완료 신호. 스플래시 게이트가 이걸 기다려 첫 화면이
+  /// 폴백 라벨로 그려졌다가 바뀌는 걸 막는다.
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
+  bool get isLoaded => _activeCodes != null;
+
+  List<String> codesFor(Sport sport) {
+    final loaded = _activeCodes;
+    // 로드됐으면 그 결과가 정본이다. 한 종목의 활성 등급이 0개면 빈 목록이 맞고,
+    // 폴백을 되살리면 DB 의 폐기 결정을 앱이 뒤집는 꼴이 된다.
+    if (loaded != null) return loaded[sport] ?? const [];
+    return sport == Sport.tennis
+        ? _kFallbackTennisGrades
+        : _kFallbackFutsalGrades;
+  }
+
+  Map<String, String> get labels => _labels ?? _kFallbackGradeLabels;
+
+  /// grades 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다 — 등급 선택지가
+  /// 비어 앱이 막히는 것보다 낫다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      // 폐기 등급까지 받아 라벨을 채운다. 선택지 필터는 is_active 로 아래에서 한다.
+      final rows = await client
+          .from('grades')
+          .select('sport, code, label_ko, is_active')
+          .order('sport')
+          .order('sort_order');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지.
+    } finally {
+      if (gen == _generation) _markReady();
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그. 정렬은 쿼리(sort_order)가 보장한다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) {
+      // 빈 응답으로 선택지를 통째로 지우지 않는다(권한·필터 사고 방어).
+      _markReady();
+      return;
+    }
+    final codes = <Sport, List<String>>{};
+    final labels = <String, String>{};
+    for (final row in rows) {
+      final sport = sportFromString(row['sport'] as String);
+      final code = row['code'] as String;
+      labels[code] = row['label_ko'] as String;
+      if (row['is_active'] as bool? ?? true) {
+        (codes[sport] ??= <String>[]).add(code);
+      }
+    }
+    _activeCodes = codes;
+    _labels = labels;
+    _markReady();
+    catalogRevision.value++;
+  }
+
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다. in-flight 로드도 무효화된다.
+  void reset() {
+    _activeCodes = null;
+    _labels = null;
+    _ready = Completer<void>();
+    _generation++;
+    catalogRevision.value++;
+  }
+}
+
+/// 종목별 등급 코드(표시 순서). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get tennisGrades => GradeCatalog.instance.codesFor(Sport.tennis);
+List<String> get futsalGrades => GradeCatalog.instance.codesFor(Sport.futsal);
+
+/// 등급 코드 → 라벨 맵.
+Map<String, String> get gradeLabels => GradeCatalog.instance.labels;
+
+/// 등급 무관. 등급 코드가 아니라 "가리지 않음"을 뜻하는 선택지 라벨이다.
+const anyGradeLabel = '무관';
+
+/// 팀 모집글 `skill_level` 에 저장 가능한 라벨(해당 종목의 등급 라벨 ∪ 무관).
+/// 종목을 받는 이유: 합집합으로 검사하면 풋살 모집글에 '1년 미만'(테니스 등급)이
+/// 들어가도 통과한다. free-text 컬럼이라 DB 가 막지 못하는 오염을 코드 경계에서 거른다.
+bool isAllowedSkillLevelLabel(Sport sport, String value) =>
+    value == anyGradeLabel || gradesFor(sport).map(gradeLabel).contains(value);
 
 const futsalEventCategoryLabels = <String, String>{
   'regional_federation': '지역 풋살연맹',
@@ -209,8 +351,7 @@ class DivisionCatalog {
   /// 로드됐으면 DB 결과, 아니면 const fallback.
   List<TennisDivision> get all => _ordered ?? _kFallbackDivisions;
 
-  TennisDivision? byCode(String code) =>
-      (_byCode ?? _kFallbackByCode)[code];
+  TennisDivision? byCode(String code) => (_byCode ?? _kFallbackByCode)[code];
 
   /// tennis_divisions 를 읽어 카탈로그를 교체한다(멱등).
   /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 기존 상태를 유지한다.
@@ -248,30 +389,36 @@ class DivisionCatalog {
     _ordered = ordered;
     _byCode = {for (final d in ordered) d.code: d};
     _markReady();
+    catalogRevision.value++;
   }
 
-  @visibleForTesting
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다. GradeCatalog.reset 과 같은 이유로,
+  /// 재로그인 로드가 실패했을 때 이전 계정의 부서 스냅샷이 남는 걸 막는다(#318).
   void reset() {
     _ordered = null;
     _byCode = null;
     _ready = Completer<void>();
     _generation++;
+    catalogRevision.value++;
   }
 
-  /// tennisOrgs 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
+  /// OrgCatalog 순서로 org 그룹핑(안정 정렬: 그룹 내 입력 순서 보존).
   /// DB 는 order('code') 로 오지만 협회 그룹핑이 흐트러지므로 재그룹핑한다.
+  /// 비활성 협회의 부서도 순서를 가져야 하므로 activeCodes(tennisOrgs) 가 아니라
+  /// all 을 쓴다 — activeCodes 만 쓰면 비활성 협회 부서가 순서 없이 뒤로 밀린다.
   static List<TennisDivision> _sortByOrgPriority(List<TennisDivision> input) {
+    final orgOrder = OrgCatalog.instance.all.map((o) => o.code).toList();
     final buckets = <String, List<TennisDivision>>{};
     final unknown = <TennisDivision>[];
     for (final d in input) {
-      if (tennisOrgs.contains(d.org)) {
+      if (orgOrder.contains(d.org)) {
         (buckets[d.org] ??= <TennisDivision>[]).add(d);
       } else {
         unknown.add(d);
       }
     }
     final result = <TennisDivision>[];
-    for (final org in tennisOrgs) {
+    for (final org in orgOrder) {
       final bucket = buckets[org];
       if (bucket != null) result.addAll(bucket);
     }
@@ -376,50 +523,151 @@ String futsalEventCategoryLabel(String? category) =>
     category == null ? '' : futsalEventCategoryLabels[category] ?? category;
 
 // =========================
-// Tennis Org (협회) — Edge Functions enums.ts 와 1:1 동기화
+// Tennis Org (협회) — 정본은 DB public.tennis_orgs (JY-135)
 // =========================
-const tennisOrgs = <String>[
-  'kta',
-  'kato',
-  'kata',
-  'ktfs',
-  'kstf',
-  'kssta',
-  'kasta',
-  'gj',
-  'jn',
-  'local',
+
+/// 협회 카탈로그 항목. 정본은 DB public.tennis_orgs 다(JY-135).
+class TennisOrgEntry {
+  const TennisOrgEntry({
+    required this.code,
+    required this.label,
+    required this.shortLabel,
+    required this.isActive,
+  });
+
+  final String code;
+  final String label;
+  final String shortLabel;
+  final bool isActive;
+}
+
+// 협회 정본은 DB public.tennis_orgs 다(JY-135). 아래 const 는 미로드 시 쓰는
+// 오프라인 폴백이며, 값은 마이그레이션 백필과 같아야 한다.
+const _kFallbackOrgEntries = <TennisOrgEntry>[
+  TennisOrgEntry(code: 'kta', label: '대한테니스협회 (KTA)', shortLabel: 'KTA', isActive: true),
+  TennisOrgEntry(code: 'kato', label: '한국테니스발전협의회 (KATO)', shortLabel: 'KATO', isActive: true),
+  TennisOrgEntry(code: 'kata', label: '한국동호인테니스협회 (KATA)', shortLabel: 'KATA', isActive: true),
+  TennisOrgEntry(code: 'ktfs', label: '국민생활체육 전국테니스연합회 (KTFS)', shortLabel: 'KTFS', isActive: false),
+  TennisOrgEntry(code: 'kstf', label: '한국시니어테니스연맹 (KSTF, 60+)', shortLabel: 'KSTF', isActive: true),
+  TennisOrgEntry(code: 'kssta', label: '한국슈퍼시니어테니스협회 (KSSTA)', shortLabel: 'KSSTA', isActive: true),
+  TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
+  TennisOrgEntry(code: 'gj', label: '광주광역시테니스협회 (GJTA)', shortLabel: '광주협회', isActive: true),
+  TennisOrgEntry(code: 'jn', label: '전라남도테니스협회 (JNTA)', shortLabel: '전남협회', isActive: true),
+  TennisOrgEntry(code: 'local', label: '시·군 또는 클럽 자체', shortLabel: '시·군/클럽', isActive: true),
 ];
 
-const tennisOrgLabels = <String, String>{
-  'kta': '대한테니스협회 (KTA)',
-  'kato': '한국테니스발전협의회 (KATO)',
-  'kata': '한국동호인테니스협회 (KATA)',
-  'ktfs': '국민생활체육 전국테니스연합회 (KTFS)',
-  'kstf': '한국시니어테니스연맹 (KSTF, 60+)',
-  'kssta': '한국슈퍼시니어테니스협회 (KSSTA)',
-  'kasta': '단식 테니스 (KASTA / 단테매)',
-  'gj': '광주광역시테니스협회 (GJTA)',
-  'jn': '전라남도테니스협회 (JNTA)',
-  'local': '시·군 또는 클럽 자체',
-};
+final _kFallbackOrgByCode = {for (final e in _kFallbackOrgEntries) e.code: e};
 
-const tennisOrgShortLabels = <String, String>{
-  'kta': 'KTA',
-  'kato': 'KATO',
-  'kata': 'KATA',
-  'ktfs': 'KTFS',
-  'kstf': 'KSTF',
-  'kssta': 'KSSTA',
-  'kasta': 'KASTA',
-  'gj': '광주협회',
-  'jn': '전남협회',
-  'local': '시·군/클럽',
-};
+/// 협회 목록·라벨 카탈로그. DivisionCatalog 와 같은 구조다(JY-120 선례).
+///
+/// 협회 추가는 tennis_orgs 에 행을 넣는 것만으로 끝난다 — 앱 재배포가 필요 없다.
+class OrgCatalog {
+  OrgCatalog._();
+  static final OrgCatalog instance = OrgCatalog._();
 
-bool isValidTennisOrg(String value) => tennisOrgs.contains(value);
-String tennisOrgLabel(String org) => tennisOrgLabels[org] ?? org;
-String tennisOrgShortLabel(String org) => tennisOrgShortLabels[org] ?? org;
+  // null = 미로드 → const 폴백 사용.
+  List<TennisOrgEntry>? _ordered;
+  Map<String, TennisOrgEntry>? _byCode;
+
+  Completer<void> _ready = Completer<void>();
+  int _generation = 0;
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
+  bool get isLoaded => _ordered != null;
+
+  List<TennisOrgEntry> get all => _ordered ?? _kFallbackOrgEntries;
+
+  /// 선택지에 노출할 활성 협회 코드(표시 순서).
+  List<String> get activeCodes =>
+      all.where((o) => o.isActive).map((o) => o.code).toList(growable: false);
+
+  /// 라벨 조회는 활성 여부와 무관하다 — 비활성 협회를 이미 가진 사용자의
+  /// 화면에 코드가 그대로 노출되면 안 된다.
+  String labelFor(String code) =>
+      (_byCode ?? _kFallbackOrgByCode)[code]?.label ?? code;
+
+  String shortLabelFor(String code) =>
+      (_byCode ?? _kFallbackOrgByCode)[code]?.shortLabel ?? code;
+
+  /// tennis_orgs 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      final rows = await client
+          .from('tennis_orgs')
+          .select('code, label_ko, short_label, name_ko, is_active, sort_order')
+          .order('sort_order')
+          .order('name_ko')
+          .order('code');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지 — 앱 진입을 막지 않는다.
+    } finally {
+      if (gen == _generation) _markReady();
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그.
+  /// label_ko 가 비면 name_ko 로, short_label 이 비면 label 로 폴백한다.
+  /// (sort_order, name_ko, code) 순으로 정렬한다 — load() 의 쿼리 order 와 동일한
+  /// 규칙을 여기서도 적용해, 테스트 픽스처처럼 정렬 안 된 입력이 와도 결과가 같다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    final sorted = [...rows]..sort((a, b) {
+        final sortOrderCmp = ((a['sort_order'] as num?) ?? 1000)
+            .compareTo((b['sort_order'] as num?) ?? 1000);
+        if (sortOrderCmp != 0) return sortOrderCmp;
+        final nameCmp = ((a['name_ko'] as String?) ?? '')
+            .compareTo((b['name_ko'] as String?) ?? '');
+        if (nameCmp != 0) return nameCmp;
+        return (a['code'] as String).compareTo(b['code'] as String);
+      });
+    final entries = sorted.map((r) {
+      final code = r['code'] as String;
+      final label = (r['label_ko'] as String?) ?? (r['name_ko'] as String?) ?? code;
+      return TennisOrgEntry(
+        code: code,
+        label: label,
+        shortLabel: (r['short_label'] as String?) ?? label,
+        isActive: (r['is_active'] as bool?) ?? true,
+      );
+    }).toList();
+    _ordered = entries;
+    _byCode = {for (final e in entries) e.code: e};
+    _markReady();
+    catalogRevision.value++;
+  }
+
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다.
+  void reset() {
+    _ordered = null;
+    _byCode = null;
+    _ready = Completer<void>();
+    _generation++;
+    catalogRevision.value++;
+  }
+}
+
+/// 협회 코드(표시 순서, 활성만). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get tennisOrgs => OrgCatalog.instance.activeCodes;
+
+/// 부서가 1개 이상 있는 활성 협회만(제보 화면용, JY-135 P1-2).
+/// eligible_grades 는 부서 코드가 필수라, 부서가 0개인 협회를 고르면 제보를
+/// 끝낼 수 없다. 부서 카탈로그에서 파생하므로 부서가 추가되면 자동 반영된다.
+List<String> get tennisOrgsWithDivisions =>
+    tennisOrgs.where((code) => divisionsForOrg(code).isNotEmpty).toList();
+
+/// 협회 코드 → 완성형 라벨.
+String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
+
+/// 협회 코드 → 짧은 라벨(칩·요약용).
+String tennisOrgShortLabel(String org) => OrgCatalog.instance.shortLabelFor(org);
 
 // =========================
 // Region (표준 17개 광역시도)

@@ -11,6 +11,18 @@ import '../../utils/club_image_upload.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_buttons.dart';
 
+// 제보 기본 협회는 광주협회다. 이 앱의 사용자·대회가 광주·전남에 몰려 있어,
+// 카탈로그 표시 순서 1번(전국 협회 kta)을 기본값으로 쓰면 매번 바꿔야 한다.
+// 목록 자체는 카탈로그(tennisOrgs)를 쓴다 — 협회 추가는 여전히 DB INSERT 하나로 반영된다.
+const _kDefaultOrg = 'gj';
+
+// 카탈로그에 gj 가 없으면(비활성화·삭제) 첫 항목으로, 그마저 없으면 gj 로 떨어진다.
+// 톱레벨 함수로 뽑아 실제 OrgCatalog 상태와 무관하게 회귀 테스트할 수 있게 한다.
+@visibleForTesting
+String defaultTennisOrgFor(List<String> catalog) => catalog.contains(_kDefaultOrg)
+    ? _kDefaultOrg
+    : (catalog.isNotEmpty ? catalog.first : _kDefaultOrg);
+
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
 
@@ -30,7 +42,8 @@ class _TournamentSubmitScreenState
   final _sourceUrl = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
-  String _tennisOrg = 'gj'; // 테니스 주최 협회
+  String _tennisOrg =
+      defaultTennisOrgFor(tennisOrgsWithDivisions); // 테니스 주최 협회
   DateTime? _startDate;
   final Set<String> _grades = {}; // eligible_grades ({org}_{div} 코드)
   bool _busy = false;
@@ -139,16 +152,14 @@ class _TournamentSubmitScreenState
     }
   }
 
-  // 테니스 협회 선택 목록 (제보에서 자주 쓰이는 협회만)
-  static const _tennisOrgOptions = <(String, String)>[
-    ('gj', '광주협회 (GJTA)'),
-    ('jn', '전남협회 (JNTA)'),
-    ('kta', 'KTA'),
-    ('kata', 'KATA'),
-    ('ktfs', 'KTFS'),
-    ('kstf', 'KSTF (시니어)'),
-    ('local', '지역/클럽 자체'),
-  ];
+  // 협회 선택지는 OrgCatalog(정본 = DB tennis_orgs)에서 부서가 있는 협회만
+  // 뽑아 쓴다. 부서가 0개인 협회를 고르면 아래 부서 칩이 비어 제보를 끝낼 수
+  // 없다(JY-135 P1-2). 하드코딩 목록을 두지 않으므로 부서 추가는 여전히 DB
+  // INSERT 하나로 이 화면에 반영된다.
+  List<DropdownMenuItem<String>> _orgItems() => [
+        for (final code in tennisOrgsWithDivisions)
+          DropdownMenuItem(value: code, child: Text(tennisOrgLabel(code))),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -229,16 +240,16 @@ class _TournamentSubmitScreenState
             _Label('종목 *'),
             const SizedBox(height: AppSpacing.sm),
             SegmentedButton<Sport>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: Sport.tennis,
-                  icon: Icon(Icons.sports_tennis_rounded),
-                  label: Text('테니스'),
+                  icon: const Icon(Icons.sports_tennis_rounded),
+                  label: Text(sportLabel(Sport.tennis)),
                 ),
                 ButtonSegment(
                   value: Sport.futsal,
-                  icon: Icon(Icons.sports_soccer_rounded),
-                  label: Text('풋살'),
+                  icon: const Icon(Icons.sports_soccer_rounded),
+                  label: Text(sportLabel(Sport.futsal)),
                 ),
               ],
               selected: {_sport},
@@ -247,7 +258,7 @@ class _TournamentSubmitScreenState
                 setState(() {
                   _sport = v.first;
                   _grades.clear();
-                  _tennisOrg = 'gj';
+                  _tennisOrg = defaultTennisOrgFor(tennisOrgsWithDivisions);
                 });
               },
             ),
@@ -314,11 +325,7 @@ class _TournamentSubmitScreenState
                 // ignore: deprecated_member_use
                 value: _tennisOrg,
                 decoration: _inputDeco('협회 선택'),
-                items: _tennisOrgOptions
-                    .map(
-                      (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)),
-                    )
-                    .toList(),
+                items: _orgItems(),
                 onChanged: (v) => setState(() {
                   _tennisOrg = v!;
                   _grades.clear();
