@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
-"""협회 정본(public.tennis_orgs) ↔ 클라이언트 폴백 상수의 일치를 **실제 DB 로** 강제한다.
+"""협회 정본(public.tennis_orgs) ↔ 클라이언트 폴백 스냅샷의 일치를 **실제 DB 로** 강제한다.
 
 왜 DB 대조인가:
     JY-135(#331)에서 협회 목록·라벨 정본을 Dart 하드코딩에서 DB tennis_orgs 로 옮기며
     check_enums.py 의 협회 3층 비교(이미 삭제된 SQL enum 텍스트가 대상이던 죽은 검사)를
-    없앴다. 그 결과 앱 폴백 상수(OrgCatalog 미로드 시 쓰는 오프라인 값)가 DB 와 어긋나도
-    아무도 못 잡는 공백이 생겼다(#330). check_grades_parity.py(JY-321)와 같은 이유로,
-    마이그레이션 SQL 을 정규식으로 재구성하지 않고 **적용된 DB** 를 직접 읽어 대조한다.
+    없앴다. 그 결과 앱 폴백 상수가 DB 와 어긋나도 아무도 못 잡는 공백이 생겼다(#330).
+
+왜 Dart 소스를 정규식으로 읽지 않는가:
+    처음엔 grade_labels.dart 를 정규식으로 파싱했다. codex 가 두 라운드에 걸쳐 사각지대
+    (줄 주석, 블록 주석, 이스케이프 시퀀스, 공백 변형)를 계속 찾아냈다 — JY-146 에서 이미
+    같은 결론에 도달한 문제다(#322): "소스 대상 검사는 실제 파서가 근본이다." 정규식
+    패치를 반복해도 문법 사각지대는 끝이 없다.
+
+    그래서 Dart 파싱을 완전히 버리고 **스냅샷 다리**를 둔다:
+      DB ──(이 스크립트)──▶ app/test/fixtures/org_fallback.json ◀──(Flutter 테스트)── Dart 폴백
+    Flutter 테스트(app/test/grade_labels_test.dart)가 OrgCatalog.instance.all(미로드 상태,
+    즉 실제 폴백)을 이 JSON 스냅샷과 비교한다 — 진짜 Dart 코드가 만든 값이라 문법 사각지대가
+    원천적으로 없다. 이 스크립트는 같은 스냅샷을 DB 와 비교한다. 둘 중 하나만 어긋나도
+    한쪽 잡이 반드시 빨간불이 된다.
 
 전제: `supabase db reset`(또는 CI 의 `supabase start`)로 마이그레이션이 이미 적용됐다.
 DB 접속은 $DATABASE_URL, 없으면 로컬 기본값.
@@ -14,21 +25,14 @@ DB 접속은 $DATABASE_URL, 없으면 로컬 기본값.
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DART = ROOT / "app/lib/utils/grade_labels.dart"
+SNAPSHOT = ROOT / "app/test/fixtures/org_fallback.json"
 
 DEFAULT_DB_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-
-
-def read(path: Path) -> str:
-    if not path.exists():
-        raise AssertionError(f"missing required file: {path.relative_to(ROOT)}")
-    return path.read_text(encoding="utf-8")
 
 
 def read_orgs() -> list[dict]:
@@ -46,8 +50,8 @@ def read_orgs() -> list[dict]:
         "select coalesce(json_agg(json_build_object("
         "'code', code, "
         "'label', coalesce(label_ko, name_ko), "
-        "'short_label', coalesce(short_label, coalesce(label_ko, name_ko)), "
-        "'active', is_active) "
+        "'shortLabel', coalesce(short_label, coalesce(label_ko, name_ko)), "
+        "'isActive', is_active) "
         "order by sort_order, name_ko, code), '[]') from public.tennis_orgs"
     )
     try:
@@ -70,93 +74,49 @@ def read_orgs() -> list[dict]:
     return data
 
 
-# 줄 전체가 `//` 로 시작하는 줄만 제거한다(codex P1: 주석 처리로 항목을 지워도
-# 안 걷혀서 여전히 파싱되던 결함). 시작 위치가 줄 앞(공백 제외)이어야 하므로 문자열
-# 안의 `//`(예: 'https://...')는 건드리지 않는다 — 그 줄은 `//` 로 시작하지 않는다.
-_COMMENT_LINE_RE = re.compile(r"(?m)^[ \t]*//.*$")
-
-# 이름 있는 인자(code:/label:/shortLabel:/isActive:)를 순서대로 뽑는다. 라벨에
-# 괄호·쉼표가 있어(예: '(KSTF, 60+)') 항목 경계를 괄호 매칭으로 잡으면 깨진다 —
-# 따옴표로 감싼 값은 괄호 개수와 무관하게 다음 홑따옴표에서 끝나므로 이 방식이 안전하다.
-# 필드 값은 이스케이프(`\'`, `\\`)를 허용한다 — 안 그러면 값 안의 `\'` 에서 문자열이
-# 조기 종료돼 그 항목 전체가 매치 실패하고, 개수 검사가 없으면 조용히 누락된다.
-_FIELD = r"'((?:\\.|[^'\\])*)'"
-_ENTRY_RE = re.compile(
-    r"TennisOrgEntry\(\s*"
-    rf"code:\s*{_FIELD}\s*,\s*"
-    rf"label:\s*{_FIELD}\s*,\s*"
-    rf"shortLabel:\s*{_FIELD}\s*,\s*"
-    r"isActive:\s*(true|false)\s*"
-    r"\)",
-)
-
-
-def _unescape(value: str) -> str:
-    return re.sub(r"\\(.)", r"\1", value)
-
-
-def read_dart_fallback(text: str) -> list[dict]:
-    text = _COMMENT_LINE_RE.sub("", text)
-    block_match = re.search(
-        r"const\s+_kFallbackOrgEntries\s*=\s*<TennisOrgEntry>\s*\[(.*?)\];",
-        text, re.S,
-    )
-    if not block_match:
-        raise AssertionError("Dart _kFallbackOrgEntries 를 찾지 못했다")
-    block = block_match.group(1)
-
-    # "못 읽은 건 건너뛰지 말고 실패시킨다"(codex P1): TennisOrgEntry( 등장 횟수와
-    # 실제로 끝까지 매치된 항목 수가 다르면, 정규식이 이해 못 한 항목이 있다는 뜻이다.
-    # 조용히 누락시키는 대신 몇 번째 항목을 못 읽었는지 알려주고 실패한다.
-    occurrences = [m.start() for m in re.finditer(r"TennisOrgEntry\(", block)]
-    matches = list(_ENTRY_RE.finditer(block))
-    matched_starts = {m.start() for m in matches}
-    unparsed = [pos for pos in occurrences if pos not in matched_starts]
-    if unparsed:
-        snippets = [block[pos:pos + 80].splitlines()[0] for pos in unparsed]
-        raise AssertionError(
-            f"Dart _kFallbackOrgEntries: TennisOrgEntry( {len(occurrences)}건 중 "
-            f"{len(unparsed)}건을 파싱하지 못했다 — 못 읽은 항목은 통과가 아니라 실패다:\n"
-            + "\n".join(f"  - {s}" for s in snippets)
-        )
-
-    entries = [
-        {
-            "code": _unescape(m.group(1)),
-            "label": _unescape(m.group(2)),
-            "short_label": _unescape(m.group(3)),
-            "active": m.group(4) == "true",
-        }
-        for m in matches
-    ]
-    if not entries:
-        raise AssertionError("Dart _kFallbackOrgEntries 항목을 하나도 파싱하지 못했다")
-    return entries
+def read_snapshot() -> list[dict]:
+    if not SNAPSHOT.exists():
+        raise AssertionError(f"missing required file: {SNAPSHOT.relative_to(ROOT)}")
+    try:
+        data = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"{SNAPSHOT.relative_to(ROOT)} JSON 파싱 실패: {exc}")
+    if not data:
+        raise AssertionError(f"{SNAPSHOT.relative_to(ROOT)} 가 비어 있다")
+    return data
 
 
 def as_rows(entries: list[dict]) -> list[tuple]:
-    return [(e["code"], e["label"], e["short_label"], e["active"]) for e in entries]
+    return [
+        (e["code"], e["label"], e["shortLabel"], e["isActive"]) for e in entries
+    ]
 
 
 def main() -> int:
     db_rows = as_rows(read_orgs())
-    dart_rows = as_rows(read_dart_fallback(read(DART)))
+    snapshot_rows = as_rows(read_snapshot())
 
-    if db_rows != dart_rows:
+    if db_rows != snapshot_rows:
         lines = [
-            f"DB public.tennis_orgs 항목 수: {len(db_rows)}, Dart 폴백 항목 수: {len(dart_rows)}",
+            f"DB public.tennis_orgs 항목 수: {len(db_rows)}, "
+            f"스냅샷 항목 수: {len(snapshot_rows)} "
+            f"({SNAPSHOT.relative_to(ROOT)})",
         ]
-        for i, (db_row, dart_row) in enumerate(zip(db_rows, dart_rows)):
-            if db_row != dart_row:
-                lines.append(f"  [{i}] DB={db_row}\n      Dart={dart_row}")
-        if len(db_rows) != len(dart_rows):
-            shorter = min(len(db_rows), len(dart_rows))
+        for i, (db_row, snap_row) in enumerate(zip(db_rows, snapshot_rows)):
+            if db_row != snap_row:
+                lines.append(f"  [{i}] DB={db_row}\n      snapshot={snap_row}")
+        if len(db_rows) != len(snapshot_rows):
+            shorter = min(len(db_rows), len(snapshot_rows))
             tail_name, tail = (
                 ("DB", db_rows[shorter:])
-                if len(db_rows) > len(dart_rows)
-                else ("Dart", dart_rows[shorter:])
+                if len(db_rows) > len(snapshot_rows)
+                else ("snapshot", snapshot_rows[shorter:])
             )
             lines.append(f"  {tail_name} 에만 있는 꼬리: {tail}")
+        lines.append(
+            "  ※ 폴백(Dart)이 스냅샷과 일치하는지는 `flutter test` 의 "
+            "OrgCatalog 스냅샷 테스트가 따로 검증한다."
+        )
         raise AssertionError("\n".join(lines))
 
     print(f"✓ tennis org catalog ({len(db_rows)}개 일치, 순서: sort_order, name_ko, code)")
