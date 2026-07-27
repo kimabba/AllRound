@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/utils/grade_labels.dart';
@@ -377,6 +379,26 @@ void main() {
 
   group('OrgCatalog', () {
     tearDown(() => OrgCatalog.instance.reset());
+
+    // #330: check_org_parity.py 가 DB 와 대조하는 JSON 스냅샷(test/fixtures/org_fallback.json)이
+    // 이 폴백과 같은지 여기서 확인한다. Dart 소스를 정규식으로 파싱하면 주석·이스케이프·
+    // 공백 변형에 사각지대가 계속 생긴다(codex 재발 3회) — 실제 Dart 코드가 만든 값과
+    // 비교하면 문법 파싱이 아예 필요 없다.
+    test('폴백 전체가 JSON 스냅샷과 순서·값 모두 일치한다(스냅샷 다리, #330)', () {
+      OrgCatalog.instance.reset();
+      final snapshot = jsonDecode(
+        File('test/fixtures/org_fallback.json').readAsStringSync(),
+      ) as List<dynamic>;
+      final actual = OrgCatalog.instance.all
+          .map((e) => {
+                'code': e.code,
+                'label': e.label,
+                'shortLabel': e.shortLabel,
+                'isActive': e.isActive,
+              })
+          .toList();
+      expect(actual, snapshot);
+    });
 
     test('미로드 시 폴백 목록·라벨을 쓴다', () {
       expect(OrgCatalog.instance.isLoaded, isFalse);
