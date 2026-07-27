@@ -9,12 +9,14 @@ class ClubSearchFilters {
   final String? gender;
   final Set<String> days;
   final RangeValues feeRange;
+  final bool recruitingOnly;
 
   const ClubSearchFilters({
     this.region,
     this.gender,
     this.days = const {},
     this.feeRange = const RangeValues(0, 100000),
+    this.recruitingOnly = false,
   });
 
   bool get hasActive =>
@@ -22,12 +24,14 @@ class ClubSearchFilters {
       gender != null ||
       days.isNotEmpty ||
       feeRange.start > 0 ||
-      feeRange.end < 100000;
+      feeRange.end < 100000 ||
+      recruitingOnly;
 
   List<String> get labels => [
         if (region != null) region!,
         if (gender != null) clubGenderLabel(gender),
         for (final day in days) day,
+        if (recruitingOnly) '모집 중',
         if (feeRange.start > 0 || feeRange.end < 100000)
           '${formatFee(feeRange.start)}~${formatFee(feeRange.end)}',
       ];
@@ -39,12 +43,14 @@ class ClubSearchFilters {
     bool clearGender = false,
     Set<String>? days,
     RangeValues? feeRange,
+    bool? recruitingOnly,
   }) {
     return ClubSearchFilters(
       region: clearRegion ? null : (region ?? this.region),
       gender: clearGender ? null : (gender ?? this.gender),
       days: days ?? this.days,
       feeRange: feeRange ?? this.feeRange,
+      recruitingOnly: recruitingOnly ?? this.recruitingOnly,
     );
   }
 
@@ -361,6 +367,20 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                               final next = {..._filters.days};
                               if (!next.add(value)) next.remove(value);
                               _filters = _filters.copyWith(days: next);
+                            }),
+                          ),
+                        ],
+                      ),
+                      FilterSection(
+                        title: '모집 상태',
+                        children: [
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('현재 모집 중인 모임만 보기'),
+                            value: _filters.recruitingOnly,
+                            onChanged: (value) => setState(() {
+                              _filters =
+                                  _filters.copyWith(recruitingOnly: value);
                             }),
                           ),
                         ],

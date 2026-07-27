@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('오늘·대회·클럽·MY 탭을 표시한다', (tester) async {
+  testWidgets('오늘·대회·모임·MY 탭을 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,7 +15,7 @@ void main() {
       ),
     );
 
-    for (final label in ['오늘', '대회', '클럽', 'MY']) {
+    for (final label in ['오늘', '대회', '모임', 'MY']) {
       expect(find.text(label), findsOneWidget);
     }
     expect(find.text('코치'), findsNothing);
