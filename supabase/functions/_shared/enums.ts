@@ -192,28 +192,34 @@ export const GJ_KEYWORD_TO_SUFFIX: Array<{ keywords: string[]; suffix: string }>
  *
  * 테니스는 등급 코드 외에 **부서 코드**(gj_m_gold 등)도 자격 표기로 쓴다. 부서 정본은
  * DB public.tennis_divisions 고 Edge 는 형식만 본다(parseDivisionCodes 와 동일 규칙).
+ * org 접두사 정본은 DB public.tennis_orgs(#330) — activeGrades 와 같은 이유로
+ * `activeOrgs` 도 호출부가 조회해 넘긴다(정적 TENNIS_ORGS 로 검사하면 협회를 DB 에
+ * 추가해도 그 협회의 부서 코드는 계속 거절된다).
  */
 export function isValidGrade(
   sport: Sport,
   grade: string,
   activeGrades: ReadonlySet<string>,
+  activeOrgs: ReadonlySet<string>,
 ): boolean {
   if (activeGrades.has(grade)) return true;
-  return sport === 'tennis' && isValidDivisionCode(grade);
+  return sport === 'tennis' && isValidDivisionCode(grade, activeOrgs);
 }
 
 /**
  * Division code 유효성: {org}_{suffix} (예: gj_m_gold, kta_m_open).
- * org 는 TENNIS_ORGS 에 있어야 하고, 전체가 ^[a-z0-9_]+$ 이며 suffix 가 비면 안 된다.
- * 형식 검사를 parseDivisionCodes 와 같은 규칙으로 맞춘다 — 조직 접두사만 보면
- * `gj_`, `gj_NOT_REAL`, `gj_'); DROP` 같은 값이 eligible_grades 로 들어왔다(codex 1차).
+ * org 는 activeOrgs(DB tennis_orgs 활성 목록)에 있어야 하고, 전체가 ^[a-z0-9_]+$
+ * 이며 suffix 가 비면 안 된다. 형식 검사를 parseDivisionCodes 와 같은 규칙으로
+ * 맞춘다 — 조직 접두사만 보면 `gj_`, `gj_NOT_REAL`, `gj_'); DROP` 같은 값이
+ * eligible_grades 로 들어왔다(codex 1차). activeOrgs 가 비면(조회 실패 등) 모든
+ * 부서 코드를 거절한다(fail-closed).
  */
-function isValidDivisionCode(code: string): boolean {
+function isValidDivisionCode(code: string, activeOrgs: ReadonlySet<string>): boolean {
   if (!DIVISION_CODE_PATTERN.test(code)) return false;
   const idx = code.indexOf('_');
   if (idx < 1 || idx === code.length - 1) return false;
   const org = code.substring(0, idx);
-  return (TENNIS_ORGS as readonly string[]).includes(org);
+  return activeOrgs.has(org);
 }
 
 // 삭제(#319): canEnter(= eligibleGrades.includes, 호출부 없음 — 자격 판정 정본은 DB RPC),

@@ -23,3 +23,19 @@ export async function assertKnownOrgs(
   const unknown = orgs.find((o) => !known.has(o));
   return unknown ? { message: `invalid org: ${unknown}`, status: 400 } : null;
 }
+
+/**
+ * 활성 협회 코드 전체 집합을 DB(tennis_orgs)에서 읽어온다.
+ * isValidGrade(테니스 부서 코드 org 접두사 검증, #330)가 쓴다 — 정적 TENNIS_ORGS 로
+ * 검사하면 협회를 DB 에 추가해도 그 협회의 부서 코드는 계속 거절된다.
+ */
+export async function fetchActiveOrgCodes(
+  client: SupabaseClient,
+): Promise<{ codes: Set<string> } | { message: string; status: number }> {
+  const { data, error } = await client
+    .from('tennis_orgs')
+    .select('code')
+    .eq('is_active', true);
+  if (error) return { message: 'org 카탈로그 조회에 실패했습니다', status: 503 };
+  return { codes: new Set((data ?? []).map((r: { code: string }) => r.code)) };
+}
