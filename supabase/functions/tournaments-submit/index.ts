@@ -1,7 +1,7 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
-import { assertKnownOrgs } from '../_shared/orgs.ts';
+import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
 import {
   EntryFeeUnit,
   isValidEntryFeeUnit,
@@ -250,8 +250,16 @@ async function handler(req: Request): Promise<Response> {
     .eq('is_active', true);
   if (gradeErr) return errorResponse(`grade catalog unavailable: ${gradeErr.message}`, 503);
   const activeGrades = new Set<string>((gradeRows ?? []).map((r) => r.code as string));
+  // 협회(org) 카탈로그 정본도 DB tennis_orgs(#330) — isValidGrade 의 테니스 부서 코드
+  // (gj_m_gold 등) org 접두사 검증에 쓴다. futsal 은 부서 코드 개념이 없어 건너뛴다.
+  let activeOrgs: ReadonlySet<string> = new Set();
+  if (body.sport === 'tennis') {
+    const orgResult = await fetchActiveOrgCodes(supabase);
+    if ('status' in orgResult) return errorResponse(orgResult.message, orgResult.status);
+    activeOrgs = orgResult.codes;
+  }
   for (const g of body.eligible_grades) {
-    if (isValidGrade(body.sport, g, activeGrades)) continue;
+    if (isValidGrade(body.sport, g, activeGrades, activeOrgs)) continue;
     // 카탈로그가 비었으면 원인은 제보 내용이 아니라 DB 상태(정책·seed 누락)다 → 503 으로 구분한다.
     // 판정 뒤에 보는 이유: 테니스 부서 코드(gj_m_gold)는 grades 와 무관하게 통과해야 하는데,
     // 빈 목록을 먼저 막으면 그 경로까지 함께 죽는다(codex 1차).
