@@ -676,7 +676,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     if (interests.length == 1 && interests.isNotEmpty) {
       return sportLabelFromString(interests.first);
     }
-    return '테니스 · 풋살';
+    return sportLabels.values.join(' · ');
   }
 
   List<Club> _nearbyRecentClubs(List<Club> source) {

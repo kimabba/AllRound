@@ -8,6 +8,7 @@ import '../../models/crawl_source.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
+import '../../utils/grade_labels.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
@@ -1087,7 +1088,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   Widget _buildPendingClubReviewContent(Club club) {
     final meta = [
-      club.sport == 'tennis' ? '테니스' : '풋살',
+      sportLabelFromString(club.sport),
       if (club.region != null) club.region!,
       if (club.address != null) club.address!,
     ].join(' · ');

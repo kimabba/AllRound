@@ -198,14 +198,9 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     // 등급 근거가 있을 때만 배지를 노출한다.
     final hasGradeBasis =
         (ref.watch(userSportsProvider).value?.isNotEmpty ?? false) ||
-            (ref.watch(userTennisOrgsProvider).value?.isNotEmpty ??
-                false);
+            (ref.watch(userTennisOrgsProvider).value?.isNotEmpty ?? false);
     final myGradeIds = hasGradeBasis
-        ? (ref
-                .watch(homeTournamentsProvider)
-                .value
-                ?.map((t) => t.id)
-                .toSet() ??
+        ? (ref.watch(homeTournamentsProvider).value?.map((t) => t.id).toSet() ??
             const <String>{})
         : const <String>{};
 
@@ -258,8 +253,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
                           )
                         : _TournamentCalendarListView(
                             tournaments: _results!,
-                            favoriteIds:
-                                favorites.value ?? const <String>{},
+                            favoriteIds: favorites.value ?? const <String>{},
                             myGradeIds: myGradeIds,
                             focusedMonth: _focusedMonth,
                             selectedDate: _selectedDate,
@@ -1660,8 +1654,12 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   String _formatDate(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서 등급 필터 칩이 폴백 라벨로 굳는다. 여기서 감싼다.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final maxHeight = MediaQuery.of(context).size.height * 0.85;

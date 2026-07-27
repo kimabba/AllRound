@@ -26,6 +26,7 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+
 def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
 
@@ -53,28 +54,74 @@ def ts_const_array(text: str, name: str) -> list[str]:
     return quoted_values(match.group(1))
 
 
-def ts_union(text: str, name: str) -> list[str]:
-    match = re.search(rf"export\s+type\s+{re.escape(name)}\s*=\s*([^;]+);", text, re.S)
-    if not match:
-        raise AssertionError(f"TypeScript union type not found: {name}")
-    return quoted_values(match.group(1))
-
-
 def sql_enum(text: str, name: str) -> list[str]:
-    match = re.search(rf"create\s+type\s+{re.escape(name)}\s+as\s+enum\s*\((.*?)\);", text, re.I | re.S)
+    pattern = rf"create\s+type\s+(?:public\.)?\"?{re.escape(name)}\"?\s+as\s+enum\s*\((.*?)\);"
+    match = re.search(pattern, text, re.I | re.S)
     if not match:
         raise AssertionError(f"SQL enum not found: {name}")
     return quoted_values(match.group(1))
 
 
-def sql_grade_check(text: str, sport: str) -> list[str]:
-    # 마이그레이션 history 를 후순위 ALTER 가 덮어쓸 수 있으므로 가장 마지막 매치를 사용.
-    # 예: 002 에서 정의 → 010 에서 ALTER 로 enum 교체된 경우, 010 의 정의가 운영 schema.
-    pattern = rf"sport\s*=\s*'{re.escape(sport)}'\s+and\s+grade\s+in\s*\((.*?)\)"
-    matches = re.findall(pattern, text, re.I | re.S)
-    if not matches:
-        raise AssertionError(f"SQL grade check not found for sport: {sport}")
-    return quoted_values(matches[-1])
+def sql_enum_after_history(text: str, name: str) -> list[str]:
+    """CREATE TYPE 이후의 ALTER TYPE ... ADD/RENAME VALUE 까지 반영한 최종 enum 값.
+
+    CREATE 만 읽으면 이후 마이그레이션이 값을 추가·개명해도 드리프트를 놓친다.
+    ADD VALUE BEFORE/AFTER 의 삽입 위치는 반영하지 않고 뒤에 붙인다(순서 비교 한계).
+    """
+    values = sql_enum(text, name)
+    quoted_name = rf"alter\s+type\s+(?:public\.)?\"?{re.escape(name)}\"?\s+"
+    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
+        migration = read(path)
+        added = re.finditer(
+            quoted_name + r"add\s+value\s+(?:if\s+not\s+exists\s+)?'([^']+)'",
+            migration,
+            re.I,
+        )
+        for match in added:
+            if match.group(1) not in values:
+                values.append(match.group(1))
+        renamed = re.finditer(
+            quoted_name + r"rename\s+value\s+'([^']+)'\s+to\s+'([^']+)'",
+            migration,
+            re.I,
+        )
+        for match in renamed:
+            old, new = match.group(1), match.group(2)
+            values = [new if value == old else value for value in values]
+    return values
+
+
+def dart_const_map(text: str, name: str) -> list[str]:
+    pattern = rf"const\s+{re.escape(name)}\s*=\s*<String,\s*String>\{{(.*?)\}};"
+    match = re.search(pattern, text, re.S)
+    if not match:
+        raise AssertionError(f"Dart const map not found: {name}")
+    entries = re.findall(r"'([^']+)'\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError(f"Dart const map is empty: {name}")
+    return [f"{key}={value}" for key, value in entries]
+
+
+def dart_sport_label_map(text: str) -> list[str]:
+    """`const sportLabels = <Sport, String>{ Sport.tennis: '테니스', ... }` — 키는 enum 멤버."""
+    match = re.search(r"const\s+sportLabels\s*=\s*<Sport,\s*String>\{(.*?)\};", text, re.S)
+    if not match:
+        raise AssertionError("Dart const map not found: sportLabels")
+    entries = re.findall(r"Sport\.([A-Za-z0-9_]+)\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError("Dart const map is empty: sportLabels")
+    return [f"{key}={value}" for key, value in entries]
+
+
+def ts_record(text: str, name: str) -> list[str]:
+    pattern = rf"export\s+const\s+{re.escape(name)}\s*:\s*Record<[^>]+>\s*=\s*\{{(.*?)\}};"
+    match = re.search(pattern, text, re.S)
+    if not match:
+        raise AssertionError(f"TypeScript record not found: {name}")
+    entries = re.findall(r"'?([A-Za-z0-9_]+)'?\s*:\s*'([^']+)'", match.group(1))
+    if not entries:
+        raise AssertionError(f"TypeScript record is empty: {name}")
+    return [f"{key}={value}" for key, value in entries]
 
 
 def sql_entry_fee_units(text: str) -> list[str]:
@@ -82,21 +129,6 @@ def sql_entry_fee_units(text: str) -> list[str]:
     if not match:
         raise AssertionError("SQL entry_fee_unit check not found")
     return quoted_values(match.group(1))
-
-
-def user_sports_grade_constraint_history() -> str:
-    sql_parts: list[str] = [read(SQL_USERS)]
-    for path in sorted(SQL_MIGRATIONS.glob("*.sql")):
-        if path == SQL_USERS:
-            continue
-        text = read(path)
-        matches = re.finditer(
-            r"alter\s+table[^;]+?add\s+constraint\s+user_sports_grade_check\s+check\s*\((.*?)\)\s*;",
-            text,
-            re.I | re.S,
-        )
-        sql_parts.extend(match.group(0) for match in matches)
-    return "\n".join(sql_parts)
 
 
 def seed_region_codes(text: str) -> list[str]:
@@ -124,36 +156,28 @@ def assert_same(name: str, *values: tuple[str, list[str]]) -> None:
 def main() -> int:
     dart = read(DART_ENUMS)
     ts = read(TS_ENUMS)
-    # 마이그레이션 history 정합: 후속 migration 의 ADD CONSTRAINT 가 기존
-    # user_sports_grade_check 를 덮어쓰므로 최신 정의를 기준으로 비교한다.
-    sql_users = user_sports_grade_constraint_history()
+    sql_users = read(SQL_USERS)
     sql_orgs = read(SQL_ORGS)
     seed = read(SQL_SEED)
 
     assert_same(
         "sports",
         ("Dart Sport", dart_enum(dart, "Sport")),
-        ("TypeScript Sport", ts_union(ts, "Sport")),
-        ("SQL sport", sql_enum(sql_users, "sport")),
+        ("TypeScript SPORTS", ts_const_array(ts, "SPORTS")),
+        ("SQL sport", sql_enum_after_history(sql_users, "sport")),
     )
+    # 등급(grades)의 정본↔폴백 대조는 check_grades_parity.py 가 **실제 DB** 로 한다.
+    # 마이그레이션을 정규식 파싱하면 유효 SQL 문법으로 grades 쓰기를 숨길 수 있어
+    # fail-open 우회가 반복됐다(codex 5~11차). 파싱을 버리고 적용된 DB 를 직접 읽는다(JY-321).
     assert_same(
-        "tennis grades",
-        ("Dart tennisGrades", dart_const_list(dart, "tennisGrades")),
-        ("TypeScript TENNIS_GRADES", ts_const_array(ts, "TENNIS_GRADES")),
-        ("SQL tennis grade check", sql_grade_check(sql_users, "tennis")),
+        "sport labels",
+        ("Dart sportLabels", dart_sport_label_map(dart)),
+        ("TypeScript SPORT_LABELS", ts_record(ts, "SPORT_LABELS")),
     )
-    assert_same(
-        "futsal grades",
-        ("Dart futsalGrades", dart_const_list(dart, "futsalGrades")),
-        ("TypeScript FUTSAL_GRADES", ts_const_array(ts, "FUTSAL_GRADES")),
-        ("SQL futsal grade check", sql_grade_check(sql_users, "futsal")),
-    )
-    assert_same(
-        "tennis orgs",
-        ("Dart tennisOrgs", dart_const_list(dart, "tennisOrgs")),
-        ("TypeScript TENNIS_ORGS", ts_const_array(ts, "TENNIS_ORGS")),
-        ("SQL tennis_org", sql_enum(sql_orgs, "tennis_org")),
-    )
+    # 협회(tennis_orgs)의 정본은 DB 다(JY-135). Dart 는 폴백만 갖고 SQL enum 은
+    # 20260711002939 에서 이미 삭제됐다 — 이 검사는 죽은 타입 텍스트를 파싱하고
+    # 있었다. 등급이 JY-321 에서 실제 DB 조회로 옮겨간 것과 같은 방향이다.
+    # 후속: 폴백↔DB 대조를 check_grades_parity.py 방식으로 추가.
     assert_same(
         "region codes",
         ("Dart regionCodes", dart_const_list(dart, "regionCodes")),
