@@ -331,6 +331,7 @@ class SimpleClubTile extends StatelessWidget {
   final bool pending;
   final ClubFavoriteToggle? onFavoriteToggle;
   final VoidCallback? onOpen;
+  final Color? backgroundColor;
 
   const SimpleClubTile({
     super.key,
@@ -339,6 +340,7 @@ class SimpleClubTile extends StatelessWidget {
     this.pending = false,
     this.onFavoriteToggle,
     this.onOpen,
+    this.backgroundColor,
   });
 
   @override
@@ -364,14 +366,24 @@ class SimpleClubTile extends StatelessWidget {
     }
 
     return Material(
-      color: Colors.transparent,
+      color: backgroundColor ?? Colors.transparent,
+      borderRadius: backgroundColor == null ? null : AppRadius.card,
       child: InkWell(
         onTap: onOpen ?? () => context.push('/clubs/${item.id}', extra: item),
+        borderRadius: backgroundColor == null ? null : AppRadius.card,
         child: Container(
           constraints: const BoxConstraints(minHeight: 84),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          padding: EdgeInsets.symmetric(
+            horizontal: backgroundColor == null ? 0 : AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+            borderRadius: backgroundColor == null ? null : AppRadius.card,
+            border: backgroundColor == null
+                ? Border(bottom: BorderSide(color: cs.outlineVariant))
+                : Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.45),
+                  ),
           ),
           child: Row(
             children: [
