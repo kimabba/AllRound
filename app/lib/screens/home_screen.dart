@@ -9,6 +9,7 @@ import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
+import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
@@ -412,7 +413,7 @@ class _HomeRulesAndQuiz extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFutsal = sport == 'futsal';
-    final sportLabel = isFutsal ? '풋살' : '테니스';
+    final currentSportLabel = sportLabelFromString(sport);
     final rules = isFutsal
         ? const [
             ('킥인은 4초 안에', '경기 재개 핵심 규칙'),
@@ -432,7 +433,7 @@ class _HomeRulesAndQuiz extends StatelessWidget {
           child: Column(
             children: [
               _HomeSectionHeader(
-                title: '$sportLabel, 이것만은 알아두기',
+                title: '$currentSportLabel, 이것만은 알아두기',
                 actionLabel: '더보기',
                 onAction: onOpenRules,
               ),
