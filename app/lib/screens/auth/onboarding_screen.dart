@@ -24,6 +24,15 @@ import '../../widgets/app_toast.dart';
 // 지역 선택지는 grade_labels.dart 의 regionCodes(표준 17개 광역시도) 정본을 그대로 쓴다.
 // code=label 1:1 이므로 별도 choices 목록이나 displayLabel 이중 상태가 필요 없다.
 
+/// 협회별로 고른 부서 코드 집합을 받아, 저장해도 되는지 판정한다(JY-136).
+///
+/// 빈 집합이 하나라도 있으면 false. 그 협회는 `division_codes` 가 빈 배열로
+/// 저장되는데, 자격매칭은 `expand_division_codes(division_codes) &&
+/// eligible_grades` 배열 교집합이라 빈 배열이면 교집합이 항상 0 —
+/// "내 등급 대회만" 이 에러도 안내도 없이 0건이 된다.
+bool tennisOrgSelectionsAreComplete(Iterable<Set<String>> selectedPerOrg) =>
+    selectedPerOrg.every((codes) => codes.isNotEmpty);
+
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -76,7 +85,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return _firstRegisteredSport ?? _primarySport;
   }
 
-  bool get _canSubmit => _firstRegisteredSport != null;
+  bool get _canSubmit =>
+      _firstRegisteredSport != null &&
+      // 협회를 추가했으면 부서를 최소 1개 골라야 넘어간다. 테니스 미등록이면
+      // _orgs 는 저장되지 않으므로(:438) 검사하지 않는다.
+      (!_tennisRegistered ||
+          tennisOrgSelectionsAreComplete(
+              _orgs.map((o) => o.selectedDivisionCodes)));
 
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
@@ -1034,6 +1049,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               );
             }).toList(),
           ),
+          if (draft.selectedDivisionCodes.isEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '출전 부서를 1개 이상 골라야 내 등급에 맞는 대회를 찾아줄 수 있어요',
+              style: tt.bodySmall?.copyWith(color: cs.error),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: draft.score,

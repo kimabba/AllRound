@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:allround/screens/auth/onboarding_screen.dart';
+
 // JY-136: 온보딩에서 부서가 0개인 협회(kssta/kasta)를 고르면 부서 칩이 하나도
 // 뜨지 않아 selectedDivisionCodes 가 빈 채로 저장된다. 자격매칭은
 // `expand_division_codes(division_codes) && eligible_grades` 배열 교집합이라
@@ -27,5 +29,39 @@ void main() {
         reason: '온보딩은 부서 있는 협회만 선택지로 내야 한다(tennisOrgsWithDivisions) —'
             ' 부서 0개 협회를 고르면 division_codes 가 빈 채로 저장돼'
             ' 자격 대회 추천이 0건이 된다');
+  });
+
+  // 위 소스 검사만으로는 절반만 막힌다. 부서가 있는 협회를 골라도 칩을 하나도
+  // 누르지 않으면 똑같이 division_codes 가 빈 채로 저장된다 — 실제로 프로덕션에
+  // 남아 있는 깨진 행(org=kata, division='default', division_codes=[])이
+  // 이 경로에서 나왔다. kata 는 부서가 6개 있는 협회다.
+  group('tennisOrgSelectionsAreComplete', () {
+    test('협회가 없으면 통과한다 (테니스 미등록·협회 미추가)', () {
+      expect(tennisOrgSelectionsAreComplete(const []), isTrue);
+    });
+
+    test('모든 협회가 부서를 1개 이상 골랐으면 통과한다', () {
+      expect(
+        tennisOrgSelectionsAreComplete([
+          {'gj_m_open'},
+          {'kata_1', 'kata_2'},
+        ]),
+        isTrue,
+      );
+    });
+
+    test('한 협회라도 부서가 비면 막는다', () {
+      expect(
+        tennisOrgSelectionsAreComplete([
+          {'gj_m_open'},
+          <String>{},
+        ]),
+        isFalse,
+      );
+    });
+
+    test('협회 하나가 통째로 비어도 막는다', () {
+      expect(tennisOrgSelectionsAreComplete([<String>{}]), isFalse);
+    });
   });
 }
