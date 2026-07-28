@@ -316,8 +316,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // ───────────────────────────────────────────────────
   Future<void> _addOrg() async {
     final used = _orgs.map((o) => o.org).toSet();
-    final available =
-        tennisOrgs.where((o) => !used.contains(o)).toList(growable: false);
+    // 부서 0개 협회를 고르면 부서 칩이 하나도 안 떠서 division_codes 가 빈 채로
+    // 저장되고, 자격매칭(배열 교집합)이 항상 0건이 된다(JY-136). 제보 화면과
+    // 같은 가드를 쓴다 — 부서가 추가되면 카탈로그에서 자동 반영된다.
+    final available = tennisOrgsWithDivisions
+        .where((o) => !used.contains(o))
+        .toList(growable: false);
     if (available.isEmpty) {
       AppToast.show(context, '등록할 수 있는 협회를 모두 추가했어요', kind: AppToastKind.info);
       return;
