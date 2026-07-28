@@ -63,5 +63,20 @@ void main() {
     test('협회 하나가 통째로 비어도 막는다', () {
       expect(tennisOrgSelectionsAreComplete([<String>{}]), isFalse);
     });
+
+    // 위 4개는 함수의 진리표만 본다 — 함수가 _canSubmit 에서 떨어져 나가면
+    // 전부 통과하면서 게이트만 사라진다(codex #3). 연결 자체를 못으로 박는다.
+    test('_canSubmit 에 연결돼 있다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      // 첫 세미콜론에서 끊는다. `;\n` 까지 늘리면 줄끝 주석이 붙은 순간
+      // 매치가 다음 getter 까지 삼켜, 연결을 끊어도 통과한다(변이 검증에서 확인).
+      final canSubmit =
+          RegExp(r'bool get _canSubmit =>([^;]*);').firstMatch(src);
+      expect(canSubmit, isNotNull, reason: '_canSubmit getter 를 찾지 못했다');
+      expect(canSubmit!.group(1), contains('tennisOrgSelectionsAreComplete'),
+          reason: '_canSubmit 이 부서 선택 검사를 통과해야 한다 —'
+              ' 연결이 끊기면 부서 미선택 저장이 다시 열린다');
+    });
   });
 }
