@@ -822,54 +822,116 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     ),
                   ],
                   const SizedBox(height: AppSpacing.lg),
-                  SimplePanel(
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        cs.primaryContainer,
+                        cs.surface,
+                        0.55,
+                      ),
+                      borderRadius: AppRadius.hero,
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.16),
+                      ),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SimpleSectionHeader(
-                          title: '내 주변 클럽',
-                          subtitle: '버튼을 누를 때 현재 위치를 한 번만 확인해요',
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        SegmentedButton<double>(
-                          segments: const [
-                            ButtonSegment(value: 3, label: Text('3km')),
-                            ButtonSegment(value: 5, label: Text('5km')),
-                            ButtonSegment(value: 10, label: Text('10km')),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: AppSizes.touchTarget,
+                              height: AppSizes.touchTarget,
+                              decoration: BoxDecoration(
+                                color: cs.primary,
+                                borderRadius: AppRadius.pill,
+                              ),
+                              child: Icon(
+                                Icons.near_me_rounded,
+                                color: cs.onPrimary,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '우리 동네 모임 찾기',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    '지금 내 주변에는 어떤 클럽이 있을까요?',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
-                          selected: {_nearbyRadiusKm},
-                          onSelectionChanged: _loadingNearby
-                              ? null
-                              : (values) {
-                                  setState(() {
-                                    _nearbyRadiusKm = values.first;
-                                    _nearbyClubs = null;
-                                    _nearbyNotice = null;
-                                  });
-                                },
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: AppSpacing.lg),
                         Row(
                           children: [
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed:
-                                    _loadingNearby ? null : _findNearbyClubs,
-                                icon: const Icon(Icons.my_location_rounded),
-                                label: Text(
-                                  _loadingNearby ? '찾는 중...' : '내 위치로 찾기',
+                            for (final radius in const [3.0, 5.0, 10.0]) ...[
+                              Expanded(
+                                child: _NearbyRadiusChoice(
+                                  radius: radius,
+                                  selected: _nearbyRadiusKm == radius,
+                                  enabled: !_loadingNearby,
+                                  onSelected: () {
+                                    setState(() {
+                                      _nearbyRadiusKm = radius;
+                                      _nearbyClubs = null;
+                                      _nearbyNotice = null;
+                                    });
+                                  },
                                 ),
                               ),
+                              if (radius != 10)
+                                const SizedBox(width: AppSpacing.sm),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _loadingNearby ? null : _findNearbyClubs,
+                            icon: const Icon(Icons.my_location_rounded),
+                            label: Text(
+                              _loadingNearby
+                                  ? '가까운 모임 찾는 중...'
+                                  : '${_nearbyRadiusKm.toInt()}km 안의 모임 보기',
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _openClubFilterSheet,
-                                icon: const Icon(Icons.map_outlined),
-                                label: const Text('지역 직접 선택'),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(
+                                double.infinity,
+                                AppSizes.control,
                               ),
                             ),
-                          ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: _openClubFilterSheet,
+                            icon: const Icon(Icons.map_outlined, size: 18),
+                            label: const Text('위치 대신 지역으로 찾기'),
+                          ),
                         ),
                         if (_loadingNearby) ...[
                           const SizedBox(height: AppSpacing.md),
@@ -926,7 +988,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  const SizedBox(height: AppSpacing.xl),
                   if (managedClubs.isNotEmpty) ...[
                     SimpleActionCard(
                       icon: Icons.person_add_alt_1_rounded,
@@ -1041,6 +1102,66 @@ class _NearbyLocationException implements Exception {
   final String message;
 
   const _NearbyLocationException(this.message);
+}
+
+class _NearbyRadiusChoice extends StatelessWidget {
+  final double radius;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onSelected;
+
+  const _NearbyRadiusChoice({
+    required this.radius,
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: selected ? cs.primary : cs.surface.withValues(alpha: 0.78),
+      borderRadius: AppRadius.pill,
+      child: InkWell(
+        onTap: enabled ? onSelected : null,
+        borderRadius: AppRadius.pill,
+        child: Container(
+          height: AppSizes.touchTarget,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.pill,
+            border: Border.all(
+              color: selected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: 0.72),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (selected) ...[
+                Icon(
+                  Icons.favorite_rounded,
+                  size: 16,
+                  color: cs.onPrimary,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+              ],
+              Text(
+                '${radius.toInt()}km',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 final _previewClubs = [
