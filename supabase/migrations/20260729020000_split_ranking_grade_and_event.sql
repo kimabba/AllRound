@@ -118,21 +118,33 @@ update public.user_tennis_orgs u
 set division = x.new_label
 from (
   select
-    u2.user_id,
-    u2.org,
-    u2.division,
-    (select string_agg(d.label_ko, ' · ' order by array_position(u2.division_codes, d.code))
-     from public.tennis_divisions d
-     where d.code = any (u2.division_codes) and d.is_ranking_grade) as new_label
-  from public.user_tennis_orgs u2
-  where exists (
-    select 1 from public.tennis_divisions d
-    where d.code = any (u2.division_codes) and not d.is_ranking_grade
-  )
+    y.*,
+    -- 같은 (user_id, org)의 여러 행이 **한 문장 안에서** 같은 문자열로 수렴하면
+    -- 아래 not exists 로는 못 막는다 — 그건 UPDATE 전 스냅샷만 보기 때문이다.
+    -- 실제로 재현했다: ['지도자부','마스터즈부'] 와 ['지도자부','초급자부'] 가 둘 다
+    -- '지도자부' 가 되면서 duplicate key. 수렴 그룹당 한 행만 바꾼다.
+    row_number() over (
+      partition by y.user_id, y.org, y.new_label order by y.division
+    ) as rn
+  from (
+    select
+      u2.user_id,
+      u2.org,
+      u2.division,
+      (select string_agg(d.label_ko, ' · ' order by array_position(u2.division_codes, d.code))
+       from public.tennis_divisions d
+       where d.code = any (u2.division_codes) and d.is_ranking_grade) as new_label
+    from public.user_tennis_orgs u2
+    where exists (
+      select 1 from public.tennis_divisions d
+      where d.code = any (u2.division_codes) and not d.is_ranking_grade
+    )
+  ) y
 ) x
 where u.user_id = x.user_id and u.org = x.org and u.division = x.division
   and x.new_label is not null
   and x.new_label <> u.division
+  and x.rn = 1
   and not exists (
     select 1 from public.user_tennis_orgs c
     where c.user_id = u.user_id and c.org = u.org and c.division = x.new_label
@@ -142,6 +154,8 @@ where u.user_id = x.user_id and u.org = x.org and u.division = x.division
 -- 대회(eligible_grades)에서는 빼지 않는다. 대회는 실제로 그 종목을 연다.
 -- 적용 시점 실측: gj_m_masters 1건(division_codes = [gj_m_instructor, gj_m_masters])
 -- → 지도자부가 남아 빈 배열이 되지 않는다.
+-- 종목 전용**만** 갖고 있던 행이 있으면 배열이 '{}' 가 된다(로컬 재현 확인). 실측에는
+-- 그런 행이 없고, 앞으로는 7번 트리거가 그 상태를 만들지 못하게 막는다.
 update public.user_tennis_orgs u
 set division_codes = (
   select coalesce(array_agg(c order by c), '{}')
