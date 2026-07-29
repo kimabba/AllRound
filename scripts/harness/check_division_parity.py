@@ -71,8 +71,12 @@ def _validate_entries(data, source: str) -> None:
 def read_divisions() -> list[dict]:
     """DB 에서 부서를 **org 표시순 → code 순**으로 읽는다.
 
-    앱 DivisionCatalog._sortByOrgPriority 가 OrgCatalog 순서(tennis_orgs.sort_order)로
-    그룹핑하고 그룹 안에서는 쿼리 순서(code)를 보존하므로, 여기서도 같은 순서를 만든다.
+    앱 DivisionCatalog._sortByOrgPriority 가 OrgCatalog 순서로 그룹핑하고 그룹 안에서는
+    쿼리 순서(code)를 보존하므로, 여기서도 같은 순서를 만든다.
+
+    org 정렬 키가 (sort_order, name_ko, code) 인 것에 주의한다 — OrgCatalog.load 의
+    order 와 같아야 한다. sort_order 만 쓰면 **동률일 때** 앱과 반대 순서가 나온다
+    (codex: 현재 시드는 sort_order 가 전부 달라 우연히 일치할 뿐이다).
     org 가 tennis_orgs 에 없으면 뒤로 민다(앱의 unknown 버킷과 같은 취급).
 
     JSON 으로 받는 이유는 check_org_parity.py 와 같다: 라벨에 가운뎃점·괄호가 들어 있어
@@ -86,7 +90,8 @@ def read_divisions() -> list[dict]:
         "'label', d.label_ko, "
         "'isRankingGrade', d.is_ranking_grade, "
         "'isActive', d.is_active) "
-        "order by coalesce(o.sort_order, 2147483647), d.org_code, d.code), '[]') "
+        "order by coalesce(o.sort_order, 2147483647), o.name_ko, d.org_code, d.code), "
+        "'[]') "
         "from public.tennis_divisions d "
         "left join public.tennis_orgs o on o.code = d.org_code"
     )
@@ -126,6 +131,48 @@ def read_snapshot() -> list[dict]:
     return data
 
 
+def check_no_event_only_in_user_rows() -> None:
+    """유저가 대회 종목 전용 부서를 등급으로 들고 있지 않은지 확인한다.
+
+    쓰기 시점은 트리거(enforce_user_division_is_ranking_grade)가 막는다. 그러나 반대
+    방향 — 이미 유저가 가진 코드를 나중에 카탈로그에서 is_ranking_grade=false 로 내리는
+    경우 — 는 user_tennis_orgs 를 건드리지 않으므로 트리거가 발동하지 않고 위반 행이
+    남는다(codex). 그 정리는 부서를 내리는 마이그레이션이 함께 해야 하고, 잊었을 때
+    여기서 잡는다.
+
+    반대편 트리거(tennis_divisions 변경 시 참조 행 거부)를 달지 않은 이유: 카탈로그
+    변경은 마이그레이션에서만 일어나고, 거기서 거부하면 부서를 내리는 것 자체가
+    막힌다 — 잡아야 할 것은 '내리는 행위'가 아니라 '정리를 빠뜨린 상태'다.
+    """
+    db_url = os.environ.get("DATABASE_URL", DEFAULT_DB_URL)
+    query = (
+        "select coalesce(json_agg(json_build_object('org', x.org, 'code', x.code) "
+        "order by x.org, x.code), '[]') from ("
+        "  select distinct u.org, c as code"
+        "  from public.user_tennis_orgs u,"
+        "       lateral unnest(u.division_codes) as c"
+        "  join public.tennis_divisions d on d.code = c"
+        "  where d.is_ranking_grade = false"
+        ") x"
+    )
+    try:
+        out = subprocess.run(
+            ["psql", db_url, "-tAc", query],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except subprocess.CalledProcessError as exc:
+        raise AssertionError(f"user_tennis_orgs 검사 실패: {exc.stderr.strip()}")
+
+    violations = json.loads(out)
+    if violations:
+        raise AssertionError(
+            "유저가 대회 종목 전용 부서를 등급으로 들고 있다 — 해당 부서를 내린\n"
+            "  마이그레이션이 user_tennis_orgs.division_codes 정리를 빠뜨렸다:\n"
+            + "\n".join(f"    {v['org']}: {v['code']}" for v in violations)
+        )
+    print("✓ user_tennis_orgs 에 대회 종목 전용 부서 없음")
+
+
 def as_rows(entries: list[dict]) -> list[tuple]:
     return [
         (e["code"], e["org"], e["label"], e["isRankingGrade"], e["isActive"])
@@ -163,6 +210,8 @@ def main() -> int:
             "DivisionCatalog 스냅샷 테스트가 따로 검증한다."
         )
         raise AssertionError("\n".join(lines))
+
+    check_no_event_only_in_user_rows()
 
     ranking = sum(1 for r in db_rows if r[3])
     active = sum(1 for r in db_rows if r[4])

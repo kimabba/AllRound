@@ -356,6 +356,28 @@ void main() {
       expect(divisionLabel('gj_m_masters'), '마스터즈부');
     });
 
+    test('ingestRows 도 비활성은 목록에서 빼고 라벨은 남긴다(DB 로드 경로)', () {
+      // 폴백 경로만 검증하면 파서 회귀를 놓친다(codex).
+      DivisionCatalog.instance.ingestRows([
+        {
+          'code': 'gj_m_open',
+          'org_code': 'gj',
+          'label_ko': '오픈부',
+          'gender': 'male',
+          'is_active': true,
+        },
+        {
+          'code': 'ktfs_open',
+          'org_code': 'ktfs',
+          'label_ko': '오픈',
+          'gender': 'all',
+          'is_active': false,
+        },
+      ]);
+      expect(tennisDivisions.map((d) => d.code), ['gj_m_open']);
+      expect(divisionLabel('ktfs_open'), '오픈');
+    });
+
     test('ingestRows 는 org 우선순위(tennisOrgs 순서)로 그룹핑, 그룹 내 입력순 보존', () {
       // 입력을 뒤섞어 넣어도 kta < gj < kato 순서(tennisOrgs)로 그룹핑돼야 함
       DivisionCatalog.instance.ingestRows([

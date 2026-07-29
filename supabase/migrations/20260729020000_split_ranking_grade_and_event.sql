@@ -93,11 +93,50 @@ values
 on conflict (code) do update set
   -- do nothing 이면 이 코드가 다른 값으로 이미 있을 때 교정하지 못한다. 2번 UPDATE 는
   -- 목록에 gj_m_jidong 이 없어 손대지 않고, 4번은 is_ranking_grade=true 인 행을
-  -- 걷어내지 않는다 — 재실행이 정본으로 수렴하도록 분류·활성 상태를 덮는다(codex).
-  is_ranking_grade = excluded.is_ranking_grade,
-  is_active = excluded.is_active,
+  -- 걷어내지 않는다 — 재실행이 정본으로 수렴하도록 **이 행이 선언하는 값 전부**를 덮는다.
+  -- synonyms 를 빼면 안 된다(codex): 기존 행에 ['지동'] 같은 넓은 동의어가 있으면
+  -- 이 블록이 막으려던 바로 그 오탐이 살아남는다.
   org_code = excluded.org_code,
-  label_ko = excluded.label_ko;
+  label_ko = excluded.label_ko,
+  synonyms = excluded.synonyms,
+  skill_tier = excluded.skill_tier,
+  gender = excluded.gender,
+  event_type = excluded.event_type,
+  is_active = excluded.is_active,
+  is_ranking_grade = excluded.is_ranking_grade;
+
+-- ── 4a) 표시용 division 문자열을 먼저 맞춘다 ──────────────────────────────
+-- division 은 division_codes 라벨의 사본이고(예: '마스터즈부 · 지도자부'),
+-- 챗 컨텍스트(functions/chat/context.ts)는 배열이 아니라 이 문자열을 읽는다. 배열만
+-- 고치면 매칭에서 뺀 부서가 AI 문맥에는 계속 실린다(codex).
+--
+-- **4번보다 먼저** 실행한다 — 배열이 정리된 뒤에는 "무엇이 빠졌는지"를 알 수 없다.
+-- division 은 PK 의 일부라(user_id, org, division) 이 UPDATE 는 행 식별자를 바꾼다.
+-- 그래서 같은 (user_id, org)에 목표 문자열이 이미 있으면 **건너뛴다** — PK 충돌로
+-- 마이그레이션이 죽는 대신 그 행은 손대지 않는다(다음 온보딩 저장 때 맞춰진다).
+update public.user_tennis_orgs u
+set division = x.new_label
+from (
+  select
+    u2.user_id,
+    u2.org,
+    u2.division,
+    (select string_agg(d.label_ko, ' · ' order by array_position(u2.division_codes, d.code))
+     from public.tennis_divisions d
+     where d.code = any (u2.division_codes) and d.is_ranking_grade) as new_label
+  from public.user_tennis_orgs u2
+  where exists (
+    select 1 from public.tennis_divisions d
+    where d.code = any (u2.division_codes) and not d.is_ranking_grade
+  )
+) x
+where u.user_id = x.user_id and u.org = x.org and u.division = x.division
+  and x.new_label is not null
+  and x.new_label <> u.division
+  and not exists (
+    select 1 from public.user_tennis_orgs c
+    where c.user_id = u.user_id and c.org = u.org and c.division = x.new_label
+  );
 
 -- ── 4) 종목 전용 코드를 유저 등록에서 걷어낸다 ────────────────────────────
 -- 대회(eligible_grades)에서는 빼지 않는다. 대회는 실제로 그 종목을 연다.
@@ -116,17 +155,6 @@ where exists (
   join public.tennis_divisions d on d.code = c
   where d.is_ranking_grade = false
 );
-
--- 표시용 division 문자열은 **일부러 손대지 않는다**.
---   codex 가 지적한 대로 division 은 division_codes 라벨의 사본이라(예: 실측 1건이
---   '마스터즈부 · 지도자부') 배열만 고치면 둘이 어긋나고, 챗 컨텍스트
---   (functions/chat/context.ts)는 배열이 아니라 이 문자열을 읽는다.
---   그런데 division 은 **PK 의 일부**다 — user_tennis_orgs_pkey (user_id, org, division).
---   여기서 고치면 표시 수정이 아니라 행 식별자 변경이 되고, 같은 (user_id, org)에 대상
---   문자열이 이미 있으면 PK 충돌로 마이그레이션이 죽는다.
---   반면 앱의 saveTennisOrgs 는 delete-all + insert 라(services/user_api.dart:142)
---   유저가 온보딩을 한 번 저장하면 문자열이 저절로 맞춰진다.
---   → 위험 대비 이득이 낮아 남긴다. division 이 PK 인 것 자체가 부채이므로 별건으로 다룬다.
 
 -- ── 5) 실체 없는 협회의 부서 비활성화 ─────────────────────────────────────
 -- KTFS: 2016년 KTA 에 흡수·소멸한 협회. local: 클럽 자체 임시 등급.
