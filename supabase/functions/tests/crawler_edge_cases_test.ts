@@ -147,8 +147,6 @@ const GJ_DICT: DivisionDictRow[] = [
     label_ko: '여자우승자부',
   },
   { code: 'gj_w_rookie', synonyms: ['여자신인부', '여자신인', '개나리'], label_ko: '여자신인부' },
-  { code: 'gj_couple', synonyms: ['부부부', '부부'], label_ko: '부부부' },
-  { code: 'gj_cross', synonyms: ['크로스'], label_ko: '크로스대회' },
 ];
 const sorted = (a: string[]) => [...a].sort();
 
@@ -168,11 +166,6 @@ Deno.test('mapDivisionsByDict: "골드부" 단일 매칭', () => {
 Deno.test('mapDivisionsByDict: 복수 매칭 — "오픈" substring이 여자오픈부에도 걸림 (집합 동치)', () => {
   const r = mapDivisionsByDict('골드부 일반부 여자오픈부 대회', GJ_DICT);
   assertEquals(sorted(r.codes), sorted(['gj_m_open', 'gj_m_gold', 'gj_m_general', 'gj_w_open']));
-});
-
-Deno.test('mapDivisionsByDict: "부부부" 매칭', () => {
-  const r = mapDivisionsByDict('부부부 대회', GJ_DICT);
-  assertEquals(r.codes, ['gj_couple']);
 });
 
 Deno.test('mapDivisionsByDict: "개나리"(synonym) → 여자신인부', () => {

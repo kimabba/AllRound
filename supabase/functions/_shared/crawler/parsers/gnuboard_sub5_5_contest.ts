@@ -195,6 +195,60 @@ export async function fetchDetail(
     if (t.includes('신청기간') || t.includes('접수기간')) deadlineColIdx = i;
   }
 
+  // 개설 부서는 `참가부서` 컬럼에만 있다. 본문에는 개설되지 않은 부서명이
+  // 자격 조건 설명으로 등장한다 — 실제 광주 대회(sid=108) 원문 기준:
+  //   "…자격을 취득할 경우 골드부 5.0 등급으로 승급되며"  (승급 규칙)
+  //   "구분 청년부 장년부 베테랑부 순수동호인 20세이상"    (연령 구분표)
+  // 본문 전체를 사전에 넣으면 이런 설명문까지 개설 부서로 잡혀, 나갈 수 없는
+  // 대회가 "내 등급 대회"로 뜬다. 컬럼이 없는 사이트는 기존 본문 매칭으로 폴백.
+  //
+  // 수집 범위는 반드시 `참가부서` 헤더를 가진 그 표 하나로 한정한다. 상세 페이지는
+  // 요강 본문도 표로 짜여 있어(광주 sid=108 은 표 여러 개·tr 179 개), 문서 전체의
+  // tr 을 훑으면 요강 표의 첫 칸까지 들어와 본문 매칭과 다를 바 없어진다.
+  const isDivisionHeader = (t: string) =>
+    t.includes('참가부서') || t === '부서' || t.includes('경기종목');
+
+  const divisionCells: string[] = [];
+  {
+    const tables = dom.querySelectorAll('table');
+    for (const tableNode of tables) {
+      const table = tableNode as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+      const rows = table.querySelectorAll('tr');
+
+      // 헤더는 표의 **첫 행**에만 있는 것으로 본다. 신청현황표는 헤더가 맨 위다.
+      // 본문 아무 행에서나 라벨을 찾으면 요강 본문표까지 걸린다 — 광주 sid=108 의
+      // 요강표(tr 176개)는 25번째 행에서 라벨이 매치돼, 컬럼 정렬이 맞지 않는
+      // 본문 셀(장소 등)까지 부서로 긁혔다.
+      //
+      // 태그는 가리지 않는다. 같은 사이트 계열이라도 헤더를 <th> 로 쓰는 페이지와
+      // <td> 로 쓰는 페이지가 섞여 있다(tests 의 실원본 모사 BODY_FIXTURE 참고).
+      let localIdx = -1;
+      if (rows.length > 0) {
+        const head = rows[0] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+        const cells = head.querySelectorAll('th, td');
+        for (let c = 0; c < cells.length; c++) {
+          const t = ((cells[c] as unknown as { textContent: string }).textContent ?? '')
+            .replace(/\s+/g, '').trim();
+          if (isDivisionHeader(t)) {
+            localIdx = c;
+            break;
+          }
+        }
+      }
+      if (localIdx < 0) continue;
+
+      // 헤더 다음 행부터가 데이터다.
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+        const cells = row.querySelectorAll('th, td');
+        if (cells.length <= localIdx) continue;
+        const cell = ((cells[localIdx] as unknown as { textContent: string }).textContent ?? '')
+          .replace(/\s+/g, ' ').trim();
+        if (cell) divisionCells.push(cell);
+      }
+    }
+  }
+
   if (matchDateColIdx >= 0 || deadlineColIdx >= 0) {
     // 첫 번째 데이터 행의 td 목록에서 추출
     const rows = dom.querySelectorAll('tr');
@@ -232,7 +286,7 @@ export async function fetchDetail(
   if (!startDate) return { rawHtml: html, tournament: null };
 
   const { codes: gradeCodes, label: divisionLabel } = mapDivisionsByDict(
-    `${title} ${bodyText}`,
+    divisionCells.length > 0 ? divisionCells.join(' ') : `${title} ${bodyText}`,
     dict,
   );
   const hasExplicitUnknownDivision = /부서\s*(?:추후\s*공지|미정|확인\s*필요)/.test(bodyText);

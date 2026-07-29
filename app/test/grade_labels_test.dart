@@ -153,10 +153,9 @@ void main() {
       expect(labels.toSet().length, labels.length);
       // 첫 등장 순서 보존: 광주(gj) 오픈부가 첫 항목
       expect(labels.first, '오픈부');
-      // 골드부/일반부/크로스대회 등 공통 라벨 포함
+      // 골드부/일반부 등 공통 라벨 포함
       expect(labels, contains('골드부'));
       expect(labels, contains('일반부'));
-      expect(labels, contains('크로스대회'));
       expect(labels, contains('여자우승자부'));
     });
 
@@ -164,11 +163,6 @@ void main() {
       final codes = tennisCodesForLabel('골드부');
       expect(codes, containsAll(['gj_m_gold', 'jn_m_gold']));
       expect(codes.every((c) => c.endsWith('_gold')), isTrue);
-    });
-
-    test('크로스대회 라벨 → gj/jn 크로스 코드', () {
-      final codes = tennisCodesForLabel('크로스대회');
-      expect(codes, containsAll(['gj_cross', 'jn_cross']));
     });
 
     test('미등록 라벨은 빈 리스트', () {
@@ -200,7 +194,7 @@ void main() {
       final labels = tennisDivisionLabelsForOrg('gj');
       expect(labels.first, '오픈부');
       expect(labels, contains('골드부'));
-      expect(labels, contains('부부부'));
+      expect(labels, contains('지도자부'));
       // 유니크
       expect(labels.toSet().length, labels.length);
       // gj 전용: gj division 의 라벨 집합과 일치
@@ -228,8 +222,8 @@ void main() {
     });
 
     test('해당 org 에 없는 라벨 → 빈 리스트', () {
-      // 부부부는 kta 에 없다
-      expect(tennisCodesForLabelInOrg('kta', '부부부'), isEmpty);
+      // 골드부는 gj/jn 부서라 kta 에 없다
+      expect(tennisCodesForLabelInOrg('kta', '골드부'), isEmpty);
     });
 
     test('tennisCodesForLabelsInOrg → org 스코프 합집합', () {
