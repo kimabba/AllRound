@@ -422,6 +422,35 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
+  Future<void> banClubMember(String clubId, String targetUserId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'ban',
+        'target_user_id': targetUserId,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> updateClubInquiryLinks(
+    String clubId, {
+    required bool enabled,
+  }) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'update_inquiry_links',
+        'enabled': enabled,
+      }),
+    );
+    check(res);
+  }
+
   Future<void> setClubMemberRole({
     required String clubId,
     required String targetUserId,
@@ -659,12 +688,26 @@ mixin ClubApi on ApiBase {
 
   // ── 게시판 ────────────────────────────────────────────────────
 
-  Future<List<ClubPost>> clubPosts(String clubId, {String? tag}) async {
+  Future<List<ClubPost>> clubPosts(
+    String clubId, {
+    String? tag,
+    String? authorQuery,
+  }) async {
+    final normalizedAuthor = authorQuery?.trim();
+    final searchingAuthor =
+        normalizedAuthor != null && normalizedAuthor.isNotEmpty;
     var query = supabase
         .from('club_posts')
-        .select('*, users!author_id(name), club_post_comments(id)')
+        .select(
+          searchingAuthor
+              ? '*, users!inner(name), club_post_comments(id)'
+              : '*, users!author_id(name), club_post_comments(id)',
+        )
         .eq('club_id', clubId);
     if (tag != null) query = query.eq('tag', tag);
+    if (searchingAuthor) {
+      query = query.ilike('users.name', '%$normalizedAuthor%');
+    }
     final rows = await query.order('created_at', ascending: false).limit(50);
     final posts = rows.map((r) => ClubPost.fromJson(r)).toList();
     posts.sort((a, b) {
