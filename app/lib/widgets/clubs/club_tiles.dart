@@ -331,6 +331,7 @@ class SimpleClubTile extends StatelessWidget {
   final ClubFavoriteToggle? onFavoriteToggle;
   final VoidCallback? onOpen;
   final Color? backgroundColor;
+  final bool isMyClub;
 
   const SimpleClubTile({
     super.key,
@@ -340,6 +341,7 @@ class SimpleClubTile extends StatelessWidget {
     this.onFavoriteToggle,
     this.onOpen,
     this.backgroundColor,
+    this.isMyClub = false,
   });
 
   @override
@@ -418,6 +420,26 @@ class SimpleClubTile extends StatelessWidget {
                               style: tt.labelSmall?.copyWith(
                                 color: cs.onSecondaryContainer,
                                 fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (isMyClub && !pending) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primaryContainer,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              '내 모임',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onPrimaryContainer,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
