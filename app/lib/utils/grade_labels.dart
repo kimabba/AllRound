@@ -238,8 +238,6 @@ const _kFallbackDivisions = <TennisDivision>[
       hasRanking: true,
       gender: 'female'),
   // 광주 — 혼성
-  TennisDivision(code: 'gj_couple', org: 'gj', label: '부부부', gender: 'mixed'),
-  TennisDivision(code: 'gj_cross', org: 'gj', label: '크로스대회', gender: 'mixed'),
 
   // 전라남도 (jn)
   TennisDivision(
@@ -287,8 +285,6 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '여자신인부',
       hasRanking: true,
       gender: 'female'),
-  TennisDivision(code: 'jn_couple', org: 'jn', label: '부부부', gender: 'mixed'),
-  TennisDivision(code: 'jn_cross', org: 'jn', label: '크로스대회', gender: 'mixed'),
 
   // KTA
   TennisDivision(code: 'kta_m_open', org: 'kta', label: '남자오픈', gender: 'male'),
