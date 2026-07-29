@@ -275,6 +275,11 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                       ),
                     ),
                   ),
+                  IconButton(
+                    tooltip: '상세검색 닫기',
+                    onPressed: () => Navigator.maybePop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
