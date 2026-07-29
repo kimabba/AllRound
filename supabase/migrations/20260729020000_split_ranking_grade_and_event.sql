@@ -158,6 +158,16 @@ where u.user_id = x.user_id and u.org = x.org and u.division = x.division
   and not exists (
     select 1 from public.user_tennis_orgs c
     where c.user_id = u.user_id and c.org = u.org and c.division = x.new_label
+  )
+  -- 카탈로그에 없는 코드가 섞인 행은 건드리지 않는다. new_label 은 tennis_divisions 를
+  -- 조인해 만들므로 미등록 코드의 라벨이 **조용히 사라진다** — 배열에는 남는데
+  -- 문자열에서만 없어져 둘이 더 어긋난다(로컬 재현: gj_brand_new 가 배열엔 남고
+  -- '신설부' 만 문자열에서 증발). 모르는 값을 지우느니 그 행은 그대로 둔다.
+  and not exists (
+    select 1 from unnest(u.division_codes) as c
+    where not exists (
+      select 1 from public.tennis_divisions d where d.code = c
+    )
   );
 
 -- ── 4) 종목 전용 코드를 유저 등록에서 걷어낸다 ────────────────────────────
