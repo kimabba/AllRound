@@ -188,13 +188,11 @@ export async function fetchDetail(
   const thList = dom.querySelectorAll('th');
   let matchDateColIdx = -1;
   let deadlineColIdx = -1;
-  let divisionColIdx = -1;
   for (let i = 0; i < thList.length; i++) {
     const th = thList[i] as unknown as { textContent: string };
     const t = (th.textContent ?? '').replace(/\s+/g, '').trim();
     if (t.includes('경기일시') || t.includes('대회일')) matchDateColIdx = i;
     if (t.includes('신청기간') || t.includes('접수기간')) deadlineColIdx = i;
-    if (t.includes('참가부서') || t === '부서' || t.includes('경기종목')) divisionColIdx = i;
   }
 
   // 개설 부서는 `참가부서` 컬럼에만 있다. 본문에는 개설되지 않은 부서명이
@@ -207,29 +205,44 @@ export async function fetchDetail(
   // 수집 범위는 반드시 `참가부서` 헤더를 가진 그 표 하나로 한정한다. 상세 페이지는
   // 요강 본문도 표로 짜여 있어(광주 sid=108 은 표 여러 개·tr 179 개), 문서 전체의
   // tr 을 훑으면 요강 표의 첫 칸까지 들어와 본문 매칭과 다를 바 없어진다.
+  const isDivisionHeader = (t: string) =>
+    t.includes('참가부서') || t === '부서' || t.includes('경기종목');
+
   const divisionCells: string[] = [];
-  if (divisionColIdx >= 0) {
+  {
     const tables = dom.querySelectorAll('table');
     for (const tableNode of tables) {
-      const table = tableNode as unknown as {
-        querySelectorAll(s: string): ArrayLike<unknown>;
-      };
-      // 이 표가 참가부서 표인지: 헤더 셀에 라벨이 있어야 한다.
-      const ths = table.querySelectorAll('th');
+      const table = tableNode as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+      const rows = table.querySelectorAll('tr');
+
+      // 헤더는 표의 **첫 행**에만 있는 것으로 본다. 신청현황표는 헤더가 맨 위다.
+      // 본문 아무 행에서나 라벨을 찾으면 요강 본문표까지 걸린다 — 광주 sid=108 의
+      // 요강표(tr 176개)는 25번째 행에서 라벨이 매치돼, 컬럼 정렬이 맞지 않는
+      // 본문 셀(장소 등)까지 부서로 긁혔다.
+      //
+      // 태그는 가리지 않는다. 같은 사이트 계열이라도 헤더를 <th> 로 쓰는 페이지와
+      // <td> 로 쓰는 페이지가 섞여 있다(tests 의 실원본 모사 BODY_FIXTURE 참고).
       let localIdx = -1;
-      for (let i = 0; i < ths.length; i++) {
-        const t = ((ths[i] as unknown as { textContent: string }).textContent ?? '')
-          .replace(/\s+/g, '').trim();
-        if (t.includes('참가부서') || t === '부서' || t.includes('경기종목')) localIdx = i;
+      if (rows.length > 0) {
+        const head = rows[0] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+        const cells = head.querySelectorAll('th, td');
+        for (let c = 0; c < cells.length; c++) {
+          const t = ((cells[c] as unknown as { textContent: string }).textContent ?? '')
+            .replace(/\s+/g, '').trim();
+          if (isDivisionHeader(t)) {
+            localIdx = c;
+            break;
+          }
+        }
       }
       if (localIdx < 0) continue;
 
-      const rows = table.querySelectorAll('tr');
-      for (let r = 0; r < rows.length; r++) {
+      // 헤더 다음 행부터가 데이터다.
+      for (let r = 1; r < rows.length; r++) {
         const row = rows[r] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
-        const tds = row.querySelectorAll('td');
-        if (tds.length <= localIdx) continue; // 헤더 행(td 없음) 등
-        const cell = ((tds[localIdx] as unknown as { textContent: string }).textContent ?? '')
+        const cells = row.querySelectorAll('th, td');
+        if (cells.length <= localIdx) continue;
+        const cell = ((cells[localIdx] as unknown as { textContent: string }).textContent ?? '')
           .replace(/\s+/g, ' ').trim();
         if (cell) divisionCells.push(cell);
       }
