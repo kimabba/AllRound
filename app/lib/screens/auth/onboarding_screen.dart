@@ -1022,12 +1022,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text('출전 부서 선택', style: tt.labelLarge),
+          Text('내 랭킹 등급 선택', style: tt.labelLarge),
           const SizedBox(height: AppSpacing.xs),
           Wrap(
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
-            children: tennisDivisions.where((d) => d.org == draft.org).map((d) {
+            children: rankingGradesForOrg(draft.org).map((d) {
               final selected = draft.selectedDivisionCodes.contains(d.code);
               return FilterChip(
                 label: Text(d.label),
@@ -1052,7 +1052,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           if (draft.selectedDivisionCodes.isEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '출전 부서를 1개 이상 골라야 내 등급에 맞는 대회를 찾아줄 수 있어요',
+              '내 랭킹 등급을 1개 이상 골라야 등급에 맞는 대회를 찾아줄 수 있어요',
               style: tt.bodySmall?.copyWith(color: cs.error),
             ),
           ],

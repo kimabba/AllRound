@@ -202,6 +202,21 @@ void main() {
       expect(labels.toSet(), gjLabels);
     });
 
+    test('rankingGradesForOrg(gj) → 대회 종목 전용은 빠진다', () {
+      final codes = rankingGradesForOrg('gj').map((d) => d.code).toList();
+      expect(codes, containsAll(['gj_m_open', 'gj_m_gold', 'gj_w_rookie']));
+      // 초급자부는 경력 기준 별도 대회, 마스터즈부·지동부는 대회만 있고 등급이 아니다.
+      expect(codes, isNot(contains('gj_m_beginner')));
+      expect(codes, isNot(contains('gj_m_masters')));
+      expect(codes, isNot(contains('gj_m_jidong')));
+    });
+
+    test('divisionsForOrg(gj) 는 종목 전용까지 전부 준다 — 대회 제보용', () {
+      // 온보딩 필터를 여기까지 번지게 하면 초급자부·마스터즈부 대회를 제보할 수 없게 된다.
+      final codes = divisionsForOrg('gj').map((d) => d.code).toList();
+      expect(codes, containsAll(['gj_m_beginner', 'gj_m_masters', 'gj_m_open']));
+    });
+
     test('tennisDivisionLabelsForOrg(kata) → 부수제 1~5부/여자부', () {
       final labels = tennisDivisionLabelsForOrg('kata');
       expect(labels, ['1부', '2부', '3부', '4부', '5부', '여자부']);
@@ -281,6 +296,31 @@ void main() {
       // 로드 성공 시 완전 교체: fallback gj 부서는 더 이상 없음
       expect(DivisionCatalog.instance.all.where((d) => d.org == 'gj'), isEmpty);
       expect(tennisDivisionLabelsForOrg('kato'), ['개나리부', '마스터스부']);
+    });
+
+    test('ingestRows 가 is_ranking_grade 를 반영하고, 없으면 등급으로 본다', () {
+      DivisionCatalog.instance.ingestRows([
+        {
+          'code': 'gj_m_open',
+          'org_code': 'gj',
+          'label_ko': '오픈부',
+          'gender': 'male',
+          'is_ranking_grade': true,
+        },
+        {
+          'code': 'gj_m_masters',
+          'org_code': 'gj',
+          'label_ko': '마스터즈부',
+          'gender': 'male',
+          'is_ranking_grade': false,
+        },
+        // 컬럼이 없는 구버전 응답 → 기존 동작대로 등급으로 본다.
+        {'code': 'gj_m_gold', 'org_code': 'gj', 'label_ko': '골드부', 'gender': 'male'},
+      ]);
+      expect(rankingGradesForOrg('gj').map((d) => d.code),
+          ['gj_m_open', 'gj_m_gold']);
+      // 라벨 해석은 종목 전용도 된다 — 대회 화면이 이름을 잃으면 안 된다.
+      expect(divisionLabel('gj_m_masters'), '마스터즈부');
     });
 
     test('ingestRows 는 org 우선순위(tennisOrgs 순서)로 그룹핑, 그룹 내 입력순 보존', () {
