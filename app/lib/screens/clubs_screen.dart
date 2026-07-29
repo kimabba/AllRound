@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config.dart';
@@ -27,9 +29,11 @@ class ClubsScreen extends ConsumerStatefulWidget {
 }
 
 class _ClubsScreenState extends ConsumerState<ClubsScreen> {
-  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김. GPS 기반 재구현 예정 (#97).
-  // false → 섹션 미노출. 코드·헬퍼는 보존하므로 true 로 되돌리면 복구됨.
-  final bool _nearbyNewClubsEnabled = false;
+  List<Club>? _nearbyClubs;
+  bool _loadingNearby = false;
+  double _nearbyRadiusKm = 5;
+  String? _nearbyError;
+  String? _nearbyNotice;
 
   // 내 클럽 탭
   List<Club>? _myClubs;
@@ -224,6 +228,154 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       });
       _load();
     }
+  }
+
+  Future<void> _findNearbyClubs() async {
+    setState(() {
+      _loadingNearby = true;
+      _nearbyError = null;
+      _nearbyNotice = null;
+    });
+
+    if (AppConfig.userDesignPreview) {
+      setState(() {
+        _nearbyClubs = _previewClubs.take(4).toList();
+        _nearbyNotice = '디자인 미리보기용 주변 클럽입니다.';
+        _loadingNearby = false;
+      });
+      return;
+    }
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw const _NearbyLocationException(
+          '아이폰 설정에서 위치 서비스를 켜주세요.',
+        );
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw const _NearbyLocationException(
+          '위치 권한을 허용하면 가까운 클럽을 찾을 수 있어요.',
+        );
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw const _NearbyLocationException(
+          '설정 > 개인정보 보호 및 보안 > 위치 서비스에서 올라운드 권한을 허용해주세요.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final api = ref.read(apiProvider);
+      final sports = _clubInterests.isEmpty
+          ? const <String>['tennis', 'futsal']
+          : _clubInterests.toList();
+      final preciseResults = await Future.wait(
+        sports.map(
+          (sport) => api.searchClubs(
+            sport: sport,
+            latitude: position.latitude,
+            longitude: position.longitude,
+            radiusKm: _nearbyRadiusKm,
+          ),
+        ),
+      );
+      final precise = _dedupeClubs(preciseResults.expand((items) => items))
+        ..sort(
+          (a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity),
+        );
+
+      var nearby = precise;
+      String? notice;
+      if (nearby.isEmpty) {
+        final placemarks = await Geocoding().placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+          locale: const Locale('ko', 'KR'),
+        );
+        final region =
+            placemarks.isEmpty ? null : _preferredRegionName(placemarks.first);
+        if (region != null) {
+          final regionResults = await Future.wait(
+            sports.map(
+              (sport) => api.searchClubs(sport: sport, region: region),
+            ),
+          );
+          nearby = _dedupeClubs(regionResults.expand((items) => items));
+          if (nearby.isNotEmpty) {
+            notice = '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.';
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _nearbyClubs = nearby;
+        _nearbyNotice = notice;
+      });
+    } on _NearbyLocationException catch (error) {
+      if (mounted) setState(() => _nearbyError = error.message);
+    } catch (error) {
+      debugPrint('nearby clubs error: $error');
+      if (mounted) {
+        setState(() => _nearbyError = '현재 위치를 확인하지 못했습니다. 지역으로 찾아보세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingNearby = false);
+    }
+  }
+
+  List<Club> _dedupeClubs(Iterable<Club> source) {
+    final seen = <String>{};
+    return [
+      for (final club in source)
+        if (seen.add(club.id)) club
+    ];
+  }
+
+  String? _preferredRegionName(Placemark placemark) {
+    for (final value in [
+      placemark.administrativeArea,
+      placemark.locality,
+      placemark.subAdministrativeArea,
+    ]) {
+      final region = value?.trim();
+      if (region != null && region.isNotEmpty) {
+        const regionAliases = {
+          '서울특별시': '서울',
+          '부산광역시': '부산',
+          '대구광역시': '대구',
+          '인천광역시': '인천',
+          '광주광역시': '광주',
+          '대전광역시': '대전',
+          '울산광역시': '울산',
+          '세종특별자치시': '세종',
+          '경기도': '경기',
+          '충청북도': '충북',
+          '충청남도': '충남',
+          '전라북도': '전북',
+          '전라남도': '전남',
+          '경상북도': '경북',
+          '경상남도': '경남',
+          '강원도': '강원',
+          '제주특별자치도': '제주',
+          '강원특별자치도': '강원',
+          '전북특별자치도': '전북',
+          'Seoul': '서울',
+        };
+        return regionAliases[region] ?? region;
+      }
+    }
+    return null;
   }
 
   Widget _buildClubFilterControls(bool hasClubNameQuery) {
@@ -466,8 +618,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         )
         .toList();
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
-    final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
-    final newClubs = nearbyNewClubs.take(4).toList();
     final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
         ? _recommendedClubs(visibleClubs)
         : sortClubs(visibleClubs, _clubSortOrder);
@@ -671,48 +821,111 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       ),
                     ),
                   ],
-                  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
-                  if (_nearbyNewClubsEnabled) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    SimplePanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SimpleSectionHeader(
-                            title: '내 주변에 새로 생겼어요',
-                            subtitle: '반경 5km · 최근 7일',
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          if (_loading || _loadingMy)
-                            const LinearProgressIndicator(),
-                          if (_searchError != null) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              _searchError!,
-                              style: TextStyle(color: cs.error),
+                  const SizedBox(height: AppSpacing.lg),
+                  SimplePanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SimpleSectionHeader(
+                          title: '내 주변 클럽',
+                          subtitle: '버튼을 누를 때 현재 위치를 한 번만 확인해요',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        SegmentedButton<double>(
+                          segments: const [
+                            ButtonSegment(value: 3, label: Text('3km')),
+                            ButtonSegment(value: 5, label: Text('5km')),
+                            ButtonSegment(value: 10, label: Text('10km')),
+                          ],
+                          selected: {_nearbyRadiusKm},
+                          onSelectionChanged: _loadingNearby
+                              ? null
+                              : (values) {
+                                  setState(() {
+                                    _nearbyRadiusKm = values.first;
+                                    _nearbyClubs = null;
+                                    _nearbyNotice = null;
+                                  });
+                                },
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed:
+                                    _loadingNearby ? null : _findNearbyClubs,
+                                icon: const Icon(Icons.my_location_rounded),
+                                label: Text(
+                                  _loadingNearby ? '찾는 중...' : '내 위치로 찾기',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _openClubFilterSheet,
+                                icon: const Icon(Icons.map_outlined),
+                                label: const Text('지역 직접 선택'),
+                              ),
                             ),
                           ],
-                          const SizedBox(height: AppSpacing.sm),
-                          SimpleClubGrid(
-                            clubs: newClubs,
-                            favoriteIds: favoriteClubIds,
-                            onFavoriteToggle: _toggleClubFavorite,
-                          ),
+                        ),
+                        if (_loadingNearby) ...[
                           const SizedBox(height: AppSpacing.md),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _openNearbyNewClubsSheet(nearbyNewClubs),
-                              icon: const Icon(Icons.near_me_rounded),
-                              label: const Text('내 주변 새 클럽 더보기'),
-                            ),
+                          const LinearProgressIndicator(),
+                        ],
+                        if (_nearbyError != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _nearbyError!,
+                            style: TextStyle(color: cs.error),
                           ),
                         ],
-                      ),
+                        if (_nearbyNotice != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _nearbyNotice!,
+                            style: TextStyle(color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                        if (_nearbyClubs != null && !_loadingNearby) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          if (_nearbyClubs!.isEmpty)
+                            const AppEmptyState(
+                              icon: Icons.location_off_outlined,
+                              title: '주변 클럽을 찾지 못했어요',
+                              description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+                            )
+                          else ...[
+                            for (final club in _nearbyClubs!.take(4))
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: SimpleClubTile(
+                                  club: club,
+                                  backgroundColor: cs.surfaceContainerLowest,
+                                  isFavorite: favoriteClubIds.contains(club.id),
+                                  onFavoriteToggle: _toggleClubFavorite,
+                                  onOpen: () => _openClub(club),
+                                ),
+                              ),
+                            if (_nearbyClubs!.length > 4)
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      _openNearbyNewClubsSheet(_nearbyClubs!),
+                                  child: const Text('주변 클럽 전체 보기'),
+                                ),
+                              ),
+                          ],
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                   const SizedBox(height: AppSpacing.xl),
                   if (managedClubs.isNotEmpty) ...[
                     SimpleActionCard(
@@ -792,20 +1005,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     await _refreshClubLists();
   }
 
-  List<Club> _nearbyRecentClubs(List<Club> source) {
-    final now = DateTime.now();
-    return source.where((club) {
-      final createdAt = club.createdAt;
-      if (createdAt == null) return false;
-      return now.difference(createdAt).inDays <= 7;
-    }).toList()
-      ..sort((a, b) {
-        final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bDate.compareTo(aDate);
-      });
-  }
-
   List<Club> _recommendedClubs(List<Club> source) {
     final scored = [
       for (final club in source)
@@ -836,6 +1035,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       .where((post) => !post.isClosed)
       .map((post) => post.clubId)
       .toSet();
+}
+
+class _NearbyLocationException implements Exception {
+  final String message;
+
+  const _NearbyLocationException(this.message);
 }
 
 final _previewClubs = [

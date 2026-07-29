@@ -31,12 +31,20 @@ mixin ClubApi on ApiBase {
   // ── 검색 / 생성 ──────────────────────────────────────────────
 
   Future<List<Club>> searchClubs(
-      {String? sport, String? region, String? q}) async {
+      {String? sport,
+      String? region,
+      String? q,
+      double? latitude,
+      double? longitude,
+      double? radiusKm}) async {
     final res = await httpGet(
       uri('clubs-search', {
         if (sport != null) 'sport': sport,
         if (region != null) 'region': region,
         if (q != null && q.isNotEmpty) 'q': q,
+        if (latitude != null) 'latitude': latitude.toString(),
+        if (longitude != null) 'longitude': longitude.toString(),
+        if (radiusKm != null) 'radius_km': radiusKm.toString(),
       }),
       headers: await authHeaders(),
     );
@@ -111,6 +119,8 @@ mixin ClubApi on ApiBase {
     List<String>? meetingDays,
     int? monthlyFee,
     String? genderPreference,
+    double? latitude,
+    double? longitude,
   }) async {
     final res = await httpPost(
       uri('clubs-create'),
@@ -131,6 +141,8 @@ mixin ClubApi on ApiBase {
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       }),
     );
     check(res);

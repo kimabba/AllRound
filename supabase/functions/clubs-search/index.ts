@@ -1,6 +1,7 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { distanceKm, numberParam } from './nearby.ts';
 
 /**
  * GET /clubs-search?sport=tennis&region=광주&q=...
@@ -19,6 +20,18 @@ Deno.serve(async (req) => {
     return errorResponse('sport must be tennis or futsal');
   }
   const region = url.searchParams.get('region');
+  const latitude = numberParam(url.searchParams.get('latitude'));
+  const longitude = numberParam(url.searchParams.get('longitude'));
+  const radiusKm = numberParam(url.searchParams.get('radius_km'));
+  const nearbyRequested = latitude !== null || longitude !== null || radiusKm !== null;
+  if (
+    nearbyRequested &&
+    (latitude === null || longitude === null || radiusKm === null ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 ||
+      radiusKm < 1 || radiusKm > 50)
+  ) {
+    return errorResponse('invalid nearby search coordinates or radius', 400);
+  }
   const rawQ = url.searchParams.get('q');
   // PostgREST .or() 표현식 메타문자 제거 (SEC-M-01 방어)
   const q = rawQ?.replace(/[(),:%_]/g, ' ').trim().slice(0, 100);
@@ -77,6 +90,56 @@ Deno.serve(async (req) => {
         club_members: mem ? [{ ...mem, user_id: auth.user.id }] : [],
       };
     });
+    return jsonResponse({ clubs });
+  }
+
+  if (latitude !== null && longitude !== null && radiusKm !== null) {
+    const supa = serviceClient();
+    let nearbyQuery = supa
+      .from('clubs')
+      .select('*')
+      .eq('status', 'approved')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .limit(500);
+    if (sport) nearbyQuery = nearbyQuery.eq('sport', sport);
+    const { data, error } = await nearbyQuery;
+    if (error) return errorResponse(error.message, 500);
+
+    const { data: memberships } = await supa
+      .from('club_members')
+      .select('club_id, role, status, can_post_notice')
+      .eq('user_id', auth.user.id)
+      .eq('status', 'active');
+    const membershipByClub = new Map(
+      (memberships ?? []).map((membership) => [
+        membership.club_id as string,
+        membership,
+      ]),
+    );
+
+    const clubs = (data ?? [])
+      .map((club) => {
+        const clubLatitude = club.latitude as number | null;
+        const clubLongitude = club.longitude as number | null;
+        if (clubLatitude === null || clubLongitude === null) return null;
+        const distance = distanceKm(
+          latitude,
+          longitude,
+          clubLatitude,
+          clubLongitude,
+        );
+        if (distance > radiusKm) return null;
+        const membership = membershipByClub.get(club.id as string);
+        return {
+          ...club,
+          distance_km: Math.round(distance * 10) / 10,
+          club_members: membership ? [{ ...membership, user_id: auth.user.id }] : [],
+        };
+      })
+      .filter((club): club is Record<string, unknown> => club !== null)
+      .sort((a, b) => (a.distance_km as number) - (b.distance_km as number))
+      .slice(0, limit);
     return jsonResponse({ clubs });
   }
 

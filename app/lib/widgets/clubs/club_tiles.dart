@@ -92,13 +92,13 @@ class NearbyNewClubsSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '내 주변 새 클럽',
+                          '내 주변 클럽',
                           style: tt.titleLarge?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         Text(
-                          '반경 5km · 최근 7일 안에 생성된 클럽',
+                          '가까운 순서로 확인해보세요',
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),
@@ -114,8 +114,8 @@ class NearbyNewClubsSheet extends StatelessWidget {
                   child: Center(
                     child: AppEmptyState(
                       icon: Icons.groups_2_rounded,
-                      title: '새로 생긴 클럽이 없습니다',
-                      description: '관심 조건을 바꾸거나 조금 뒤에 다시 확인해보세요.',
+                      title: '주변 클럽이 없습니다',
+                      description: '반경을 넓히거나 지역을 직접 선택해보세요.',
                     ),
                   ),
                 )
@@ -159,14 +159,9 @@ class NearbyNewClubCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final createdAt = club.createdAt;
-    final daysAgo =
-        createdAt == null ? null : DateTime.now().difference(createdAt).inDays;
-    final createdLabel = daysAgo == null
-        ? '최근 생성'
-        : daysAgo == 0
-            ? '오늘 생성'
-            : '$daysAgo일 전 생성';
+    final distanceLabel = club.distanceKm == null
+        ? '같은 지역'
+        : '${club.distanceKm!.toStringAsFixed(1)}km';
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -195,7 +190,7 @@ class NearbyNewClubCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                       child: Text(
-                        'NEW',
+                        'NEAR',
                         style: tt.labelSmall?.copyWith(
                           color: cs.onPrimaryContainer,
                           fontWeight: FontWeight.w900,
@@ -204,7 +199,7 @@ class NearbyNewClubCard extends StatelessWidget {
                     ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
-                      createdLabel,
+                      distanceLabel,
                       style: tt.labelSmall?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w800,
@@ -221,7 +216,7 @@ class NearbyNewClubCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  club.description ?? '새로 등록된 클럽입니다.',
+                  club.description ?? '가까운 클럽의 일정과 활동을 확인해보세요.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -455,7 +450,11 @@ class SimpleClubTile extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      clubRegionMemberLabel(item.region, item.memberCount),
+                      [
+                        clubRegionMemberLabel(item.region, item.memberCount),
+                        if (item.distanceKm != null)
+                          '${item.distanceKm!.toStringAsFixed(1)}km',
+                      ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tt.bodySmall?.copyWith(

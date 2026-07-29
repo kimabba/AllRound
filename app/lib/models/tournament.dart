@@ -320,6 +320,9 @@ class Club {
   final int? monthlyFee;
   final String? genderPreference;
   final bool inquiryLinksEnabled;
+  final double? latitude;
+  final double? longitude;
+  final double? distanceKm;
   final DateTime? createdAt;
   // 현재 사용자의 멤버십 정보 (조회 시 join)
   final String? myRole; // 'owner'|'manager'|'member'|null
@@ -344,6 +347,9 @@ class Club {
     this.monthlyFee,
     this.genderPreference,
     this.inquiryLinksEnabled = true,
+    this.latitude,
+    this.longitude,
+    this.distanceKm,
     this.createdAt,
     this.myRole,
     this.myCanPostNotice = false,
@@ -388,6 +394,9 @@ class Club {
       monthlyFee: j['monthly_fee'] as int?,
       genderPreference: j['gender_preference'] as String?,
       inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,
+      latitude: (j['latitude'] as num?)?.toDouble(),
+      longitude: (j['longitude'] as num?)?.toDouble(),
+      distanceKm: (j['distance_km'] as num?)?.toDouble(),
       createdAt: j['created_at'] != null
           ? DateTime.parse(j['created_at'] as String)
           : null,
