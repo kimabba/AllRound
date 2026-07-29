@@ -183,53 +183,122 @@ class TennisDivision {
   /// 예: 초급자부(경력 기준 별도 대회), 마스터즈부, 혼합복식, 지동부.
   /// 기본 true — 대부분의 부서가 등급이고 예외만 명시한다(DB default 와 동일).
   final bool isRankingGrade;
+
+  /// 카탈로그에 살아 있는가(DB tennis_divisions.is_active).
+  /// false 여도 **라벨 해석은 된다** — 과거 데이터에 코드 원문이 노출되면 안 되기 때문에
+  /// 목록(all)에서만 빠진다. GradeCatalog 의 폐기 등급과 같은 취급이다.
+  final bool isActive;
   final String gender; // 'male' | 'female' | 'mixed' | 'all'
   const TennisDivision({
     required this.code,
     required this.org,
     required this.label,
     this.isRankingGrade = true,
+    this.isActive = true,
     this.gender = 'all',
   });
 }
 
 const _kFallbackDivisions = <TennisDivision>[
-  // 광주광역시 (gj) — 남자
+  // KTA 대한테니스협회
+  TennisDivision(code: 'kta_m_open', org: 'kta', label: '남자오픈', gender: 'male'),
   TennisDivision(
-      code: 'gj_m_open',
-      org: 'gj',
-      label: '오픈부',
-      gender: 'male'),
-  TennisDivision(
-      code: 'gj_m_gold',
-      org: 'gj',
-      label: '골드부',
-      gender: 'male'),
-  TennisDivision(
-      code: 'gj_m_general',
-      org: 'gj',
-      label: '일반부',
-      gender: 'male'),
-  TennisDivision(
-      code: 'gj_m_instructor',
-      org: 'gj',
-      label: '지도자부',
-      gender: 'male'),
-  // 광주 — 대회 종목 전용(개인 등급 아님)이 섞여 있다
-  TennisDivision(
-      code: 'gj_m_masters',
-      org: 'gj',
-      label: '마스터즈부',
+      code: 'kta_mixed',
+      org: 'kta',
+      label: '혼합복식',
       isRankingGrade: false,
-      gender: 'male'),
-  TennisDivision(code: 'gj_m_rookie', org: 'gj', label: '신인부', gender: 'male'),
+      gender: 'mixed'),
+  TennisDivision(code: 'kta_senior_60', org: 'kta', label: '시니어 60+'),
+  TennisDivision(code: 'kta_senior_65', org: 'kta', label: '시니어 65+'),
   TennisDivision(
-      code: 'gj_m_veteran', org: 'gj', label: '베테랑부', gender: 'male'),
+      code: 'kta_w_open',
+      org: 'kta',
+      label: '여자오픈',
+      gender: 'female'),
+
+  // KATO 한국테니스발전협의회
+  TennisDivision(code: 'kato_challenger', org: 'kato', label: '챌린저부'),
+  TennisDivision(
+      code: 'kato_couple',
+      org: 'kato',
+      label: '부부혼합부',
+      isRankingGrade: false,
+      gender: 'mixed'),
+  TennisDivision(
+      code: 'kato_futures_m',
+      org: 'kato',
+      label: '남자퓨처스부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'kato_futures_w',
+      org: 'kato',
+      label: '여자퓨처스부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'kato_gaenari',
+      org: 'kato',
+      label: '개나리부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'kato_gukhwa',
+      org: 'kato',
+      label: '국화부',
+      gender: 'mixed'),
+  TennisDivision(code: 'kato_instructor', org: 'kato', label: '지도자부'),
+  TennisDivision(code: 'kato_masters', org: 'kato', label: '마스터스부'),
+  TennisDivision(
+      code: 'kato_mixed',
+      org: 'kato',
+      label: '혼합복식부',
+      isRankingGrade: false,
+      gender: 'mixed'),
+  TennisDivision(code: 'kato_veteran', org: 'kato', label: '베테랑부'),
+
+  // KATA 한국동호인테니스협회 — 부수제
+  TennisDivision(code: 'kata_1', org: 'kata', label: '1부', gender: 'male'),
+  TennisDivision(code: 'kata_2', org: 'kata', label: '2부', gender: 'male'),
+  TennisDivision(code: 'kata_3', org: 'kata', label: '3부', gender: 'male'),
+  TennisDivision(code: 'kata_4', org: 'kata', label: '4부', gender: 'male'),
+  TennisDivision(code: 'kata_5', org: 'kata', label: '5부', gender: 'male'),
+  TennisDivision(code: 'kata_w', org: 'kata', label: '여자부', gender: 'female'),
+
+  // KTFS 전국테니스연합회 — 2016년 KTA 에 흡수·소멸(비활성)
+  TennisDivision(
+      code: 'ktfs_beginner',
+      org: 'ktfs',
+      label: '초급',
+      isActive: false),
+  TennisDivision(
+      code: 'ktfs_general',
+      org: 'ktfs',
+      label: '일반',
+      isActive: false),
+  TennisDivision(code: 'ktfs_open', org: 'ktfs', label: '오픈', isActive: false),
+  TennisDivision(
+      code: 'ktfs_w',
+      org: 'ktfs',
+      label: '여자부',
+      isActive: false,
+      gender: 'female'),
+
+  // KSTF 한국시니어테니스연맹
+  TennisDivision(code: 'kstf_60', org: 'kstf', label: '60+부'),
+  TennisDivision(code: 'kstf_65', org: 'kstf', label: '65+부'),
+  TennisDivision(code: 'kstf_70', org: 'kstf', label: '70+부'),
+
+  // 광주광역시테니스협회
   TennisDivision(
       code: 'gj_m_beginner',
       org: 'gj',
       label: '초급자부',
       isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(code: 'gj_m_general', org: 'gj', label: '일반부', gender: 'male'),
+  TennisDivision(code: 'gj_m_gold', org: 'gj', label: '골드부', gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_instructor',
+      org: 'gj',
+      label: '지도자부',
       gender: 'male'),
   TennisDivision(
       code: 'gj_m_jidong',
@@ -237,37 +306,44 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '지동부',
       isRankingGrade: false,
       gender: 'male'),
-  // 광주 — 여자
   TennisDivision(
-      code: 'gj_w_open', org: 'gj', label: '여자오픈부', gender: 'female'),
-  TennisDivision(
-      code: 'gj_w_winner',
+      code: 'gj_m_masters',
       org: 'gj',
-      label: '여자우승자부',
+      label: '마스터즈부',
+      isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(code: 'gj_m_open', org: 'gj', label: '오픈부', gender: 'male'),
+  TennisDivision(code: 'gj_m_rookie', org: 'gj', label: '신인부', gender: 'male'),
+  TennisDivision(
+      code: 'gj_m_veteran',
+      org: 'gj',
+      label: '베테랑부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'gj_w_open',
+      org: 'gj',
+      label: '여자오픈부',
       gender: 'female'),
   TennisDivision(
       code: 'gj_w_rookie',
       org: 'gj',
       label: '여자신인부',
       gender: 'female'),
-  // 광주 — 혼성
+  TennisDivision(
+      code: 'gj_w_winner',
+      org: 'gj',
+      label: '여자우승자부',
+      gender: 'female'),
 
-  // 전라남도 (jn)
+  // 전라남도테니스협회
   TennisDivision(
-      code: 'jn_m_open',
+      code: 'jn_m_beginner',
       org: 'jn',
-      label: '오픈부',
+      label: '초급자부',
+      isRankingGrade: false,
       gender: 'male'),
-  TennisDivision(
-      code: 'jn_m_gold',
-      org: 'jn',
-      label: '골드부',
-      gender: 'male'),
-  TennisDivision(
-      code: 'jn_m_general',
-      org: 'jn',
-      label: '일반부',
-      gender: 'male'),
+  TennisDivision(code: 'jn_m_general', org: 'jn', label: '일반부', gender: 'male'),
+  TennisDivision(code: 'jn_m_gold', org: 'jn', label: '골드부', gender: 'male'),
   TennisDivision(
       code: 'jn_m_instructor',
       org: 'jn',
@@ -279,56 +355,51 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '마스터즈부',
       isRankingGrade: false,
       gender: 'male'),
+  TennisDivision(code: 'jn_m_open', org: 'jn', label: '오픈부', gender: 'male'),
   TennisDivision(code: 'jn_m_rookie', org: 'jn', label: '신인부', gender: 'male'),
   TennisDivision(
-      code: 'jn_m_veteran', org: 'jn', label: '베테랑부', gender: 'male'),
-  TennisDivision(
-      code: 'jn_m_beginner',
+      code: 'jn_m_veteran',
       org: 'jn',
-      label: '초급자부',
-      isRankingGrade: false,
+      label: '베테랑부',
       gender: 'male'),
   TennisDivision(
-      code: 'jn_w_open', org: 'jn', label: '여자오픈부', gender: 'female'),
-  TennisDivision(
-      code: 'jn_w_winner',
+      code: 'jn_w_open',
       org: 'jn',
-      label: '여자우승자부',
+      label: '여자오픈부',
       gender: 'female'),
   TennisDivision(
       code: 'jn_w_rookie',
       org: 'jn',
       label: '여자신인부',
       gender: 'female'),
-
-  // KTA
-  TennisDivision(code: 'kta_m_open', org: 'kta', label: '남자오픈', gender: 'male'),
   TennisDivision(
-      code: 'kta_w_open', org: 'kta', label: '여자오픈', gender: 'female'),
+      code: 'jn_w_winner',
+      org: 'jn',
+      label: '여자우승자부',
+      gender: 'female'),
+
+  // 시·군/클럽 자체 — 임시 등급(비활성)
   TennisDivision(
-      code: 'kta_mixed',
-      org: 'kta',
-      label: '혼합복식',
-      isRankingGrade: false,
-      gender: 'mixed'),
-  TennisDivision(code: 'kta_senior_60', org: 'kta', label: '시니어 60+'),
-  TennisDivision(code: 'kta_senior_65', org: 'kta', label: '시니어 65+'),
-
-  // KATA — 부수제
-  TennisDivision(code: 'kata_1', org: 'kata', label: '1부', gender: 'male'),
-  TennisDivision(code: 'kata_2', org: 'kata', label: '2부', gender: 'male'),
-  TennisDivision(code: 'kata_3', org: 'kata', label: '3부', gender: 'male'),
-  TennisDivision(code: 'kata_4', org: 'kata', label: '4부', gender: 'male'),
-  TennisDivision(code: 'kata_5', org: 'kata', label: '5부', gender: 'male'),
-  TennisDivision(code: 'kata_w', org: 'kata', label: '여자부', gender: 'female'),
-
-  // KSTF (시니어)
-  TennisDivision(code: 'kstf_60', org: 'kstf', label: '60+부'),
-  TennisDivision(code: 'kstf_65', org: 'kstf', label: '65+부'),
-  TennisDivision(code: 'kstf_70', org: 'kstf', label: '70+부'),
-
-  // KTFS(2016년 KTA 흡수·소멸)·local(클럽 자체 임시 등급)은 DB 에서 is_active=false 라
-  // 폴백에서도 뺀다 — 남겨두면 DB 로드 실패 시에만 유령처럼 되살아난다.
+      code: 'local_general',
+      org: 'local',
+      label: '자체 일반',
+      isActive: false),
+  TennisDivision(
+      code: 'local_open',
+      org: 'local',
+      label: '자체 오픈',
+      isActive: false),
+  TennisDivision(
+      code: 'local_rookie',
+      org: 'local',
+      label: '자체 신인',
+      isActive: false),
+  TennisDivision(
+      code: 'local_w',
+      org: 'local',
+      label: '자체 여자부',
+      isActive: false,
+      gender: 'female'),
 ];
 
 /// 부서 카탈로그: 미로드 시 const fallback, load 성공 시 DB 결과로 완전 교체.
@@ -354,8 +425,15 @@ class DivisionCatalog {
 
   bool get isLoaded => _ordered != null;
 
-  /// 로드됐으면 DB 결과, 아니면 const fallback.
-  List<TennisDivision> get all => _ordered ?? _kFallbackDivisions;
+  /// 목록은 **활성 부서만**. 비활성은 byCode(라벨 해석)에만 남는다.
+  List<TennisDivision> get all => (_ordered ?? _kFallbackDivisions)
+      .where((d) => d.isActive)
+      .toList(growable: false);
+
+  /// 비활성까지 포함한 폴백 원본. check_division_parity.py 가 DB 와 대조하는 JSON
+  /// 스냅샷과의 일치를 Flutter 테스트가 이걸로 확인한다(스냅샷 다리).
+  @visibleForTesting
+  List<TennisDivision> get fallbackSnapshot => _kFallbackDivisions;
 
   TennisDivision? byCode(String code) => (_byCode ?? _kFallbackByCode)[code];
 
@@ -366,8 +444,8 @@ class DivisionCatalog {
     try {
       final rows = await client
           .from('tennis_divisions')
-          .select('code, org_code, label_ko, gender, is_ranking_grade')
-          .eq('is_active', true)
+          .select(
+              'code, org_code, label_ko, gender, is_ranking_grade, is_active')
           .order('code');
       // reset()/재로드로 세대가 바뀌었으면 이 결과는 버린다(stale 반영 방지).
       if (gen == _generation) {
@@ -389,8 +467,11 @@ class DivisionCatalog {
               org: r['org_code'] as String,
               label: r['label_ko'] as String,
               gender: (r['gender'] as String?) ?? 'all',
-              // 컬럼이 없는 구버전 응답이면 true — 기존 동작(전부 등급)을 유지한다.
+              // null 방어. 두 컬럼 다 NOT NULL 이라 정상 응답에는 null 이 없다.
+              // 컬럼 자체가 없는 구버전 스키마면 select 가 통째로 실패해 여기 오지
+              // 않는다(폴백 유지) — 앱보다 마이그레이션이 먼저 적용돼야 한다.
               isRankingGrade: (r['is_ranking_grade'] as bool?) ?? true,
+              isActive: (r['is_active'] as bool?) ?? true,
             ))
         .toList();
     final ordered = _sortByOrgPriority(divisions);

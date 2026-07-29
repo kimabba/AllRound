@@ -31,6 +31,16 @@
 --
 -- 주의: 기존 event_type 컬럼(doubles/mixed/couple)은 **복식 형태** 구분이다.
 --       이번 축과 이름만 비슷하고 뜻이 다르므로 별도 컬럼을 쓴다.
+--
+-- 이 단계가 **끝내지 않는 것** (codex 지적, 의도적으로 남긴다):
+--   자격 매칭은 여전히 배열 교집합이다(tournaments_for_user · 챗 검색 RPC). 종목 전용
+--   코드로만 열리는 대회는 유저 division_codes 와 겹칠 수 없으니 only_my_grade 필터와
+--   홈 추천에서 빠진다. 전체 목록·수동 부서 필터에서는 그대로 보인다.
+--   이는 **회귀가 아니라 기존 상태의 고착**이다 — 그 코드를 등급으로 가진 유저가 이미
+--   0명이라 지금도 아무에게도 매칭되지 않는다. 다만 앞으로도 그럴 수 없게 된다.
+--   실제 자격(KATO 혼합복식·부부혼합, KTA 혼합복식)은 남녀 각자의 부서·연령·입상 이력
+--   조합으로 판정되므로, 등급 배열 하나로는 애초에 표현할 수 없다. 개인 자격 → 종목
+--   매핑과 3값 판정(가능/불가/알 수 없음)은 다음 단계에서 다룬다.
 
 begin;
 
@@ -80,7 +90,14 @@ insert into public.tennis_divisions
   (code, org_code, label_ko, synonyms, skill_tier, gender, event_type, is_active, is_ranking_grade)
 values
   ('gj_m_jidong', 'gj', '지동부', array['지동부'], null, 'male', 'doubles', true, false)
-on conflict (code) do nothing;
+on conflict (code) do update set
+  -- do nothing 이면 이 코드가 다른 값으로 이미 있을 때 교정하지 못한다. 2번 UPDATE 는
+  -- 목록에 gj_m_jidong 이 없어 손대지 않고, 4번은 is_ranking_grade=true 인 행을
+  -- 걷어내지 않는다 — 재실행이 정본으로 수렴하도록 분류·활성 상태를 덮는다(codex).
+  is_ranking_grade = excluded.is_ranking_grade,
+  is_active = excluded.is_active,
+  org_code = excluded.org_code,
+  label_ko = excluded.label_ko;
 
 -- ── 4) 종목 전용 코드를 유저 등록에서 걷어낸다 ────────────────────────────
 -- 대회(eligible_grades)에서는 빼지 않는다. 대회는 실제로 그 종목을 연다.
@@ -100,6 +117,17 @@ where exists (
   where d.is_ranking_grade = false
 );
 
+-- 표시용 division 문자열은 **일부러 손대지 않는다**.
+--   codex 가 지적한 대로 division 은 division_codes 라벨의 사본이라(예: 실측 1건이
+--   '마스터즈부 · 지도자부') 배열만 고치면 둘이 어긋나고, 챗 컨텍스트
+--   (functions/chat/context.ts)는 배열이 아니라 이 문자열을 읽는다.
+--   그런데 division 은 **PK 의 일부**다 — user_tennis_orgs_pkey (user_id, org, division).
+--   여기서 고치면 표시 수정이 아니라 행 식별자 변경이 되고, 같은 (user_id, org)에 대상
+--   문자열이 이미 있으면 PK 충돌로 마이그레이션이 죽는다.
+--   반면 앱의 saveTennisOrgs 는 delete-all + insert 라(services/user_api.dart:142)
+--   유저가 온보딩을 한 번 저장하면 문자열이 저절로 맞춰진다.
+--   → 위험 대비 이득이 낮아 남긴다. division 이 PK 인 것 자체가 부채이므로 별건으로 다룬다.
+
 -- ── 5) 실체 없는 협회의 부서 비활성화 ─────────────────────────────────────
 -- KTFS: 2016년 KTA 에 흡수·소멸한 협회. local: 클럽 자체 임시 등급.
 -- 둘 다 대회 0건·유저 0명. 행은 남기고 노출만 끊는다(참조가 생겼을 때 라벨 해석 유지).
@@ -117,9 +145,53 @@ update public.tennis_divisions set score_min = 1, score_max = 7 where code = 'gj
 update public.tennis_divisions set score_min = 1, score_max = 4 where code = 'gj_m_general';
 update public.tennis_divisions set score_min = 0, score_max = 4 where code = 'gj_m_instructor';
 
--- ponytail: user_tennis_orgs.division_codes 에 종목 전용 코드가 못 들어가게 하는
--- 트리거는 달지 않았다. 쓰기 경로가 온보딩 하나뿐이고 거기서 필터하기 때문이다.
--- PostgREST 직행으로 넣는 경로가 실제로 생기면 그때 enforce_eligible_grade_format 과
--- 같은 형태의 테이블 트리거를 단다.
+-- ── 7) 새 불변식을 DB 에서 강제한다 ───────────────────────────────────────
+-- 처음엔 "쓰기 경로가 온보딩 하나뿐"이라 보고 트리거를 생략했다. codex 리뷰 2건이
+-- 같은 구멍을 지적했고, 확인해보니 틀린 전제였다:
+--   · 앱은 user_tennis_orgs 에 PostgREST 로 직접 upsert 한다(services/user_api.dart)
+--   · RLS 는 본인 행인지와 연령만 본다(20260718030000) — 코드 유효성 검사가 없다
+--   · 이 마이그레이션보다 앱 배포가 늦으면, 그 사이 구버전 UI 가 종목 전용 칩을
+--     계속 보여주고 저장해 4번의 정리를 곧바로 되돌린다
+-- 그러면 "등급과 종목의 분리"가 서버 정본이 아니라 최신 UI 버전에만 의존하게 된다.
+-- enforce_eligible_grade_format(20260726010000)과 같은 형태로, 모든 경로가 반드시
+-- 지나가는 테이블 트리거에 검사를 단다.
+--
+-- **등록된 코드 중 is_ranking_grade=false 인 것만** 막는다. 미등록 코드는 통과시킨다 —
+-- 의미 검증까지 하면 새 부서를 넣는 순서에 따라 저장이 막히고, 그건 이 트리거가
+-- 지켜야 할 불변식이 아니다(같은 이유로 tournaments 쪽은 형식만 본다).
+create or replace function public.enforce_user_division_is_ranking_grade()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  bad text;
+begin
+  if new.division_codes is null or array_length(new.division_codes, 1) is null then
+    return new;
+  end if;
+
+  select string_agg(d.code, ', ' order by d.code)
+  into bad
+  from public.tennis_divisions d
+  where d.code = any (new.division_codes)
+    and d.is_ranking_grade = false;
+
+  if bad is not null then
+    raise exception
+      'division_codes 에 대회 종목 전용 부서가 들어왔다: %. 유저는 랭킹 등급만 가질 수 있다.',
+      bad
+      using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_user_division_is_ranking_grade on public.user_tennis_orgs;
+create trigger enforce_user_division_is_ranking_grade
+  before insert or update of division_codes on public.user_tennis_orgs
+  for each row
+  execute function public.enforce_user_division_is_ranking_grade();
 
 commit;

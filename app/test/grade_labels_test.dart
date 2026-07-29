@@ -151,8 +151,8 @@ void main() {
       final labels = tennisDivisionLabels();
       // 유니크해야 함
       expect(labels.toSet().length, labels.length);
-      // 첫 등장 순서 보존: 광주(gj) 오픈부가 첫 항목
-      expect(labels.first, '오픈부');
+      // 첫 등장 순서 보존: 카탈로그 순서(협회 sort_order → code)의 첫 부서
+      expect(labels.first, '남자오픈');
       // 골드부/일반부 등 공통 라벨 포함
       expect(labels, contains('골드부'));
       expect(labels, contains('일반부'));
@@ -192,7 +192,8 @@ void main() {
   group('org-scoped division helpers', () {
     test('tennisDivisionLabelsForOrg(gj) → 광주 부서 라벨만, 첫 등장 순서', () {
       final labels = tennisDivisionLabelsForOrg('gj');
-      expect(labels.first, '오픈부');
+      // gj 그룹 안에서는 code 순 — DB 가 order('code') 로 주는 순서와 같다.
+      expect(labels.first, '초급자부');
       expect(labels, contains('골드부'));
       expect(labels, contains('지도자부'));
       // 유니크
@@ -262,17 +263,19 @@ void main() {
       OrgCatalog.instance.reset();
     });
 
-    test('미로드 시 all()은 const fallback 반환', () {
+    test('미로드 시 all()은 const fallback 반환 — DB 정본과 같은 목록', () {
       expect(DivisionCatalog.instance.isLoaded, isFalse);
-      // fallback 에는 kato 부서가 없다
-      expect(
-        DivisionCatalog.instance.all.where((d) => d.org == 'kato'),
-        isEmpty,
-      );
+      // 폴백은 이제 DB 전량의 사본이다(check_division_parity.py 가 강제). 예전엔 kato 가
+      // 통째로 빠져 있어 오프라인에서 코드 원문이 노출됐다.
+      expect(DivisionCatalog.instance.all.where((d) => d.org == 'kato'),
+          isNotEmpty);
+      expect(DivisionCatalog.instance.all.map((d) => d.code),
+          containsAll(['kato_gaenari', 'gj_m_open', 'kta_m_open']));
     });
 
-    test('미로드 시 divisionLabel(kato_*)은 코드 원문 반환', () {
-      expect(divisionLabel('kato_gaenari'), 'kato_gaenari');
+    test('미로드 시에도 divisionLabel(kato_*)이 라벨을 준다', () {
+      // 스플래시 게이트(JY-121)가 늦거나 로드가 실패해도 코드 원문이 새지 않는다.
+      expect(divisionLabel('kato_gaenari'), '개나리부');
     });
 
     test('ingestRows 후 kato 라벨 해석', () {
@@ -296,6 +299,36 @@ void main() {
       // 로드 성공 시 완전 교체: fallback gj 부서는 더 이상 없음
       expect(DivisionCatalog.instance.all.where((d) => d.org == 'gj'), isEmpty);
       expect(tennisDivisionLabelsForOrg('kato'), ['개나리부', '마스터스부']);
+    });
+
+    // check_division_parity.py 가 DB 와 대조하는 JSON 스냅샷이 이 폴백과 같은지 확인한다.
+    // 다리의 반대쪽 — 마이그레이션에서 분류를 하나 빠뜨리거나 폴백에서 코드를 지우면
+    // 둘 중 하나가 반드시 빨간불이 된다(codex: 기존 '왕복' 테스트는 목록 자체를 순회해
+    // 삭제된 코드가 검사 대상에서 함께 사라지므로 조용히 약해진다).
+    test('폴백 전체가 JSON 스냅샷과 순서·값 모두 일치한다(스냅샷 다리)', () {
+      DivisionCatalog.instance.reset();
+      final snapshot = jsonDecode(
+        File('test/fixtures/division_fallback.json').readAsStringSync(),
+      ) as List<dynamic>;
+      final actual = DivisionCatalog.instance.fallbackSnapshot
+          .map((d) => {
+                'code': d.code,
+                'org': d.org,
+                'label': d.label,
+                'isRankingGrade': d.isRankingGrade,
+                'isActive': d.isActive,
+              })
+          .toList();
+      expect(actual, snapshot);
+    });
+
+    test('비활성 부서는 목록에서 빠지되 라벨 해석은 된다', () {
+      DivisionCatalog.instance.reset();
+      // 과거 대회 상세에 'ktfs_open' 같은 코드 원문이 뜨면 안 된다.
+      expect(divisionLabel('ktfs_open'), '오픈');
+      expect(divisionLabel('local_w'), '자체 여자부');
+      expect(tennisDivisions.map((d) => d.code), isNot(contains('ktfs_open')));
+      expect(divisionsForOrg('ktfs'), isEmpty);
     });
 
     test('ingestRows 가 is_ranking_grade 를 반영하고, 없으면 등급으로 본다', () {
@@ -382,7 +415,8 @@ void main() {
       expect(DivisionCatalog.instance.isLoaded, isTrue);
       DivisionCatalog.instance.reset();
       expect(DivisionCatalog.instance.isLoaded, isFalse);
-      expect(divisionLabel('kato_gaenari'), 'kato_gaenari');
+      // 폴백으로 복귀 — 폴백도 kato 를 들고 있으므로 라벨은 그대로 나온다.
+      expect(divisionLabel('kato_gaenari'), '개나리부');
     });
 
     // JY-121: 스플래시 게이트가 이 Future 를 기다려 stale fallback 을 예방한다.

@@ -1,0 +1,387 @@
+[
+    {
+        "org": "kta",
+        "code": "kta_m_open",
+        "label": "남자오픈",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kta",
+        "code": "kta_mixed",
+        "label": "혼합복식",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "kta",
+        "code": "kta_senior_60",
+        "label": "시니어 60+",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kta",
+        "code": "kta_senior_65",
+        "label": "시니어 65+",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kta",
+        "code": "kta_w_open",
+        "label": "여자오픈",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_challenger",
+        "label": "챌린저부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_couple",
+        "label": "부부혼합부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "kato",
+        "code": "kato_futures_m",
+        "label": "남자퓨처스부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_futures_w",
+        "label": "여자퓨처스부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_gaenari",
+        "label": "개나리부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_gukhwa",
+        "label": "국화부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_instructor",
+        "label": "지도자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_masters",
+        "label": "마스터스부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kato",
+        "code": "kato_mixed",
+        "label": "혼합복식부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "kato",
+        "code": "kato_veteran",
+        "label": "베테랑부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_1",
+        "label": "1부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_2",
+        "label": "2부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_3",
+        "label": "3부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_4",
+        "label": "4부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_5",
+        "label": "5부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kata",
+        "code": "kata_w",
+        "label": "여자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "ktfs",
+        "code": "ktfs_beginner",
+        "label": "초급",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "ktfs",
+        "code": "ktfs_general",
+        "label": "일반",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "ktfs",
+        "code": "ktfs_open",
+        "label": "오픈",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "ktfs",
+        "code": "ktfs_w",
+        "label": "여자부",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kstf",
+        "code": "kstf_60",
+        "label": "60+부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kstf",
+        "code": "kstf_65",
+        "label": "65+부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "kstf",
+        "code": "kstf_70",
+        "label": "70+부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_beginner",
+        "label": "초급자부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_general",
+        "label": "일반부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_gold",
+        "label": "골드부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_instructor",
+        "label": "지도자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_jidong",
+        "label": "지동부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_masters",
+        "label": "마스터즈부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_open",
+        "label": "오픈부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_rookie",
+        "label": "신인부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_m_veteran",
+        "label": "베테랑부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_w_open",
+        "label": "여자오픈부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_w_rookie",
+        "label": "여자신인부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_w_winner",
+        "label": "여자우승자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_beginner",
+        "label": "초급자부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_general",
+        "label": "일반부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_gold",
+        "label": "골드부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_instructor",
+        "label": "지도자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_masters",
+        "label": "마스터즈부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_open",
+        "label": "오픈부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_rookie",
+        "label": "신인부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_m_veteran",
+        "label": "베테랑부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_w_open",
+        "label": "여자오픈부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_w_rookie",
+        "label": "여자신인부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_w_winner",
+        "label": "여자우승자부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "local",
+        "code": "local_general",
+        "label": "자체 일반",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "local",
+        "code": "local_open",
+        "label": "자체 오픈",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "local",
+        "code": "local_rookie",
+        "label": "자체 신인",
+        "isActive": false,
+        "isRankingGrade": true
+    },
+    {
+        "org": "local",
+        "code": "local_w",
+        "label": "자체 여자부",
+        "isActive": false,
+        "isRankingGrade": true
+    }
+]
