@@ -61,6 +61,13 @@ function extractCompactDates(text: string): string[] {
     const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
     if (y < nowYear - 1 || y > nowYear + 5) continue;
     if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+    // 달력에 실재하는 날짜만 — 20260231 같은 값이 통과하면 안 된다(codex).
+    const probe = new Date(Date.UTC(y, mo - 1, d));
+    if (
+      probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d
+    ) {
+      continue;
+    }
     out.push(`${m[1]}-${m[2]}-${m[3]}`);
   }
   return out;
@@ -138,10 +145,20 @@ export function parseListing(html: string, baseUrl: string): BoardItem[] {
 
     let sid: string | null = null;
     if (boTable) {
-      if (!absolute.includes(`bo_table=${boTable}`)) continue;
-      const m = absolute.match(/[?&]wr_id=(\d+)/);
-      if (!m) continue;
-      sid = m[1];
+      // 문자열 포함으로 보면 bo_table=game2 가 game 으로 통과한다(codex).
+      // 파라미터로 파싱해 정확히 같은 값만 받는다.
+      let linkTable: string | null = null;
+      let wrId: string | null = null;
+      try {
+        const u = new URL(absolute);
+        linkTable = u.searchParams.get('bo_table');
+        wrId = u.searchParams.get('wr_id');
+      } catch {
+        continue;
+      }
+      if (linkTable !== boTable) continue;
+      if (!wrId || !/^\d+$/.test(wrId)) continue;
+      sid = wrId;
     } else {
       if (!href.includes('sub5_2_2_view') || !href.includes('sid=')) continue;
       const m = absolute.match(/[?&]sid=(\d+)/);
@@ -208,9 +225,15 @@ export async function fetchDetail(
   const h3El = dom.querySelector('h3');
   let title = (h3El?.textContent ?? '').replace(/\s+/g, ' ').trim() || titleHint;
   if (dom.querySelector('#bo_v_con')) {
+    // 표준 그누보드의 <title> 은 '{글 제목} > {게시판} | {사이트명}' 이다.
+    // 길이 비교로 고르면 h3 가 진짜 제목인 사이트에서도 덮어쓸 수 있다(codex).
+    // h3 가 그 글 제목에 **들어 있지 않을 때만** 게시판 이름으로 보고 갈아탄다.
+    //   지도자회 h3='대회관련'  → 제목에 없음 → <title> 사용
+    //   북구     h3='제26회 …' → 제목에 있음 → h3 유지
     const docTitle = (dom.querySelector('title')?.textContent ?? '')
       .split('>')[0].replace(/\s+/g, ' ').trim();
-    if (docTitle && docTitle.length > title.length) title = docTitle;
+    if (docTitle && title && !docTitle.includes(title)) title = docTitle;
+    else if (docTitle && !title) title = docTitle;
   }
   if (!title) return { rawHtml: html, tournament: null };
 
@@ -245,6 +268,9 @@ export async function fetchDetail(
   // 경기일보다 늦게** 나왔다(2025-11-05 경기인데 마감 2025-12-05).
   let tableStartDate: string | null = null;
   let tableDeadline: string | null = null;
+  // 부서별로 경기일이 다른 대회가 있다(빛고을배: 일반부 8/30, 지동부 7/05).
+  // 마감일 clamp 는 **가장 늦은 경기일**과 비교해야 정상 대회를 잘못 비우지 않는다.
+  let tableLastStartDate: string | null = null;
 
   // 개설 부서는 `참가부서` 컬럼에만 있다. 본문에는 개설되지 않은 부서명이
   // 자격 조건 설명으로 등장한다 — 실제 광주 대회(sid=108) 원문 기준:
@@ -302,12 +328,15 @@ export async function fetchDetail(
           if (cell) divisionCells.push(cell);
         }
 
-        // 경기일: 첫 데이터 행의 값을 쓴다(부서별로 같은 날인 대회가 대부분이고,
-        // 다르면 가장 이른 행이 대회 시작일이다).
-        if (dateIdx >= 0 && !tableStartDate && cells.length > dateIdx) {
+        // 경기일: 첫 데이터 행의 값을 대회일로 쓰고, 최댓값은 clamp 용으로 따로 둔다.
+        if (dateIdx >= 0 && cells.length > dateIdx) {
           const t = cellText(dateIdx);
           // 구별 협회는 '20260614 09:00:00시' 처럼 구분자 없이 쓴다.
-          tableStartDate = extractDate(t) ?? extractCompactDates(t)[0] ?? null;
+          const d = extractDate(t) ?? extractCompactDates(t)[0] ?? null;
+          if (d) {
+            if (!tableStartDate) tableStartDate = d;
+            if (!tableLastStartDate || d > tableLastStartDate) tableLastStartDate = d;
+          }
         }
 
         // 신청기간: "2026년 6월 22일 ~ 2026년 7월 01일 18시 까지" → 마지막 날짜가 마감일
@@ -332,6 +361,59 @@ export async function fetchDetail(
     }
   }
 
+  // 부서 컬럼이 있는 표에 날짜 컬럼이 없는 사이트도 있을 수 있다. 예전 코드는 문서
+  // 전역에서 날짜를 읽어 그 경우가 우연히 커버됐다 — 표 단위로 좁히면서 잃은 경로라
+  // 2차 시도로 되살린다(부서는 이미 확정됐으므로 날짜만 본다).
+  if (!tableStartDate || !tableDeadline) {
+    const tables = dom.querySelectorAll('table');
+    for (const tableNode of tables) {
+      const table = tableNode as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+      const rows = table.querySelectorAll('tr');
+      if (rows.length === 0) continue;
+      const head = rows[0] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+      const headCells = head.querySelectorAll('th, td');
+      let dateIdx = -1;
+      let deadlineIdx = -1;
+      for (let c = 0; c < headCells.length; c++) {
+        const t = ((headCells[c] as unknown as { textContent: string }).textContent ?? '')
+          .replace(/\s+/g, '').trim();
+        if (dateIdx < 0 && (t.includes('경기일시') || t.includes('대회일'))) dateIdx = c;
+        if (deadlineIdx < 0 && (t.includes('신청기간') || t.includes('접수기간'))) deadlineIdx = c;
+      }
+      if (dateIdx < 0 && deadlineIdx < 0) continue;
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r] as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
+        const cells = row.querySelectorAll('th, td');
+        const cellText = (i: number) =>
+          ((cells[i] as unknown as { textContent: string }).textContent ?? '')
+            .replace(/\s+/g, ' ').trim();
+        if (dateIdx >= 0 && !tableStartDate && cells.length > dateIdx) {
+          const t = cellText(dateIdx);
+          const d = extractDate(t) ?? extractCompactDates(t)[0] ?? null;
+          if (d) {
+            tableStartDate = d;
+            if (!tableLastStartDate || d > tableLastStartDate) tableLastStartDate = d;
+          }
+        }
+        if (deadlineIdx >= 0 && !tableDeadline && cells.length > deadlineIdx) {
+          const t = cellText(deadlineIdx);
+          const dates = extractCompactDates(t);
+          const korean: string[] = [];
+          for (const dm of t.matchAll(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/g)) {
+            korean.push(
+              `${dm[1]}-${String(Number(dm[2])).padStart(2, '0')}-${
+                String(Number(dm[3])).padStart(2, '0')
+              }`,
+            );
+          }
+          const all = korean.length > 0 ? korean : dates;
+          if (all.length > 0) tableDeadline = all[all.length - 1];
+        }
+      }
+      if (tableStartDate && tableDeadline) break;
+    }
+  }
+
   // 테이블 파싱 실패 시 기존 fallback
   const startDate = tableStartDate ?? extractDate(bodyText) ?? extractDate(title);
   if (!startDate) return { rawHtml: html, tournament: null };
@@ -349,7 +431,10 @@ export async function fetchDetail(
   // 그대로 두면 앱이 이미 끝난 대회를 "마감 D-30" 으로 보여준다. 값을 지어내지 않고
   // 비운다 — 마감 미상이면 알림도 안 가고 카드에 D-day 도 안 뜬다.
   const rawDeadline = tableDeadline ?? extractApplicationDeadline(bodyText) ?? undefined;
-  const deadline = rawDeadline && rawDeadline > startDate ? undefined : rawDeadline;
+  const clampAgainst = tableLastStartDate && tableLastStartDate > startDate
+    ? tableLastStartDate
+    : startDate;
+  const deadline = rawDeadline && rawDeadline > clampAgainst ? undefined : rawDeadline;
 
   // ── 참가비 추출 ──
   // "참가비팀당 34,000원" / "참가비 팀당 30,000원" / "참가비인당 15,000원"

@@ -213,3 +213,110 @@ Deno.test('fetchDetail(시협회): <title> 이 사이트명이어도 h3 제목�
     assertEquals(t!.eligible_grades, ['gj_m_general']);
   });
 });
+
+// ── codex 리뷰(PR #349)에서 나온 오탐·손실 경로 ────────────────────────────
+
+Deno.test('parseListing: bo_table 은 부분 문자열이 아니라 파라미터로 비교한다', () => {
+  const html = `
+<html><body>
+  <a href="/bbs/board.php?bo_table=game&wr_id=10">진짜 대회</a>
+  <a href="/bbs/board.php?bo_table=game2&wr_id=11">다른 게시판(game2)</a>
+  <a href="/bbs/board.php?bo_table=gameroom&wr_id=12">다른 게시판(gameroom)</a>
+  <a href="/bbs/board.php?bo_table=game&wr_id=abc">wr_id 가 숫자가 아님</a>
+</body></html>`;
+  const items = parseListing(html, 'http://x.gjtennis.kr/bbs/board.php?bo_table=game');
+  assertEquals(items.map((i) => i.sid), ['10']);
+});
+
+Deno.test('extractCompactDates 경로: 달력에 없는 날짜는 쓰지 않는다', async () => {
+  // 20260231(2월 31일)은 존재하지 않는다. 그걸 통과시키면 잘못된 마감일이 저장된다.
+  const html = `
+<html><head><title>날짜검증 &gt; 대회신청 | 테스트협회</title></head>
+<body><h3>대회관련</h3><div id="bo_v_con">
+  <table>
+    <tr><th>참가 부서</th><th>신청기간</th><th>경기일시</th></tr>
+    <tr><td>골드부</td><td>20260201 ~ 20260231 [마감]</td><td>20260305 09:00:00시</td></tr>
+  </table>
+</div></body></html>`;
+  await withFetch(html, async () => {
+    const r = await fetchDetail('http://x/bbs/board.php?bo_table=game&wr_id=1', '광주', '', DICT);
+    const t = r?.tournament;
+    assert(t, '파싱 실패');
+    assertEquals(t!.start_date, '2026-03-05');
+    // 20260201 만 유효하므로 그게 마감으로 남는다(존재하지 않는 20260231 은 버린다).
+    assertEquals(t!.application_deadline, '2026-02-01');
+  });
+});
+
+Deno.test('fetchDetail(북구): #bo_v_con 이어도 h3 가 진짜 제목이면 h3 를 지킨다', () => {
+  // <title> 이 h3 를 **포함하면서 더 길다**(게시판이 접미를 붙이는 경우).
+  // 길이만 비교하면 '… (신청서 첨부)' 까지 제목이 되고, 포함 관계로 판정하면 h3 를 지킨다.
+  const html = `
+<html><head><title>제26회 광주광역시 북구청장배 테니스 대회 (신청서 첨부) &gt; 대회신청 | 광주광역시북구테니스협회</title></head>
+<body><h3>제26회 광주광역시 북구청장배 테니스 대회</h3><div id="bo_v_con">
+  <table>
+    <tr><th>참가 부서</th><th>신청기간</th><th>경기일시</th></tr>
+    <tr><td>골드부</td><td>20251027 ~ 20251104 [마감]</td><td>20251105 09:00:00시</td></tr>
+  </table>
+</div></body></html>`;
+  return withFetch(html, async () => {
+    const r = await fetchDetail(
+      'http://bukgu/bbs/board.php?bo_table=game&wr_id=1',
+      '광주',
+      '',
+      DICT,
+    );
+    assertEquals(r?.tournament?.title, '제26회 광주광역시 북구청장배 테니스 대회');
+  });
+});
+
+Deno.test('fetchDetail: 부서별로 경기일이 다른 대회의 마감을 잘못 비우지 않는다', () => {
+  // 빛고을배 실물 구조 — 지동부가 먼저(7/05), 일반부가 나중(8/30)이고 마감은 8/26.
+  // clamp 를 첫 행 경기일과 비교하면 정상 마감(8/26 > 7/05)이 사라진다.
+  const html = `
+<html><body><div class="docContWrap"><h3>2026 빛고을배 전국대회</h3>
+  <table>
+    <tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+    <tr><td>지동부</td><td>2026년 6월 22일 ~ 2026년 7월 20일 18시 까지</td><td>2026년 7월 05일</td></tr>
+    <tr><td>남자일반부</td><td>2026년 6월 22일 ~ 2026년 8월 26일 19시 까지</td><td>2026년 8월 30일</td></tr>
+  </table>
+</div></body></html>`;
+  return withFetch(html, async () => {
+    const r = await fetchDetail('https://gjtennis.kr/sub5_2_2_view.php?sid=108', '광주', '', DICT);
+    const t = r?.tournament;
+    assert(t, '파싱 실패');
+    assertEquals(t!.start_date, '2026-07-05');
+    // 첫 행 마감(7/20)은 첫 행 경기일(7/05)보다 늦지만, 이 대회의 마지막 경기일은
+    // 8/30 이다. clamp 를 첫 행과만 비교하면 정상 마감이 사라진다.
+    assertEquals(
+      t!.application_deadline,
+      '2026-07-20',
+      'clamp 기준이 첫 행 경기일이면 정상 마감이 지워진다',
+    );
+  });
+});
+
+Deno.test('fetchDetail: 부서 표에 날짜가 없으면 날짜 표에서 찾는다', () => {
+  // 부서 컬럼이 있는 표에 날짜가 없고, 날짜는 별도 표에 있는 구조.
+  // 표 단위로 좁히면서 잃었던 경로다(2차 시도로 되살림).
+  const html = `
+<html><body><div class="docContWrap"><h3>날짜 분리형 대회</h3>
+  <table>
+    <tr><th>참가부서</th><th>구분</th></tr>
+    <tr><td>골드부</td><td>복식</td></tr>
+    <tr><td>신인부</td><td>복식</td></tr>
+  </table>
+  <table>
+    <tr><th>접수기간</th><th>대회일</th></tr>
+    <tr><td>2026년 5월 1일 ~ 2026년 5월 20일</td><td>2026년 5월 24일</td></tr>
+  </table>
+</div></body></html>`;
+  return withFetch(html, async () => {
+    const r = await fetchDetail('https://gjtennis.kr/sub5_2_2_view.php?sid=1', '광주', '', DICT);
+    const t = r?.tournament;
+    assert(t, '파싱 실패');
+    assertEquals(t!.eligible_grades, ['gj_m_gold', 'gj_m_rookie']);
+    assertEquals(t!.start_date, '2026-05-24');
+    assertEquals(t!.application_deadline, '2026-05-20');
+  });
+});
