@@ -1626,6 +1626,11 @@ class _ClubManagementTab extends ConsumerWidget {
             onChanged: onChanged,
           ),
           const SizedBox(height: AppSpacing.md),
+          _FormerMemberBanCard(
+            club: club,
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: AppSpacing.md),
           _DangerClubManageCard(club: club, onDeleted: onDeleted),
         ],
       ],
@@ -2472,6 +2477,162 @@ class _InquiryLinkPolicyTileState
             ? '가입 전 1:1 문의에서 웹 링크를 보낼 수 있습니다.'
             : '가입 전 1:1 문의에서 텍스트 웹 링크를 차단합니다.',
         style: tt.bodySmall,
+      ),
+    );
+  }
+}
+
+class _FormerMemberBanCard extends ConsumerStatefulWidget {
+  const _FormerMemberBanCard({
+    required this.club,
+    required this.onChanged,
+  });
+
+  final Club club;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_FormerMemberBanCard> createState() =>
+      _FormerMemberBanCardState();
+}
+
+class _FormerMemberBanCardState extends ConsumerState<_FormerMemberBanCard> {
+  late Future<List<ClubMember>> _formerMembers;
+  String? _busyUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _formerMembers = ref.read(apiProvider).formerClubMembers(widget.club.id);
+  }
+
+  void _reload() {
+    setState(() {
+      _formerMembers = ref.read(apiProvider).formerClubMembers(widget.club.id);
+    });
+  }
+
+  Future<void> _ban(ClubMember member) async {
+    final name = _clubMemberDisplayName(member);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('이전 멤버 영구 차단'),
+        content: Text(
+          '$name 님을 영구 차단할까요?\n'
+          '앞으로 이 계정은 클럽 가입 신청과 가입 전 문의를 보낼 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: const Text('영구 차단'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busyUserId = member.userId);
+    try {
+      await ref.read(apiProvider).banClubMember(
+            widget.club.id,
+            member.userId,
+          );
+      widget.onChanged();
+      _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$name 님을 영구 차단했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('영구 차단 실패: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyUserId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _ClubFlatSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '이전 멤버',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '먼저 탈퇴한 회원도 이곳에서 영구 차단할 수 있습니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FutureBuilder<List<ClubMember>>(
+            future: _formerMembers,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return TextButton.icon(
+                  onPressed: _reload,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('이전 멤버 다시 불러오기'),
+                );
+              }
+              final members = snapshot.data ?? const [];
+              if (members.isEmpty) {
+                return const Text('차단할 이전 멤버가 없습니다.');
+              }
+              return Column(
+                children: [
+                  for (final member in members)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: cs.surfaceContainerHighest,
+                        child: Text(
+                          _clubMemberDisplayName(member).characters.first,
+                        ),
+                      ),
+                      title: Text(_clubMemberDisplayName(member)),
+                      subtitle: const Text('탈퇴한 멤버'),
+                      trailing: TextButton(
+                        onPressed:
+                            _busyUserId == null ? () => _ban(member) : null,
+                        child: _busyUserId == member.userId
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(
+                                '영구 차단',
+                                style: TextStyle(color: cs.error),
+                              ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }

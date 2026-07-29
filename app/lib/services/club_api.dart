@@ -577,6 +577,24 @@ mixin ClubApi on ApiBase {
     return members;
   }
 
+  Future<List<ClubMember>> formerClubMembers(String clubId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'list_former_members',
+      }),
+    );
+    check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final rows = body['members'] as List? ?? const [];
+    return rows
+        .whereType<Map>()
+        .map((row) => ClubMember.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
   Future<List<ClubEvent>> clubEvents(String clubId) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
     final rows = await supabase

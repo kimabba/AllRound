@@ -1,7 +1,7 @@
 // clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
-//   action: 'request'|'cancel'|'leave'|'kick'|'ban'|'set_manager'|'update_monthly_fee'|'update_inquiry_links'|'update_intro'|'resubmit_review'|'delete_club'|'list_members',
+//   action: 'request'|'cancel'|'leave'|'kick'|'ban'|'set_manager'|'update_monthly_fee'|'update_inquiry_links'|'update_intro'|'resubmit_review'|'delete_club'|'list_members'|'list_former_members',
 //   message?,
 //   target_user_id?,
 //   role?,
@@ -150,6 +150,57 @@ Deno.serve(async (req) => {
     }));
 
     return jsonResponse({ members });
+  }
+
+  if (action === 'list_former_members') {
+    const ownerError = await requireOwner();
+    if (ownerError) return ownerError;
+
+    const { data, error } = await supa
+      .from('club_members')
+      .select('user_id, role, can_create_event, can_post_notice, joined_at')
+      .eq('club_id', clubId)
+      .neq('status', 'active')
+      .order('left_at', { ascending: false });
+    if (error) return errorResponse(error.message, 500);
+
+    const formerRows = data ?? [];
+    const userIds = formerRows.map((row) => row.user_id as string);
+    const bannedIds = new Set<string>();
+    if (userIds.length > 0) {
+      const { data: bans, error: bansError } = await supa
+        .from('club_bans')
+        .select('user_id')
+        .eq('club_id', clubId)
+        .in('user_id', userIds);
+      if (bansError) return errorResponse(bansError.message, 500);
+      for (const ban of bans ?? []) bannedIds.add(ban.user_id as string);
+    }
+
+    const visibleRows = formerRows.filter(
+      (row) => !bannedIds.has(row.user_id as string),
+    );
+    const nameById = new Map<string, string | null>();
+    if (visibleRows.length > 0) {
+      const { data: profiles, error: profileError } = await supa
+        .from('users')
+        .select('id, name')
+        .in('id', visibleRows.map((row) => row.user_id as string));
+      if (profileError) return errorResponse(profileError.message, 500);
+      for (const profile of profiles ?? []) {
+        nameById.set(
+          profile.id as string,
+          (profile.name as string | null) ?? null,
+        );
+      }
+    }
+
+    return jsonResponse({
+      members: visibleRows.map((row) => ({
+        ...row,
+        users: { name: nameById.get(row.user_id as string) ?? null },
+      })),
+    });
   }
 
   if (action === 'request') {
@@ -301,9 +352,8 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('club_id', clubId)
       .eq('user_id', targetUserId)
-      .eq('status', 'active')
       .maybeSingle();
-    if (!target) return errorResponse('Target member not found', 404);
+    if (!target) return errorResponse('Target member history not found', 404);
     if (target.role === 'owner') {
       return errorResponse('Owner cannot be kicked', 400);
     }
@@ -549,7 +599,7 @@ Deno.serve(async (req) => {
   }
 
   return errorResponse(
-    'action must be request|cancel|leave|kick|ban|set_manager|update_monthly_fee|update_inquiry_links|update_intro|resubmit_review|delete_club|list_members',
+    'action must be request|cancel|leave|kick|ban|set_manager|update_monthly_fee|update_inquiry_links|update_intro|resubmit_review|delete_club|list_members|list_former_members',
     400,
   );
 });
