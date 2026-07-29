@@ -320,6 +320,12 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '베테랑부',
       gender: 'male'),
   TennisDivision(
+      code: 'gj_w_beginner',
+      org: 'gj',
+      label: '여자초급자부',
+      isRankingGrade: false,
+      gender: 'female'),
+  TennisDivision(
       code: 'gj_w_open',
       org: 'gj',
       label: '여자오픈부',

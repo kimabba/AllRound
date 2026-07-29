@@ -260,6 +260,13 @@
     },
     {
         "org": "gj",
+        "code": "gj_w_beginner",
+        "label": "여자초급자부",
+        "isActive": true,
+        "isRankingGrade": false
+    },
+    {
+        "org": "gj",
         "code": "gj_w_open",
         "label": "여자오픈부",
         "isActive": true,
