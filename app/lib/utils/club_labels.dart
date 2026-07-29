@@ -112,3 +112,11 @@ String? clubWebsiteInputError(String? value) {
 }
 
 String clubMemberCountLabel(int count) => '총 ${count < 0 ? 0 : count}명';
+
+String clubRegionMemberLabel(String? region, int count) {
+  final normalizedRegion = region?.trim();
+  final regionLabel = normalizedRegion == null || normalizedRegion.isEmpty
+      ? '지역 미정'
+      : normalizedRegion;
+  return '$regionLabel ${count < 0 ? 0 : count}명';
+}
