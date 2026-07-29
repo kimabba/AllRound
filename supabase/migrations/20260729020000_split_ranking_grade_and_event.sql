@@ -86,10 +86,17 @@ where code in (
 -- 동호인은 골드(금배) 등급으로 **각자** 적립되므로 지동부 자체는 등급이 아니다.
 -- synonyms 를 ['지동부'] 하나로 좁게 둔다 — '지동'만 두면 요강 본문 아무 데나 걸린다
 -- (gj_cross 가 ['크로스'] 하나로 오탐원이 됐던 것과 같은 실수를 피한다).
+-- equiv_group·age_min·champion_only 를 굳이 적는 이유: 아래 do update 가 **이 목록에
+-- 있는 것만** 덮는다. 빠뜨리면 기존 행의 그 값이 살아남아 재실행이 정본으로 수렴하지
+-- 않는다(로컬에서 equiv_group='junk' 를 심어 재현 확인).
+--   equiv_group  — 광주↔전남 동일 부서를 묶는 키. 지동부는 광주 전용이라 null.
+--   age_min      — 연령 하한 없음.  champion_only — 우승자 한정 아님.
 insert into public.tennis_divisions
-  (code, org_code, label_ko, synonyms, skill_tier, gender, event_type, is_active, is_ranking_grade)
+  (code, org_code, label_ko, synonyms, skill_tier, gender, event_type,
+   equiv_group, age_min, champion_only, is_active, is_ranking_grade)
 values
-  ('gj_m_jidong', 'gj', '지동부', array['지동부'], null, 'male', 'doubles', true, false)
+  ('gj_m_jidong', 'gj', '지동부', array['지동부'], null, 'male', 'doubles',
+   null, null, false, true, false)
 on conflict (code) do update set
   -- do nothing 이면 이 코드가 다른 값으로 이미 있을 때 교정하지 못한다. 2번 UPDATE 는
   -- 목록에 gj_m_jidong 이 없어 손대지 않고, 4번은 is_ranking_grade=true 인 행을
@@ -102,6 +109,9 @@ on conflict (code) do update set
   skill_tier = excluded.skill_tier,
   gender = excluded.gender,
   event_type = excluded.event_type,
+  equiv_group = excluded.equiv_group,
+  age_min = excluded.age_min,
+  champion_only = excluded.champion_only,
   is_active = excluded.is_active,
   is_ranking_grade = excluded.is_ranking_grade;
 
