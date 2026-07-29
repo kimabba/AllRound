@@ -115,99 +115,7 @@ on conflict (code) do update set
   is_active = excluded.is_active,
   is_ranking_grade = excluded.is_ranking_grade;
 
--- ── 4a) 표시용 division 문자열을 먼저 맞춘다 ──────────────────────────────
--- division 은 division_codes 라벨의 사본이고(예: '마스터즈부 · 지도자부'),
--- 챗 컨텍스트(functions/chat/context.ts)는 배열이 아니라 이 문자열을 읽는다. 배열만
--- 고치면 매칭에서 뺀 부서가 AI 문맥에는 계속 실린다(codex).
---
--- **4번보다 먼저** 실행한다 — 배열이 정리된 뒤에는 "무엇이 빠졌는지"를 알 수 없다.
--- division 은 PK 의 일부라(user_id, org, division) 이 UPDATE 는 행 식별자를 바꾼다.
--- 그래서 같은 (user_id, org)에 목표 문자열이 이미 있으면 **건너뛴다** — PK 충돌로
--- 마이그레이션이 죽는 대신 그 행은 손대지 않는다(다음 온보딩 저장 때 맞춰진다).
-update public.user_tennis_orgs u
-set division = x.new_label
-from (
-  select
-    y.*,
-    -- 같은 (user_id, org)의 여러 행이 **한 문장 안에서** 같은 문자열로 수렴하면
-    -- 아래 not exists 로는 못 막는다 — 그건 UPDATE 전 스냅샷만 보기 때문이다.
-    -- 실제로 재현했다: ['지도자부','마스터즈부'] 와 ['지도자부','초급자부'] 가 둘 다
-    -- '지도자부' 가 되면서 duplicate key. 수렴 그룹당 한 행만 바꾼다.
-    row_number() over (
-      partition by y.user_id, y.org, y.new_label order by y.division
-    ) as rn
-  from (
-    select
-      u2.user_id,
-      u2.org,
-      u2.division,
-      (select string_agg(d.label_ko, ' · ' order by array_position(u2.division_codes, d.code))
-       from public.tennis_divisions d
-       where d.code = any (u2.division_codes) and d.is_ranking_grade) as new_label
-    from public.user_tennis_orgs u2
-    where exists (
-      select 1 from public.tennis_divisions d
-      where d.code = any (u2.division_codes) and not d.is_ranking_grade
-    )
-  ) y
-) x
-where u.user_id = x.user_id and u.org = x.org and u.division = x.division
-  and x.new_label is not null
-  and x.new_label <> u.division
-  and x.rn = 1
-  and not exists (
-    select 1 from public.user_tennis_orgs c
-    where c.user_id = u.user_id and c.org = u.org and c.division = x.new_label
-  )
-  -- 카탈로그에 없는 코드가 섞인 행은 건드리지 않는다. new_label 은 tennis_divisions 를
-  -- 조인해 만들므로 미등록 코드의 라벨이 **조용히 사라진다** — 배열에는 남는데
-  -- 문자열에서만 없어져 둘이 더 어긋난다(로컬 재현: gj_brand_new 가 배열엔 남고
-  -- '신설부' 만 문자열에서 증발). 모르는 값을 지우느니 그 행은 그대로 둔다.
-  and not exists (
-    select 1 from unnest(u.division_codes) as c
-    where not exists (
-      select 1 from public.tennis_divisions d where d.code = c
-    )
-  );
-
--- ── 4) 종목 전용 코드를 유저 등록에서 걷어낸다 ────────────────────────────
--- 대회(eligible_grades)에서는 빼지 않는다. 대회는 실제로 그 종목을 연다.
--- 적용 시점 실측: gj_m_masters 1건(division_codes = [gj_m_instructor, gj_m_masters])
--- → 지도자부가 남아 빈 배열이 되지 않는다.
--- 종목 전용**만** 갖고 있던 행이 있으면 배열이 '{}' 가 된다(로컬 재현 확인). 실측에는
--- 그런 행이 없고, 앞으로는 7번 트리거가 그 상태를 만들지 못하게 막는다.
-update public.user_tennis_orgs u
-set division_codes = (
-  select coalesce(array_agg(c order by c), '{}')
-  from unnest(u.division_codes) as c
-  where c not in (
-    select d.code from public.tennis_divisions d where d.is_ranking_grade = false
-  )
-)
-where exists (
-  select 1 from unnest(u.division_codes) as c
-  join public.tennis_divisions d on d.code = c
-  where d.is_ranking_grade = false
-);
-
--- ── 5) 실체 없는 협회의 부서 비활성화 ─────────────────────────────────────
--- KTFS: 2016년 KTA 에 흡수·소멸한 협회. local: 클럽 자체 임시 등급.
--- 둘 다 대회 0건·유저 0명. 행은 남기고 노출만 끊는다(참조가 생겼을 때 라벨 해석 유지).
-update public.tennis_divisions
-set is_active = false
-where org_code in ('ktfs', 'local');
-
--- ── 6) 부서별 점수 범위 (근거 있는 것만) ──────────────────────────────────
--- 출처: 광주광역시테니스협회 부서별 참가자격요건. 소수부는 버린다(kimabba 결정).
---   오픈부 0.1~8.0 / 골드부 1.0~7.0 / 일반부 1.0~4.0 / 지도자부 0.1~4.0
--- 전남은 "등급의 분류는 광주·전남 협회가 공동 결정"이라는 문구까지만 확인됐고
--- 부서별 점수 범위 원문은 확보하지 못했다 → 추정하지 않고 null 로 둔다.
-update public.tennis_divisions set score_min = 0, score_max = 8 where code = 'gj_m_open';
-update public.tennis_divisions set score_min = 1, score_max = 7 where code = 'gj_m_gold';
-update public.tennis_divisions set score_min = 1, score_max = 4 where code = 'gj_m_general';
-update public.tennis_divisions set score_min = 0, score_max = 4 where code = 'gj_m_instructor';
-
--- ── 7) 새 불변식을 DB 에서 강제한다 ───────────────────────────────────────
+-- ── 4-pre) 새 불변식을 DB 에서 강제한다 (정리보다 **먼저**) ──────────────
 -- 처음엔 "쓰기 경로가 온보딩 하나뿐"이라 보고 트리거를 생략했다. codex 리뷰 2건이
 -- 같은 구멍을 지적했고, 확인해보니 틀린 전제였다:
 --   · 앱은 user_tennis_orgs 에 PostgREST 로 직접 upsert 한다(services/user_api.dart)
@@ -217,6 +125,11 @@ update public.tennis_divisions set score_min = 0, score_max = 4 where code = 'gj
 -- 그러면 "등급과 종목의 분리"가 서버 정본이 아니라 최신 UI 버전에만 의존하게 된다.
 -- enforce_eligible_grade_format(20260726010000)과 같은 형태로, 모든 경로가 반드시
 -- 지나가는 테이블 트리거에 검사를 단다.
+--
+-- **정리(4·4a)보다 먼저 설치한다**(codex): 나중에 달면 정리와 트리거 설치 사이에
+-- 다른 세션의 구버전 쓰기가 커밋돼 위반 행이 되살아날 수 있다. 트리거 생성은 기존
+-- 행을 검사하지 않으므로 그 행은 영영 남는다. 먼저 달아도 4번은 위반을 **제거**하는
+-- 방향이라 통과하고, 4a 는 division 만 SET 해서 update of division_codes 에 걸리지 않는다.
 --
 -- **등록된 코드 중 is_ranking_grade=false 인 것만** 막는다. 미등록 코드는 통과시킨다 —
 -- 의미 검증까지 하면 새 부서를 넣는 순서에 따라 저장이 막히고, 그건 이 트리거가
@@ -255,5 +168,128 @@ create trigger enforce_user_division_is_ranking_grade
   before insert or update of division_codes on public.user_tennis_orgs
   for each row
   execute function public.enforce_user_division_is_ranking_grade();
+
+-- ── 4a) 표시용 division 문자열을 먼저 맞춘다 ──────────────────────────────
+-- division 은 division_codes 라벨의 사본이고(예: '마스터즈부 · 지도자부'),
+-- 챗 컨텍스트(functions/chat/context.ts)는 배열이 아니라 이 문자열을 읽는다. 배열만
+-- 고치면 매칭에서 뺀 부서가 AI 문맥에는 계속 실린다(codex).
+--
+-- **4번보다 먼저** 실행한다 — 배열이 정리된 뒤에는 "무엇이 빠졌는지"를 알 수 없다.
+-- division 은 PK 의 일부라(user_id, org, division) 이 UPDATE 는 행 식별자를 바꾼다.
+-- 그래서 같은 (user_id, org)에 목표 문자열이 이미 있으면 **건너뛴다** — PK 충돌로
+-- 마이그레이션이 죽는 대신 그 행은 손대지 않는다(다음 온보딩 저장 때 맞춰진다).
+update public.user_tennis_orgs u
+set division = x.new_label
+from (
+  select
+    y.*,
+    -- 같은 (user_id, org)의 여러 행이 **한 문장 안에서** 같은 문자열로 수렴하면
+    -- 아래 not exists 로는 못 막는다 — 그건 UPDATE 전 스냅샷만 보기 때문이다.
+    -- 실제로 재현했다: ['지도자부','마스터즈부'] 와 ['지도자부','초급자부'] 가 둘 다
+    -- '지도자부' 가 되면서 duplicate key. 수렴 그룹당 한 행만 바꾼다.
+    row_number() over (
+      partition by y.user_id, y.org, y.new_label order by y.division
+    ) as rn
+  from (
+    select
+      u2.user_id,
+      u2.org,
+      u2.division,
+      -- 정렬을 4번의 array_agg(order by c)와 같은 code 순으로 맞춘다. 배열 순서로
+      -- 만들면 4번이 배열을 재정렬한 뒤 문자열과 순서가 어긋나고, 그때는 종목 전용
+      -- 코드가 이미 없어 재실행해도 교정되지 않는다(codex).
+      (select string_agg(d.label_ko, ' · ' order by d.code)
+       from public.tennis_divisions d
+       where d.code = any (u2.division_codes) and d.is_ranking_grade) as new_label
+    from public.user_tennis_orgs u2
+    where exists (
+      select 1 from public.tennis_divisions d
+      where d.code = any (u2.division_codes) and not d.is_ranking_grade
+    )
+  ) y
+) x
+where u.user_id = x.user_id and u.org = x.org and u.division = x.division
+  and x.new_label is not null
+  and x.new_label <> u.division
+  and x.rn = 1
+  and not exists (
+    select 1 from public.user_tennis_orgs c
+    where c.user_id = u.user_id and c.org = u.org and c.division = x.new_label
+  )
+  -- 카탈로그에 없는 코드가 섞인 행은 건드리지 않는다. new_label 은 tennis_divisions 를
+  -- 조인해 만들므로 미등록 코드의 라벨이 **조용히 사라진다** — 배열에는 남는데
+  -- 문자열에서만 없어져 둘이 더 어긋난다(로컬 재현: gj_brand_new 가 배열엔 남고
+  -- '신설부' 만 문자열에서 증발). 모르는 값을 지우느니 그 행은 그대로 둔다.
+  and not exists (
+    select 1 from unnest(u.division_codes) as c
+    where not exists (
+      select 1 from public.tennis_divisions d where d.code = c
+    )
+  );
+
+-- ── 4-guard) 등급이 하나도 안 남는 행이 있으면 멈춘다 ────────────────────
+-- 종목 전용**만** 들고 있던 행은 4번에서 division_codes 가 '{}' 가 되고, 4a 도
+-- new_label 이 null 이라 문자열을 못 고친다 — 등록이 조용히 빈 껍데기가 된다(codex).
+-- 적용 시점 실측은 0건이지만, 실측과 적용 사이에 구버전 앱이 만들 수 있다.
+-- 조용한 소실 대신 **시끄러운 중단**을 택한다. 걸리면 사람이 보고 판단한다
+-- (해당 유저에게 등급을 다시 고르게 하거나, 그 행을 지우거나).
+do $$
+declare
+  n integer;
+begin
+  select count(*) into n
+  from public.user_tennis_orgs u
+  where exists (
+      select 1 from public.tennis_divisions d
+      where d.code = any (u.division_codes) and not d.is_ranking_grade
+    )
+    and not exists (
+      select 1 from public.tennis_divisions d
+      where d.code = any (u.division_codes) and d.is_ranking_grade
+    );
+  if n > 0 then
+    raise exception
+      '종목 전용 부서만 등록된 user_tennis_orgs 행이 %건 있다. 정리하면 등급이 0개가 된다 — 수동 확인 후 진행하라.', n
+      using errcode = '23514';
+  end if;
+end;
+$$;
+
+-- ── 4) 종목 전용 코드를 유저 등록에서 걷어낸다 ────────────────────────────
+-- 대회(eligible_grades)에서는 빼지 않는다. 대회는 실제로 그 종목을 연다.
+-- 적용 시점 실측: gj_m_masters 1건(division_codes = [gj_m_instructor, gj_m_masters])
+-- → 지도자부가 남아 빈 배열이 되지 않는다.
+-- 종목 전용**만** 갖고 있던 행이 있으면 배열이 '{}' 가 된다(로컬 재현 확인). 실측에는
+-- 그런 행이 없고, 앞으로는 7번 트리거가 그 상태를 만들지 못하게 막는다.
+update public.user_tennis_orgs u
+set division_codes = (
+  select coalesce(array_agg(c order by c), '{}')
+  from unnest(u.division_codes) as c
+  where c not in (
+    select d.code from public.tennis_divisions d where d.is_ranking_grade = false
+  )
+)
+where exists (
+  select 1 from unnest(u.division_codes) as c
+  join public.tennis_divisions d on d.code = c
+  where d.is_ranking_grade = false
+);
+
+-- ── 5) 실체 없는 협회의 부서 비활성화 ─────────────────────────────────────
+-- KTFS: 2016년 KTA 에 흡수·소멸한 협회. local: 클럽 자체 임시 등급.
+-- 둘 다 대회 0건·유저 0명. 행은 남기고 노출만 끊는다(참조가 생겼을 때 라벨 해석 유지).
+update public.tennis_divisions
+set is_active = false
+where org_code in ('ktfs', 'local');
+
+-- ── 6) 부서별 점수 범위 (근거 있는 것만) ──────────────────────────────────
+-- 출처: 광주광역시테니스협회 부서별 참가자격요건. 소수부는 버린다(kimabba 결정).
+--   오픈부 0.1~8.0 / 골드부 1.0~7.0 / 일반부 1.0~4.0 / 지도자부 0.1~4.0
+-- 전남은 "등급의 분류는 광주·전남 협회가 공동 결정"이라는 문구까지만 확인됐고
+-- 부서별 점수 범위 원문은 확보하지 못했다 → 추정하지 않고 null 로 둔다.
+update public.tennis_divisions set score_min = 0, score_max = 8 where code = 'gj_m_open';
+update public.tennis_divisions set score_min = 1, score_max = 7 where code = 'gj_m_gold';
+update public.tennis_divisions set score_min = 1, score_max = 4 where code = 'gj_m_general';
+update public.tennis_divisions set score_min = 0, score_max = 4 where code = 'gj_m_instructor';
 
 commit;
