@@ -371,6 +371,23 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     );
   }
 
+  Future<void> _openAllRecruitingPosts(
+    List<RecruitingPostPreview> posts,
+    Set<String> managedClubIds,
+  ) {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamRecruitingListScreen(
+          posts: posts,
+          managedClubIds: managedClubIds,
+          onClosePost: _closeRecruitingPost,
+          onOpenPost: _openRecruitingDetail,
+        ),
+      ),
+    );
+  }
+
   Future<void> _closeRecruitingPost(RecruitingPostPreview post) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -696,6 +713,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     managedClubIds: managedClubs.map((club) => club.id).toSet(),
                     onClosePost: _closeRecruitingPost,
                     onOpenPost: _openRecruitingDetail,
+                    onViewAll: () => _openAllRecruitingPosts(
+                      _visibleRecruitingPosts(),
+                      managedClubs.map((club) => club.id).toSet(),
+                    ),
                   ),
                 ],
               ),

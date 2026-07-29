@@ -17,6 +17,7 @@ class TeamRecruitingBoard extends StatelessWidget {
   final Set<String> managedClubIds;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
+  final VoidCallback onViewAll;
 
   const TeamRecruitingBoard({
     super.key,
@@ -25,6 +26,7 @@ class TeamRecruitingBoard extends StatelessWidget {
     required this.managedClubIds,
     required this.onClosePost,
     required this.onOpenPost,
+    required this.onViewAll,
   });
 
   @override
@@ -43,9 +45,19 @@ class TeamRecruitingBoard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '팀원모집 글',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '팀원모집 글',
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton(
+                onPressed: posts.isEmpty ? null : onViewAll,
+                child: const Text('전체 보기'),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
@@ -73,7 +85,7 @@ class TeamRecruitingBoard extends StatelessWidget {
               ),
             )
           else
-            for (final post in posts)
+            for (final post in posts.take(3))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: TeamRecruitingPostCard(
@@ -84,6 +96,73 @@ class TeamRecruitingBoard extends StatelessWidget {
                 ),
               ),
         ],
+      ),
+    );
+  }
+}
+
+class TeamRecruitingListScreen extends StatelessWidget {
+  const TeamRecruitingListScreen({
+    super.key,
+    required this.posts,
+    required this.managedClubIds,
+    required this.onClosePost,
+    required this.onOpenPost,
+  });
+
+  final List<RecruitingPostPreview> posts;
+  final Set<String> managedClubIds;
+  final ValueChanged<RecruitingPostPreview> onClosePost;
+  final ValueChanged<RecruitingPostPreview> onOpenPost;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('전체 팀원모집'),
+      ),
+      body: posts.isEmpty
+          ? const Center(
+              child: Text('등록된 팀원모집 글이 없습니다.'),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xxl,
+              ),
+              itemCount: posts.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return TeamRecruitingPostCard(
+                  post: post,
+                  canManage: managedClubIds.contains(post.clubId),
+                  onClose: () => onClosePost(post),
+                  onTap: () => onOpenPost(post),
+                );
+              },
+            ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xs,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            '최신 등록순 · ${posts.length}개',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ),
       ),
     );
   }
