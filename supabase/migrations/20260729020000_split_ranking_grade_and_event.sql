@@ -237,6 +237,9 @@ do $$
 declare
   n integer;
 begin
+  -- 남는 원소의 판정은 **4번의 보존 조건과 글자 그대로 같아야** 한다.
+  -- "is_ranking_grade=true 인 것이 있는가"로 물으면 미등록 코드를 세지 못해,
+  -- [종목 전용, 미등록] 처럼 4번 후에도 배열이 남는 행까지 막는다(codex).
   select count(*) into n
   from public.user_tennis_orgs u
   where exists (
@@ -244,8 +247,10 @@ begin
       where d.code = any (u.division_codes) and not d.is_ranking_grade
     )
     and not exists (
-      select 1 from public.tennis_divisions d
-      where d.code = any (u.division_codes) and d.is_ranking_grade
+      select 1 from unnest(u.division_codes) as c
+      where c not in (
+        select d.code from public.tennis_divisions d where d.is_ranking_grade = false
+      )
     );
   if n > 0 then
     raise exception
