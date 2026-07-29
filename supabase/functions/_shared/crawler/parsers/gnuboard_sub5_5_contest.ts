@@ -287,6 +287,12 @@ export async function fetchDetail(
 
   const divisionCells: string[] = [];
   {
+    // **문서 전체**를 훑는다. contentRoot 로 좁히면 안 된다 — 구 협회 사이트의
+    // 신청현황표는 본문 컨테이너(#bo_v_con) **밖(앞)** 에 렌더된다(실측: coach 는
+    // 표 위치 27110 < bo_v_con 35060, 북구는 37131 < 38222). 좁혔더니 구별 4곳이
+    // 전부 파싱 실패로 돌아섰다. 무관한 표에 대한 방어는 범위가 아니라 (1) 위쪽에서
+    // 노이즈 요소(nav/header/footer/aside/.footer/.gnb/.lnb/.snb)를 DOM 에서 제거하고
+    // (2) 부서 컬럼이 있는 표만 1차로 보는 것으로 한다.
     const tables = dom.querySelectorAll('table');
     for (const tableNode of tables) {
       const table = tableNode as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
@@ -365,6 +371,12 @@ export async function fetchDetail(
   // 전역에서 날짜를 읽어 그 경우가 우연히 커버됐다 — 표 단위로 좁히면서 잃은 경로라
   // 2차 시도로 되살린다(부서는 이미 확정됐으므로 날짜만 본다).
   if (!tableStartDate || !tableDeadline) {
+    // **문서 전체**를 훑는다. contentRoot 로 좁히면 안 된다 — 구 협회 사이트의
+    // 신청현황표는 본문 컨테이너(#bo_v_con) **밖(앞)** 에 렌더된다(실측: coach 는
+    // 표 위치 27110 < bo_v_con 35060, 북구는 37131 < 38222). 좁혔더니 구별 4곳이
+    // 전부 파싱 실패로 돌아섰다. 무관한 표에 대한 방어는 범위가 아니라 (1) 위쪽에서
+    // 노이즈 요소(nav/header/footer/aside/.footer/.gnb/.lnb/.snb)를 DOM 에서 제거하고
+    // (2) 부서 컬럼이 있는 표만 1차로 보는 것으로 한다.
     const tables = dom.querySelectorAll('table');
     for (const tableNode of tables) {
       const table = tableNode as unknown as { querySelectorAll(s: string): ArrayLike<unknown> };
@@ -387,11 +399,14 @@ export async function fetchDetail(
         const cellText = (i: number) =>
           ((cells[i] as unknown as { textContent: string }).textContent ?? '')
             .replace(/\s+/g, ' ').trim();
-        if (dateIdx >= 0 && !tableStartDate && cells.length > dateIdx) {
+        // 첫 값만 대회일로 쓰되, **모든 행**을 훑어 최댓값(clamp 기준)을 갱신한다.
+        // !tableStartDate 로 조건을 걸면 둘째 행부터 건너뛰어 clamp 가 첫 행 기준으로
+        // 되돌아간다(codex).
+        if (dateIdx >= 0 && cells.length > dateIdx) {
           const t = cellText(dateIdx);
           const d = extractDate(t) ?? extractCompactDates(t)[0] ?? null;
           if (d) {
-            tableStartDate = d;
+            if (!tableStartDate) tableStartDate = d;
             if (!tableLastStartDate || d > tableLastStartDate) tableLastStartDate = d;
           }
         }

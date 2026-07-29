@@ -320,3 +320,68 @@ Deno.test('fetchDetail: 부서 표에 날짜가 없으면 날짜 표에서 찾�
     assertEquals(t!.application_deadline, '2026-05-20');
   });
 });
+
+Deno.test('fetchDetail: 노이즈 요소(aside) 안의 표는 날짜로 쓰지 않는다', () => {
+  // 사이드바에도 '경기일시' 헤더를 가진 표가 있는 구조.
+  //
+  // 표 순회를 본문 컨테이너로 좁히는 방식은 **쓸 수 없다** — 구 협회의 신청현황표가
+  // #bo_v_con 밖(앞)에 있어서 좁히면 표를 아예 못 읽는다(실측). 그래서 방어는
+  // DOM 에서 노이즈 요소를 미리 제거하는 쪽이다. 사이드바를 본문 **앞에** 두어
+  // 그 제거가 실제로 동작하는지 본다(뒤에 있으면 본문에서 먼저 찾아 도달하지 않는다).
+  const html = `
+<html><head><title>사이드바 검증 &gt; 대회신청 | 테스트협회</title></head>
+<body>
+  <h3>대회관련</h3>
+  <aside>
+    <table>
+      <tr><th>신청기간</th><th>경기일시</th></tr>
+      <tr><td>2030년 1월 1일 ~ 2030년 1월 2일</td><td>2030년 1월 3일</td></tr>
+    </table>
+  </aside>
+  <div id="bo_v_con">
+    <table>
+      <tr><th>참가부서</th><th>구분</th></tr>
+      <tr><td>골드부</td><td>복식</td></tr>
+    </table>
+    <table>
+      <tr><th>접수기간</th><th>대회일</th></tr>
+      <tr><td>2026년 5월 1일 ~ 2026년 5월 20일</td><td>2026년 5월 24일</td></tr>
+    </table>
+  </div>
+</body></html>`;
+  return withFetch(html, async () => {
+    const r = await fetchDetail('http://x/bbs/board.php?bo_table=game&wr_id=1', '광주', '', DICT);
+    const t = r?.tournament;
+    assert(t, '파싱 실패');
+    assertEquals(t!.start_date, '2026-05-24');
+    assertEquals(t!.application_deadline, '2026-05-20');
+  });
+});
+
+Deno.test('fetchDetail: 날짜 표에서도 최대 경기일을 모아 clamp 기준으로 쓴다', () => {
+  // 부서 표에 날짜가 없어 2차 시도로 넘어가는데, 그 표가 여러 행이고 경기일이 다르다.
+  // 첫 행만 보면 clamp 기준이 5/10 이 되어 정상 마감(6/20)이 지워진다.
+  const html = `
+<html><body><div class="docContWrap"><h3>2차 시도 + 순차 개최</h3>
+  <table>
+    <tr><th>참가부서</th><th>구분</th></tr>
+    <tr><td>골드부</td><td>복식</td></tr>
+  </table>
+  <table>
+    <tr><th>접수기간</th><th>대회일</th></tr>
+    <tr><td>2026년 4월 1일 ~ 2026년 6월 20일</td><td>2026년 5월 10일</td></tr>
+    <tr><td>2026년 4월 1일 ~ 2026년 6월 25일</td><td>2026년 7월 30일</td></tr>
+  </table>
+</div></body></html>`;
+  return withFetch(html, async () => {
+    const r = await fetchDetail('https://gjtennis.kr/sub5_2_2_view.php?sid=1', '광주', '', DICT);
+    const t = r?.tournament;
+    assert(t, '파싱 실패');
+    assertEquals(t!.start_date, '2026-05-10');
+    assertEquals(
+      t!.application_deadline,
+      '2026-06-20',
+      '2차 시도에서 최대 경기일(7/30)을 모으지 않으면 정상 마감이 지워진다',
+    );
+  });
+});
