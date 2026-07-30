@@ -100,7 +100,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _HomePersonalSchedule(
                   tournaments: myTournaments.value ?? const [],
                   clubs: myClubs.value ?? const [],
-                  onTournamentBrowse: () => context.go('/tournaments'),
+                  // 대회는 탭에서 빠져 하위 화면이 됐다 — go 로 가면 뒤로가기 스택이
+                  // 사라지므로 push. 클럽은 여전히 탭이라 go 가 맞다.
+                  onTournamentBrowse: () => context.push('/tournaments'),
                   onClubBrowse: () => context.go('/clubs'),
                   onTournamentTap: (item) =>
                       context.push('/tournaments/${item.id}'),

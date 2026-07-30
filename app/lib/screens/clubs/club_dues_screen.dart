@@ -303,15 +303,17 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
     final paymentByUser = {
       for (final payment in _payments) payment.userId: payment,
     };
-    final paid = _payments
-        .where((payment) => payment.status == ClubDueStatus.paid)
+    // 목록과 같은 기준으로 센다 — 목록은 현재 멤버를 돌면서 "행 없으면 미납"으로
+    // 표시하는데, 요약을 _payments 로 세면 행 없는 신규 가입자가 목록엔 미납으로
+    // 보이면서 숫자에선 빠지고, 탈퇴자 행은 반대로 숫자에만 남는다.
+    int countBy(ClubDueStatus target) => _members
+        .where((member) =>
+            (paymentByUser[member.userId]?.status ?? ClubDueStatus.unpaid) ==
+            target)
         .length;
-    final unpaid = _payments
-        .where((payment) => payment.status == ClubDueStatus.unpaid)
-        .length;
-    final exempt = _payments
-        .where((payment) => payment.status == ClubDueStatus.exempt)
-        .length;
+    final paid = countBy(ClubDueStatus.paid);
+    final unpaid = countBy(ClubDueStatus.unpaid);
+    final exempt = countBy(ClubDueStatus.exempt);
     final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: () => _load(selectPeriodId: period.id),

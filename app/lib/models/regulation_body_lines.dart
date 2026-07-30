@@ -129,12 +129,14 @@ List<RegulationLine> parseRegulationBody(String body) {
 bool isHiddenPublicRegulationLabel(String? label) {
   if (label == null) return false;
   final normalized = label.toLowerCase().replaceAll(RegExp(r'[\s_\-·:]'), '');
+  // '안내' 는 숨기지 않는다. 크롤한 요강의 안내문에는 입금계좌·신청 변경 규칙처럼
+  // 사용자가 반드시 봐야 하는 내용이 들어 있다(published 대회 37건 중 35건이 보유).
+  // 숨길 대상은 수집 메타데이터(출처·내부 ID)뿐이다.
   return normalized == '출처' ||
       normalized == 'source' ||
       normalized == 'sourceurl' ||
       normalized == '풋살허브id' ||
-      normalized == 'futsalhubid' ||
-      normalized == '안내';
+      normalized == 'futsalhubid';
 }
 
 /// 전체 요강에서 사용자에게 필요한 대회 정보만 반환한다.

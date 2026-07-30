@@ -433,6 +433,8 @@ class _DetailBody extends StatelessWidget {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = t.regulationFields
+        // 수집 메타데이터(출처·내부 ID)는 사용자 상세에서 감춘다. 안내문은 감추지
+        // 않는다 — 입금계좌·신청 변경 규칙이 거기 들어 있다.
         .where(
           (field) =>
               field.label.replaceAll(' ', '') != '포스터' &&
@@ -455,7 +457,9 @@ class _DetailBody extends StatelessWidget {
       }
     }
 
-    if (fields.isNotEmpty || hasBody) {
+    final notes = t.regulationNotes;
+
+    if (fields.isNotEmpty || hasBody || notes.isNotEmpty) {
       final children = <Widget>[];
 
       // (a) 라벨/값 행
@@ -481,6 +485,11 @@ class _DetailBody extends StatelessWidget {
             withDivider: fields.isNotEmpty,
           ),
         );
+      }
+
+      // (c) 안내(※) 불릿
+      if (notes.isNotEmpty) {
+        children.add(_RegulationNotes(notes: notes));
       }
 
       children.add(const SizedBox(height: AppSpacing.sm));
@@ -1033,6 +1042,63 @@ class _ScheduleDivision extends StatelessWidget {
   }
 }
 
+/// 요강 안내문(※) 블록: 구분선 + "안내" 소제목 + 불릿 리스트.
+class _RegulationNotes extends StatelessWidget {
+  const _RegulationNotes({required this.notes});
+
+  final List<String> notes;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          Divider(color: cs.outlineVariant),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '안내',
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (final note in notes)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '• ',
+                    style: tt.bodyMedium?.copyWith(
+                      height: 1.45,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      note,
+                      style: tt.bodyMedium?.copyWith(
+                        height: 1.45,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 전체 요강 본문: 구분선 + "전체 요강" 소제목 + 마커 기반 계층 렌더.
 ///
 /// 폰트 패밀리는 전부 tt.bodyMedium 으로 동일하게 두고, weight·color·
@@ -1049,7 +1115,7 @@ class _RegulationBody extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final base = tt.bodyMedium ?? const TextStyle();
-    final lines = publicRegulationBodyLines(body);
+    final lines = parseRegulationBody(body);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),

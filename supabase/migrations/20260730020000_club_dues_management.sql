@@ -24,7 +24,11 @@ CREATE TABLE public.club_dues_periods (
 CREATE TABLE public.club_dues_payments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   period_id uuid NOT NULL REFERENCES public.club_dues_periods(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  -- 탈퇴해도 장부의 줄은 남긴다. 사람 연결고리만 끊고 표시용 이름 스냅샷을 남기는
+  -- 방식은 게시글 익명화(club_posts.author_id ON DELETE SET NULL)와 같다.
+  -- 회비는 "냈다/안 냈다" 분쟁 데이터라 삭제 시점이 곧 증거 소멸 시점이다.
+  user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  member_name text,
   status text NOT NULL DEFAULT 'unpaid'
     CHECK (status IN ('paid', 'unpaid', 'exempt')),
   amount_paid integer,
@@ -45,6 +49,10 @@ CREATE TABLE public.club_dues_audit (
   actor_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
   previous_status text,
   next_status text NOT NULL,
+  -- 상태만 남기면 "얼마를 언제 냈던 건지"가 사라진다. 되돌릴 때 amount_paid·paid_at
+  -- 이 NULL 로 소거되므로 이전 값을 여기 남겨야 복원 근거가 생긴다.
+  previous_amount_paid integer,
+  previous_paid_at timestamptz,
   note text,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT club_dues_audit_previous_status
@@ -202,19 +210,22 @@ BEGIN
     RAISE EXCEPTION 'note_too_long' USING ERRCODE = '22023';
   END IF;
 
-  INSERT INTO public.club_dues_payments (period_id, user_id)
-  SELECT p_period_id, member.user_id
+  INSERT INTO public.club_dues_payments (period_id, user_id, member_name)
+  SELECT p_period_id, member.user_id, u.name
   FROM public.club_members member
+  JOIN public.users u ON u.id = member.user_id
   WHERE member.club_id = v_club_id
     AND member.status = 'active'
     AND member.user_id = ANY(p_user_ids)
   ON CONFLICT (period_id, user_id) DO NOTHING;
 
   FOR v_payment IN
-    SELECT id, status
+    SELECT id, status, amount_paid, paid_at
     FROM public.club_dues_payments
     WHERE period_id = p_period_id
       AND user_id = ANY(p_user_ids)
+    -- 잠금 순서를 고정한다. 운영진 둘이 겹치는 멤버를 역순으로 잠그면 교착이 난다.
+    ORDER BY id
     FOR UPDATE
   LOOP
     UPDATE public.club_dues_payments
@@ -225,17 +236,23 @@ BEGIN
           )
           ELSE NULL
         END,
-        paid_at = CASE WHEN p_status = 'paid' THEN now() ELSE NULL END,
+        -- 이미 paid 인 멤버를 다시 paid 로 일괄 지정해도 원래 납부 시각을 지킨다.
+        paid_at = CASE
+          WHEN p_status = 'paid' THEN COALESCE(v_payment.paid_at, now())
+          ELSE NULL
+        END,
         note = NULLIF(trim(p_note), ''),
         updated_by = v_actor,
         updated_at = now()
     WHERE id = v_payment.id;
 
     INSERT INTO public.club_dues_audit (
-      payment_id, actor_id, previous_status, next_status, note
+      payment_id, actor_id, previous_status, next_status,
+      previous_amount_paid, previous_paid_at, note
     )
     VALUES (
-      v_payment.id, v_actor, v_payment.status, p_status, NULLIF(trim(p_note), '')
+      v_payment.id, v_actor, v_payment.status, p_status,
+      v_payment.amount_paid, v_payment.paid_at, NULLIF(trim(p_note), '')
     );
     v_count := v_count + 1;
   END LOOP;
@@ -283,6 +300,17 @@ BEGIN
      OR array_length(p_user_ids, 1) > 200 THEN
     RAISE EXCEPTION 'invalid_user_count' USING ERRCODE = '22023';
   END IF;
+
+  -- 장부에 행이 아직 없는 멤버(뒤늦게 가입)는 화면에선 미납으로 보이는데 알림만
+  -- 조용히 빠졌다. set_club_due_status 와 같은 방식으로 행을 먼저 만든다.
+  INSERT INTO public.club_dues_payments (period_id, user_id, member_name)
+  SELECT p_period_id, member.user_id, u.name
+  FROM public.club_members member
+  JOIN public.users u ON u.id = member.user_id
+  WHERE member.club_id = v_period.club_id
+    AND member.status = 'active'
+    AND member.user_id = ANY(p_user_ids)
+  ON CONFLICT (period_id, user_id) DO NOTHING;
 
   INSERT INTO public.notifications (
     user_id, type, title, body, reference_type, reference_id, club_id, status

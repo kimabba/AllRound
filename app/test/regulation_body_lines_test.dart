@@ -124,18 +124,21 @@ void main() {
   });
 
   group('사용자용 요강 필터', () {
-    test('출처·풋살허브 ID·안내 필드와 ※ 안내문을 숨긴다', () {
+    test('출처·풋살허브 ID 는 숨기고 안내는 남긴다', () {
       final lines = publicRegulationBodyLines(
         '장소: 서울월드컵경기장\n'
         '출처: 풋살허브\n'
         '풋살허브 ID: 12345\n'
-        '안내: 운영진에게 문의\n'
+        '안내: 입금계좌 확인 후 입금해주세요\n'
         '※ 일정은 변경될 수 있습니다',
       );
 
-      expect(lines, hasLength(1));
-      expect(lines.single.label, '장소');
-      expect(lines.single.value, '서울월드컵경기장');
+      // 안내문에는 입금계좌·신청 변경 규칙이 들어 있어 숨기면 안 된다.
+      expect(lines, hasLength(2));
+      expect(lines[0].label, '장소');
+      expect(lines[0].value, '서울월드컵경기장');
+      expect(lines[1].label, '안내');
+      expect(lines[1].value, '입금계좌 확인 후 입금해주세요');
     });
 
     test('수집 메타데이터 라벨의 공백·밑줄·영문 표기도 숨긴다', () {
@@ -165,10 +168,10 @@ void main() {
       expect(cleanPlainRegulationLines('준비 중인 대회입니다.'), ['준비 중인 대회입니다.']);
     });
 
-    test('평문 폴백에서도 안내 라인을 숨긴다', () {
+    test('평문 폴백은 안내 라인을 남긴다', () {
       expect(
-        cleanPlainRegulationLines('장소: 서울\n안내: 운영진에게 문의'),
-        ['장소: 서울'],
+        cleanPlainRegulationLines('장소: 서울\n안내: 입금계좌 확인 후 입금해주세요'),
+        ['장소: 서울', '안내: 입금계좌 확인 후 입금해주세요'],
       );
     });
 

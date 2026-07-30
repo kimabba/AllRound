@@ -899,7 +899,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
               .titleLarge
               ?.copyWith(fontWeight: FontWeight.w900),
         ),
-        subtitle: const Text('선택하면 현재 위치와 가까운 모임을 보여드려요'),
+        subtitle: const Text('선택하면 현재 위치와 가까운 클럽을 보여드려요'),
         onExpansionChanged: (expanded) {
           if (expanded && _nearbyClubs == null && !_loadingNearby) {
             _findNearbyClubs();
