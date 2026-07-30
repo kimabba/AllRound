@@ -6,7 +6,7 @@
 
 > 회원가입 시 종목·등급을 등록하면, 출전 가능한 대회만 자동으로 보여드립니다.
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.41+-02569B?logo=flutter)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.44+-02569B?logo=flutter)](https://flutter.dev)
 [![Supabase](https://img.shields.io/badge/Supabase-Edge_Functions-3ECF8E?logo=supabase)](https://supabase.com)
 [![Deno](https://img.shields.io/badge/Deno-2.1+-000000?logo=deno)](https://deno.com)
 [![Gemini](https://img.shields.io/badge/Gemini-2.0_Flash-4285F4?logo=google)](https://ai.google.dev)
@@ -69,7 +69,7 @@ Flutter App (iOS · Android · Web)
 - Docker Desktop
 - [Supabase CLI](https://supabase.com/docs/guides/cli) — `brew install supabase/tap/supabase`
 - [Deno 2.x](https://deno.com)
-- [Flutter 3.41+](https://docs.flutter.dev/get-started/install)
+- [Flutter 3.44+](https://docs.flutter.dev/get-started/install)
 - [Gemini API 키](https://aistudio.google.com/apikey)
 
 ### 1단계 — 환경 파일 준비 (최초 1회)

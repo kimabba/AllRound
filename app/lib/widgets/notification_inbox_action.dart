@@ -10,7 +10,7 @@ class NotificationInboxAction extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+    final unread = ref.watch(unreadNotificationCountProvider).value ?? 0;
     return Badge(
       isLabelVisible: unread > 0,
       label: Text(unread > 99 ? '99+' : '$unread'),

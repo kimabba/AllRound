@@ -32,15 +32,21 @@ export function mapDivisionsByDict(
 
 /**
  * 크롤 시점에 org의 활성 부서 사전 로드. crawl당 1회 호출 권장.
+ *
+ * 시니어(kstf)는 org 를 가리지 않고 함께 싣는다. 연령 부서는 전국 공통이라 시도협회
+ * 대회에도 그대로 나온다 — 광주 서구 어르신 대회의 '어르신60+/65+/70+' 가 그 예다.
+ * org 만으로 좁히면 그 부서가 영원히 미매칭으로 남는다. synonyms 가 연령 표기라
+ * 다른 부서명과 겹칠 여지도 낮다.
  */
 export async function loadDivisionDict(
   supabase: SupabaseClient,
   orgCode: string,
 ): Promise<DivisionDictRow[]> {
+  const orgCodes = orgCode === 'kstf' ? [orgCode] : [orgCode, 'kstf'];
   const { data, error } = await supabase
     .from('tennis_divisions')
     .select('code, synonyms, label_ko')
-    .eq('org_code', orgCode)
+    .in('org_code', orgCodes)
     .eq('is_active', true)
     .order('code');
   if (error) throw new Error(`loadDivisionDict(${orgCode}) 실패: ${error.message}`);

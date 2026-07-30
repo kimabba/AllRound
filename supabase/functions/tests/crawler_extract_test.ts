@@ -457,3 +457,149 @@ Deno.test('extractRegulationBody drops only known header rows, keeps text/data r
   // 숫자 없는 텍스트 다칸 행 보존 — 2칸이지만 화이트리스트/헤더 라벨 아니라 "라벨: 값"
   assert(lines.includes('남자부: 여자부'), `text row dropped: ${body}`);
 });
+
+// ── 참가부서 컬럼 우선 매칭 ──
+// 요강 본문에는 "개설 부서"만 있는 게 아니라 "자격 조건 설명"에도 부서명이 나온다.
+// 실제 광주 대회(sid=108) 원문에서:
+//   · "…자격을 취득할 경우 골드부 5.0 등급으로 승급되며"   ← 승급 규칙
+//   · "구분 청년부 장년부 베테랑부 순수동호인 20세이상…"    ← 연령 구분표
+// 본문 전체를 dict 에 넣으면 이런 설명문까지 개설 부서로 잡혀, 나갈 수 없는 대회가
+// "내 등급 대회"로 뜬다. 페이지에는 개설 부서만 담긴 `참가부서` 컬럼이 따로 있다.
+const DIVISION_TABLE_FIXTURE = `<html><body><div class="docContWrap">
+<h3>제1회 표컬럼 테스트 대회</h3>
+<table>
+<tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+<tr><td>남자일반부</td><td>2026년 6월 22일 ~ 2026년 8월 26일 까지</td><td>2026년 8월 30일</td></tr>
+</table>
+<table>
+<tr><td>2026년 광주빛고을배 전국동호인테니스대회</td></tr>
+<tr><td>우승자에 준하는 자격을 취득할 경우 골드부 5.0 등급으로 승급되며</td></tr>
+<tr><td>구분 청년부 장년부 베테랑부 순수동호인 20세이상</td></tr>
+</table>
+<p>우승자에 준하는 자격을 취득할 경우 골드부 5.0 등급으로 승급되며</p>
+<p>구분 청년부 장년부 베테랑부 순수동호인 20세이상</p>
+</div></body></html>`;
+
+const FIXTURE_DICT = [
+  { code: 'gj_m_general', label_ko: '일반부', synonyms: ['남자일반부', '일반부'] },
+  { code: 'gj_m_gold', label_ko: '골드부', synonyms: ['골드부'] },
+  { code: 'gj_m_veteran', label_ko: '베테랑부', synonyms: ['베테랑부'] },
+];
+
+Deno.test('gnuboard fetchDetail: 참가부서 컬럼만 보고 부서를 정한다(설명문 오탐 차단)', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() => Promise.resolve(new Response(DIVISION_TABLE_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=108',
+      '광주',
+      '제1회 표컬럼 테스트 대회',
+      FIXTURE_DICT,
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(
+      result!.tournament!.eligible_grades,
+      ['gj_m_general'],
+      '참가부서 표에 있는 부서만 채택해야 한다(골드부·베테랑부는 설명문)',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('gnuboard fetchDetail: 참가부서 컬럼이 없으면 본문 매칭으로 폴백한다', async () => {
+  const originalFetch = globalThis.fetch;
+  const noTable = `<html><body><div class="docContWrap">
+<h3>제2회 표없음 대회</h3><p>경기일시 2026년 8월 30일</p><p>남자일반부 경기</p>
+</div></body></html>`;
+  globalThis.fetch =
+    (() => Promise.resolve(new Response(noTable, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=1',
+      '광주',
+      '제2회 표없음 대회',
+      FIXTURE_DICT,
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(result!.tournament!.eligible_grades, ['gj_m_general']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// 같은 사이트 계열이라도 신청현황표 헤더를 <th> 가 아니라 <td> 로 쓰는 페이지가
+// 있다(위 BODY_FIXTURE 가 실원본 모사). <th> 전용으로 찾으면 이런 페이지는
+// 폴백으로 떨어져 본문 오탐이 그대로 남는다 — codex 리뷰 지적.
+const TD_HEADER_FIXTURE = `<html><body><div class="docContWrap">
+<h3>제3회 td헤더 대회</h3>
+<table>
+<tr><td>참가부서</td><td>신청기간</td><td>경기일시</td></tr>
+<tr><td>남자일반부</td><td>2026년 6월 23일 ~ 7월 1일</td><td>2026년 7월 4일</td></tr>
+</table>
+<p>골드부 5.0 등급으로 승급되며 청년부 장년부 베테랑부 순수동호인</p>
+</div></body></html>`;
+
+Deno.test('gnuboard fetchDetail: 헤더가 <td> 인 신청현황표도 인식한다', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() => Promise.resolve(new Response(TD_HEADER_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://www.jntennis.kr/sub5_2_2_view.php?sid=9',
+      '전남',
+      '제3회 td헤더 대회',
+      FIXTURE_DICT,
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(
+      result!.tournament!.eligible_grades,
+      ['gj_m_general'],
+      '<td> 헤더 표도 참가부서 컬럼으로 인식해야 한다',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// 요강 본문표는 tr 이 수십~수백 개고, 그 중간 행에 '경기종목'·'참가부서' 같은
+// 라벨이 등장한다(광주 sid=108 요강표는 tr 176개 중 25번째에서 매치). 헤더를
+// "아무 행에서나" 찾으면 그 표까지 신청현황표로 오인해, 컬럼 정렬이 맞지 않는
+// 본문 셀까지 부서로 긁힌다. 헤더는 표의 첫 행에만 있는 것으로 본다.
+const MIDTABLE_LABEL_FIXTURE = `<html><body><div class="docContWrap">
+<h3>제4회 본문표 대회</h3>
+<table>
+<tr><th>참가부서</th><th>신청기간</th><th>경기일시</th></tr>
+<tr><td>남자일반부</td><td>2026년 6월 23일 ~ 7월 1일</td><td>2026년 7월 4일</td></tr>
+</table>
+<table>
+<tr><td>제4회 본문표 대회 요강</td></tr>
+<tr><td>일 시</td><td>2026년 7월 4일</td></tr>
+<tr><td>경기종목</td><td>참가자격</td></tr>
+<tr><td>골드부</td><td>합산 8.0 이하</td></tr>
+<tr><td>베테랑부</td><td>만50세 이상</td></tr>
+</table>
+</div></body></html>`;
+
+Deno.test('gnuboard fetchDetail: 요강 본문표 중간의 라벨을 헤더로 오인하지 않는다', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() => Promise.resolve(new Response(MIDTABLE_LABEL_FIXTURE, { status: 200 }))) as typeof fetch;
+  try {
+    const result = await fetchDetail(
+      'https://gjtennis.kr/sub5_2_2_view.php?sid=108',
+      '광주',
+      '제4회 본문표 대회',
+      FIXTURE_DICT,
+    );
+    assert(result?.tournament, 'tournament should be parsed');
+    assertEquals(
+      result!.tournament!.eligible_grades,
+      ['gj_m_general'],
+      '신청현황표(첫 행 헤더)만 채택해야 한다 — 요강표 중간 라벨은 헤더가 아니다',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

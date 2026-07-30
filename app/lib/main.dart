@@ -36,7 +36,9 @@ Future<void> initializeAllRoundServices({
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
+    // supabase_flutter 2.16+ 에서 anonKey deprecated → publishableKey.
+    // 값은 동일(effectiveKey = publishableKey ?? anonKey), 키 체계 전환 아님.
+    publishableKey: AppConfig.supabaseAnonKey,
     authOptions: authOptions,
   );
 
@@ -51,9 +53,17 @@ Future<void> initializeAllRoundServices({
       initNotifications(ApiService(Supabase.instance.client));
     }
     // signedIn(신규 로그인) + initialSession(복원 세션) 모두에서 로드.
-    // RLS(tennis_divisions_read = authenticated) 이므로 세션 존재 시에만.
+    // RLS(tennis_divisions_read / grades_read = authenticated) 이므로 세션 존재 시에만.
     if (event.session != null) {
       DivisionCatalog.instance.load(Supabase.instance.client);
+      GradeCatalog.instance.load(Supabase.instance.client);
+      OrgCatalog.instance.load(Supabase.instance.client);
+    } else if (event.event == AuthChangeEvent.signedOut) {
+      // 세션이 끊기면 카탈로그를 비운다. 재로그인 로드가 실패했을 때 이전 세션의
+      // 스냅샷이 그대로 쓰이는 걸 막는다(in-flight 로드도 세대 증가로 무효화).
+      GradeCatalog.instance.reset();
+      DivisionCatalog.instance.reset();
+      OrgCatalog.instance.reset();
     }
   });
 
@@ -64,7 +74,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeAllRoundServices();
 
-  runApp(const ProviderScope(child: MatchUpApp()));
+  // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
+  // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
+  runApp(
+    ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
+  );
 }
 
 class MatchUpApp extends ConsumerWidget {
@@ -74,8 +88,8 @@ class MatchUpApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!AppConfig.userDesignPreview) {
       ref.listen(authStateProvider, (previous, next) {
-        final previousUserId = previous?.valueOrNull?.session?.user.id;
-        final nextUserId = next.valueOrNull?.session?.user.id;
+        final previousUserId = previous?.value?.session?.user.id;
+        final nextUserId = next.value?.session?.user.id;
         if (previousUserId == nextUserId) return;
 
         ref.read(chatProvider).reset();
@@ -228,6 +242,17 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
     if (Supabase.instance.client.auth.currentSession != null) {
       waits.add(
         DivisionCatalog.instance.whenReady
+            .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
+      );
+      // 등급 라벨도 같은 이유로 기다린다 — 늦게 도착하면 첫 화면이 번들 폴백 라벨로
+      // 그려지고, 값이 교체돼도 리빌드되지 않아 옛 이름이 남는다.
+      waits.add(
+        GradeCatalog.instance.whenReady
+            .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
+      );
+      // 협회 라벨도 같은 이유로 기다린다(#318 과 같은 stale fallback 문제).
+      waits.add(
+        OrgCatalog.instance.whenReady
             .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
       );
     }

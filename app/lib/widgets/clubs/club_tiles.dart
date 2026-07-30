@@ -331,6 +331,7 @@ class SimpleClubTile extends StatelessWidget {
   final bool pending;
   final ClubFavoriteToggle? onFavoriteToggle;
   final VoidCallback? onOpen;
+  final Color? backgroundColor;
 
   const SimpleClubTile({
     super.key,
@@ -339,6 +340,7 @@ class SimpleClubTile extends StatelessWidget {
     this.pending = false,
     this.onFavoriteToggle,
     this.onOpen,
+    this.backgroundColor,
   });
 
   @override
@@ -357,21 +359,31 @@ class SimpleClubTile extends StatelessWidget {
           ),
         ),
         child: Text(
-          '관심 있는 클럽을 찾아 가입해보세요.',
+          '관심 있는 모임을 찾아 가입해보세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
       );
     }
 
     return Material(
-      color: Colors.transparent,
+      color: backgroundColor ?? Colors.transparent,
+      borderRadius: backgroundColor == null ? null : AppRadius.card,
       child: InkWell(
         onTap: onOpen ?? () => context.push('/clubs/${item.id}', extra: item),
+        borderRadius: backgroundColor == null ? null : AppRadius.card,
         child: Container(
           constraints: const BoxConstraints(minHeight: 84),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          padding: EdgeInsets.symmetric(
+            horizontal: backgroundColor == null ? 0 : AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+            borderRadius: backgroundColor == null ? null : AppRadius.card,
+            border: backgroundColor == null
+                ? Border(bottom: BorderSide(color: cs.outlineVariant))
+                : Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.45),
+                  ),
           ),
           child: Row(
             children: [
@@ -424,19 +436,25 @@ class SimpleClubTile extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          '${sportLabelFromString(item.sport)} / ${item.region ?? '지역 미정'}',
+                          item.region ?? '지역 미정',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '·',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
                         Text(
                           clubMemberCountLabel(item.memberCount),
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w800,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ],

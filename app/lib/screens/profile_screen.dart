@@ -300,10 +300,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.watch(currentUserProvider);
     final sports = ref.watch(userSportsProvider);
     final tennisOrgs = ref.watch(userTennisOrgsProvider);
-    final profile = ref.watch(myProfileProvider).valueOrNull;
-    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
+    final profile = ref.watch(myProfileProvider).value;
+    final isAdmin = ref.watch(isAdminProvider).value ?? false;
     final unreadNotificationCount =
-        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+        ref.watch(unreadNotificationCountProvider).value ?? 0;
 
     final email = user?.email ?? '';
     final emailPrefix = email.contains('@') ? email.split('@').first : email;

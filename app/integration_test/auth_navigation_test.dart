@@ -98,7 +98,10 @@ Future<void> _launchSignedOutApp(WidgetTester tester) async {
   // router swaps back to Login, making the next synthetic account tap miss.
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pump(const Duration(milliseconds: 100));
-  await tester.pumpWidget(const ProviderScope(child: MatchUpApp()));
+  // main.dart 와 동일하게 riverpod 3 자동 재시도를 끈다(프로덕션 동작과 일치).
+  await tester.pumpWidget(
+    ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
+  );
   await _waitFor(tester, find.byKey(AllRoundE2EKeys.loginScreen));
   await tester.pump(const Duration(milliseconds: 350));
 }

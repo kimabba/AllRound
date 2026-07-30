@@ -75,7 +75,7 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
     }
 
     final tournaments = ref.watch(myFavoriteTournamentsProvider);
-    final favoriteIds = ref.watch(favoriteIdsProvider).valueOrNull;
+    final favoriteIds = ref.watch(favoriteIdsProvider).value;
 
     return tournaments.when(
       data: (items) {

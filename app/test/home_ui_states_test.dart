@@ -24,6 +24,8 @@ void main() {
   }) async {
     await tester.pumpWidget(
       ProviderScope(
+        // main.dart 와 동일하게 riverpod 3 자동 재시도를 끈다(에러 상태 정착 보장).
+        retry: (_, __) => null,
         overrides: [
           homeTournamentsProvider.overrideWith((ref) => load()),
           unreadNotificationCountProvider.overrideWith((ref) async => 0),
@@ -64,6 +66,8 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
+    expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
+    expect(find.text('나의 일정'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

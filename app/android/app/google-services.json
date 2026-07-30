@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "620735036879",
+    "project_id": "allround-f2260",
+    "storage_bucket": "allround-f2260.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:620735036879:android:60cc7df9197fc704c426ba",
+        "android_client_info": {
+          "package_name": "kr.allround.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTW_cSaWBSg187-LvJV_j0KSM9x54QwGY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

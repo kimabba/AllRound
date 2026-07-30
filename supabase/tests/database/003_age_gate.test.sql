@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(10);
+SELECT plan(13);
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000008', true);
@@ -19,6 +19,8 @@ SELECT is(
   '생년월일이 없는 가입 직후 계정은 연령 검증 전 상태다'
 );
 
+-- user_sports 직접 DML 은 #320 이후 권한 자체가 없다(RPC 가 유일한 쓰기 경계).
+-- 연령 게이트는 RLS 가 아니라 save_user_sports 본문이 건다 — DEFINER 라 RLS 를 우회하므로.
 SELECT throws_ok(
   $$INSERT INTO public.user_sports (user_id, sport, grade, is_primary)
     VALUES (
@@ -28,9 +30,45 @@ SELECT throws_ok(
       true
     )$$,
   '42501',
-  'new row violates row-level security policy for table "user_sports"',
+  'permission denied for table user_sports',
+  '앱 클라이언트는 종목을 직접 INSERT 할 수 없다(RPC 전용 경계)'
+);
+
+SELECT throws_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"intro","is_primary":true}]'::jsonb)$$,
+  '42501',
+  '연령 검증이 필요합니다',
   '생년월일이 없는 계정은 종목을 등록할 수 없다'
 );
+
+-- 게이트 도입(2026-07-18) 전 가입해 birth_date 가 비어 있는데 종목은 가진 계정이 있다
+-- (운영 실측 3명). RLS 시절 delete 는 연령을 보지 않았으므로, 줄이기만 하는 저장은
+-- 계속 통과해야 한다 — 전체 삭제만 되고 부분 삭제가 막히면 되돌릴 수 없는 유실이 된다.
+RESET ROLE;
+INSERT INTO public.user_sports (user_id, sport, grade, is_primary) VALUES
+  ('00000000-0000-4000-8000-000000000008', 'futsal', 'intro', true),
+  ('00000000-0000-4000-8000-000000000008', 'tennis', 'y1to3', false);
+SET LOCAL ROLE authenticated;
+
+SELECT lives_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"intro","is_primary":true}]'::jsonb)$$,
+  '연령 미검증이어도 기존 종목을 줄이기만 하는 저장은 통과한다'
+);
+
+SELECT throws_ok(
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"beginner","is_primary":true}]'::jsonb)$$,
+  '42501',
+  '연령 검증이 필요합니다',
+  '연령 미검증 계정은 기존 종목의 등급을 바꿀 수 없다'
+);
+
+RESET ROLE;
+DELETE FROM public.user_sports
+ WHERE user_id = '00000000-0000-4000-8000-000000000008';
+SET LOCAL ROLE authenticated;
 
 SELECT throws_ok(
   $$INSERT INTO public.tournaments
@@ -92,13 +130,8 @@ SELECT is(
 );
 
 SELECT lives_ok(
-  $$INSERT INTO public.user_sports (user_id, sport, grade, is_primary)
-    VALUES (
-      '00000000-0000-4000-8000-000000000008',
-      'futsal',
-      'intro',
-      true
-    )$$,
+  $$SELECT public.save_user_sports(
+      '[{"sport":"futsal","grade":"intro","is_primary":true}]'::jsonb)$$,
   '연령 검증을 마친 계정은 종목을 등록할 수 있다'
 );
 

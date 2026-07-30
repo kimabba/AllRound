@@ -24,6 +24,12 @@ result = subprocess.run(
 )
 paths = [Path(line) for line in result.stdout.splitlines() if line.strip()]
 exclude_files = {'pubspec.lock'}
+exclude_paths = {
+    # Firebase client config keys identify an app and are intentionally shipped
+    # in mobile binaries; server/service-account credentials remain scanned.
+    'app/android/app/google-services.json',
+    'app/ios/Runner/GoogleService-Info.plist',
+}
 # Keep this list intentionally conservative to avoid noisy placeholder matches.
 patterns = {
     'GitHub token': re.compile(r'gh[pousr]_[A-Za-z0-9_]{30,}'),
@@ -39,7 +45,7 @@ findings: list[str] = []
 
 for rel in paths:
     path = root / rel
-    if not path.is_file() or path.name in exclude_files:
+    if not path.is_file() or path.name in exclude_files or rel.as_posix() in exclude_paths:
         continue
     try:
         text = path.read_text(encoding='utf-8')

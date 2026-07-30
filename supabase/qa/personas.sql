@@ -120,7 +120,10 @@ VALUES
   ('00000000-0000-4000-8000-000000000001', 'kta',  '남자오픈',   ARRAY['kta_m_open'],    true, 'seoul'),
   ('00000000-0000-4000-8000-000000000002', 'gj',   '남자일반부', ARRAY['gj_m_general'],  true, 'gwangju'),
   ('00000000-0000-4000-8000-000000000003', 'gj',   '남자신인부', ARRAY['gj_m_rookie'],   true, 'gwangju'),
-  ('00000000-0000-4000-8000-000000000004', 'jn',   '초급자부',   ARRAY['jn_m_beginner'], true, 'jeonnam'),
+  -- 초급자부(jn_m_beginner)는 20260729020000 에서 **대회 종목 전용**이 됐다. 유저가
+  -- 자기 랭킹 등급으로 가질 수 없으므로 트리거가 시드를 막는다. 이 페르소나의 뜻은
+  -- '전남 소속 낮은 등급 유저' 이므로 같은 결의 랭킹 등급인 신인부로 바꾼다.
+  ('00000000-0000-4000-8000-000000000004', 'jn',   '신인부',     ARRAY['jn_m_rookie'],   true, 'jeonnam'),
   ('00000000-0000-4000-8000-000000000005', 'kata', '4부',        ARRAY['kata_4'],         true, 'seoul')
 ON CONFLICT (user_id, org, division) DO UPDATE SET
   division_codes = EXCLUDED.division_codes,

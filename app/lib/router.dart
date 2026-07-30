@@ -30,6 +30,7 @@ import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
 import 'state/providers.dart';
+import 'utils/grade_labels.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
 
@@ -69,7 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (kIsWeb) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
-        final isAdmin = adminAsync.valueOrNull ?? false;
+        final isAdmin = adminAsync.value ?? false;
 
         if (loc == '/login') return '/';
         if (loc.startsWith('/admin')) {
@@ -83,13 +84,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == '/admin/clubs') {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
-        return (adminAsync.valueOrNull ?? false) ? null : '/';
+        return (adminAsync.value ?? false) ? null : '/';
       }
 
       // 앱: 기존 로직
       final sportsAsync = ref.read(userSportsProvider);
       if (sportsAsync.isLoading) return null;
-      final sports = sportsAsync.valueOrNull ?? const [];
+      final sports = sportsAsync.value ?? const [];
       if (sports.isEmpty && loc != '/onboarding') return '/onboarding';
 
       // 나머지 어드민 경로는 기존처럼 웹에서만 허용한다.
@@ -99,51 +100,64 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+          path: '/login', builder: (_, __) => catalogAware(LoginScreen.new)),
       GoRoute(
         path: '/reset-password',
-        builder: (_, __) => const ResetPasswordScreen(),
+        builder: (_, __) => catalogAware(ResetPasswordScreen.new),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (_, __) => const OnboardingScreen(),
+        builder: (_, __) => catalogAware(OnboardingScreen.new),
       ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+          GoRoute(path: '/', builder: (_, __) => catalogAware(HomeScreen.new)),
           GoRoute(
             path: '/chat',
             builder: (_, state) {
               final extra = state.extra;
-              return ChatScreen(
-                entryContext: extra is ChatEntryContext ? extra : null,
+              return catalogAware(
+                () => ChatScreen(
+                  entryContext: extra is ChatEntryContext ? extra : null,
+                ),
               );
             },
           ),
           GoRoute(
             path: '/tournaments',
-            builder: (_, __) => const TournamentsScreen(),
+            builder: (_, __) => catalogAware(TournamentsScreen.new),
           ),
-          GoRoute(path: '/clubs', builder: (_, __) => const ClubsScreen()),
-          GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
-          GoRoute(path: '/rules', builder: (_, __) => const RulesScreen()),
-          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+          GoRoute(
+            path: '/clubs',
+            builder: (_, __) => catalogAware(ClubsScreen.new),
+          ),
+          GoRoute(
+              path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
+          GoRoute(
+            path: '/rules',
+            builder: (_, __) => catalogAware(RulesScreen.new),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (_, __) => catalogAware(ProfileScreen.new),
+          ),
           GoRoute(
             path: '/notifications',
-            builder: (_, __) => const NotificationsScreen(),
+            builder: (_, __) => catalogAware(NotificationsScreen.new),
           ),
           GoRoute(
             path: '/favorites',
-            builder: (_, __) => const FavoritesScreen(),
+            builder: (_, __) => catalogAware(FavoritesScreen.new),
           ),
           GoRoute(
             path: '/blocked-users',
-            builder: (_, __) => const BlockedUsersScreen(),
+            builder: (_, __) => catalogAware(BlockedUsersScreen.new),
           ),
           GoRoute(
             path: '/tournaments/submit',
-            builder: (_, __) => const TournamentSubmitScreen(),
+            builder: (_, __) => catalogAware(TournamentSubmitScreen.new),
           ),
           GoRoute(
             path: '/clubs/:id',
@@ -151,86 +165,104 @@ final routerProvider = Provider<GoRouter>((ref) {
               final club = state.extra as Club?;
               final openManagement =
                   state.uri.queryParameters['tab'] == 'manage';
-              return club != null
-                  ? ClubDetailScreen(
-                      club: club,
-                      openManagement: openManagement,
-                    )
-                  : ClubDetailScreen(
-                      clubId: state.pathParameters['id']!,
-                      openManagement: openManagement,
-                    );
+              return catalogAware(
+                () => club != null
+                    ? ClubDetailScreen(
+                        club: club,
+                        openManagement: openManagement,
+                      )
+                    : ClubDetailScreen(
+                        clubId: state.pathParameters['id']!,
+                        openManagement: openManagement,
+                      ),
+              );
             },
           ),
           GoRoute(
             path: '/tournaments/:id',
-            builder: (_, state) => TournamentDetailScreen(
-              tournamentId: state.pathParameters['id']!,
+            builder: (_, state) => catalogAware(
+              () => TournamentDetailScreen(
+                tournamentId: state.pathParameters['id']!,
+              ),
             ),
           ),
         ],
       ),
       // 웹 전용
-      GoRoute(path: '/no-access', builder: (_, __) => const NoAccessScreen()),
+      GoRoute(
+        path: '/no-access',
+        builder: (_, __) => catalogAware(NoAccessScreen.new),
+      ),
 
       // Admin routes (AdminShell wrapping)
       ShellRoute(
         builder: (context, state, child) => AdminShell(child: child),
         routes: [
-          GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
+          GoRoute(
+            path: '/admin',
+            builder: (_, __) => catalogAware(AdminScreen.new),
+          ),
           GoRoute(
             path: '/admin/drafts',
-            builder: (_, __) => const AdminScreen(initialTab: 1),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 1)),
           ),
           GoRoute(
             path: '/admin/format-review',
-            builder: (_, __) => const FormatReviewScreen(),
+            builder: (_, __) => catalogAware(FormatReviewScreen.new),
           ),
           GoRoute(
             path: '/admin/sources',
-            builder: (_, __) => const AdminScreen(initialTab: 2),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 2)),
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => const AdminScreen(initialTab: 3),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 3)),
           ),
           GoRoute(
             path: '/admin/kb',
-            builder: (_, __) => const AdminScreen(initialTab: 4),
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 4)),
           ),
           GoRoute(
             path: '/admin/tournaments',
-            builder: (_, __) => const _AdminTournamentListScreen(),
+            builder: (_, __) => catalogAware(_AdminTournamentListScreen.new),
           ),
           GoRoute(
             path: '/admin/reports',
-            builder: (_, __) => const ModerationScreen(),
+            builder: (_, __) => catalogAware(ModerationScreen.new),
           ),
           GoRoute(
             path: '/admin/edit/:id',
-            builder: (_, state) => TournamentEditScreen(
-              tournamentId: state.pathParameters['id']!,
+            builder: (_, state) => catalogAware(
+              () => TournamentEditScreen(
+                tournamentId: state.pathParameters['id']!,
+              ),
             ),
           ),
         ],
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/manage',
-        builder: (_, state) => ClubInquiryInboxScreen(
-          clubId: state.pathParameters['id']!,
+        builder: (_, state) => catalogAware(
+          () => ClubInquiryInboxScreen(
+            clubId: state.pathParameters['id']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/:threadId',
-        builder: (_, state) => ClubInquiryConversationScreen(
-          clubId: state.pathParameters['id']!,
-          threadId: state.pathParameters['threadId']!,
+        builder: (_, state) => catalogAware(
+          () => ClubInquiryConversationScreen(
+            clubId: state.pathParameters['id']!,
+            threadId: state.pathParameters['threadId']!,
+          ),
         ),
       ),
       GoRoute(
         path: '/clubs/:id/inquiries',
-        builder: (_, state) => ClubInquiryConversationScreen(
-          clubId: state.pathParameters['id']!,
+        builder: (_, state) => catalogAware(
+          () => ClubInquiryConversationScreen(
+            clubId: state.pathParameters['id']!,
+          ),
         ),
       ),
     ],
