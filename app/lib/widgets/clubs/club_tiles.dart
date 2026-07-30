@@ -239,11 +239,10 @@ class NearbyNewClubCard extends StatelessWidget {
                     ),
                     MiniInfoChip(
                       icon: Icons.place_rounded,
-                      label: club.region ?? '지역 미정',
-                    ),
-                    MiniInfoChip(
-                      icon: Icons.groups_rounded,
-                      label: clubMemberCountLabel(club.memberCount),
+                      label: clubRegionMemberLabel(
+                        club.region,
+                        club.memberCount,
+                      ),
                     ),
                   ],
                 ),
@@ -300,7 +299,7 @@ class SimpleClubMiniTile extends StatelessWidget {
                 style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
               Text(
-                '${sportLabelFromString(club.sport)} · ${club.region ?? '지역 미정'} · ${clubMemberCountLabel(club.memberCount)}',
+                '${sportLabelFromString(club.sport)} · ${clubRegionMemberLabel(club.region, club.memberCount)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -433,31 +432,13 @@ class SimpleClubTile extends StatelessWidget {
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      children: [
-                        Text(
-                          item.region ?? '지역 미정',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          '·',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          clubMemberCountLabel(item.memberCount),
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      clubRegionMemberLabel(item.region, item.memberCount),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),

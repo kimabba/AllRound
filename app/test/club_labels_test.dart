@@ -75,4 +75,10 @@ void main() {
     expect(clubMemberCountLabel(0), '총 0명');
     expect(clubMemberCountLabel(-1), '총 0명');
   });
+
+  test('club region and member count use a compact card label', () {
+    expect(clubRegionMemberLabel('서울', 10), '서울 10명');
+    expect(clubRegionMemberLabel(null, 0), '지역 미정 0명');
+    expect(clubRegionMemberLabel('  ', -1), '지역 미정 0명');
+  });
 }
