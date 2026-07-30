@@ -3507,11 +3507,18 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       context: context,
       initialTime: const TimeOfDay(hour: 19, minute: 0),
     );
-    if (time == null) return;
-    setState(() {
-      _startsAt =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
+    if (time == null || !mounted) return;
+    final picked =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    // 서버는 현재 시각 이하를 거절한다. 여기서 걸러 주지 않으면 오늘 날짜에
+    // 이미 지난 시간을 골라도 통과한 뒤 일반 실패 메시지만 보게 된다.
+    if (!picked.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미 지난 시간이에요. 앞으로의 일시를 골라주세요.')),
+      );
+      return;
+    }
+    setState(() => _startsAt = picked);
   }
 
   Future<void> _submit() async {

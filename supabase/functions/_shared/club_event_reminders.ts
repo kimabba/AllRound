@@ -3,6 +3,8 @@ export interface ClubEventReminder {
   clubId: string;
   title: string;
   clubName: string;
+  /// 작성자. 차단 관계인 멤버를 알림 수신자에서 빼는 데 쓴다.
+  createdBy: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -42,6 +44,7 @@ export function parseClubEventReminders(
       clubId: row['club_id'],
       title: row['title'],
       clubName: isRecord(club) && typeof club['name'] === 'string' ? club['name'] : '클럽',
+      createdBy: typeof row['created_by'] === 'string' ? row['created_by'] : null,
     });
   }
   return reminders;

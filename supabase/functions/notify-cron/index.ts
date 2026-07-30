@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
   const tomorrow = tomorrowKstBounds(new Date());
   const { data: eventRows, error: eventError } = await supabase
     .from('club_events')
-    .select('id, club_id, title, starts_at, clubs(name)')
+    .select('id, club_id, title, starts_at, created_by, clubs(name)')
     .is('ended_early_at', null)
     .gte('starts_at', tomorrow.start)
     .lt('starts_at', tomorrow.end);
@@ -178,7 +178,40 @@ Deno.serve(async (req) => {
   }
 
   const eventReminders = parseClubEventReminders(eventRows as unknown);
+
+  // club_events SELECT RLS 는 차단 관계를 숨기므로, D-1 알림도 같은 기준으로
+  // 수신자를 걸러야 한다(제목이 알림으로 새어 나가지 않게).
+  const authorIds = [
+    ...new Set(
+      eventReminders
+        .map((event) => event.createdBy)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const blockedByAuthor = new Map<string, Set<string>>();
+  if (authorIds.length > 0) {
+    const { data: blockRows } = await supabase
+      .from('user_blocks')
+      .select('blocker_id, blocked_id')
+      .or(
+        `blocker_id.in.(${authorIds.join(',')}),blocked_id.in.(${authorIds.join(',')})`,
+      );
+    for (const row of blockRows ?? []) {
+      const blocker = row.blocker_id as string;
+      const blocked = row.blocked_id as string;
+      for (const [author, other] of [[blocker, blocked], [blocked, blocker]]) {
+        if (!authorIds.includes(author)) continue;
+        const set = blockedByAuthor.get(author) ?? new Set<string>();
+        set.add(other);
+        blockedByAuthor.set(author, set);
+      }
+    }
+  }
+
   for (const event of eventReminders) {
+    const blockedForEvent = event.createdBy === null
+      ? new Set<string>()
+      : blockedByAuthor.get(event.createdBy) ?? new Set<string>();
     const { data: members, error: membersError } = await supabase
       .from('club_members')
       .select('user_id')
@@ -189,6 +222,7 @@ Deno.serve(async (req) => {
       continue;
     }
     for (const userId of parseUserIds(members as unknown)) {
+      if (blockedForEvent.has(userId)) continue;
       const { data: existing } = await supabase
         .from('notifications')
         .select('id')

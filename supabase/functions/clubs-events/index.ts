@@ -63,6 +63,25 @@ Deno.serve(async (req) => {
   if (action === 'end' || action === 'delete') {
     const eventId = requiredText(rawBody.event_id, 64);
     if (eventId === null) return errorResponse('Invalid event id', 400);
+
+    // 종료·삭제는 작성자 또는 owner/manager 만. can_create_event 는 생성 권한일
+    // 뿐이라 여기서 허용하면 club_events UPDATE/DELETE RLS(작성자 또는 매니저)를
+    // service_role 로 우회하게 되고, 화면(owner/manager 에게만 관리 메뉴 노출)과도
+    // 어긋난다.
+    const { data: targetEvent, error: targetError } = await supabase
+      .from('club_events')
+      .select('created_by')
+      .eq('id', eventId)
+      .eq('club_id', clubId)
+      .maybeSingle();
+    if (targetError) return errorResponse(targetError.message, 500);
+    if (!targetEvent) return errorResponse('Event not found', 404);
+    const isClubManager = membership?.role === 'owner' ||
+      membership?.role === 'manager';
+    if (!isClubManager && targetEvent.created_by !== auth.user.id) {
+      return errorResponse('Event manager permission required', 403);
+    }
+
     const { error } = action === 'delete'
       ? await supabase
         .from('club_events')
@@ -92,6 +111,16 @@ Deno.serve(async (req) => {
   const locationText = optionalText(rawBody.location_text, 300);
   const fee = optionalInteger(rawBody.fee, 0);
   const capacity = optionalInteger(rawBody.capacity, 1);
+  // 길이 초과는 null 로 바뀌므로, 값이 들어왔는데 null 이면 조용히 버리지 말고
+  // 오류로 돌려준다(입력이 사라진 채 생성 성공하는 것을 막는다).
+  if (
+    (rawBody.description !== null && rawBody.description !== undefined &&
+      rawBody.description !== '' && description === null) ||
+    (rawBody.location_text !== null && rawBody.location_text !== undefined &&
+      rawBody.location_text !== '' && locationText === null)
+  ) {
+    return errorResponse('Invalid description or location', 400);
+  }
   if (
     (rawBody.fee !== null && rawBody.fee !== undefined && fee === null) ||
     (rawBody.capacity !== null && rawBody.capacity !== undefined && capacity === null)
@@ -136,9 +165,21 @@ Deno.serve(async (req) => {
     .eq('status', 'active')
     .neq('user_id', auth.user.id);
   const clubName = typeof club?.name === 'string' ? club.name : '클럽';
+  // club_events SELECT RLS 는 차단 관계(is_user_blocked_pair)를 숨긴다.
+  // 알림으로 제목을 보내면 그 차단이 무의미해지므로 수신자에서 제외한다.
+  const { data: blockRows } = await supabase
+    .from('user_blocks')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${auth.user.id},blocked_id.eq.${auth.user.id}`);
+  const blockedWithAuthor = new Set(
+    (blockRows ?? []).map((row) =>
+      row.blocker_id === auth.user.id ? row.blocked_id : row.blocker_id
+    ),
+  );
   const recipients = (memberRows ?? [])
     .map((member) => member.user_id)
-    .filter((userId): userId is string => typeof userId === 'string');
+    .filter((userId): userId is string => typeof userId === 'string')
+    .filter((userId) => !blockedWithAuthor.has(userId));
   const results = await Promise.allSettled(
     recipients.map((userId) =>
       createNotification(supabase, {
