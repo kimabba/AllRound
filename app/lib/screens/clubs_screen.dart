@@ -484,54 +484,100 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
               ),
               sliver: SliverList.list(
                 children: [
-                  const SimpleSectionHeader(title: '나의 모임'),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (_loadingMy)
-                    const LinearProgressIndicator()
-                  else if (joinedClubs.isEmpty && pendingClubs.isEmpty)
-                    SimpleClubTile(
-                      club: null,
-                      onFavoriteToggle: _toggleClubFavorite,
-                    )
-                  else ...[
-                    for (final club in pendingClubs)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppSpacing.sm,
-                        ),
-                        child: SimpleClubTile(
-                          club: club,
-                          pending: true,
-                          backgroundColor: cs.primaryContainer,
-                          isFavorite: favoriteClubIds.contains(club.id),
-                          onFavoriteToggle: _toggleClubFavorite,
-                          onOpen: () => _openClub(club),
-                        ),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer.withValues(alpha: 0.42),
+                      borderRadius: AppRadius.card,
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.18),
                       ),
-                    for (final club in joinedClubs)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppSpacing.sm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SimpleSectionHeader(
+                          title: '나의 모임',
+                          subtitle: '내가 참여하고 있는 모임',
+                          icon: Icons.verified_rounded,
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              borderRadius: AppRadius.pill,
+                            ),
+                            child: Text(
+                              '참여 중 ${joinedClubs.length}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: cs.onPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
                         ),
-                        child: SimpleClubTile(
-                          club: club,
-                          backgroundColor: cs.surfaceContainerLow,
-                          isFavorite: favoriteClubIds.contains(club.id),
-                          onFavoriteToggle: _toggleClubFavorite,
-                          onOpen: () => _openClub(club),
-                        ),
-                      ),
-                  ],
+                        const SizedBox(height: AppSpacing.md),
+                        if (_loadingMy)
+                          const LinearProgressIndicator()
+                        else if (joinedClubs.isEmpty && pendingClubs.isEmpty)
+                          SimpleClubTile(
+                            club: null,
+                            onFavoriteToggle: _toggleClubFavorite,
+                          )
+                        else ...[
+                          for (final club in pendingClubs)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
+                              child: SimpleClubTile(
+                                club: club,
+                                pending: true,
+                                isMyClub: true,
+                                backgroundColor: cs.surface,
+                                isFavorite: favoriteClubIds.contains(club.id),
+                                onFavoriteToggle: _toggleClubFavorite,
+                                onOpen: () => _openClub(club),
+                              ),
+                            ),
+                          for (final club in joinedClubs)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
+                              child: SimpleClubTile(
+                                club: club,
+                                isMyClub: true,
+                                backgroundColor: cs.surface,
+                                isFavorite: favoriteClubIds.contains(club.id),
+                                onFavoriteToggle: _toggleClubFavorite,
+                                onOpen: () => _openClub(club),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xl),
                   _buildClubFilterControls(hasClubNameQuery),
                   const SizedBox(height: AppSpacing.lg),
                   SimpleSectionHeader(
                     title: hasClubNameQuery ? '검색 결과' : '추천 모임',
+                    icon: hasClubNameQuery
+                        ? Icons.search_rounded
+                        : Icons.explore_outlined,
                     subtitle: hasClubNameQuery
                         ? '"${_clubNameQuery.trim()}"'
                         : (_clubFilters.hasActive
                             ? _clubFilters.labels.join(' · ')
-                            : null),
+                            // 이 분기는 필터가 없는 상태 = region null 이라 지역을
+                            // 반영하지 않는다. 지역까지 쓰려면 필터를 걸어야 한다.
+                            : '관심 종목을 기준으로 추천해요'),
                     trailing: Text('${recommendedClubs.length}개'),
                   ),
                   const SizedBox(height: AppSpacing.sm),

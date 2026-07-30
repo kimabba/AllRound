@@ -6,12 +6,14 @@ class SimpleSectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
+  final IconData? icon;
 
   const SimpleSectionHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.trailing,
+    this.icon,
   });
 
   @override
@@ -20,7 +22,15 @@ class SimpleSectionHeader extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (icon != null) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 22, color: cs.primary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
