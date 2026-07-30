@@ -319,6 +319,7 @@ class Club {
   final List<String> meetingDays;
   final int? monthlyFee;
   final String? genderPreference;
+  final bool inquiryLinksEnabled;
   final DateTime? createdAt;
   // 현재 사용자의 멤버십 정보 (조회 시 join)
   final String? myRole; // 'owner'|'manager'|'member'|null
@@ -342,6 +343,7 @@ class Club {
     this.meetingDays = const [],
     this.monthlyFee,
     this.genderPreference,
+    this.inquiryLinksEnabled = true,
     this.createdAt,
     this.myRole,
     this.myCanPostNotice = false,
@@ -385,6 +387,7 @@ class Club {
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
       genderPreference: j['gender_preference'] as String?,
+      inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,
       createdAt: j['created_at'] != null
           ? DateTime.parse(j['created_at'] as String)
           : null,
