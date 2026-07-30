@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -248,8 +249,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw const _NearbyLocationException(
-          '아이폰 설정에서 위치 서비스를 켜주세요.',
+        throw _NearbyLocationException(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? '아이폰 설정에서 위치 서비스를 켜주세요.'
+              : '기기 설정에서 위치 서비스를 켜주세요.',
         );
       }
 
@@ -263,8 +266,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         );
       }
       if (permission == LocationPermission.deniedForever) {
-        throw const _NearbyLocationException(
-          '설정 > 개인정보 보호 및 보안 > 위치 서비스에서 올라운드 권한을 허용해주세요.',
+        throw _NearbyLocationException(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? '설정 > 개인정보 보호 및 보안 > 위치 서비스에서 올라운드 권한을 허용해주세요.'
+              : '기기 설정 > 앱 권한에서 올라운드의 위치 권한을 허용해주세요.',
         );
       }
 
@@ -296,24 +301,40 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
       var nearby = precise;
       String? notice;
-      if (nearby.isEmpty) {
-        final placemarks = await Geocoding().placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-          locale: const Locale('ko', 'KR'),
-        );
-        final region =
-            placemarks.isEmpty ? null : _preferredRegionName(placemarks.first);
-        if (region != null) {
-          final regionResults = await Future.wait(
-            sports.map(
-              (sport) => api.searchClubs(sport: sport, region: region),
-            ),
+      // 좌표가 없는 기존 클럽은 거리 계산에서 통째로 빠진다. 정확 결과가 하나라도
+      // 있으면 지역 보완을 건너뛰던 예전 로직은 같은 반경의 기존 클럽을 모두
+      // 누락시켰다 → 항상 지역 결과를 뒤에 덧붙인다(중복은 제거).
+      // geocoding 패키지는 웹을 지원하지 않으므로 웹에서는 건너뛴다.
+      if (!kIsWeb) {
+        try {
+          final placemarks = await Geocoding().placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+            locale: const Locale('ko', 'KR'),
           );
-          nearby = _dedupeClubs(regionResults.expand((items) => items));
-          if (nearby.isNotEmpty) {
-            notice = '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.';
+          final region = placemarks.isEmpty
+              ? null
+              : _preferredRegionName(placemarks.first);
+          if (region != null) {
+            final regionResults = await Future.wait(
+              sports.map(
+                (sport) => api.searchClubs(sport: sport, region: region),
+              ),
+            );
+            final merged = _dedupeClubs(
+              [...precise, ...regionResults.expand((items) => items)],
+            );
+            final added = merged.length - precise.length;
+            if (added > 0) {
+              notice = precise.isEmpty
+                  ? '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.'
+                  : '거리 정보가 없는 $region 지역 클럽 $added곳도 함께 보여드려요.';
+              nearby = merged;
+            }
           }
+        } catch (error) {
+          // 지역 보완 실패가 이미 찾은 정확 결과까지 날리면 안 된다.
+          debugPrint('nearby region fallback error: $error');
         }
       }
 

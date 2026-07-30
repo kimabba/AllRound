@@ -1,7 +1,7 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
-import { distanceKm, numberParam } from './nearby.ts';
+import { boundingBox, distanceKm, numberParam } from './nearby.ts';
 
 /**
  * GET /clubs-search?sport=tennis&region=광주&q=...
@@ -95,12 +95,20 @@ Deno.serve(async (req) => {
 
   if (latitude !== null && longitude !== null && radiusKm !== null) {
     const supa = serviceClient();
+    // 반경을 감싸는 사각형으로 DB 에서 먼저 좁힌다. 이게 없으면 정렬 없는
+    // limit(500) 이 반경 밖 클럽으로 먼저 채워져 실제 근거리 클럽이 빠진다.
+    const box = boundingBox(latitude, longitude, radiusKm);
     let nearbyQuery = supa
       .from('clubs')
       .select('*')
       .eq('status', 'approved')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
+      .gte('latitude', box.minLatitude)
+      .lte('latitude', box.maxLatitude)
+      .gte('longitude', box.minLongitude)
+      .lte('longitude', box.maxLongitude)
+      // 사각형 안이 500개를 넘길 만큼 조밀해지면 반경 질의를 PostGIS 로 옮긴다.
       .limit(500);
     if (sport) nearbyQuery = nearbyQuery.eq('sport', sport);
     const { data, error } = await nearbyQuery;

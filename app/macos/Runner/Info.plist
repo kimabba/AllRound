@@ -39,5 +39,8 @@
 			</array>
 		</dict>
 	</array>
+	<!-- geolocator macOS: 위치 사용 설명이 없으면 권한 요청 자체가 실패한다. -->
+	<key>NSLocationUsageDescription</key>
+	<string>가까운 클럽을 찾기 위해 현재 위치를 사용합니다.</string>
 </dict>
 </plist>
