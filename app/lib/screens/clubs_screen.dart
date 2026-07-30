@@ -575,7 +575,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         ? '"${_clubNameQuery.trim()}"'
                         : (_clubFilters.hasActive
                             ? _clubFilters.labels.join(' · ')
-                            : '관심 종목과 지역을 기준으로 추천해요'),
+                            // 이 분기는 필터가 없는 상태 = region null 이라 지역을
+                            // 반영하지 않는다. 지역까지 쓰려면 필터를 걸어야 한다.
+                            : '관심 종목을 기준으로 추천해요'),
                     trailing: Text('${recommendedClubs.length}개'),
                   ),
                   const SizedBox(height: AppSpacing.sm),
