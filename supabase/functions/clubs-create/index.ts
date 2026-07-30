@@ -85,6 +85,15 @@ Deno.serve(async (req) => {
   if (!parsedWebsite.ok) {
     return errorResponse(parsedWebsite.message, 400);
   }
+  const latitude = typeof body.latitude === 'number' ? body.latitude : null;
+  const longitude = typeof body.longitude === 'number' ? body.longitude : null;
+  if (
+    (latitude === null) !== (longitude === null) ||
+    (latitude !== null && (latitude < -90 || latitude > 90)) ||
+    (longitude !== null && (longitude < -180 || longitude > 180))
+  ) {
+    return errorResponse('invalid club coordinates', 400);
+  }
 
   const supa = serviceClient();
   const accessError = await ugcAccessError(
@@ -108,6 +117,8 @@ Deno.serve(async (req) => {
     meeting_days: parsedMeetingDays.value,
     monthly_fee: parsedMonthlyFee.value,
     gender_preference: parsedGenderPreference.value,
+    latitude,
+    longitude,
     status: 'pending',
     created_by: auth.user.id,
   };

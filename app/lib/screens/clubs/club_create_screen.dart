@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -289,11 +290,25 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       }
       _setSubmittingLabel('클럽 생성 요청 중');
       final fee = int.tryParse(_monthlyFee.text.trim());
+      double? latitude;
+      double? longitude;
+      final address = _address.text.trim();
+      if (address.isNotEmpty) {
+        try {
+          final locations = await Geocoding().locationFromAddress(address);
+          if (locations.isNotEmpty) {
+            latitude = locations.first.latitude;
+            longitude = locations.first.longitude;
+          }
+        } catch (_) {
+          // 주소 좌표 변환 실패가 클럽 생성 자체를 막지 않도록 한다.
+        }
+      }
       await ref.read(apiProvider).createClub(
             sport: _sport,
             name: _name.text.trim(),
             region: _region.text.trim(),
-            address: _address.text.trim(),
+            address: address,
             logoUrl: logoUrl,
             contact: _contact.text.trim(),
             website: _website.text.trim(),
@@ -302,6 +317,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
             genderPreference: _genderPreference,
+            latitude: latitude,
+            longitude: longitude,
           );
       _draftSaveTimer?.cancel();
       _submitted = true;
