@@ -376,12 +376,13 @@ Deno.serve(async (req) => {
     const ownerError = await requireOwner();
     if (ownerError) return ownerError;
 
+    // 이전 멤버(status != 'active')도 차단 대상이다 — list_former_members 가
+    // 그들을 반환하므로 여기서 active 로 좁히면 화면의 차단이 항상 404 로 실패한다.
     const { data: target } = await supa
       .from('club_members')
       .select('role')
       .eq('club_id', clubId)
       .eq('user_id', targetUserId)
-      .eq('status', 'active')
       .maybeSingle();
     if (!target) return errorResponse('Target member not found', 404);
     if (target.role === 'owner') return errorResponse('Owner cannot be banned', 400);
