@@ -68,7 +68,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 letterSpacing: -0.8,
               ),
         ),
-        actions: [const NotificationInboxAction(), const SizedBox(width: 8)],
+        actions: [
+          const NotificationInboxAction(),
+          const ProfileAction(),
+          const SizedBox(width: 4),
+        ],
       ),
       body: RefreshIndicator(
         color: cs.primary,
@@ -113,7 +117,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _HomeSectionHeader(
                   title: '다가오는 대회',
                   actionLabel: '전체 보기',
-                  onAction: () => context.go('/tournaments'),
+                  // 대회가 탭에서 빠진 뒤로 여기가 대회 목록의 주 진입점이다.
+                  actionKey: AllRoundE2EKeys.navTournaments,
+                  onAction: () => context.push('/tournaments'),
                 ),
               ),
             ),
@@ -171,7 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           title: '예정된 대회가 없습니다',
                           description: '필터를 바꾸거나 전체 대회에서 찾아보세요.',
                           actionLabel: '전체 대회 보기',
-                          onAction: () => context.go('/tournaments'),
+                          onAction: () => context.push('/tournaments'),
                         ),
                       ),
                     );
@@ -307,10 +313,10 @@ class _HomePersonalSchedule extends StatelessWidget {
               child: _PersonalScheduleCard(
                 icon: Icons.groups_2_outlined,
                 color: cs.surfaceContainerLow,
-                label: '가입한 모임',
-                title: club?.name ?? '가입 모임 없음',
+                label: '가입한 클럽',
+                title: club?.name ?? '가입 클럽 없음',
                 status: club == null
-                    ? '모임을 찾아보세요'
+                    ? '클럽을 찾아보세요'
                     : '${club.region ?? '지역 미정'} · ${club.memberCount}명',
                 onTap: club == null ? null : () => onClubTap(club),
               ),
@@ -393,11 +399,13 @@ class _HomeSectionHeader extends StatelessWidget {
     required this.title,
     this.actionLabel,
     this.onAction,
+    this.actionKey,
   });
 
   final String title;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final Key? actionKey;
 
   @override
   Widget build(BuildContext context) {
@@ -406,7 +414,11 @@ class _HomeSectionHeader extends StatelessWidget {
       children: [
         Expanded(child: Text(title, style: tt.titleLarge)),
         if (actionLabel != null && onAction != null)
-          TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          TextButton(
+            key: actionKey,
+            onPressed: onAction,
+            child: Text(actionLabel!),
+          ),
       ],
     );
   }

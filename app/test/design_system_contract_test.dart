@@ -41,8 +41,9 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
-    expect(find.text('오늘'), findsOneWidget);
-    expect(find.text('MY'), findsOneWidget);
+    expect(find.text('일정'), findsOneWidget);
+    expect(find.text('룰북'), findsOneWidget);
+    expect(find.text('볼보이'), findsOneWidget);
   });
 
   testWidgets('200% text keeps the bottom nav within its fixed region',
