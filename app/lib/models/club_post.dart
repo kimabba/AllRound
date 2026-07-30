@@ -3,7 +3,7 @@ class ClubPost {
   final String clubId;
   final String? authorId;
   final String? authorName;
-  final String tag; // notice, free, recruit, photo
+  final String tag; // notice, free, recruit, photo, intro
   final String title;
   final String body;
   final List<String> imageUrls;
@@ -51,10 +51,12 @@ class ClubPost {
         'free' => '자유',
         'recruit' => '모집',
         'photo' => '사진',
+        'intro' => '가입인사',
         _ => tag,
       };
 
-  bool get allowsComments => const {'free', 'recruit', 'photo'}.contains(tag);
+  bool get allowsComments =>
+      const {'free', 'recruit', 'photo', 'intro'}.contains(tag);
 
   String get authorDisplayName {
     if (authorId == null) return '탈퇴한 사용자';

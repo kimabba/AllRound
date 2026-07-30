@@ -1,6 +1,10 @@
 import { assertEquals, assertFalse } from 'std/assert/mod.ts';
 
-import { ageGroupFromBirthDate, parseInquiryRequest } from '../clubs-inquiries/validation.ts';
+import {
+  ageGroupFromBirthDate,
+  containsInquiryLink,
+  parseInquiryRequest,
+} from '../clubs-inquiries/validation.ts';
 
 Deno.test('clubs-inquiries accepts a new pre-join inquiry', () => {
   assertEquals(parseInquiryRequest({ club_id: 'club-1', body: '  주말 시간이 궁금해요.  ' }), {
@@ -108,4 +112,11 @@ Deno.test('parse rejects non-object payloads', () => {
       message: 'Invalid JSON object',
     });
   }
+});
+
+Deno.test('inquiry link policy detects common links but allows plain text', () => {
+  assertEquals(containsInquiryLink('https://open.kakao.com/o/example'), true);
+  assertEquals(containsInquiryLink('www.example.com 으로 오세요'), true);
+  assertEquals(containsInquiryLink('example.kr/path'), true);
+  assertEquals(containsInquiryLink('이번 주 토요일에 만나요.'), false);
 });
