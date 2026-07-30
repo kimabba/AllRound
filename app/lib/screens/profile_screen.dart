@@ -282,23 +282,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
 
     if (result == null) return;
+    // 로컬 설정(대회·클럽·코치·알림음)을 먼저 저장한다. 알림음 서버 동기화가
+    // 실패해도(웹·토큰 미발급·네트워크) 나머지 설정까지 함께 날아가면 안 된다.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
+    await prefs.setBool(_notifyClubPrefsKey, result.club);
+    await prefs.setBool(_notifyCoachPrefsKey, result.coach);
+    await prefs.setBool(_notifySoundPrefsKey, result.sound);
+    var soundSynced = true;
     try {
       await syncNotificationSoundPreference(
         ref.read(apiProvider),
         enabled: result.sound,
       );
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알림음 설정을 저장하지 못했어요. 다시 시도해주세요.')),
-      );
-      return;
+      soundSynced = false;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
-    await prefs.setBool(_notifyClubPrefsKey, result.club);
-    await prefs.setBool(_notifyCoachPrefsKey, result.coach);
-    await prefs.setBool(_notifySoundPrefsKey, result.sound);
     if (!mounted) return;
     setState(() {
       _notifyTournament = result.tournament;
@@ -306,6 +305,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _notifyCoach = result.coach;
       _notifySound = result.sound;
     });
+    if (!soundSynced) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
+      );
+    }
   }
 
   @override
