@@ -285,29 +285,29 @@ class _MainShell extends ConsumerWidget {
 
   static const _tabs = <String>[
     '/',
-    '/tournaments',
     '/clubs',
-    '/profile',
+    '/rules',
   ];
 
-  static const _profileSubPaths = [
+  /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
+  /// (마이는 앱바 우상단, 대회 전체 목록은 일정 화면에서 들어간다).
+  static const _untabbedPaths = [
     '/more',
     '/profile',
     '/notifications',
     '/favorites',
     '/blocked-users',
-    '/rules',
+    '/tournaments',
   ];
 
   int _indexOf(String location) {
+    if (_untabbedPaths.any(
+      (p) => location == p || location.startsWith('$p/'),
+    )) {
+      return -1;
+    }
     for (var i = 0; i < _tabs.length; i++) {
-      if (_tabs[i] == '/profile') {
-        if (_profileSubPaths.any(
-          (p) => location == p || (location.startsWith(p) && p != '/'),
-        )) {
-          return i;
-        }
-      } else if (location == _tabs[i] ||
+      if (location == _tabs[i] ||
           (location.startsWith(_tabs[i]) && _tabs[i] != '/')) {
         return i;
       }

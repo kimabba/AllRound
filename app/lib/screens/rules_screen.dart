@@ -11,6 +11,7 @@ import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_skeleton_card.dart';
+import '../widgets/notification_inbox_action.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
   const RulesScreen({super.key});
@@ -179,6 +180,11 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       key: AllRoundE2EKeys.rulesScreen,
       appBar: AppBar(
         title: const Text('룰북'),
+        actions: const [
+          NotificationInboxAction(),
+          ProfileAction(),
+          SizedBox(width: 4),
+        ],
         bottom: TabBar(
           controller: _tab,
           tabs: [

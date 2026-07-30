@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
-/// 볼보이 원이 냅 상단 경계선 위로 떠오르는 높이.
-/// 냅 전체 높이에 포함시켜 돌출부까지 hit-test 되게 한다(보이는 곳 = 눌리는 곳).
-const double bottomNavDialProtrusion = 14;
+/// 볼보이 원이 탭바 위에 떠 있는 영역의 높이(원 + 라벨).
+/// 탭이 3개(짝수가 아님)라 다이얼을 탭바 안에 넣으면 가운데 탭 라벨을 덮는다.
+/// → 탭바 위로 완전히 띄우고, 그 높이를 냅 전체 높이에 포함시켜 hit-test 되게 한다.
+/// 원(54) + 간격(2) + 라벨 1줄. 라벨은 아래에서 배율을 1.3배로 제한하므로
+/// 최대 높이가 정해진다(11px × 1.3 × 줄높이 ≈ 20). 넘치면 RenderFlex overflow 로
+/// 디자인 계약 테스트가 잡는다 — 값을 줄일 때는 그 테스트를 함께 볼 것.
+const double bottomNavDialProtrusion = 80;
+const double _dialDiameter = 54;
 const double _dialSlotWidth = AppSizes.touchTarget + 16;
 
 class AppBottomNav extends StatelessWidget {
@@ -30,12 +35,11 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['오늘', '대회', '모임', 'MY'];
+    const labels = ['일정', '클럽', '룰북'];
     const keys = [
       AllRoundE2EKeys.navToday,
-      AllRoundE2EKeys.navTournaments,
       AllRoundE2EKeys.navClubs,
-      AllRoundE2EKeys.navProfile,
+      AllRoundE2EKeys.navRules,
     ];
 
     Widget tab(int index) {
@@ -99,16 +103,7 @@ class AppBottomNav extends StatelessWidget {
         top: false,
         child: SizedBox(
           height: AppSizes.bottomNavigation,
-          child: Row(
-            children: [
-              tab(0),
-              tab(1),
-              // 가운데 자리는 오버레이 버튼이 차지 — 폭만 비워둔다.
-              if (onChatTap != null) const SizedBox(width: _dialSlotWidth),
-              tab(2),
-              tab(3),
-            ],
-          ),
+          child: Row(children: [tab(0), tab(1), tab(2)]),
         ),
       ),
     );
@@ -133,6 +128,10 @@ class AppBottomNav extends StatelessWidget {
 class _ChatDialButton extends StatefulWidget {
   const _ChatDialButton({required this.onTap, this.hint});
 
+  /// 라벨 정본. 챗 화면 카피("여러분의 도우미 볼보이(BB)")와 같은 이름을 쓴다.
+  /// `BB` 두 글자는 누르기 전에는 뜻을 알 수 없어 탭바 라벨로 부적합하다.
+  static const label = '볼보이';
+
   final VoidCallback onTap;
   final String? hint;
 
@@ -148,11 +147,11 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: _dialSlotWidth,
-      height: bottomNavDialProtrusion + AppSizes.bottomNavigation,
+      height: bottomNavDialProtrusion,
       child: Semantics(
         key: AllRoundE2EKeys.globalChatDock,
         button: true,
-        label: 'BB',
+        label: _ChatDialButton.label,
         hint: widget.hint,
         onTap: widget.onTap,
         child: ExcludeSemantics(
@@ -164,16 +163,16 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
               setState(() => _pressed = false);
               widget.onTap();
             },
-            child: Stack(
-              alignment: Alignment.topCenter,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 AnimatedScale(
                   scale: _pressed ? 0.9 : 1,
                   duration: const Duration(milliseconds: 110),
                   curve: Curves.easeOut,
                   child: Container(
-                    width: 54,
-                    height: 54,
+                    width: _dialDiameter,
+                    height: _dialDiameter,
                     decoration: BoxDecoration(
                       color: cs.primary,
                       shape: BoxShape.circle,
@@ -193,10 +192,14 @@ class _ChatDialButtonState extends State<_ChatDialButton> {
                     ),
                   ),
                 ),
-                Positioned(
-                  bottom: 9,
+                const SizedBox(height: 2),
+                // 냅은 높이가 고정된 영역이라 라벨 배율을 제한한다. 원형 버튼의
+                // Semantics label('볼보이')은 배율과 무관하므로 낭독에는 영향 없다.
+                MediaQuery.withClampedTextScaling(
+                  maxScaleFactor: 1.3,
                   child: Text(
-                    'BB',
+                    _ChatDialButton.label,
+                    maxLines: 1,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: cs.primary,
                           fontWeight: FontWeight.w800,
