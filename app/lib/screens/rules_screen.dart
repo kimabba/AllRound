@@ -137,7 +137,10 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     if (_loading) {
       return Scaffold(
         key: AllRoundE2EKeys.rulesScreen,
-        appBar: AppBar(title: const Text('룰북')),
+        appBar: AppBar(
+          title: const Text('룰북'),
+          actions: _rulesAppBarActions,
+        ),
         body: const _RulesLoadingState(),
       );
     }
@@ -145,7 +148,10 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     if (_error != null) {
       return Scaffold(
         key: AllRoundE2EKeys.rulesScreen,
-        appBar: AppBar(title: const Text('룰북')),
+        appBar: AppBar(
+          title: const Text('룰북'),
+          actions: _rulesAppBarActions,
+        ),
         body: AppEmptyState(
           icon: Icons.menu_book_outlined,
           title: '룰북을 불러올 수 없어요',
@@ -161,6 +167,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         key: AllRoundE2EKeys.rulesScreen,
         appBar: AppBar(
           title: Text(_titleForSport(_activeSport!)),
+          actions: _rulesAppBarActions,
         ),
         backgroundColor: cs.surface,
         body: KeyedSubtree(
@@ -180,11 +187,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       key: AllRoundE2EKeys.rulesScreen,
       appBar: AppBar(
         title: const Text('룰북'),
-        actions: const [
-          NotificationInboxAction(),
-          ProfileAction(),
-          SizedBox(width: 4),
-        ],
+        actions: _rulesAppBarActions,
         bottom: TabBar(
           controller: _tab,
           tabs: [
@@ -339,6 +342,14 @@ class _RuleBookBody extends StatelessWidget {
     return limit == null ? all : all.take(limit).toList();
   }
 }
+
+/// 룰북 화면의 앱바 액션. 화면이 로딩·오류·단일종목·탭 4갈래로 갈라지므로
+/// 한 곳에만 넣으면 분기에 따라 마이 진입점이 사라진다(실제로 그랬다).
+const _rulesAppBarActions = <Widget>[
+  NotificationInboxAction(),
+  ProfileAction(),
+  SizedBox(width: 4),
+];
 
 class _RulesLoadingState extends StatelessWidget {
   const _RulesLoadingState();
