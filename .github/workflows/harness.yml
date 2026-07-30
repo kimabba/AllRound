@@ -45,6 +45,15 @@ jobs:
       - run: python3 scripts/harness/check_grades_parity.py
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 협회 정본↔폴백 대조도 같은 이유로 DB 를 직접 읽는다(#330 3번, JY-135 후 공백).
+      - run: python3 scripts/harness/check_org_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 부서 정본↔폴백 대조. 랭킹 등급/대회 종목 분류(is_ranking_grade)가 마이그레이션과
+      # 앱 폴백 사이에서 갈라지면 여기서 잡는다.
+      - run: python3 scripts/harness/check_division_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   flutter:
     name: Flutter analyze/test

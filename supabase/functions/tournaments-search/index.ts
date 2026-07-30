@@ -1,11 +1,7 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
-import {
-  isValidRegionCode,
-  isValidTennisOrg,
-  parseDivisionCodes,
-  parseRecruiting,
-} from '../_shared/enums.ts';
+import { assertKnownOrgs } from '../_shared/orgs.ts';
+import { isValidRegionCode, parseDivisionCodes, parseRecruiting } from '../_shared/enums.ts';
 
 /**
  * GET /tournaments-search
@@ -30,6 +26,7 @@ Deno.serve(async (req) => {
 
   const auth = await requireUser(req);
   if ('error' in auth) return auth.error;
+  const { supabase, user } = auth;
 
   const url = new URL(req.url);
   const sport = url.searchParams.get('sport');
@@ -42,8 +39,11 @@ Deno.serve(async (req) => {
     return errorResponse('invalid region_code');
   }
   const org = url.searchParams.get('org'); // 협회 (kta, kato 등)
-  if (org && !isValidTennisOrg(org)) {
-    return errorResponse('invalid org');
+  if (org) {
+    // 협회 정본은 DB tennis_orgs 다(JY-135, #330). 정적 목록으로 검증하면 새 협회로
+    // 필터를 눌러도 "invalid org" 로 거절된다 — 0건 결과가 아니라 검증 실패였다.
+    const orgError = await assertKnownOrgs(supabase, [org]);
+    if (orgError) return errorResponse(orgError.message, orgError.status);
   }
   const dateFrom = url.searchParams.get('date_from');
   const dateTo = url.searchParams.get('date_to');
@@ -59,7 +59,6 @@ Deno.serve(async (req) => {
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 100);
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10), 0);
 
-  const { supabase, user } = auth;
   const { data, error } = await supabase.rpc('tournaments_for_user', {
     p_user_id: user.id,
     p_sport: sport,

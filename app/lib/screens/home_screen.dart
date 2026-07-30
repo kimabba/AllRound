@@ -8,7 +8,10 @@ import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
+import '../theme/color_schemes.dart';
 import '../theme/tokens.dart';
+import '../utils/grade_labels.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
 import '../widgets/notification_inbox_action.dart';
@@ -57,158 +60,199 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final tournaments = ref.watch(homeTournamentsProvider);
     final recruiting = ref.watch(homeRecruitingProvider);
+    final myTournaments = ref.watch(myTournamentRecordsProvider);
+    final myClubs = ref.watch(myClubsProvider);
+    final activeSport = ref.watch(activeSportProvider) ?? 'tennis';
     final cs = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
+    final accent = AppDiaryColors.roseAccent(brightness);
+    final diaryScheme = cs.copyWith(
+      primary: accent,
+      primaryContainer: AppDiaryColors.rose(brightness),
+      secondary: accent,
+      secondaryContainer: AppDiaryColors.lavender(brightness),
+    );
 
-    return Scaffold(
-      key: AllRoundE2EKeys.homeScreen,
-      appBar: AppBar(
-        title: Text(
-          '올라운드',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
-              ),
+    return Theme(
+      data: Theme.of(context).copyWith(colorScheme: diaryScheme),
+      child: Scaffold(
+        key: AllRoundE2EKeys.homeScreen,
+        appBar: AppBar(
+          title: Text(
+            '올라운드',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.8,
+                ),
+          ),
+          actions: [const NotificationInboxAction(), const SizedBox(width: 8)],
         ),
-        actions: [
-          const NotificationInboxAction(),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: cs.primary,
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                0,
-              ),
-              sliver: SliverToBoxAdapter(child: _HomeIntro()),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xxxl,
-                AppSpacing.xl,
-                0,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: _HomeSectionHeader(
-                  title: '다가오는 대회',
-                  actionLabel: '전체 보기',
-                  onAction: () => context.go('/tournaments'),
+        body: RefreshIndicator(
+          color: accent,
+          onRefresh: _refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  0,
                 ),
+                sliver: SliverToBoxAdapter(child: _HomeIntro()),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              sliver: SliverToBoxAdapter(
-                child: _HomeFilterTabs(
-                  selected: _filter,
-                  onSelected: (value) => setState(() => _filter = value),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxl,
+                  AppSpacing.xl,
+                  0,
                 ),
-              ),
-            ),
-            if (AppConfig.userDesignPreview)
-              _TournamentListSliver(
-                tournaments: _visibleTournaments(_previewTournaments()),
-                onTap: (item) => context.push('/tournaments/${item.id}'),
-              )
-            else
-              tournaments.when(
-                loading: () => const _HomeTournamentSkeleton(
-                  key: AllRoundE2EKeys.homeLoadingState,
-                ),
-                error: (_, __) => SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                    AppSpacing.huge,
+                sliver: SliverToBoxAdapter(
+                  child: _HomePersonalSchedule(
+                    tournaments: myTournaments.value ?? const [],
+                    clubs: myClubs.value ?? const [],
+                    onTournamentTap: (item) =>
+                        context.push('/tournaments/${item.id}'),
+                    onClubTap: (club) => context.push('/clubs/${club.id}'),
                   ),
-                  sliver: SliverToBoxAdapter(
-                    child: AppEmptyState(
-                      key: AllRoundE2EKeys.homeErrorState,
-                      icon: Icons.refresh_rounded,
-                      title: '대회를 불러오지 못했습니다',
-                      description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
-                      actionLabel: '다시 불러오기',
-                      onAction: () => ref.invalidate(homeTournamentsProvider),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxxl,
+                  AppSpacing.xl,
+                  0,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: _HomeSectionHeader(
+                    title: '다가오는 대회',
+                    actionLabel: '전체 보기',
+                    onAction: () => context.go('/tournaments'),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                sliver: SliverToBoxAdapter(
+                  child: _HomeFilterTabs(
+                    selected: _filter,
+                    onSelected: (value) => setState(() => _filter = value),
+                  ),
+                ),
+              ),
+              if (AppConfig.userDesignPreview)
+                _TournamentListSliver(
+                  tournaments: _visibleTournaments(_previewTournaments()),
+                  onTap: (item) => context.push('/tournaments/${item.id}'),
+                )
+              else
+                tournaments.when(
+                  loading: () => const _HomeTournamentSkeleton(
+                    key: AllRoundE2EKeys.homeLoadingState,
+                  ),
+                  error: (_, __) => SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.huge,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: AppEmptyState(
+                        key: AllRoundE2EKeys.homeErrorState,
+                        icon: Icons.refresh_rounded,
+                        title: '대회를 불러오지 못했습니다',
+                        description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
+                        actionLabel: '다시 불러오기',
+                        onAction: () => ref.invalidate(homeTournamentsProvider),
+                      ),
                     ),
                   ),
-                ),
-                data: (items) {
-                  final visible = _visibleTournaments(items);
-                  if (visible.isEmpty) {
-                    return SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                        AppSpacing.huge,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: AppEmptyState(
-                          key: AllRoundE2EKeys.homeEmptyState,
-                          icon: Icons.calendar_month_outlined,
-                          title: '예정된 대회가 없습니다',
-                          description: '필터를 바꾸거나 전체 대회에서 찾아보세요.',
-                          actionLabel: '전체 대회 보기',
-                          onAction: () => context.go('/tournaments'),
+                  data: (items) {
+                    final visible = _visibleTournaments(items);
+                    if (visible.isEmpty) {
+                      return SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xl,
+                          AppSpacing.lg,
+                          AppSpacing.xl,
+                          AppSpacing.huge,
                         ),
-                      ),
-                    );
-                  }
-                  return _TournamentListSliver(
-                    key: AllRoundE2EKeys.homeTournamentList,
-                    tournaments: visible,
-                    onTap: (item) => context.push('/tournaments/${item.id}'),
-                  );
-                },
-              ),
-            recruiting.maybeWhen(
-              data: (posts) => posts.isEmpty
-                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                  : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.xxxl,
-                        AppSpacing.xl,
-                        0,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: _HomeRecruitingSection(
-                          posts: posts,
-                          onOpen: (post) => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  TeamRecruitingDetailScreen(post: post),
-                            ),
+                        sliver: SliverToBoxAdapter(
+                          child: AppEmptyState(
+                            key: AllRoundE2EKeys.homeEmptyState,
+                            icon: Icons.calendar_month_outlined,
+                            title: '예정된 대회가 없습니다',
+                            description: '필터를 바꾸거나 전체 대회에서 찾아보세요.',
+                            actionLabel: '전체 대회 보기',
+                            onAction: () => context.go('/tournaments'),
                           ),
-                          onSeeAll: () => context.go('/clubs'),
                         ),
-                      ),
-                    ),
-              orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xxxl,
-                AppSpacing.xl,
-                112,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: _HomeClubShortcut(
-                  onTap: () => context.go('/clubs'),
+                      );
+                    }
+                    return _TournamentListSliver(
+                      key: AllRoundE2EKeys.homeTournamentList,
+                      tournaments: visible,
+                      onTap: (item) => context.push('/tournaments/${item.id}'),
+                    );
+                  },
+                ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxl,
+                  AppSpacing.xl,
+                  0,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: _HomeRulesAndQuiz(
+                    sport: activeSport,
+                    onOpenRules: () => context.push('/rules'),
+                  ),
                 ),
               ),
-            ),
-          ],
+              recruiting.maybeWhen(
+                data: (posts) => posts.isEmpty
+                    ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                    : SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xl,
+                          AppSpacing.xxxl,
+                          AppSpacing.xl,
+                          0,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _HomeRecruitingSection(
+                            posts: posts,
+                            onOpen: (post) => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    TeamRecruitingDetailScreen(post: post),
+                              ),
+                            ),
+                            onSeeAll: () => context.go('/clubs'),
+                          ),
+                        ),
+                      ),
+                orElse: () =>
+                    const SliverToBoxAdapter(child: SizedBox.shrink()),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxxl,
+                  AppSpacing.xl,
+                  112,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: _HomeClubShortcut(onTap: () => context.go('/clubs')),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -220,30 +264,328 @@ class _HomeIntro extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final brightness = Theme.of(context).brightness;
     final now = DateTime.now();
     final date = DateFormat('M월 d일 EEEE', 'ko').format(now);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppDiaryColors.rose(brightness),
+        borderRadius: AppRadius.hero,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    date,
+                    style: tt.labelMedium?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppDiaryColors.lavender(brightness),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(AppSpacing.sm),
+                    child: Icon(Icons.notifications_none_rounded, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            Text('오늘,\n어디서 뛸까요?', style: tt.displayMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '신청 가능한 대회와 클럽 일정을 빠르게 확인하세요.',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomePersonalSchedule extends StatelessWidget {
+  const _HomePersonalSchedule({
+    required this.tournaments,
+    required this.clubs,
+    required this.onTournamentTap,
+    required this.onClubTap,
+  });
+
+  final List<Tournament> tournaments;
+  final List<Club> clubs;
+  final ValueChanged<Tournament> onTournamentTap;
+  final ValueChanged<Club> onClubTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final upcoming = tournaments
+        .where((item) => !item.startDate.isBefore(today))
+        .toList(growable: false)
+      ..sort((a, b) => a.startDate.compareTo(b.startDate));
+    final tournament = upcoming.firstOrNull;
+    final club = clubs.where((item) => item.isMember).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          date,
-          style: tt.labelMedium?.copyWith(
-            color: cs.primary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          '이번 주,\n어디서 뛸까요?',
-          style: tt.displayMedium,
-        ),
+        const _HomeSectionHeader(title: '나의 일정'),
         const SizedBox(height: AppSpacing.md),
-        Text(
-          '신청 가능한 대회와 클럽 일정을 빠르게 확인하세요.',
-          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _PersonalScheduleCard(
+                icon: Icons.emoji_events_outlined,
+                color: AppDiaryColors.rose(brightness),
+                label: '저장한 대회',
+                title: tournament?.title ?? '예정 대회 없음',
+                status: tournament == null
+                    ? '대회를 둘러보세요'
+                    : _dayLabel(tournament.startDate, today),
+                onTap: tournament == null
+                    ? null
+                    : () => onTournamentTap(tournament),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _PersonalScheduleCard(
+                icon: Icons.groups_2_outlined,
+                color: AppDiaryColors.lavender(brightness),
+                label: '가입한 모임',
+                title: club?.name ?? '가입 모임 없음',
+                status: club == null
+                    ? '모임을 찾아보세요'
+                    : '${club.region ?? '지역 미정'} · ${club.memberCount}명',
+                onTap: club == null ? null : () => onClubTap(club),
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  static String _dayLabel(DateTime date, DateTime today) {
+    final target = DateTime(date.year, date.month, date.day);
+    final days = target.difference(today).inDays;
+    if (days == 0) return '오늘';
+    return 'D-$days';
+  }
+}
+
+class _PersonalScheduleCard extends StatelessWidget {
+  const _PersonalScheduleCard({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.title,
+    required this.status,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String title;
+  final String status;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      variant: AppCardVariant.outlined,
+      backgroundColor: color,
+      borderColor: Colors.transparent,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: cs.primary, size: 20),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            label,
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: tt.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            status,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tt.labelMedium?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeRulesAndQuiz extends StatelessWidget {
+  const _HomeRulesAndQuiz({required this.sport, required this.onOpenRules});
+
+  final String sport;
+  final VoidCallback onOpenRules;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isFutsal = sport == 'futsal';
+    final currentSportLabel = sportLabelFromString(sport);
+    final rules = isFutsal
+        ? const [
+            ('킥인은 4초 안에', '경기 재개 핵심 규칙'),
+            ('누적 파울과 두 번째 페널티', '많이 묻는 경기 규칙'),
+          ]
+        : const [
+            ('타이브레이크 점수 계산', '게임과 세트의 핵심 규칙'),
+            ('서브 순서와 코트 교대', '많이 묻는 경기 규칙'),
+          ];
+    final quiz = isFutsal ? '킥인할 때 수비 거리는?' : '타이브레이크는 몇 점까지일까요?';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          variant: AppCardVariant.outlined,
+          backgroundColor: AppDiaryColors.lavender(brightness),
+          borderColor: Colors.transparent,
+          child: Column(
+            children: [
+              _HomeSectionHeader(
+                title: '$currentSportLabel, 이것만은 알아두기',
+                actionLabel: '더보기',
+                onAction: onOpenRules,
+              ),
+              for (var index = 0; index < rules.length; index++) ...[
+                if (index > 0)
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                _HomeRuleRow(
+                  title: rules[index].$1,
+                  description: rules[index].$2,
+                  icon: isFutsal
+                      ? Icons.sports_soccer_outlined
+                      : Icons.sports_tennis_outlined,
+                  onTap: onOpenRules,
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          onTap: onOpenRules,
+          backgroundColor: AppDiaryColors.rose(brightness),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '오늘의 퀴즈',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      quiz,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeRuleRow extends StatelessWidget {
+  const _HomeRuleRow({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSizes.listRow),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: cs.primary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: tt.titleMedium),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      description,
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -407,20 +749,31 @@ class _TournamentListSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-      sliver: SliverList.separated(
-        itemCount: tournaments.length,
-        separatorBuilder: (_, __) => Divider(
-          height: 1,
-          color: Theme.of(context).colorScheme.outlineVariant,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.sm,
+        AppSpacing.xl,
+        0,
+      ),
+      sliver: SliverToBoxAdapter(
+        child: AppCard(
+          variant: AppCardVariant.outlined,
+          child: Column(
+            children: [
+              for (var index = 0; index < tournaments.length; index++) ...[
+                if (index > 0)
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                _HomeTournamentRow(
+                  tournament: tournaments[index],
+                  onTap: () => onTap(tournaments[index]),
+                ),
+              ],
+            ],
+          ),
         ),
-        itemBuilder: (context, index) {
-          final item = tournaments[index];
-          return _HomeTournamentRow(
-            tournament: item,
-            onTap: () => onTap(item),
-          );
-        },
       ),
     );
   }
@@ -538,11 +891,7 @@ class _HomeTournamentSkeleton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           child: Row(
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                color: cs.surfaceContainerHigh,
-              ),
+              Container(width: 52, height: 52, color: cs.surfaceContainerHigh),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -602,9 +951,7 @@ class _HomeClubShortcut extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       '지역과 운동 요일에 맞는 클럽을 확인하세요.',
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),

@@ -57,11 +57,13 @@ Future<void> initializeAllRoundServices({
     if (event.session != null) {
       DivisionCatalog.instance.load(Supabase.instance.client);
       GradeCatalog.instance.load(Supabase.instance.client);
+      OrgCatalog.instance.load(Supabase.instance.client);
     } else if (event.event == AuthChangeEvent.signedOut) {
       // 세션이 끊기면 카탈로그를 비운다. 재로그인 로드가 실패했을 때 이전 세션의
       // 스냅샷이 그대로 쓰이는 걸 막는다(in-flight 로드도 세대 증가로 무효화).
       GradeCatalog.instance.reset();
       DivisionCatalog.instance.reset();
+      OrgCatalog.instance.reset();
     }
   });
 
@@ -246,6 +248,11 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
       // 그려지고, 값이 교체돼도 리빌드되지 않아 옛 이름이 남는다.
       waits.add(
         GradeCatalog.instance.whenReady
+            .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
+      );
+      // 협회 라벨도 같은 이유로 기다린다(#318 과 같은 stale fallback 문제).
+      waits.add(
+        OrgCatalog.instance.whenReady
             .timeout(const Duration(milliseconds: 3000), onTimeout: () {}),
       );
     }

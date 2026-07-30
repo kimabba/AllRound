@@ -1,12 +1,12 @@
 import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
 import {
   EntryFeeUnit,
   isValidEntryFeeUnit,
   isValidGrade,
   isValidRegionCode,
-  isValidTennisOrg,
   RegionCode,
   Sport,
   TennisOrg,
@@ -210,7 +210,9 @@ function normalizeOptionalUrl(
   return { value: trimmed };
 }
 
-Deno.serve(async (req) => {
+// import.meta.main 가드: 테스트가 이 모듈을 import 할 때(age_gate_wiring_test.ts)
+// Deno.serve 가 같이 실행되며 포트 바인딩을 시도하는 걸 막는다(embed-pending/index.ts 와 동일 패턴).
+async function handler(req: Request): Promise<Response> {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -248,8 +250,16 @@ Deno.serve(async (req) => {
     .eq('is_active', true);
   if (gradeErr) return errorResponse(`grade catalog unavailable: ${gradeErr.message}`, 503);
   const activeGrades = new Set<string>((gradeRows ?? []).map((r) => r.code as string));
+  // 협회(org) 카탈로그 정본도 DB tennis_orgs(#330) — isValidGrade 의 테니스 부서 코드
+  // (gj_m_gold 등) org 접두사 검증에 쓴다. futsal 은 부서 코드 개념이 없어 건너뛴다.
+  let activeOrgs: ReadonlySet<string> = new Set();
+  if (body.sport === 'tennis') {
+    const orgResult = await fetchActiveOrgCodes(supabase);
+    if ('status' in orgResult) return errorResponse(orgResult.message, orgResult.status);
+    activeOrgs = orgResult.codes;
+  }
   for (const g of body.eligible_grades) {
-    if (isValidGrade(body.sport, g, activeGrades)) continue;
+    if (isValidGrade(body.sport, g, activeGrades, activeOrgs)) continue;
     // 카탈로그가 비었으면 원인은 제보 내용이 아니라 DB 상태(정책·seed 누락)다 → 503 으로 구분한다.
     // 판정 뒤에 보는 이유: 테니스 부서 코드(gj_m_gold)는 grades 와 무관하게 통과해야 하는데,
     // 빈 목록을 먼저 막으면 그 경로까지 함께 죽는다(codex 1차).
@@ -267,11 +277,8 @@ Deno.serve(async (req) => {
     if (!Array.isArray(body.host_orgs)) {
       return errorResponse('host_orgs must be array');
     }
-    for (const o of body.host_orgs) {
-      if (!isValidTennisOrg(o)) {
-        return errorResponse(`Invalid tennis_org: ${o}`);
-      }
-    }
+    const orgError = await assertKnownOrgs(supabase, body.host_orgs);
+    if (orgError) return errorResponse(orgError.message, orgError.status);
   }
   if (body.entry_fee_unit && !isValidEntryFeeUnit(body.entry_fee_unit)) {
     return errorResponse(`Invalid entry_fee_unit: ${body.entry_fee_unit}`);
@@ -344,4 +351,8 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ tournament: data }, { status: 201 });
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}

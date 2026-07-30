@@ -17,6 +17,7 @@ void main() {
   tearDown(() {
     GradeCatalog.instance.reset();
     DivisionCatalog.instance.reset();
+    OrgCatalog.instance.reset();
   });
 
   Widget appUnderTest(Widget Function() screen) {

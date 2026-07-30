@@ -174,12 +174,10 @@ def main() -> int:
         ("Dart sportLabels", dart_sport_label_map(dart)),
         ("TypeScript SPORT_LABELS", ts_record(ts, "SPORT_LABELS")),
     )
-    assert_same(
-        "tennis orgs",
-        ("Dart tennisOrgs", dart_const_list(dart, "tennisOrgs")),
-        ("TypeScript TENNIS_ORGS", ts_const_array(ts, "TENNIS_ORGS")),
-        ("SQL tennis_org", sql_enum(sql_orgs, "tennis_org")),
-    )
+    # 협회(tennis_orgs)의 정본은 DB 다(JY-135). Dart 는 폴백만 갖고 SQL enum 은
+    # 20260711002939 에서 이미 삭제됐다 — 이 검사는 죽은 타입 텍스트를 파싱하고
+    # 있었다. 등급이 JY-321 에서 실제 DB 조회로 옮겨간 것과 같은 방향이다.
+    # 후속: 폴백↔DB 대조를 check_grades_parity.py 방식으로 추가.
     assert_same(
         "region codes",
         ("Dart regionCodes", dart_const_list(dart, "regionCodes")),
