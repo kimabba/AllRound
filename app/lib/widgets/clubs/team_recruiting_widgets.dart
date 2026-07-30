@@ -13,20 +13,16 @@ import 'club_tiles.dart';
 
 class TeamRecruitingBoard extends StatelessWidget {
   final List<RecruitingPostPreview> posts;
-  final bool showOpenOnly;
   final bool isLoading;
   final Set<String> managedClubIds;
-  final ValueChanged<bool> onShowOpenOnlyChanged;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
 
   const TeamRecruitingBoard({
     super.key,
     required this.posts,
-    required this.showOpenOnly,
     required this.isLoading,
     required this.managedClubIds,
-    required this.onShowOpenOnlyChanged,
     required this.onClosePost,
     required this.onOpenPost,
   });
@@ -35,7 +31,6 @@ class TeamRecruitingBoard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final openCount = posts.where((post) => !post.isClosed).length;
 
     return Container(
       width: double.infinity,
@@ -54,19 +49,10 @@ class TeamRecruitingBoard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            showOpenOnly ? '모집중인 글만 보고 있어요.' : '모집중 글과 마감글을 함께 보여줘요.',
+            '팀원 모집글을 확인하세요.',
             style: tt.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilterChip(
-              selected: showOpenOnly,
-              label: Text('모집중만 $openCount'),
-              onSelected: onShowOpenOnlyChanged,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -715,14 +701,25 @@ class _TeamRecruitingDraftSheetState
   static const _genders = ['무관', '여성', '남성', '혼성'];
   static const _ages = ['무관', '20대', '30대', '40대', '50대 이상'];
   static const _futsalPositions = ['필드·키퍼', '필드', '키퍼'];
-  static const _futsalGrades = ['무관', '입문', '초급', '중급', '고급', '선출'];
-  static const _tennisGrades = ['무관', '신입', '5부', '4부', '3부', '2부', '1부'];
+  // 등급 선택지는 종목별 등급 정본(grade_labels.dart)에서 파생한다.
+  // 직접 나열하면 등급 개편 때 여기만 남아 조용히 갈라진다(JY-146).
+  //
+  // static final 이 아니라 getter 다. static final 은 클래스 최초 접근 때 한 번만
+  // 평가돼 앱 수명 내내 고정되므로, 카탈로그가 나중에 로드돼도 폴백 등급이 그대로 남는다.
+  List<String> get _futsalGrades => [
+        anyGradeLabel,
+        ...gradesFor(Sport.futsal).map(gradeLabel),
+      ];
+  List<String> get _tennisGrades => [
+        anyGradeLabel,
+        ...gradesFor(Sport.tennis).map(gradeLabel),
+      ];
 
   late String _selectedClubId = widget.managedClubs.first.id;
   String _gender = _genders.first;
   String _age = _ages.first;
   String _position = _futsalPositions.first;
-  String _grade = _futsalGrades.first;
+  late String _grade = _futsalGrades.first;
   int _fieldCount = 4;
   int _keeperCount = 1;
   int _tennisCount = 2;
@@ -813,6 +810,7 @@ class _TeamRecruitingDraftSheetState
     try {
       await ref.read(apiProvider).createTeamRecruitingPost(
             clubId: _selectedClub.id,
+            sport: sportFromString(_selectedClub.sport),
             title: title,
             place: place,
             schedule: '$date $time',
@@ -837,8 +835,12 @@ class _TeamRecruitingDraftSheetState
     }
   }
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서 등급 선택지가 폴백 라벨로 굳는다. 여기서 감싼다.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -960,7 +962,7 @@ class _TeamRecruitingDraftSheetState
               ),
               const SizedBox(height: AppSpacing.md),
               RecruitingSection(
-                title: _isFutsal ? '풋살 모집 상세' : '테니스 모집 상세',
+                title: '${sportLabelFromString(_selectedClub.sport)} 모집 상세',
                 child: _isFutsal
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

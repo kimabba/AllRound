@@ -1,11 +1,15 @@
-export type Sport = 'tennis' | 'futsal';
+// 정본은 DB `sport` enum. 타입을 배열에서 파생시켜, 종목이 늘 때 리터럴 유니온을
+// 여기저기 다시 적는 일이 없게 한다(JY-146).
+export const SPORTS = ['tennis', 'futsal'] as const;
+export type Sport = typeof SPORTS[number];
 
-export const TENNIS_GRADES = ['under1y', 'y1to3', 'y3to5', 'over5y'] as const;
-export const FUTSAL_GRADES = ['intro', 'beginner', 'intermediate', 'advanced', 'elite'] as const;
+export function isValidSport(value: unknown): value is Sport {
+  return typeof value === 'string' && (SPORTS as readonly string[]).includes(value);
+}
 
-export type TennisGrade = typeof TENNIS_GRADES[number];
-export type FutsalGrade = typeof FUTSAL_GRADES[number];
-export type Grade = TennisGrade | FutsalGrade;
+// 등급 정본은 DB public.grades 다(JY-146 P3-a). Edge 는 TS 사본을 두지 않는다 — 사본이 있으면
+// 관리자가 grades 에 등급을 추가했을 때 Flutter 는 선택지에 띄우는데 Edge 만 400 으로 거부하고
+// 라벨 대신 코드를 노출한다(#319). 검증·표시가 필요한 지점에서 grades 를 직접 읽는다.
 
 // =========================
 // Tennis Org (협회·조직)
@@ -136,96 +140,10 @@ export function parseRecruiting(raw: unknown): RecruitingState | null {
 }
 
 // =========================
-// Tennis Divisions — 협회별 부서 코드 ({org}_{div} 형식)
-// tournaments.eligible_grades 에 저장되는 값
+// Tennis Divisions — 부서 코드({org}_{suffix}) 형식 검증
+// 부서 카탈로그 정본은 DB public.tennis_divisions 다. Edge 는 목록이 필요 없고
+// 형식 검증만 하므로 사본을 두지 않는다(JY-146 P2).
 // =========================
-
-export interface TennisDivisionDef {
-  code: string;
-  org: string;
-  label: string;
-  hasRanking?: boolean;
-  gender?: 'male' | 'female' | 'mixed' | 'all';
-}
-
-export const TENNIS_DIVISIONS: TennisDivisionDef[] = [
-  // 광주광역시 (gj) — 남자 랭킹 배점 부서
-  { code: 'gj_m_open', org: 'gj', label: '오픈부', hasRanking: true, gender: 'male' },
-  { code: 'gj_m_gold', org: 'gj', label: '골드부', hasRanking: true, gender: 'male' },
-  { code: 'gj_m_general', org: 'gj', label: '일반부', hasRanking: true, gender: 'male' },
-  { code: 'gj_m_instructor', org: 'gj', label: '지도자부', hasRanking: true, gender: 'male' },
-  // 광주 — 남자 선택 부서
-  { code: 'gj_m_masters', org: 'gj', label: '마스터즈부', hasRanking: false, gender: 'male' },
-  { code: 'gj_m_rookie', org: 'gj', label: '신인부', hasRanking: false, gender: 'male' },
-  { code: 'gj_m_veteran', org: 'gj', label: '베테랑부', hasRanking: false, gender: 'male' },
-  { code: 'gj_m_beginner', org: 'gj', label: '초급자부', hasRanking: false, gender: 'male' },
-  // 광주 — 여자
-  { code: 'gj_w_open', org: 'gj', label: '여자오픈부', hasRanking: false, gender: 'female' },
-  { code: 'gj_w_winner', org: 'gj', label: '여자우승자부', hasRanking: true, gender: 'female' },
-  { code: 'gj_w_rookie', org: 'gj', label: '여자신인부', hasRanking: true, gender: 'female' },
-  // 광주 — 혼성
-  { code: 'gj_couple', org: 'gj', label: '부부부', hasRanking: false, gender: 'mixed' },
-  { code: 'gj_cross', org: 'gj', label: '크로스대회', hasRanking: false, gender: 'mixed' },
-
-  // 전라남도 (jn) — gj와 동일 체계
-  { code: 'jn_m_open', org: 'jn', label: '오픈부', hasRanking: true, gender: 'male' },
-  { code: 'jn_m_gold', org: 'jn', label: '골드부', hasRanking: true, gender: 'male' },
-  { code: 'jn_m_general', org: 'jn', label: '일반부', hasRanking: true, gender: 'male' },
-  { code: 'jn_m_instructor', org: 'jn', label: '지도자부', hasRanking: true, gender: 'male' },
-  { code: 'jn_m_masters', org: 'jn', label: '마스터즈부', hasRanking: false, gender: 'male' },
-  { code: 'jn_m_rookie', org: 'jn', label: '신인부', hasRanking: false, gender: 'male' },
-  { code: 'jn_m_veteran', org: 'jn', label: '베테랑부', hasRanking: false, gender: 'male' },
-  { code: 'jn_m_beginner', org: 'jn', label: '초급자부', hasRanking: false, gender: 'male' },
-  { code: 'jn_w_open', org: 'jn', label: '여자오픈부', hasRanking: false, gender: 'female' },
-  { code: 'jn_w_winner', org: 'jn', label: '여자우승자부', hasRanking: true, gender: 'female' },
-  { code: 'jn_w_rookie', org: 'jn', label: '여자신인부', hasRanking: true, gender: 'female' },
-  { code: 'jn_couple', org: 'jn', label: '부부부', hasRanking: false, gender: 'mixed' },
-  { code: 'jn_cross', org: 'jn', label: '크로스대회', hasRanking: false, gender: 'mixed' },
-
-  // KTA (대한테니스협회)
-  { code: 'kta_m_open', org: 'kta', label: '남자오픈', gender: 'male' },
-  { code: 'kta_w_open', org: 'kta', label: '여자오픈', gender: 'female' },
-  { code: 'kta_mixed', org: 'kta', label: '혼합복식', gender: 'mixed' },
-  { code: 'kta_senior_60', org: 'kta', label: '시니어 60+', gender: 'all' },
-  { code: 'kta_senior_65', org: 'kta', label: '시니어 65+', gender: 'all' },
-
-  // KATA (한국동호인테니스협회) — 부수제
-  { code: 'kata_1', org: 'kata', label: '1부', gender: 'male' },
-  { code: 'kata_2', org: 'kata', label: '2부', gender: 'male' },
-  { code: 'kata_3', org: 'kata', label: '3부', gender: 'male' },
-  { code: 'kata_4', org: 'kata', label: '4부', gender: 'male' },
-  { code: 'kata_5', org: 'kata', label: '5부', gender: 'male' },
-  { code: 'kata_w', org: 'kata', label: '여자부', gender: 'female' },
-
-  // KTFS (전국생활체육연합회)
-  { code: 'ktfs_open', org: 'ktfs', label: '오픈', gender: 'all' },
-  { code: 'ktfs_general', org: 'ktfs', label: '일반', gender: 'all' },
-  { code: 'ktfs_beginner', org: 'ktfs', label: '초급', gender: 'all' },
-  { code: 'ktfs_w', org: 'ktfs', label: '여자부', gender: 'female' },
-
-  // KSTF (시니어)
-  { code: 'kstf_60', org: 'kstf', label: '60+부', gender: 'all' },
-  { code: 'kstf_65', org: 'kstf', label: '65+부', gender: 'all' },
-  { code: 'kstf_70', org: 'kstf', label: '70+부', gender: 'all' },
-
-  // 지역/클럽 자체
-  { code: 'local_open', org: 'local', label: '자체 오픈', gender: 'all' },
-  { code: 'local_general', org: 'local', label: '자체 일반', gender: 'all' },
-  { code: 'local_rookie', org: 'local', label: '자체 신인', gender: 'all' },
-  { code: 'local_w', org: 'local', label: '자체 여자부', gender: 'female' },
-];
-
-export const TENNIS_DIVISION_LABELS: Record<string, string> = Object.fromEntries(
-  TENNIS_DIVISIONS.map((d) => [d.code, d.label]),
-);
-
-export function getDivisionsForOrg(org: string): TennisDivisionDef[] {
-  return TENNIS_DIVISIONS.filter((d) => d.org === org);
-}
-
-export function getDivisionLabel(code: string): string {
-  return TENNIS_DIVISION_LABELS[code] ?? code;
-}
 
 /** Division code 형식 검증: 영문소문자/숫자/언더스코어만 (^[a-z0-9_]+$). */
 const DIVISION_CODE_PATTERN = /^[a-z0-9_]+$/;
@@ -266,73 +184,46 @@ export const GJ_KEYWORD_TO_SUFFIX: Array<{ keywords: string[]; suffix: string }>
   { keywords: ['크로스'], suffix: 'cross' },
 ];
 
-const TENNIS_RANK: Record<TennisGrade, number> = {
-  under1y: 0,
-  y1to3: 1,
-  y3to5: 2,
-  over5y: 3,
-};
-
-const FUTSAL_RANK: Record<FutsalGrade, number> = {
-  intro: 0,
-  beginner: 1,
-  intermediate: 2,
-  advanced: 3,
-  elite: 4,
-};
-
-export function isValidGrade(sport: Sport, grade: string): grade is Grade {
-  if (sport === 'tennis') {
-    // Legacy grade (y1to3 등) 또는 division code (gj_m_gold 등) 모두 허용
-    if ((TENNIS_GRADES as readonly string[]).includes(grade)) return true;
-    return isValidDivisionCode(grade);
-  }
-  return (FUTSAL_GRADES as readonly string[]).includes(grade);
+/**
+ * 등급 코드 유효성. 활성 등급 목록(`activeGrades`)은 호출부가 DB 에서 읽어 넘긴다 —
+ *   select code from public.grades where sport = ? and is_active
+ * 목록을 인자로 받는 이유: enums.ts 를 순수 모듈로 유지(DB 클라이언트 의존 없음)하고,
+ * 호출부가 조회 실패를 자기 방식(503 등)으로 처리하게 한다.
+ *
+ * 테니스는 등급 코드 외에 **부서 코드**(gj_m_gold 등)도 자격 표기로 쓴다. 부서 정본은
+ * DB public.tennis_divisions 고 Edge 는 형식만 본다(parseDivisionCodes 와 동일 규칙).
+ * org 접두사 정본은 DB public.tennis_orgs(#330) — activeGrades 와 같은 이유로
+ * `activeOrgs` 도 호출부가 조회해 넘긴다(정적 TENNIS_ORGS 로 검사하면 협회를 DB 에
+ * 추가해도 그 협회의 부서 코드는 계속 거절된다).
+ */
+export function isValidGrade(
+  sport: Sport,
+  grade: string,
+  activeGrades: ReadonlySet<string>,
+  activeOrgs: ReadonlySet<string>,
+): boolean {
+  if (activeGrades.has(grade)) return true;
+  return sport === 'tennis' && isValidDivisionCode(grade, activeOrgs);
 }
 
-/** Division code 유효성: {org}_{suffix} 패턴 (예: gj_m_gold, kta_m_open) */
-function isValidDivisionCode(code: string): boolean {
+/**
+ * Division code 유효성: {org}_{suffix} (예: gj_m_gold, kta_m_open).
+ * org 는 activeOrgs(DB tennis_orgs 활성 목록)에 있어야 하고, 전체가 ^[a-z0-9_]+$
+ * 이며 suffix 가 비면 안 된다. 형식 검사를 parseDivisionCodes 와 같은 규칙으로
+ * 맞춘다 — 조직 접두사만 보면 `gj_`, `gj_NOT_REAL`, `gj_'); DROP` 같은 값이
+ * eligible_grades 로 들어왔다(codex 1차). activeOrgs 가 비면(조회 실패 등) 모든
+ * 부서 코드를 거절한다(fail-closed).
+ */
+function isValidDivisionCode(code: string, activeOrgs: ReadonlySet<string>): boolean {
+  if (!DIVISION_CODE_PATTERN.test(code)) return false;
   const idx = code.indexOf('_');
-  if (idx < 1) return false;
+  if (idx < 1 || idx === code.length - 1) return false;
   const org = code.substring(0, idx);
-  return (TENNIS_ORGS as readonly string[]).includes(org);
+  return activeOrgs.has(org);
 }
 
-/**
- * 사용자 등급 기준으로 출전 가능한 등급 배열을 반환.
- * 테니스는 "본인 등급보다 같거나 낮은 부수의 대회 = 출전 가능"으로 가정한다.
- *   (실제 동호인 룰에서는 1부 사람이 5부 대회 못 나가는 경우도 있으나
- *    MVP에서는 "낮은 부수=상위" 가정 하에 본인 등급 또는 그 이하 등급 대회 모두 출전 가능으로 처리)
- *
- * 즉 사용자가 'div3' 이면 출전 가능한 eligible_grades 는
- *   div5, div4, div3, rookie  (본인보다 등급이 낮거나 같은) — 사용자가 div3이면 div3 이상 대회는 부담스러움
- *
- * 사실 동호인 테니스는 "내 부수 또는 그 위 부수"가 출전 가능.
- *   예: 내가 3부 → 3부, 4부, 5부, 신입 대회 출전 가능 (낮은 부수 = 더 잘함, 상위 부수)
- *   여기서 'div1' 이 가장 잘하는 사람.
- *   대회의 eligible_grades 에는 "참가 자격이 되는 등급들"이 들어 있음.
- *
- * 따라서 단순 매칭: 사용자 grade ∈ eligible_grades.
- * 이 함수는 명시적 "이 사용자가 해당 대회에 나갈 수 있는가" 체크용.
- */
-export function canEnter(userGrade: string, eligibleGrades: string[]): boolean {
-  return eligibleGrades.includes(userGrade);
-}
-
-/**
- * UI 표시명 매핑
- */
-export const GRADE_LABELS: Record<string, string> = {
-  under1y: '1년 미만',
-  y1to3: '1~3년',
-  y3to5: '3~5년',
-  over5y: '5년 이상',
-  intro: '입문',
-  beginner: '초급',
-  intermediate: '중급',
-  advanced: '고급',
-  elite: '선출',
-};
+// 삭제(#319): canEnter(= eligibleGrades.includes, 호출부 없음 — 자격 판정 정본은 DB RPC),
+// rankOf(등급 순서 정본은 grades.sort_order, 호출부 없음), GRADE_LABELS(grades.label_ko 사본).
 
 export const SPORT_LABELS: Record<Sport, string> = {
   tennis: '테니스',
@@ -363,10 +254,4 @@ export const PLAYER_ORIGIN_LABELS: Record<PlayerOrigin, string> = {
 
 export function isValidPlayerOrigin(value: string): value is PlayerOrigin {
   return (PLAYER_ORIGINS as readonly string[]).includes(value);
-}
-
-export function rankOf(sport: Sport, grade: string): number | null {
-  if (sport === 'tennis' && grade in TENNIS_RANK) return TENNIS_RANK[grade as TennisGrade];
-  if (sport === 'futsal' && grade in FUTSAL_RANK) return FUTSAL_RANK[grade as FutsalGrade];
-  return null;
 }

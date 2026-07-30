@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from './supabase.ts';
-import { regionCodeFromLabel } from './enums.ts';
+import { regionCodeFromLabel, type Sport } from './enums.ts';
 
 export interface CrawlerTournament {
   title: string;
@@ -126,7 +126,7 @@ export async function saveRawDocument(
  */
 export async function upsertTournament(
   audit: AuditHandle,
-  sport: 'tennis' | 'futsal',
+  sport: Sport,
   t: CrawlerTournament,
   rawHtml?: string,
 ): Promise<'inserted' | 'updated' | 'skipped'> {

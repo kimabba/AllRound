@@ -137,6 +137,7 @@ const GJ_DICT: DivisionDictRow[] = [
   { code: 'gj_m_general', synonyms: ['남자일반부', '일반부', '남자일반'], label_ko: '일반부' },
   { code: 'gj_m_instructor', synonyms: ['지도자부', '지도자'], label_ko: '지도자부' },
   { code: 'gj_m_masters', synonyms: ['마스터즈부', '마스터즈'], label_ko: '마스터즈부' },
+  { code: 'gj_m_jidong', synonyms: ['지동부'], label_ko: '지동부' },
   { code: 'gj_m_rookie', synonyms: ['남자신인부', '신인부', '신인'], label_ko: '신인부' },
   { code: 'gj_m_veteran', synonyms: ['베테랑부', '베테랑'], label_ko: '베테랑부' },
   { code: 'gj_m_beginner', synonyms: ['초급자부', '비입상자부', '초급자'], label_ko: '초급자부' },
@@ -147,8 +148,6 @@ const GJ_DICT: DivisionDictRow[] = [
     label_ko: '여자우승자부',
   },
   { code: 'gj_w_rookie', synonyms: ['여자신인부', '여자신인', '개나리'], label_ko: '여자신인부' },
-  { code: 'gj_couple', synonyms: ['부부부', '부부'], label_ko: '부부부' },
-  { code: 'gj_cross', synonyms: ['크로스'], label_ko: '크로스대회' },
 ];
 const sorted = (a: string[]) => [...a].sort();
 
@@ -170,9 +169,15 @@ Deno.test('mapDivisionsByDict: 복수 매칭 — "오픈" substring이 여자오
   assertEquals(sorted(r.codes), sorted(['gj_m_open', 'gj_m_gold', 'gj_m_general', 'gj_w_open']));
 });
 
-Deno.test('mapDivisionsByDict: "부부부" 매칭', () => {
-  const r = mapDivisionsByDict('부부부 대회', GJ_DICT);
-  assertEquals(r.codes, ['gj_couple']);
+// 지동부 synonyms 를 ['지동부'] 하나로 좁게 둔 이유를 고정한다 — '지동'만 두면 요강
+// 본문 아무 데나 걸리고, '지도자부' 와도 섞이면 안 된다.
+Deno.test('mapDivisionsByDict: "지동부" → 지동부만, "지도자부" 와 섞이지 않는다', () => {
+  assertEquals(mapDivisionsByDict('지동부 대진표', GJ_DICT).codes, ['gj_m_jidong']);
+  assertEquals(mapDivisionsByDict('지도자부 대진표', GJ_DICT).codes, ['gj_m_instructor']);
+  assertEquals(
+    sorted(mapDivisionsByDict('지도자부 지동부 개설', GJ_DICT).codes),
+    sorted(['gj_m_instructor', 'gj_m_jidong']),
+  );
 });
 
 Deno.test('mapDivisionsByDict: "개나리"(synonym) → 여자신인부', () => {
