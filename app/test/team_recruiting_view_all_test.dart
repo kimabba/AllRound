@@ -60,7 +60,7 @@ void main() {
         home: TeamRecruitingListScreen(
           posts: posts,
           managedClubIds: const {},
-          onClosePost: (_) {},
+          onClosePost: (_) async => posts,
           onOpenPost: (_) {},
         ),
       ),
@@ -71,5 +71,42 @@ void main() {
     for (var index = 0; index < 4; index++) {
       expect(find.text('팀원 모집 $index'), findsOneWidget);
     }
+  });
+
+  testWidgets('마감하면 돌려받은 목록으로 화면이 갱신된다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TeamRecruitingListScreen(
+          posts: posts,
+          managedClubIds: {posts.first.clubId},
+          onClosePost: (post) async =>
+              posts.where((p) => p.id != post.id).toList(growable: false),
+          onOpenPost: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('팀원 모집 0'), findsOneWidget);
+    await tester.tap(find.text('마감하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('팀원 모집 0'), findsNothing);
+    expect(find.text('최신 등록순 · 3개'), findsOneWidget);
+  });
+
+  testWidgets('조회 상한에 걸리면 전체가 아님을 알린다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TeamRecruitingListScreen(
+          posts: posts,
+          managedClubIds: const {},
+          capped: true,
+          onClosePost: (_) async => posts,
+          onOpenPost: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('최신 등록순 · 4개 (최신 글만 표시)'), findsOneWidget);
   });
 }

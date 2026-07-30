@@ -200,7 +200,7 @@ mixin ClubApi on ApiBase {
   // ── 팀원 모집 ──────────────────────────────────────────────
 
   Future<List<RecruitingPostPreview>> teamRecruitingPosts(
-      {List<String>? regions, String? sport}) async {
+      {List<String>? regions, String? sport, int limit = 50}) async {
     var query = supabase
         .from('club_recruiting_posts')
         .select(
@@ -214,7 +214,7 @@ mixin ClubApi on ApiBase {
       query = query.inFilter('clubs.region', regions);
     }
     final Object raw =
-        await query.order('created_at', ascending: false).limit(50);
+        await query.order('created_at', ascending: false).limit(limit);
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
