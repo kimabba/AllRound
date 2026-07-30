@@ -26,6 +26,7 @@ interface NotifyTask {
 interface DeviceTokenRow {
   token: string;
   platform: 'ios' | 'android' | 'web';
+  sound_enabled: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,17 +120,20 @@ Deno.serve(async (req) => {
     // 디바이스 토큰
     const { data: tokensRow } = await supabase
       .from('device_tokens')
-      .select('token, platform')
+      .select('token, platform, sound_enabled')
       .eq('user_id', task.user_id)
       .eq('enabled', true);
 
-    const tokens = ((tokensRow ?? []) as DeviceTokenRow[]).map((t) => t.token);
+    const targets = ((tokensRow ?? []) as DeviceTokenRow[]).map((token) => ({
+      token: token.token,
+      soundEnabled: token.sound_enabled,
+    }));
 
     const message = task.type === 'd_minus_3'
       ? `대회 3일 전: ${task.title} — ${task.start_date}`
       : `오늘 신청 마감: ${task.title}`;
 
-    const result = await sendFcm(tokens, {
+    const result = await sendFcm(targets, {
       title: '대회 알림',
       body: message,
       type: notifType,
