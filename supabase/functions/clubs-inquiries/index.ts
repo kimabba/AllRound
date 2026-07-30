@@ -5,7 +5,7 @@ import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
-import { ageGroupFromBirthDate, parseInquiryRequest } from './validation.ts';
+import { ageGroupFromBirthDate, containsInquiryLink, parseInquiryRequest } from './validation.ts';
 
 interface InquiryThreadRow {
   id: string;
@@ -18,6 +18,7 @@ interface ClubRow {
   name: string;
   status: string;
   created_by: string | null;
+  inquiry_links_enabled: boolean;
 }
 
 interface InquiryListRow extends InquiryThreadRow {
@@ -54,7 +55,13 @@ function clubFrom(value: unknown): ClubRow | null {
   const name = stringField(row.name);
   const status = stringField(row.status);
   if (!id || !name || !status) return null;
-  return { id, name, status, created_by: stringField(row.created_by) };
+  return {
+    id,
+    name,
+    status,
+    created_by: stringField(row.created_by),
+    inquiry_links_enabled: row.inquiry_links_enabled !== false,
+  };
 }
 
 function inquiryListRowFrom(value: unknown): InquiryListRow | null {
@@ -269,7 +276,7 @@ Deno.serve(async (req) => {
   if (parsed.value.clubId !== null) {
     const { data: clubData, error: clubError } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by')
+      .select('id, name, status, created_by, inquiry_links_enabled')
       .eq('id', parsed.value.clubId)
       .maybeSingle();
     club = clubFrom(clubData);
@@ -326,11 +333,23 @@ Deno.serve(async (req) => {
 
     const { data: clubData } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by')
+      .select('id, name, status, created_by, inquiry_links_enabled')
       .eq('id', thread.club_id)
       .maybeSingle();
     club = clubFrom(clubData);
     if (!club) return errorResponse('CLUB_NOT_AVAILABLE', 404);
+  }
+
+  const { data: clubBan } = await supabase
+    .from('club_bans')
+    .select('club_id')
+    .eq('club_id', thread.club_id)
+    .eq('user_id', auth.user.id)
+    .maybeSingle();
+  if (clubBan) return errorResponse('CLUB_BANNED', 403);
+
+  if (!club.inquiry_links_enabled && containsInquiryLink(parsed.value.body)) {
+    return errorResponse('INQUIRY_LINKS_DISABLED', 400);
   }
 
   let operatorIds = await activeOperatorIds(supabase, thread.club_id);

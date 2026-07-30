@@ -4,6 +4,11 @@ export interface InquiryRequest {
   body: string;
 }
 
+export function containsInquiryLink(value: string): boolean {
+  return /(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|kr|io|app)(?:\/|\b))/iu
+    .test(value);
+}
+
 export function ageGroupFromBirthDate(
   birthDate: string | null,
   today = new Date(),
