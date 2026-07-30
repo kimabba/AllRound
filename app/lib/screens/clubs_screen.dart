@@ -49,6 +49,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   List<RecruitingPostPreview> _recruitingPosts = const [];
   bool _loadingRecruiting = false;
 
+  /// 모집글 조회 상한. 상한에 닿으면 "전체 보기"가 전부가 아니므로
+  /// 화면 하단에 그 사실을 표시한다(_recruitingCapped).
+  static const int _recruitingFetchLimit = 200;
+  bool _recruitingCapped = false;
+
   @override
   void initState() {
     super.initState();
@@ -155,8 +160,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return;
     }
     try {
-      final posts = await ref.read(apiProvider).teamRecruitingPosts();
-      if (mounted) setState(() => _recruitingPosts = posts);
+      final posts = await ref
+          .read(apiProvider)
+          .teamRecruitingPosts(limit: _recruitingFetchLimit);
+      if (mounted) {
+        setState(() {
+          _recruitingPosts = posts;
+          _recruitingCapped = posts.length >= _recruitingFetchLimit;
+        });
+      }
     } catch (error) {
       debugPrint('teamRecruitingPosts error: $error');
       if (mounted) setState(() => _recruitingPosts = const []);
@@ -371,7 +383,29 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     );
   }
 
-  Future<void> _closeRecruitingPost(RecruitingPostPreview post) async {
+  Future<void> _openAllRecruitingPosts(
+    List<RecruitingPostPreview> posts,
+    Set<String> managedClubIds,
+  ) {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamRecruitingListScreen(
+          posts: posts,
+          managedClubIds: managedClubIds,
+          capped: _recruitingCapped,
+          onClosePost: _closeRecruitingPost,
+          onOpenPost: _openRecruitingDetail,
+        ),
+      ),
+    );
+  }
+
+  /// 마감 후 갱신된 목록을 돌려준다. 전체보기 화면은 스냅샷을 들고 있어서
+  /// 이 반환값으로 자기 목록을 갱신해야 마감 상태가 화면에 반영된다.
+  Future<List<RecruitingPostPreview>> _closeRecruitingPost(
+    RecruitingPostPreview post,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -389,21 +423,22 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return _visibleRecruitingPosts();
 
     try {
       await ref.read(apiProvider).closeTeamRecruitingPost(post.id);
       await _loadRecruitingPosts();
-      if (!mounted) return;
+      if (!mounted) return _visibleRecruitingPosts();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('팀원 모집을 마감했습니다.')),
       );
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return _visibleRecruitingPosts();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('모집을 마감하지 못했습니다.')),
       );
     }
+    return _visibleRecruitingPosts();
   }
 
   @override
@@ -696,6 +731,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     managedClubIds: managedClubs.map((club) => club.id).toSet(),
                     onClosePost: _closeRecruitingPost,
                     onOpenPost: _openRecruitingDetail,
+                    onViewAll: () => _openAllRecruitingPosts(
+                      _visibleRecruitingPosts(),
+                      managedClubs.map((club) => club.id).toSet(),
+                    ),
                   ),
                 ],
               ),

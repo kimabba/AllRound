@@ -17,6 +17,7 @@ class TeamRecruitingBoard extends StatelessWidget {
   final Set<String> managedClubIds;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
+  final VoidCallback onViewAll;
 
   const TeamRecruitingBoard({
     super.key,
@@ -25,6 +26,7 @@ class TeamRecruitingBoard extends StatelessWidget {
     required this.managedClubIds,
     required this.onClosePost,
     required this.onOpenPost,
+    required this.onViewAll,
   });
 
   @override
@@ -43,9 +45,19 @@ class TeamRecruitingBoard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '팀원모집 글',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '팀원모집 글',
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton(
+                onPressed: posts.isEmpty ? null : onViewAll,
+                child: const Text('전체 보기'),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
@@ -73,7 +85,7 @@ class TeamRecruitingBoard extends StatelessWidget {
               ),
             )
           else
-            for (final post in posts)
+            for (final post in posts.take(3))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: TeamRecruitingPostCard(
@@ -84,6 +96,98 @@ class TeamRecruitingBoard extends StatelessWidget {
                 ),
               ),
         ],
+      ),
+    );
+  }
+}
+
+class TeamRecruitingListScreen extends StatefulWidget {
+  const TeamRecruitingListScreen({
+    super.key,
+    required this.posts,
+    required this.managedClubIds,
+    required this.onClosePost,
+    required this.onOpenPost,
+    this.capped = false,
+  });
+
+  final List<RecruitingPostPreview> posts;
+  final Set<String> managedClubIds;
+
+  /// 마감 처리 후 갱신된 목록을 돌려준다 — 이 화면은 스냅샷을 들고 있어서
+  /// 반환값으로 갱신하지 않으면 마감한 글이 그대로 열린 상태로 남는다.
+  final Future<List<RecruitingPostPreview>> Function(RecruitingPostPreview)
+      onClosePost;
+  final ValueChanged<RecruitingPostPreview> onOpenPost;
+
+  /// 조회 상한에 걸려 목록이 잘렸는지. true 면 "전체"가 아님을 하단에 알린다.
+  final bool capped;
+
+  @override
+  State<TeamRecruitingListScreen> createState() =>
+      _TeamRecruitingListScreenState();
+}
+
+class _TeamRecruitingListScreenState extends State<TeamRecruitingListScreen> {
+  late List<RecruitingPostPreview> _posts = widget.posts;
+
+  Future<void> _close(RecruitingPostPreview post) async {
+    final updated = await widget.onClosePost(post);
+    if (!mounted) return;
+    setState(() => _posts = updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final posts = _posts;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('전체 팀원모집'),
+      ),
+      body: posts.isEmpty
+          ? const Center(
+              child: Text('등록된 팀원모집 글이 없습니다.'),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xxl,
+              ),
+              itemCount: posts.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return TeamRecruitingPostCard(
+                  post: post,
+                  canManage: widget.managedClubIds.contains(post.clubId),
+                  onClose: () => _close(post),
+                  onTap: () => widget.onOpenPost(post),
+                );
+              },
+            ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xs,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            widget.capped
+                ? '최신 등록순 · ${posts.length}개 (최신 글만 표시)'
+                : '최신 등록순 · ${posts.length}개',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ),
       ),
     );
   }
