@@ -123,6 +123,29 @@ void main() {
     });
   });
 
+  group('사용자용 요강 필터', () {
+    test('출처·풋살허브 ID·안내 필드와 ※ 안내문을 숨긴다', () {
+      final lines = publicRegulationBodyLines(
+        '장소: 서울월드컵경기장\n'
+        '출처: 풋살허브\n'
+        '풋살허브 ID: 12345\n'
+        '안내: 운영진에게 문의\n'
+        '※ 일정은 변경될 수 있습니다',
+      );
+
+      expect(lines, hasLength(1));
+      expect(lines.single.label, '장소');
+      expect(lines.single.value, '서울월드컵경기장');
+    });
+
+    test('수집 메타데이터 라벨의 공백·밑줄·영문 표기도 숨긴다', () {
+      expect(isHiddenPublicRegulationLabel('풋살허브ID'), isTrue);
+      expect(isHiddenPublicRegulationLabel('futsal_hub_id'), isTrue);
+      expect(isHiddenPublicRegulationLabel('source_url'), isTrue);
+      expect(isHiddenPublicRegulationLabel('참가비'), isFalse);
+    });
+  });
+
   group('cleanPlainRegulationLines (단순 공고 평문 폴백)', () {
     test('중복 메타라인 제거 + 부서 접수 항목 줄바꿈', () {
       const desc =
@@ -140,6 +163,13 @@ void main() {
 
     test('메타라인 없는 평문은 그대로 한 줄', () {
       expect(cleanPlainRegulationLines('준비 중인 대회입니다.'), ['준비 중인 대회입니다.']);
+    });
+
+    test('평문 폴백에서도 안내 라인을 숨긴다', () {
+      expect(
+        cleanPlainRegulationLines('장소: 서울\n안내: 운영진에게 문의'),
+        ['장소: 서울'],
+      );
     });
 
     test('빈/공백 → 빈 리스트', () {

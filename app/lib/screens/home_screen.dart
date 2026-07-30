@@ -96,6 +96,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _HomePersonalSchedule(
                   tournaments: myTournaments.value ?? const [],
                   clubs: myClubs.value ?? const [],
+                  onTournamentBrowse: () => context.go('/tournaments'),
+                  onClubBrowse: () => context.go('/clubs'),
                   onTournamentTap: (item) =>
                       context.push('/tournaments/${item.id}'),
                   onClubTap: (club) => context.push('/clubs/${club.id}'),
@@ -259,12 +261,16 @@ class _HomePersonalSchedule extends StatelessWidget {
   const _HomePersonalSchedule({
     required this.tournaments,
     required this.clubs,
+    required this.onTournamentBrowse,
+    required this.onClubBrowse,
     required this.onTournamentTap,
     required this.onClubTap,
   });
 
   final List<Tournament> tournaments;
   final List<Club> clubs;
+  final VoidCallback onTournamentBrowse;
+  final VoidCallback onClubBrowse;
   final ValueChanged<Tournament> onTournamentTap;
   final ValueChanged<Club> onClubTap;
 
@@ -298,7 +304,7 @@ class _HomePersonalSchedule extends StatelessWidget {
                     ? '대회를 둘러보세요'
                     : _dayLabel(tournament.startDate, today),
                 onTap: tournament == null
-                    ? null
+                    ? onTournamentBrowse
                     : () => onTournamentTap(tournament),
               ),
             ),
@@ -312,7 +318,7 @@ class _HomePersonalSchedule extends StatelessWidget {
                 status: club == null
                     ? '모임을 찾아보세요'
                     : '${club.region ?? '지역 미정'} · ${club.memberCount}명',
-                onTap: club == null ? null : () => onClubTap(club),
+                onTap: club == null ? onClubBrowse : () => onClubTap(club),
               ),
             ),
           ],

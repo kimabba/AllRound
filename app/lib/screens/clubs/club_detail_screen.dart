@@ -22,6 +22,7 @@ import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
+import 'club_dues_screen.dart';
 import 'club_inquiry_screen.dart';
 import 'widgets/club_intro_photo_strip.dart';
 
@@ -1572,6 +1573,8 @@ class _ClubManagementTab extends ConsumerWidget {
           onChanged: onMonthlyFeeChanged,
         ),
         const SizedBox(height: AppSpacing.md),
+        _ClubDuesLedgerCard(club: club),
+        const SizedBox(height: AppSpacing.md),
         _JoinRequestManageCard(
           club: club,
           onChanged: onChanged,
@@ -2314,6 +2317,56 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
                   )
                 : const Icon(Icons.save_rounded),
             label: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClubDuesLedgerCard extends StatelessWidget {
+  final Club club;
+
+  const _ClubDuesLedgerCard({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _ClubFlatSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: cs.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  '월별 회비 장부',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '멤버별 납부·미납·면제를 체크하고 미납 멤버에게 앱 알림을 보낼 수 있어요.',
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton.icon(
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClubDuesScreen(club: club),
+              ),
+            ),
+            icon: const Icon(Icons.checklist_rounded),
+            label: const Text('회비 장부 열기'),
           ),
         ],
       ),

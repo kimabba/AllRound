@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
+import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
@@ -587,6 +588,107 @@ mixin ClubApi on ApiBase {
     const rank = {'owner': 0, 'manager': 1, 'member': 2};
     members.sort((a, b) => (rank[a.role] ?? 3).compareTo(rank[b.role] ?? 3));
     return members;
+  }
+
+  Future<List<ClubDuesPeriod>> clubDuesPeriods(String clubId) async {
+    final rows = await supabase
+        .from('club_dues_periods')
+        .select()
+        .eq('club_id', clubId)
+        .order('period_month', ascending: false);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubDuesPeriod.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<ClubDuesPayment>> clubDuesPayments(String periodId) async {
+    final rows = await supabase
+        .from('club_dues_payments')
+        .select()
+        .eq('period_id', periodId)
+        .order('updated_at', ascending: false);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubDuesPayment.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<ClubDuesAuditEntry>> clubDuesAudit(
+    Iterable<String> paymentIds,
+  ) async {
+    final ids = paymentIds.toList(growable: false);
+    if (ids.isEmpty) return const [];
+    final rows = await supabase
+        .from('club_dues_audit')
+        .select()
+        .inFilter('payment_id', ids)
+        .order('created_at', ascending: false)
+        .limit(100);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) =>
+            ClubDuesAuditEntry.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<String> upsertClubDuesPeriod({
+    required String clubId,
+    required DateTime periodMonth,
+    required int amount,
+    DateTime? dueDate,
+    String? accountInfo,
+  }) async {
+    final result = await supabase.rpc(
+      'upsert_club_dues_period',
+      params: {
+        'p_club_id': clubId,
+        'p_period_month':
+            DateTime(periodMonth.year, periodMonth.month).toIso8601String(),
+        'p_amount': amount,
+        'p_due_date': dueDate == null
+            ? null
+            : DateTime(dueDate.year, dueDate.month, dueDate.day)
+                .toIso8601String(),
+        'p_account_info': accountInfo,
+      },
+    );
+    if (result is! String) {
+      throw const FormatException('회비 장부 저장 결과가 올바르지 않습니다.');
+    }
+    return result;
+  }
+
+  Future<int> setClubDueStatus({
+    required String periodId,
+    required Iterable<String> userIds,
+    required ClubDueStatus status,
+    String? note,
+  }) async {
+    final result = await supabase.rpc(
+      'set_club_due_status',
+      params: {
+        'p_period_id': periodId,
+        'p_user_ids': userIds.toList(growable: false),
+        'p_status': status.value,
+        'p_note': note,
+      },
+    );
+    return (result as num).toInt();
+  }
+
+  Future<int> sendClubDuesReminders({
+    required String periodId,
+    required Iterable<String> userIds,
+  }) async {
+    final result = await supabase.rpc(
+      'send_club_dues_reminders',
+      params: {
+        'p_period_id': periodId,
+        'p_user_ids': userIds.toList(growable: false),
+      },
+    );
+    return (result as num).toInt();
   }
 
   Future<List<ClubMember>> formerClubMembers(String clubId) async {
