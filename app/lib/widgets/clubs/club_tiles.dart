@@ -355,7 +355,7 @@ class SimpleClubTile extends StatelessWidget {
           ),
         ),
         child: Text(
-          '관심 있는 모임을 찾아 가입해보세요.',
+          '관심 있는 클럽을 찾아 가입해보세요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
       );
@@ -431,7 +431,7 @@ class SimpleClubTile extends StatelessWidget {
                               borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
                             child: Text(
-                              '내 모임',
+                              '내 클럽',
                               style: tt.labelSmall?.copyWith(
                                 color: cs.onPrimaryContainer,
                                 fontWeight: FontWeight.w800,

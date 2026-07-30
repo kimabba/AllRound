@@ -413,7 +413,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           controller: _clubNameQueryController,
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
-            hintText: '지역이나 모임 이름 검색',
+            hintText: '지역이나 클럽 이름 검색',
             prefixIcon: Icon(Icons.search_rounded),
           ),
           onSubmitted: (value) {
@@ -661,9 +661,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text('모임'),
+        title: const Text('클럽'),
         actions: [
           const NotificationInboxAction(),
+          const ProfileAction(),
           TextButton.icon(
             onPressed: _openCreate,
             style: TextButton.styleFrom(
@@ -703,8 +704,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SimpleSectionHeader(
-                          title: '나의 모임',
-                          subtitle: '내가 참여하고 있는 모임',
+                          title: '나의 클럽',
+                          subtitle: '내가 참여하고 있는 클럽',
                           icon: Icons.verified_rounded,
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(
@@ -777,7 +778,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   _buildClubFilterControls(hasClubNameQuery),
                   const SizedBox(height: AppSpacing.lg),
                   SimpleSectionHeader(
-                    title: hasClubNameQuery ? '검색 결과' : '추천 모임',
+                    title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
                     icon: hasClubNameQuery
                         ? Icons.search_rounded
                         : Icons.explore_outlined,

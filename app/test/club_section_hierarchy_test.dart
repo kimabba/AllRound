@@ -14,7 +14,7 @@ void main() {
     memberCount: 10,
   );
 
-  testWidgets('나의 모임 카드는 내 모임 상태를 명확히 표시한다', (tester) async {
+  testWidgets('나의 클럽 카드는 내 클럽 상태를 명확히 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -27,7 +27,7 @@ void main() {
       ),
     );
 
-    expect(find.text('내 모임'), findsOneWidget);
+    expect(find.text('내 클럽'), findsOneWidget);
     expect(find.text('서울 10명'), findsOneWidget);
   });
 
