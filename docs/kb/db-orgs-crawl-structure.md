@@ -67,9 +67,10 @@ pg_cron(15~30분) 또는 어드민 수동(force) → crawl-dispatch(단일 진�
 
 ## 3. 발견 사항
 
-### 🔴 A. 테니스 대회 자격매칭 무력화 (출시 크리티컬 — JY-136)
-온보딩이 `user_tennis_orgs.division_codes` 를 저장 안 함. `UserTennisOrg`(tournament.dart) 모델에 divisionCodes 필드 자체가 없어 `toUpsert`/`fromJson` 에서 누락 → 부서를 골라도 라벨(`division`)만 저장, `division_codes=[]`. 테니스 매칭 RPC 는 division_codes 교집합만 보므로 **"내 등급 대회" 필터에서 테니스 대회 0건**. demian 실데이터도 codes=[].
-→ 수정: UserTennisOrg 에 divisionCodes 필드 + toUpsert/fromJson 반영 + 온보딩 저장 시 선택 코드 전달 + 기존 사용자 백필(라벨→코드).
+### ✅ A. 테니스 대회 자격매칭 무력화 — 해결됨 (JY-136, PR #228)
+> 2026-07-26 확인: 아래는 조사 시점(7/15) 기록이며 **이미 해결됐다**. `UserTennisOrg`(tournament.dart)에 `divisionCodes` 필드·`toUpsert`/`fromJson` 반영 완료, 온보딩이 선택 코드를 전달(`onboarding_screen.dart`의 `o.selectedDivisionCodes`)한다. 운영 실측: 코드 보유 사용자가 `expand_division_codes` 동치확장을 거쳐 테니스 대회 13건 매칭(0건 아님). 잔여는 부서 미선택(`division='default'`) 사용자 1명뿐 — 매핑할 라벨이 없어 기계적 백필 대상 아님(제품 판단).
+
+(원래 조사 기록) 온보딩이 `user_tennis_orgs.division_codes` 를 저장 안 함. 모델에 divisionCodes 필드가 없어 부서를 골라도 라벨만 저장, `division_codes=[]` → 테니스 매칭 RPC 가 교집합만 보므로 "내 등급 대회" 필터에서 테니스 0건.
 
 ### B. 협회 확충 (JY-135)
 부서=DB INSERT 만, 협회=DB+코드+재배포. 시도협회는 `sido_std` 표준 재사용 가능(gj/jn 패턴 복제).
