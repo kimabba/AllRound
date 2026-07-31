@@ -26,14 +26,19 @@ select is(
 );
 
 -- 2) 쓰기를 서버 경로로만 여는 테이블에 클라이언트 DML 권한이 없어야 한다.
---    club_inquiry_*: Edge 전용. user_sports: save_user_sports RPC 전용(#320).
+--    club_inquiry_*: Edge 전용. club_dues_*: 운영진 RPC 전용.
+--    user_sports: save_user_sports RPC 전용(#320).
 select is(
   (select coalesce(string_agg(format('%s:%s', c.relname, r.who), ', '
                               order by c.relname, r.who), '(없음)')
      from pg_class c join pg_namespace n on n.oid = c.relnamespace
      cross join (values ('anon'),('authenticated')) as r(who)
     where n.nspname = 'public'
-      and c.relname in ('club_inquiry_threads','club_inquiry_messages','user_sports')
+      and c.relname in (
+        'club_inquiry_threads','club_inquiry_messages',
+        'club_dues_periods','club_dues_payments','club_dues_audit',
+        'user_sports'
+      )
       -- has_table_privilege 만 보면 컬럼 단위 grant(예: grant insert (grade) on ...)를
       -- 놓친다. has_any_column_privilege 는 테이블 권한과 컬럼 권한을 함께 본다.
       and (has_any_column_privilege(r.who, c.oid, 'INSERT')

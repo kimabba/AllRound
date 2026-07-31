@@ -81,6 +81,97 @@ class SimplePanel extends StatelessWidget {
   }
 }
 
+class FirstClubEmptyState extends StatelessWidget {
+  final VoidCallback onCreate;
+
+  const FirstClubEmptyState({
+    super.key,
+    required this.onCreate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: AppRadius.hero,
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              Icon(
+                Icons.groups_2_rounded,
+                size: 38,
+                color: cs.primary,
+              ),
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: cs.surface, width: 3),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 17,
+                    color: cs.onPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            '첫 모임을 만들어보세요',
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '함께 운동할 사람을 모으고\n일정과 회비까지 한곳에서 관리할 수 있어요.',
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('모임 만들기'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SimpleActionCard extends StatelessWidget {
   final IconData icon;
   final String title;

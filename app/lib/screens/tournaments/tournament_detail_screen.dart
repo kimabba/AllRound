@@ -433,7 +433,13 @@ class _DetailBody extends StatelessWidget {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = t.regulationFields
-        .where((field) => field.label.replaceAll(' ', '') != '포스터')
+        // 수집 메타데이터(출처·내부 ID)는 사용자 상세에서 감춘다. 안내문은 감추지
+        // 않는다 — 입금계좌·신청 변경 규칙이 거기 들어 있다.
+        .where(
+          (field) =>
+              field.label.replaceAll(' ', '') != '포스터' &&
+              !isHiddenPublicRegulationLabel(field.label),
+        )
         .toList(growable: true);
     final hasBody =
         t.regulationBody != null && t.regulationBody!.trim().isNotEmpty;
