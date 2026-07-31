@@ -48,6 +48,24 @@ void main() {
     expect(find.text('관심 종목과 지역을 기준으로 추천해요'), findsOneWidget);
   });
 
+  testWidgets('모임이 없으면 첫 모임 만들기 행동을 안내한다', (tester) async {
+    var createTapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FirstClubEmptyState(
+            onCreate: () => createTapped = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('첫 모임을 만들어보세요'), findsOneWidget);
+    expect(find.text('모임 만들기'), findsOneWidget);
+    await tester.tap(find.text('모임 만들기'));
+    expect(createTapped, isTrue);
+  });
+
   testWidgets('주변 클럽은 지역과 인원 뒤에 거리를 표시한다', (tester) async {
     final nearbyClub = Club(
       id: 'nearby-club',

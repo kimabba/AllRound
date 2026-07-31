@@ -732,10 +732,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         if (_loadingMy)
                           const LinearProgressIndicator()
                         else if (joinedClubs.isEmpty && pendingClubs.isEmpty)
-                          SimpleClubTile(
-                            club: null,
-                            onFavoriteToggle: _toggleClubFavorite,
-                          )
+                          FirstClubEmptyState(onCreate: _openCreate)
                         else ...[
                           for (final club in pendingClubs)
                             Padding(
@@ -804,12 +801,26 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     ),
                   ],
                   if (displayedRecommendationClubs.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.lg,
+                      ),
                       child: AppEmptyState(
-                        icon: Icons.search_off_rounded,
-                        title: '조건에 맞는 클럽이 없습니다',
-                        description: '검색어를 줄이거나 맞춤 조건을 바꿔보세요.',
+                        icon: hasClubNameQuery || _clubFilters.hasActive
+                            ? Icons.search_off_rounded
+                            : Icons.sports_rounded,
+                        title: hasClubNameQuery || _clubFilters.hasActive
+                            ? '조건에 맞는 모임이 없어요'
+                            : '아직 등록된 모임이 없어요',
+                        description: hasClubNameQuery || _clubFilters.hasActive
+                            ? '검색어를 줄이거나 맞춤 조건을 바꿔보세요.'
+                            : '새 모임을 만들면 이곳에서 다른 사용자에게 소개돼요.',
+                        actionLabel: hasClubNameQuery || _clubFilters.hasActive
+                            ? null
+                            : '첫 모임 만들기',
+                        onAction: hasClubNameQuery || _clubFilters.hasActive
+                            ? null
+                            : _openCreate,
                       ),
                     )
                   else
