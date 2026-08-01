@@ -89,6 +89,12 @@ void main() {
     final local = DateTime(2026, 8, 8, 19, 0);
     expect(clubEventDateTimeLabel(local.toUtc()), '8월 8일 (토) 19:00');
     expect(clubEventDateTimeLabel(local), '8월 8일 (토) 19:00');
+    // 분이 정각뿐이면 분 보존·자릿수 채움 회귀를 못 잡는다. 5분은 둘 다 덮는다
+    // (분을 버리면 19:00, padLeft 를 빠뜨리면 19:5).
+    expect(
+      clubEventDateTimeLabel(DateTime(2026, 8, 8, 19, 5).toUtc()),
+      '8월 8일 (토) 19:05',
+    );
   });
 
   // 변환을 빠뜨리면 시각뿐 아니라 날짜·요일까지 틀어진다(KST 이른 아침 모임이
