@@ -4,6 +4,10 @@
 
 다른 환경에서 이어받는 방법: `git fetch && git checkout feat/tournament-regulation-ai-formatting` (HEAD = `f43e679`).
 
+> **⚠️ 아카이브 문서 (2026-08-01).** PR #244 는 머지됐다. 여기 적힌 체크아웃 지시를 그대로 따르면
+> supabase-js 2.45.4 시절 코드로 되돌아가고, 그 상태에서 아래 배포 명령을 실행하면 프로덕션이
+> 옛 버전으로 덮인다(JY-96). 배포는 **항상 main 기준**으로, `docs/team/START-HERE.md` 의 명령을 쓸 것.
+
 ---
 
 ## 1. 지금 어디까지 됐나 (요약)
@@ -61,7 +65,7 @@ select format_status, count(*) filter (where format_staged is not null) staged,
   count(*) filter (where format_flags is not null) flags, count(*) from tournaments group by 1;
 # 강제 재정형화(특정 행): guard 트리거 disable/enable로 감싸 format_status='pending', format_attempts=0, format_flags=null
 # Edge 배포
-supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json
+supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json
 ```
 
 ## 7. 커밋 맵 (origin/main..HEAD, 본 작업 = c59b80c 이후)
