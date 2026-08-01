@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { assertKnownOrgs } from '../_shared/orgs.ts';
 import { isValidRegionCode, parseDivisionCodes, parseRecruiting } from '../_shared/enums.ts';
@@ -19,7 +19,7 @@ import { isValidRegionCode, parseDivisionCodes, parseRecruiting } from '../_shar
  * 사용자 등급 기반 자동 필터링:
  *  user_sports 와 tournaments.eligible_grades 를 종목별로 매칭한다.
  */
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'GET') return errorResponse('Method not allowed', 405);
@@ -78,4 +78,4 @@ Deno.serve(async (req) => {
   if (error) return errorResponse(error.message, 500);
 
   return jsonResponse({ tournaments: Array.isArray(data) ? data : [], limit, offset });
-});
+}));

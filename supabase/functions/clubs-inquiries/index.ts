@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { requireUser } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -193,7 +193,7 @@ async function notifyMessage(
   if (failed > 0) throw new Error(`Failed to create ${failed} inquiry notifications`);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -409,4 +409,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ thread_id: thread.id, message_id: messageId }, { status: 201 });
-});
+}));
