@@ -27,6 +27,7 @@ import { finishAudit, startAudit } from '../_shared/crawler.ts';
 import { getParser } from '../_shared/crawler/registry.ts';
 import type { CrawlResult, CrawlSource } from '../_shared/crawler/types.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { syncTournamentStatus } from '../_shared/tournament_status.ts';
 
 interface DispatchRequest {
   slug?: string;
@@ -277,20 +278,17 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 크롤 완료 후: start_date가 지난 published 대회를 자동 closed 처리
+  // 크롤 완료 후: 날짜 기준으로 published ↔ closed 를 맞춘다 (JY-151 — 되살리기 포함).
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const todayKst = kstNow.toISOString().slice(0, 10);
-  const { count: closedCount } = await supabase
-    .from('tournaments')
-    .update({ status: 'closed' }, { count: 'exact' })
-    .eq('status', 'published')
-    .lt('start_date', todayKst);
+  const statusSync = await syncTournamentStatus(supabase, todayKst);
 
   return jsonResponse({
     executed,
     skipped,
     errors,
-    auto_closed: closedCount ?? 0,
+    auto_closed: statusSync.closed,
+    auto_reopened: statusSync.reopened,
     requested: { slug: body.slug ?? null, force: body.force === true },
   });
 });

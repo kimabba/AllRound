@@ -93,6 +93,40 @@ def check_no_shell_background_wrappers_in_harness() -> None:
     print("✓ harness script is foreground/CI-friendly")
 
 
+def check_tournament_closed_is_automation_only() -> None:
+    """JY-151: 대회의 'closed' 는 크롤 dispatcher(날짜 기준 자동 마감)만 만든다.
+
+    _shared/tournament_status.ts 의 되살리기(closed + 미래 start_date → published)는 이 전제
+    위에서만 안전하다. 관리자가 UI 로 직접 closed 를 고를 수 있게 되면, 사람이 닫은 대회를
+    다음 크롤이 조용히 되살린다. 그때는 auto/수동 구분 컬럼부터 만들어야 한다.
+
+    한계: 이건 앱 경로 방어다. RLS 의 tournaments_admin_all 은 관리자에게 전체 update 를
+    허용하므로 Studio·직접 API 로 쓴 closed 까지 막지는 못한다.
+    """
+    item_pattern = r"DropdownMenuItem\(\s*\n?\s*value:\s*'[a-z_]+'"
+    relative = "app/lib/screens/admin/tournament_edit_screen.dart"
+    source = read(relative)
+    values = set(re.findall(item_pattern.replace("'[a-z_]+'", "'([a-z_]+)'"), source))
+    if not values:
+        fail(f"{relative}: 대회 상태 드롭다운을 찾지 못했다 — 규칙이 무력화됐는지 확인할 것")
+    # 리터럴이 아닌 value(열거형 순회 등)가 섞이면 이 검사는 그 항목을 못 본다. 나머지가
+    # 리터럴로 남아 있으면 그대로 통과하므로, 개수가 어긋나는 순간 사람이 보게 만든다.
+    total_items = len(re.findall(r"DropdownMenuItem\(", source))
+    if total_items != len(re.findall(item_pattern, source)):
+        fail(
+            f"{relative}: 상태 드롭다운에 리터럴이 아닌 value 가 섞였다 "
+            f"(DropdownMenuItem {total_items}개 중 리터럴만 인식). 이 검사는 리터럴만 볼 수 있다 — "
+            "'closed' 가 목록에 들어갔는지 직접 확인하고 검사를 새 형태에 맞게 고칠 것."
+        )
+    if "closed" in values:
+        fail(
+            f"{relative}: 상태 드롭다운에 'closed' 를 추가했다.\n"
+            "supabase/functions/_shared/tournament_status.ts 가 closed 를 '자동 마감'으로 보고 "
+            "미래 대회를 되살린다 — 수동 마감을 도입하려면 auto/수동 구분을 먼저 넣을 것."
+        )
+    print(f"✓ 대회 상태 'closed' 는 자동화 전용 (드롭다운: {', '.join(sorted(values))})")
+
+
 def check_pureform_literal_contracts() -> None:
     roots = [ROOT / "app/lib/screens", ROOT / "app/lib/widgets"]
     excluded_parts = {"admin"}
@@ -564,6 +598,7 @@ def main() -> int:
     check_agents_rule_links()
     check_github_templates()
     check_no_shell_background_wrappers_in_harness()
+    check_tournament_closed_is_automation_only()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
     print("✅ static repository rules passed")
