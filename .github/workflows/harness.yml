@@ -58,6 +58,9 @@ jobs:
   flutter:
     name: Flutter analyze/test
     runs-on: ubuntu-latest
+    # ci.yml 과 동일 이유로 KST 고정 (시각 표시 테스트가 로컬 타임존 의존, JY-149)
+    env:
+      TZ: Asia/Seoul
     defaults:
       run:
         working-directory: app

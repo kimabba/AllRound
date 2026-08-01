@@ -5159,10 +5159,4 @@ class _PostMetaChip extends StatelessWidget {
   }
 }
 
-String _fmtDateTime(DateTime dt) {
-  const wd = ['월', '화', '수', '목', '금', '토', '일'];
-  final w = wd[(dt.weekday - 1) % 7];
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  return '${dt.month}월 ${dt.day}일 ($w) $h:$m';
-}
+String _fmtDateTime(DateTime dt) => clubEventDateTimeLabel(dt);
