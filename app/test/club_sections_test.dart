@@ -30,13 +30,24 @@ void main() {
     expect(cards, isEmpty);
   });
 
-  test('반려된 클럽은 노출하지 않는다', () {
-    final cards = pendingClubCards(
-      myClubs: [club('rejected', status: 'rejected', role: 'owner')],
-      joinRequestClubs: const [],
+  test('반려된 클럽은 내가 만든 것이든 가입신청한 것이든 노출하지 않는다', () {
+    expect(
+      pendingClubCards(
+        myClubs: [club('mine-rejected', status: 'rejected', role: 'owner')],
+        joinRequestClubs: const [],
+      ),
+      isEmpty,
     );
 
-    expect(cards, isEmpty);
+    // 승인된 클럽에 가입 신청한 뒤 관리자가 그 클럽을 반려로 되돌리면,
+    // 신청은 아직 pending 이지만 클럽은 rejected 로 내려온다.
+    expect(
+      pendingClubCards(
+        myClubs: const [],
+        joinRequestClubs: [club('requested-rejected', status: 'rejected')],
+      ),
+      isEmpty,
+    );
   });
 
   test('가입신청 대기는 그대로 유지되고, 이미 참여 중인 클럽은 빠진다', () {

@@ -7,7 +7,9 @@ import '../models/tournament.dart';
 ///   2) 내가 낸 가입 신청이 대기 중인 클럽 (`club_join_requests`)
 ///
 /// 1번이 어디에도 안 보여서 사용자가 제출 여부를 확인하지 못하고 같은 클럽을 다시
-/// 만드는 문제가 있었다. 반려된 클럽(`isRejected`)은 어느 쪽에도 들어가지 않는다.
+/// 만드는 문제가 있었다. 반려된 클럽(`isRejected`)은 양쪽 모두에서 제외한다 — 2번은
+/// 신청 자체는 대기 중이어도 클럽이 나중에 반려될 수 있어(관리자가 승인된 클럽을
+/// 반려로 되돌리는 경우) 명시적으로 걸러야 한다.
 List<Club> pendingClubCards({
   required List<Club> myClubs,
   required List<Club> joinRequestClubs,
@@ -16,9 +18,10 @@ List<Club> pendingClubCards({
   final approvedIds = myClubs.where((club) => club.isApproved).map((c) => c.id);
   return [
     ...createdPending,
-    // 이미 멤버로 참여 중이거나 위에 넣은 클럽은 중복이라 뺀다.
+    // 반려됐거나, 이미 멤버로 참여 중이거나, 위에 넣은 클럽은 뺀다.
     ...joinRequestClubs.where(
       (club) =>
+          !club.isRejected &&
           !approvedIds.contains(club.id) &&
           !createdPending.any((pending) => pending.id == club.id),
     ),
