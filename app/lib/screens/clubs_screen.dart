@@ -12,6 +12,7 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/club_sections.dart';
 import '../utils/club_sort.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
@@ -649,10 +650,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
-    // 승인 대기중 가입신청 — 이미 멤버인 클럽은 제외.
-    final pendingClubs = _pendingClubs
-        .where((p) => !joinedClubs.any((j) => j.id == p.id))
-        .toList();
+    // 승인 대기 카드 = 내가 만든 승인 대기 클럽(JY-150) + 내가 낸 가입신청.
+    final pendingClubs = pendingClubCards(
+      myClubs: myMembershipClubs,
+      joinRequestClubs: _pendingClubs,
+    );
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
