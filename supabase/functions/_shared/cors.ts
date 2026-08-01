@@ -14,10 +14,26 @@
 const rawAllowList = Deno.env.get('CORS_ALLOW_ORIGIN') ?? '';
 const allowList = rawAllowList.split(',').map((s) => s.trim()).filter(Boolean);
 
-// 로컬 스택(supabase start)에서는 secret 을 매번 넣기 번거로우니 미설정을 '전부 허용'으로 본다.
+/**
+ * 로컬 스택(supabase start)인가. **hostname 을 파싱해 정확히 대조한다** — 부분 문자열
+ * 매칭이면 자체 호스팅 프로덕션(`http://kong:8000`)이나 'localhost' 를 포함한 커스텀
+ * 도메인, `127.0.0.10` 까지 로컬로 오판해 프로덕션이 열린다(codex 리뷰).
+ * 게이트웨이 호스트명을 쓰는 환경은 자동 감지 대상이 아니다 — `CORS_ALLOW_ORIGIN='*'` 를
+ * 명시할 것.
+ */
+export function isLocalStackUrl(rawUrl: string): boolean {
+  try {
+    const { hostname } = new URL(rawUrl);
+    return hostname === 'localhost' || hostname === '127.0.0.1' ||
+      hostname === '::1' || hostname === '[::1]' || hostname === '0.0.0.0';
+  } catch {
+    return false; // 파싱 불가 → 로컬이라 단정하지 않는다(fail-closed).
+  }
+}
+
 // 프로덕션에서 미설정이면 **fail-closed** — 경고 로그만 남기고 열어두면 설정을 잊은 순간
-// 취약점이 그대로 유지된다(codex 리뷰).
-const isLocalStack = /localhost|127\.0\.0\.1|kong/.test(Deno.env.get('SUPABASE_URL') ?? '');
+// 취약점이 그대로 유지된다.
+const isLocalStack = isLocalStackUrl(Deno.env.get('SUPABASE_URL') ?? '');
 const allowAny = allowList.includes('*') || (allowList.length === 0 && isLocalStack);
 
 if (allowList.length === 0) {

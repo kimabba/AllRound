@@ -3,6 +3,7 @@ import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
   corsHeaders,
   errorResponse,
+  isLocalStackUrl,
   jsonResponse,
   matchOrigin,
   preflight,
@@ -86,6 +87,27 @@ Deno.test('matchOrigin: 명시적 * 또는 로컬 스택 플래그면 모두 허
   assertEquals(matchOrigin('https://anything.example', ['*']), 'https://anything.example');
   assertEquals(matchOrigin('https://anything.example', [], true), 'https://anything.example');
   assertEquals(matchOrigin(null, [], true), '*');
+});
+
+// 로컬 판정이 느슨하면 프로덕션이 '미설정 = 전부 허용' 으로 열린다. 부분 문자열 매칭으로
+// 되돌아가면 아래가 깨진다(codex 리뷰 blocker).
+Deno.test('isLocalStackUrl: 진짜 로컬 스택만 로컬로 본다', () => {
+  assert(isLocalStackUrl('http://localhost:54321'));
+  assert(isLocalStackUrl('http://127.0.0.1:54321'));
+  assert(isLocalStackUrl('http://0.0.0.0:54321'));
+});
+
+Deno.test('isLocalStackUrl: 프로덕션을 로컬로 오판하지 않는다', () => {
+  assertEquals(isLocalStackUrl('https://bsjdgwmveokanclqwtvx.supabase.co'), false);
+  // 자체 호스팅 프로덕션 게이트웨이 — 부분 매칭이면 여기서 열렸다.
+  assertEquals(isLocalStackUrl('http://kong:8000'), false);
+  // 호스트명에 localhost/127.0.0.1 이 섞인 커스텀 도메인.
+  assertEquals(isLocalStackUrl('https://localhost.evil.example'), false);
+  assertEquals(isLocalStackUrl('https://api.localhost-proxy.example'), false);
+  assertEquals(isLocalStackUrl('http://127.0.0.10:54321'), false);
+  // 파싱 불가한 값은 로컬로 단정하지 않는다.
+  assertEquals(isLocalStackUrl(''), false);
+  assertEquals(isLocalStackUrl('not-a-url'), false);
 });
 
 Deno.test('withCors: 핸들러 응답에 Vary: Origin 을 붙이고 상태·본문을 보존한다', async () => {
