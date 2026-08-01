@@ -90,4 +90,11 @@ void main() {
     expect(clubEventDateTimeLabel(local.toUtc()), '8월 8일 (토) 19:00');
     expect(clubEventDateTimeLabel(local), '8월 8일 (토) 19:00');
   });
+
+  // 변환을 빠뜨리면 시각뿐 아니라 날짜·요일까지 틀어진다(KST 이른 아침 모임이
+  // 전날로 표시). 일요일은 weekday==7 이라 요일 인덱스 경계도 함께 덮는다.
+  test('club event label keeps the local date across a day boundary', () {
+    final sundayMorning = DateTime(2026, 8, 9, 7, 0);
+    expect(clubEventDateTimeLabel(sundayMorning.toUtc()), '8월 9일 (일) 07:00');
+  });
 }
