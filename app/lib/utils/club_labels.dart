@@ -120,3 +120,15 @@ String clubRegionMemberLabel(String? region, int count) {
       : normalizedRegion;
   return '$regionLabel ${count < 0 ? 0 : count}명';
 }
+
+/// 클럽 모임 일시 표시용 라벨. 서버는 starts_at 을 UTC 로 내려주므로
+/// (ClubEvent.fromJson 의 DateTime.parse 결과도 UTC) 반드시 로컬로 변환한 뒤
+/// 포맷한다. 변환을 빠뜨리면 KST 기준 9시간 밀려 보인다 (JY-149).
+String clubEventDateTimeLabel(DateTime dt) {
+  final local = dt.toLocal();
+  const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+  final weekday = weekdays[(local.weekday - 1) % 7];
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}월 ${local.day}일 ($weekday) $hour:$minute';
+}
