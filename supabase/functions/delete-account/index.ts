@@ -10,7 +10,7 @@
  * 본인 JWT 로만 호출 가능(requireUser). uid 는 검증된 토큰에서만 취하므로
  * 타인 계정을 지울 수 없다.
  */
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { parseOwnedPublicObjects, publicMediaBucketIds } from '../_shared/account_deletion.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -39,7 +39,7 @@ async function deletePublicMedia(
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -78,4 +78,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ deleted: true });
-});
+}));

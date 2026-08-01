@@ -1,7 +1,7 @@
 // clubs-create: 클럽 생성 요청 (status='pending' → 어드민 승인 대기)
 // POST { sport, name, region?, address?, logo_url?, intro_image_urls?, contact?, website?, description? }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -43,7 +43,7 @@ function optionalUrlArray(value: unknown, maxItems: number): string[] {
   return urls;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -181,4 +181,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ club }, { status: 201 });
-});
+}));

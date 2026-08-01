@@ -14,7 +14,7 @@
  *  7. Cache insert on success
  */
 
-import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
+import { corsHeaders, errorResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { EMBEDDING_MODEL, embedTextWithUsage, toVectorLiteral } from '../_shared/embedding.ts';
 import { type ChatTurn, GEMINI_MODEL } from '../_shared/gemini.ts';
@@ -86,7 +86,7 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -1206,4 +1206,4 @@ Deno.serve(async (req) => {
       'X-Accel-Buffering': 'no',
     },
   });
-});
+}));

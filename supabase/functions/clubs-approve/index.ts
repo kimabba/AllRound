@@ -1,7 +1,7 @@
 // clubs-approve: 어드민이 클럽 생성 요청 승인·거절
 // POST { club_id|club_ids, action: 'approve'|'reject', reason? }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireAdmin } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
@@ -22,7 +22,7 @@ function parseClubIds(body: Record<string, unknown>): string[] {
   ];
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -74,4 +74,4 @@ Deno.serve(async (req) => {
     return errorResponse('No pending clubs were found', 409);
   }
   return jsonResponse({ ok: true, action, count: data.length });
-});
+}));

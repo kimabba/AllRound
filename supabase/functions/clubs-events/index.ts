@@ -1,5 +1,5 @@
 import { requireVerifiedUser } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -24,7 +24,7 @@ function optionalInteger(value: unknown, minimum: number): number | null {
   return Number.isInteger(value) && Number(value) >= minimum ? Number(value) : null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -205,4 +205,4 @@ Deno.serve(async (req) => {
     },
     { status: 201 },
   );
-});
+}));

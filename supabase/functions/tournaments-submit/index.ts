@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
@@ -354,5 +354,5 @@ async function handler(req: Request): Promise<Response> {
 }
 
 if (import.meta.main) {
-  Deno.serve(handler);
+  Deno.serve(withCors(handler));
 }

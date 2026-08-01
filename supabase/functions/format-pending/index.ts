@@ -1,5 +1,5 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { GEMINI_MODEL, generateStructured } from '../_shared/gemini.ts';
 import { capRegulationBody, normalizeRegulationFields } from '../_shared/regulation.ts';
@@ -50,7 +50,7 @@ function buildPrompt(title: string, sourceText: string): string {
   ].join('\n');
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   const auth = await requireServiceRoleOrAdmin(req);
@@ -187,4 +187,4 @@ Deno.serve(async (req) => {
     }
   }
   return jsonResponse(result);
-});
+}));

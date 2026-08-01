@@ -4,7 +4,7 @@ import {
   parseUserIds,
   tomorrowKstBounds,
 } from '../_shared/club_event_reminders.ts';
-import { jsonResponse, preflight } from '../_shared/cors.ts';
+import { jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { sendFcm } from '../_shared/fcm.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -78,7 +78,7 @@ function parseTasks(rows: unknown, today: string, dPlus3: string): NotifyTask[] 
   return tasks;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -259,4 +259,4 @@ Deno.serve(async (req) => {
     dedup_skipped: dedupSkipped,
     failed,
   });
-});
+}));

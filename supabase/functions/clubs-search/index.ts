@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { boundingBox, distanceKm, numberParam } from './nearby.ts';
@@ -6,7 +6,7 @@ import { boundingBox, distanceKm, numberParam } from './nearby.ts';
 /**
  * GET /clubs-search?sport=tennis&region=광주&q=...
  */
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'GET') return errorResponse('Method not allowed', 405);
@@ -172,4 +172,4 @@ Deno.serve(async (req) => {
   const { data, error } = await query.order('name', { ascending: true });
   if (error) return errorResponse(error.message, 500);
   return jsonResponse({ clubs: data ?? [] });
-});
+}));

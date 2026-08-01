@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { embedBatch, toVectorLiteral } from '../_shared/embedding.ts';
 import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/regulation.ts';
@@ -161,5 +161,5 @@ async function handler(req: Request): Promise<Response> {
 }
 
 if (import.meta.main) {
-  Deno.serve(handler);
+  Deno.serve(withCors(handler));
 }

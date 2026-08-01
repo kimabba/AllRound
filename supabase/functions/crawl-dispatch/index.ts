@@ -22,7 +22,7 @@
 //   6) JSON 응답 { executed: [...], skipped: [...], errors: [...] }
 
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { finishAudit, startAudit } from '../_shared/crawler.ts';
 import { getParser } from '../_shared/crawler/registry.ts';
 import type { CrawlResult, CrawlSource } from '../_shared/crawler/types.ts';
@@ -97,7 +97,7 @@ async function parseRequestBody(req: Request): Promise<DispatchRequest> {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -291,4 +291,4 @@ Deno.serve(async (req) => {
     auto_reopened: statusSync.reopened,
     requested: { slug: body.slug ?? null, force: body.force === true },
   });
-});
+}));

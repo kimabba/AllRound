@@ -8,7 +8,7 @@
 //   monthly_fee?,
 // }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -60,7 +60,7 @@ function optionalUrlArray(value: unknown): string[] {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -603,4 +603,4 @@ Deno.serve(async (req) => {
     'action must be request|cancel|leave|kick|ban|set_manager|update_monthly_fee|update_inquiry_links|update_intro|resubmit_review|delete_club|list_members|list_former_members',
     400,
   );
-});
+}));
