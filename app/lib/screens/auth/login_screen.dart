@@ -562,8 +562,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   : '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
                               textAlign: TextAlign.center,
                               style: tt.bodyMedium?.copyWith(
+                                // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
+                                // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
                                 color: cs.onPrimaryContainer.withValues(
-                                  alpha: 0.72,
+                                  alpha: 0.8,
                                 ),
                                 height: 1.55,
                               ),
@@ -769,8 +771,10 @@ class _FeaturePill extends StatelessWidget {
           const SizedBox(width: AppSpacing.xs),
           Text(
             label,
+            // pill 배경이 onPrimaryContainer 계열이므로 전경도 같은 role 을 쓴다.
+            // cs.primary 는 다크에서 4.04:1 로 AA 미달이었다(교체 후 라이트 7.66 / 다크 6.53).
             style: tt.labelMedium?.copyWith(
-              color: cs.primary,
+              color: cs.onPrimaryContainer,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -832,6 +836,8 @@ class _MarketingConsentRow extends StatelessWidget {
               value: value,
               onChanged: onChanged,
               side: BorderSide(color: cs.outline, width: 1.4),
+              // 레이블이 없으면 스크린리더가 무엇에 대한 체크박스인지 알리지 못한다.
+              semanticLabel: '마케팅 정보 수신 동의 (선택)',
             ),
             Expanded(
               child: Text(
