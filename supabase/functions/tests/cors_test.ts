@@ -76,10 +76,16 @@ Deno.test('matchOrigin: Origin 없는 호출(모바일·서버)은 null', () => 
   assertEquals(matchOrigin(null, LIST), null);
 });
 
-Deno.test('matchOrigin: 목록이 비었거나 *면 모두 허용(로컬 개발 폴백)', () => {
-  assertEquals(matchOrigin('https://anything.example', []), 'https://anything.example');
+Deno.test('matchOrigin: 목록이 비면 fail-closed — 미설정을 열린 상태로 두지 않는다', () => {
+  // 프로덕션에서 secret 을 잊었을 때 '*' 로 여는 대신 브라우저를 막는다(codex 리뷰 blocker).
+  assertEquals(matchOrigin('https://anything.example', []), null);
+  assertEquals(matchOrigin(null, []), null);
+});
+
+Deno.test('matchOrigin: 명시적 * 또는 로컬 스택 플래그면 모두 허용', () => {
   assertEquals(matchOrigin('https://anything.example', ['*']), 'https://anything.example');
-  assertEquals(matchOrigin(null, []), '*');
+  assertEquals(matchOrigin('https://anything.example', [], true), 'https://anything.example');
+  assertEquals(matchOrigin(null, [], true), '*');
 });
 
 Deno.test('withCors: 핸들러 응답에 Vary: Origin 을 붙이고 상태·본문을 보존한다', async () => {

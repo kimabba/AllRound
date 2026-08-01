@@ -13,12 +13,22 @@
 
 const rawAllowList = Deno.env.get('CORS_ALLOW_ORIGIN') ?? '';
 const allowList = rawAllowList.split(',').map((s) => s.trim()).filter(Boolean);
-const allowAny = allowList.length === 0 || allowList.includes('*');
 
-if (allowAny) {
-  console.warn(
-    'CORS_ALLOW_ORIGIN 미설정 — 모든 오리진을 허용한다. 프로덕션에서는 반드시 설정할 것 (JY-95).',
-  );
+// 로컬 스택(supabase start)에서는 secret 을 매번 넣기 번거로우니 미설정을 '전부 허용'으로 본다.
+// 프로덕션에서 미설정이면 **fail-closed** — 경고 로그만 남기고 열어두면 설정을 잊은 순간
+// 취약점이 그대로 유지된다(codex 리뷰).
+const isLocalStack = /localhost|127\.0\.0\.1|kong/.test(Deno.env.get('SUPABASE_URL') ?? '');
+const allowAny = allowList.includes('*') || (allowList.length === 0 && isLocalStack);
+
+if (allowList.length === 0) {
+  if (isLocalStack) {
+    console.warn('CORS_ALLOW_ORIGIN 미설정 — 로컬 스택이라 모든 오리진을 허용한다.');
+  } else {
+    console.error(
+      'CORS_ALLOW_ORIGIN 미설정 — 브라우저 요청을 전부 차단한다(fail-closed). ' +
+        '웹에서 이 API 를 쓰려면 secret 을 설정할 것 (JY-95).',
+    );
+  }
 }
 
 const baseHeaders: Record<string, string> = {
@@ -30,14 +40,18 @@ const baseHeaders: Record<string, string> = {
  * 요청 Origin 에 돌려줄 ACAO 값. 허용되지 않으면 null(헤더를 붙이지 않는다).
  * 허용 목록을 인자로 받는 순수 함수 — 모듈 로드 시 고정되는 env 와 분리해 테스트한다.
  */
-export function matchOrigin(origin: string | null, list: string[]): string | null {
-  if (list.length === 0 || list.includes('*')) return origin ?? '*';
+export function matchOrigin(
+  origin: string | null,
+  list: string[],
+  anyAllowed = false,
+): string | null {
+  if (anyAllowed || list.includes('*')) return origin ?? '*';
   if (!origin) return null; // 브라우저가 아닌 호출(모바일·서버) — CORS 헤더가 필요 없다.
   return list.includes(origin) ? origin : null;
 }
 
 export function resolveAllowedOrigin(origin: string | null): string | null {
-  return matchOrigin(origin, allowList);
+  return matchOrigin(origin, allowList, allowAny);
 }
 
 /**
