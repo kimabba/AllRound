@@ -10,9 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
 
-  // 로그인 히어로의 색 조합은 Flutter 의 textContrastGuideline 이 놓친다(pill 은
-  // 실제로 렌더되는데도 다크 4.04:1 미달이 검출되지 않았다). 그래서 조합의 대비를
-  // 토큰에서 직접 계산해 못 박는다.
+  // 색 대비는 위젯 테스트(textContrastGuideline)가 아니라 여기서 못 박는다.
+  // 그 가이드라인은 렌더된 픽셀을 샘플링하기 때문에 이 화면에서 양쪽으로 틀렸다:
+  //   - 놓침: pill 이 렌더되는데도 다크 4.04:1 미달을 잡지 못했다
+  //   - 거짓 양성: 11sp '로그인' 라벨이 Linux CI 에서 1.36:1 로 보고됐다. 실제 토큰
+  //     기준으로는 라이트 4.76 / 다크 9.22 로 통과이며, 안티앨리어싱 가장자리 픽셀을
+  //     본문 색으로 오인한 값이다(로컬 macOS 에서는 통과 — 환경 의존).
+  // 토큰에서 직접 계산하면 렌더링 환경과 무관하게 같은 결론이 나온다.
   //
   // 한계 — 이 테스트는 색 '조합'을 검사할 뿐 위젯이 그 조합을 쓰는지는 보지 않는다.
   // 토큰 색이나 alpha 가 바뀌면 잡히지만, 위젯이 다른 색으로 갈아타면 못 잡는다.
@@ -46,6 +50,13 @@ void main() {
         _contrastRatio(scheme.onPrimaryContainer, pillBackground),
         greaterThanOrEqualTo(4.5),
         reason: '${entry.key}: pill 텍스트 대비가 AA 기준에 미달합니다.',
+      );
+
+      // 헤더의 보조 라벨('로그인'). 11sp 라 완화 기준이 적용되지 않는다.
+      expect(
+        _contrastRatio(scheme.onSurfaceVariant, scheme.surface),
+        greaterThanOrEqualTo(4.5),
+        reason: '${entry.key}: 헤더 보조 라벨 대비가 AA 기준에 미달합니다.',
       );
     }
   });

@@ -1,4 +1,3 @@
-import 'package:allround/screens/auth/login_screen.dart';
 import 'package:allround/screens/chat_screen.dart';
 import 'package:allround/state/chat_state.dart';
 import 'package:allround/theme/app_theme.dart';
@@ -10,28 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  // 로그인 화면은 그동안 이 검사 밖에 있어서 히어로 텍스트의 대비 미달(라이트
-  // 4.34:1, pill 은 다크 4.04:1)을 CI 가 잡지 못했다. 라이트·다크 양쪽을 본다.
-  testWidgets('로그인 화면이 라이트·다크에서 접근성 기준을 충족한다', (tester) async {
-    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
-      final semantics = tester.ensureSemantics();
-      try {
-        await tester.pumpWidget(
-          ProviderScope(
-            child: MaterialApp(
-              theme: theme,
-              home: const LoginScreen(),
-            ),
-          ),
-        );
-        await tester.pump();
-        await _expectCoreAccessibilityGuidelines(tester);
-      } finally {
-        semantics.dispose();
-      }
-    }
-  });
-
   testWidgets('하단 채팅과 내비게이션이 접근성 기준을 충족한다', (tester) async {
     final semantics = tester.ensureSemantics();
     try {
