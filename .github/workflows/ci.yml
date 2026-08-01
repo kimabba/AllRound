@@ -17,6 +17,10 @@ jobs:
   flutter:
     name: Flutter
     runs-on: ubuntu-latest
+    # 러너 기본값은 UTC 다. 앱은 KST 사용자를 대상으로 하고 시각 표시 테스트가
+    # 로컬 타임존에 의존하므로(JY-149) 한국 시간대로 고정해 검증한다.
+    env:
+      TZ: Asia/Seoul
     defaults:
       run:
         working-directory: app

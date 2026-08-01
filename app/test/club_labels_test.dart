@@ -81,4 +81,13 @@ void main() {
     expect(clubRegionMemberLabel(null, 0), '지역 미정 0명');
     expect(clubRegionMemberLabel('  ', -1), '지역 미정 0명');
   });
+
+  // JY-149: 서버가 내려준 UTC 시각을 그대로 포맷하면 KST 에서 9시간 밀려 보였다.
+  // 주의 — 이 성질은 실행 환경의 타임존에 의존한다. UTC 환경에서는 변환 누락이어도
+  // 통과하므로 초록불이 곧 증거는 아니다. CI 는 TZ=Asia/Seoul 로 고정해 검증한다.
+  test('club event label renders local time, not the raw UTC clock', () {
+    final local = DateTime(2026, 8, 8, 19, 0);
+    expect(clubEventDateTimeLabel(local.toUtc()), '8월 8일 (토) 19:00');
+    expect(clubEventDateTimeLabel(local), '8월 8일 (토) 19:00');
+  });
 }
