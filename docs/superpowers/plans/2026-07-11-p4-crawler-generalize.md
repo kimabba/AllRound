@@ -6,7 +6,7 @@
 
 **Architecture:** Deno Edge Function. 순수 코드 변경(마이그레이션 없음). (2) `extractGJDivisions`→`extractSidoStdDivisions(org: string)` rename+일반화는 `deno test`로 TDD 검증. (1) slug 추론 제거는 `CrawlSource.org_code` 추가 + 파서가 그것을 읽고 없으면 fail loud; `deno check` + 배포 후 라이브 스모크로 검증.
 
-**Tech Stack:** Deno, TypeScript. 테스트 `deno test`, 타입 `deno check`. 배포 `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json`.
+**Tech Stack:** Deno, TypeScript. 테스트 `deno test`, 타입 `deno check`. 배포 `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json`.
 
 ## Global Constraints
 
@@ -199,7 +199,7 @@ Expected: 타입 에러 없음. 전체 테스트 PASS. `grep -rn "includes('gwan
 
 배포:
 ```bash
-supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json
+supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json
 ```
 
 강제 재크롤(스냅샷 기준): 배포 전 `execute_sql`로 두 소스의 gj_/jn_ 대회 샘플 존재 확인 후, force 크롤을 유발한다. 강제 재크롤은 메모리 규율에 따라:
