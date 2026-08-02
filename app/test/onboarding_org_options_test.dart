@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:allround/models/tournament.dart';
 import 'package:allround/screens/auth/onboarding_screen.dart';
 
 // JY-136: 온보딩에서 부서가 0개인 협회(kssta/kasta)를 고르면 부서 칩이 하나도
@@ -23,8 +24,10 @@ void main() {
         .split('\n')
         .where((l) => !l.trimLeft().startsWith('//'))
         .join('\n');
-    // tennisOrgsWithDivisions 는 허용, 맨 tennisOrgs 는 금지.
-    final bareTennisOrgs = RegExp(r'tennisOrgs(?!WithDivisions)');
+    // 금지 대상은 '맨' tennisOrgs 다. tennisOrgsWithDivisions 처럼 이름이
+    // 이어지는 다른 심볼은 별개이므로, 뒤에 식별자 문자가 오면 제외한다
+    // (WithDivisions 만 예외로 두면 새 심볼이 생길 때마다 오탐이 난다).
+    final bareTennisOrgs = RegExp(r'tennisOrgs(?![A-Za-z0-9_])');
     expect(bareTennisOrgs.hasMatch(codeOnly), isFalse,
         reason: '온보딩은 부서 있는 협회만 선택지로 내야 한다(tennisOrgsWithDivisions) —'
             ' 부서 0개 협회를 고르면 division_codes 가 빈 채로 저장돼'
@@ -79,16 +82,41 @@ void main() {
               ' 안 하면 재진입 저장이 기존 협회를 통째로 지운다(#337)');
     });
 
-    test('협회 저장은 복원이 끝난 뒤에만 한다', () {
+    test('복원이 끝나기 전에는 제출 자체를 막는다', () {
       final src =
           File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
-      final guard =
-          RegExp(r'if \(_tennisRegistered && ([^)]*)\) \{').firstMatch(src);
-      expect(guard, isNotNull, reason: '협회 저장 가드를 찾지 못했다');
-      expect(guard!.group(1), '_existingOrgsReady',
-          reason: '복원 전에는 저장을 막아야 한다 — 아직 빈 _orgs 를 보내면'
-              ' delete-all 로 기존 협회가 사라진다(#337).'
-              ' _orgs.isNotEmpty 가드는 반대로 협회 전체 삭제를 불가능하게 만든다');
+      expect(src, contains('if (_tennisRegistered && !_existingOrgsReady) {'),
+          reason: '복원 전 제출은 이유를 보여주고 중단해야 한다 — 그냥 저장하면'
+              ' 빈 _orgs 가 delete-all 로 기존 협회를 지우고(#337),'
+              ' 조용히 건너뛰면 이번에 고른 협회가 안내 없이 사라진다');
+      // 저장 블록에 _orgs.isNotEmpty 가드가 되살아나면 협회 전체 삭제가
+      // 다시 불가능해진다(사용자가 다 지워도 서버엔 남는다).
+      expect(src, isNot(contains('_tennisRegistered && _orgs.isNotEmpty')),
+          reason: '협회를 전부 지운 저장도 그대로 보내야 한다');
+    });
+
+    // 복원이 늦게 도착하는 사이 사용자가 협회를 먼저 추가할 수 있다. 그때
+    // 복원을 통째로 건너뛰면 서버 협회가 저장 목록에서 빠져 delete-all 에
+    // 지워진다 — 고치려던 유실이 그대로 재발한다(codex #1).
+    group('tennisOrgsMissingFromDraft', () {
+      UserTennisOrg org(String code) =>
+          UserTennisOrg(org: code, division: 'default');
+
+      test('화면에 없는 서버 협회만 고른다', () {
+        final missing =
+            tennisOrgsMissingFromDraft([org('gj'), org('kta')], {'gj'});
+        expect(missing.map((o) => o.org), ['kta']);
+      });
+
+      test('사용자가 먼저 고른 협회는 중복으로 넣지 않는다', () {
+        expect(tennisOrgsMissingFromDraft([org('gj')], {'gj'}), isEmpty);
+      });
+
+      test('초안이 비어 있으면 서버 목록을 전부 복원한다', () {
+        final missing =
+            tennisOrgsMissingFromDraft([org('gj'), org('kta')], <String>{});
+        expect(missing.map((o) => o.org), ['gj', 'kta']);
+      });
     });
 
     test('_canSubmit 에 연결돼 있다', () {

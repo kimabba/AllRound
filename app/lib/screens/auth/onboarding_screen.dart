@@ -33,6 +33,17 @@ import '../../widgets/app_toast.dart';
 bool tennisOrgSelectionsAreComplete(Iterable<Set<String>> selectedPerOrg) =>
     selectedPerOrg.every((codes) => codes.isNotEmpty);
 
+/// 서버에 등록돼 있는데 화면 초안에는 없는 협회를 고른다(#337).
+///
+/// 복원이 늦게 도착하는 사이 사용자가 협회를 먼저 추가할 수 있다. 그때 복원을
+/// 통째로 건너뛰면 서버 협회가 저장 목록에서 빠지고, `saveTennisOrgs` 의
+/// delete-all 이 그걸 지운다 — 고치려던 유실이 그대로 재발한다. 둘을 합친다.
+List<UserTennisOrg> tennisOrgsMissingFromDraft(
+  Iterable<UserTennisOrg> saved,
+  Set<String> draftedOrgs,
+) =>
+    saved.where((o) => !draftedOrgs.contains(o.org)).toList();
+
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -289,15 +300,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _existingOrgsReady) return;
-      // 사용자가 이미 협회를 추가했으면 덮어쓰지 않는다.
-      if (orgs.isEmpty || _orgs.isNotEmpty) {
-        setState(() => _existingOrgsReady = true);
-        return;
-      }
       setState(() {
-        _orgs.addAll(orgs.map(_OrgDraft.fromSaved));
-        _primaryOrg =
-            (orgs.where((o) => o.isPrimary).firstOrNull ?? orgs.first).org;
+        // 사용자가 먼저 고른 협회는 그대로 두고, 서버에만 있는 것을 채운다.
+        final missing = tennisOrgsMissingFromDraft(
+          orgs,
+          _orgs.map((o) => o.org).toSet(),
+        );
+        _orgs.addAll(missing.map(_OrgDraft.fromSaved));
+        // 사용자가 이미 주 협회를 골랐으면 그 선택을 존중한다.
+        _primaryOrg ??=
+            (orgs.where((o) => o.isPrimary).firstOrNull ?? orgs.firstOrNull)
+                ?.org;
         _existingOrgsReady = true;
       });
     });
@@ -423,6 +436,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _removeOrg(String org) {
     setState(() {
+      for (final o in _orgs.where((o) => o.org == org).toList()) {
+        o.divisionLocal.dispose();
+        o.score.dispose();
+      }
       _orgs.removeWhere((o) => o.org == org);
       if (_primaryOrg == org) {
         _primaryOrg = _orgs.isEmpty ? null : _orgs.first.org;
@@ -440,6 +457,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _submit() async {
     if (AppConfig.userDesignPreview) {
       context.go('/');
+      return;
+    }
+
+    // 등록해 둔 협회를 아직 못 불러왔으면 저장하지 않는다 — saveTennisOrgs 가
+    // delete-all + insert 라, 비어 있는 _orgs 를 보내면 통째로 사라진다(#337).
+    // 조용히 건너뛰면 이번에 고른 협회가 안내 없이 유실되므로 이유를 보여준다.
+    if (_tennisRegistered && !_existingOrgsReady) {
+      setState(() => _error = '등록한 협회를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
       return;
     }
 
@@ -475,11 +500,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await api.saveUserSports(sports);
 
       // 2) user_tennis_orgs (테니스 등록자만)
-      // 기존 협회 복원이 끝나기 전에는 저장하지 않는다 — saveTennisOrgs 가
-      // delete-all + insert 라, 아직 비어 있는 _orgs 를 보내면 등록해 둔 협회가
-      // 통째로 사라진다(#337). 복원이 끝났다면 빈 목록도 그대로 보낸다:
-      // 사용자가 협회를 전부 지운 것이므로 삭제가 맞다.
-      if (_tennisRegistered && _existingOrgsReady) {
+      // 복원이 끝난 것은 위 가드가 보장한다. 빈 목록도 그대로 보낸다 —
+      // 사용자가 협회를 전부 지운 것이므로 삭제가 맞다(예전 _orgs.isNotEmpty
+      // 가드는 협회 전체 삭제를 아예 불가능하게 만들고 있었다).
+      if (_tennisRegistered) {
         final orgRows = _orgs.map((o) {
           return UserTennisOrg(
             org: o.org,
@@ -1321,6 +1345,10 @@ class _OrgDraft {
   factory _OrgDraft.fromSaved(UserTennisOrg saved) {
     final draft = _OrgDraft(org: saved.org);
     // 카탈로그에 없는 옛 코드도 그대로 싣는다. 걸러내면 저장 때 사라진다.
+    // ponytail: 그 대가로, 옛 코드만 남은 협회는 칩이 하나도 안 뜨는데
+    // selectedDivisionCodes 는 비어 있지 않아 _canSubmit 의 "부서 1개 이상"
+    // 경고가 뜨지 않는다. 프로덕션 5행에는 그런 코드가 없어 두고 본다 —
+    // 필요해지면 카탈로그 밖 코드를 UI 에 '만료된 부서'로 따로 보여준다.
     draft.selectedDivisionCodes.addAll(saved.divisionCodes);
     // 'default' 는 라벨이 빈 채로 저장될 때 쓰는 대체값이라 화면엔 되돌리지 않는다.
     if (saved.division != 'default') draft.divisionLocal.text = saved.division;
