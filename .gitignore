@@ -62,3 +62,7 @@ supabase/.branches/
 supabase/.temp/
 
 supabase/functions/.env
+
+# Orca 작업 디렉터리 — drops/ 에 서비스 계정 키 등 자격증명이 떨어진다.
+# PUBLIC 리포라 실수로 add 되면 그대로 공개된다.
+.orca/
