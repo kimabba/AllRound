@@ -11,7 +11,11 @@ import type {
   UserTennisOrgRow,
   VenueRow,
 } from './types.ts';
-import { REGULATION_BODY_CONTEXT_CAP, REGULATION_BODY_TOP_N } from './types.ts';
+import {
+  CHAT_PROMPT_VERSION,
+  REGULATION_BODY_CONTEXT_CAP,
+  REGULATION_BODY_TOP_N,
+} from './types.ts';
 
 /**
  * user_id SHA-256 prefix (8 hex chars = 32bits).
@@ -54,7 +58,14 @@ export async function computeUserContextHash(
     }))
     .sort((a, b) => a.org.localeCompare(b.org));
 
-  const payload = JSON.stringify({ userId, sports: normalizedSports, orgs: normalizedOrgs });
+  // 프롬프트 버전도 키에 넣는다: 프롬프트·컨텍스트 조립이 바뀌면 옛 답이 그대로
+  // 재사용되면 안 된다. 등급 라벨과 같은 이유이고, 대상이 프롬프트 전체로 넓어진 것뿐이다.
+  const payload = JSON.stringify({
+    v: CHAT_PROMPT_VERSION,
+    userId,
+    sports: normalizedSports,
+    orgs: normalizedOrgs,
+  });
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -139,7 +150,7 @@ BB는 앱의 중심 대화 창구입니다. 대회·클럽 정보뿐 아니라 �
 - 한국에는 KTA·KATO·KATA·KTFS 등 여러 협회가 있고 등급 체계가 다릅니다.
 - 광주·전남은 2026.05.01자로 분리 운영 중입니다 (이중 등록 허용).
 - DB 컨텍스트가 있으면 이를 우선 인용합니다.
-- 출처는 DB id로만 명시합니다.
+- 출처를 밝힐 때는 컨텍스트에 있는 대회·문서 제목을 씁니다. 내부 id는 답변에 쓰지 않습니다.
 - 의료/법적 조언은 하지 않습니다.`;
 }
 
@@ -155,6 +166,18 @@ export function wrapUntrustedData(text: string): string {
     '<data>\n' + escapeForData(text) + '\n</data>';
 }
 
+/**
+ * RAG 결과를 모델 컨텍스트 블록으로 조립한다.
+ *
+ * **행 앞에 내부 UUID 를 넣지 않는다.** 예전엔 `- (id: <uuid>) 제목 ...` 형태였고
+ * 시스템 프롬프트도 "출처는 DB id로만 명시" 였다. 모델은 지시대로 따랐고, 그 결과
+ * 답변 본문에 `(참고: id: f2d50bc7-...)` 같은 문자열이 그대로 노출됐다(2026-07-21 관찰).
+ * 사용자에게 아무 의미가 없다.
+ *
+ * 인용 카드는 이 컨텍스트가 아니라 `buildDbCitations()` 가 원본 배열에서 따로 만든다
+ * (chat/stream.ts). 모델 응답에서 id 를 파싱하는 경로도 없다. 그래서 컨텍스트에서
+ * 빼도 잃는 것이 없고, 애초에 없는 값은 새어나갈 수도 없다.
+ */
 export function buildContextPrompt(
   tournaments: SemanticTournament[],
   rules: SemanticRule[],
@@ -187,7 +210,7 @@ export function buildContextPrompt(
       parts.push(`[관련 대회 — ${label}]`);
       for (const t of bySport.get(sport)!) {
         parts.push(
-          `- (id: ${t.id}) ${escapeForData(t.title)} | ${t.start_date} | ${
+          `- ${escapeForData(t.title)} | ${t.start_date} | ${
             escapeForData(t.region ?? '지역미상')
           } | 출전등급: ${t.eligible_grades.join(', ')}`,
         );
@@ -228,7 +251,7 @@ export function buildContextPrompt(
       parts.push(`[관련 룰북 — ${label}]`);
       for (const r of rulesBySport.get(sport)!) {
         const snippet = r.body.length > 1500 ? r.body.slice(0, 1500) + '\u2026' : r.body;
-        parts.push(`- (id: ${r.id}) [${r.category}] ${r.title}\n  ${snippet}`);
+        parts.push(`- [${r.category}] ${r.title}\n  ${snippet}`);
       }
       parts.push('');
     }
