@@ -296,6 +296,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// `saveTennisOrgs` 는 delete-all + insert 라 화면이 보낸 목록이 곧 전부가
   /// 된다. 복원하지 않으면 협회를 하나 추가해 저장하는 순간 기존 협회가 통째로
   /// 사라진다. 복원이 끝나기 전에는 `_submit` 이 저장 자체를 건너뛴다.
+  ///
+  /// 복원 전에 사용자가 직접 추가했다 지운 협회가 서버에도 있으면 여기서 다시
+  /// 올라온다. 되살아난 것처럼 보이지만 의도한 동작이다 — 그 삭제는 서버에
+  /// 무엇이 있는지 모르는 상태에서 한 것이라 서버 상태에 대한 의사가 아니다.
+  /// 존중하면 #337 이 그대로 재발한다(모르는 채 남의 데이터를 지운다). 복원이
+  /// 끝난 뒤의 삭제는 `_existingOrgsReady` 가 재실행을 막으므로 그대로 남는다.
   void _prepareExistingOrgs(List<UserTennisOrg>? orgs) {
     if (_existingOrgsReady || orgs == null) return;
 
@@ -317,6 +323,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       ?.org ??
                   _primaryOrg;
         }
+        // 협회가 하나라도 있으면 주 협회도 있어야 한다. 직접 고른 협회를 다시
+        // 지워 _primaryOrg 가 null 이 된 채 복원이 도착하면(touched 라 위 분기가
+        // 건너뛴다) 아무도 primary 가 아닌 채로 저장된다.
+        _primaryOrg ??= _orgs.firstOrNull?.org;
         _existingOrgsReady = true;
       });
     });

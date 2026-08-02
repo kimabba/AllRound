@@ -143,6 +143,17 @@ void main() {
           reason: '_setPrimaryOrg 가 직접 선택을 표시해야 복원이 그것만 존중한다');
     });
 
+    // 직접 고른 협회를 다시 지우면 _primaryOrg 는 null 이 되는데 touched 는
+    // 그대로 true 다. 그 상태로 복원이 도착하면 위 분기를 건너뛰어, 협회는
+    // 있는데 아무도 primary 가 아닌 payload 가 저장된다(codex 3차 #2/#4).
+    test('협회가 있으면 주 협회도 남긴다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      expect(src, contains('_primaryOrg ??= _orgs.firstOrNull?.org;'),
+          reason: '복원 끝에 주 협회 불변식을 복구해야 한다 —'
+              ' 협회 목록이 비어 있지 않으면 주 협회가 하나 있어야 한다');
+    });
+
     test('_canSubmit 에 연결돼 있다', () {
       final src =
           File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
