@@ -89,6 +89,21 @@ Deno.test('세 종류 id 가 각각 빠졌는지 개별 확인', () => {
   }
 });
 
+// 프롬프트만 고치고 캐시 키를 그대로 두면, 배포해도 TTL(24시간) 동안 옛 프롬프트로
+// 만든 답이 계속 나간다 — UUID 를 지우고도 하루는 그대로 보인다(codex 리뷰가 잡음).
+// 캐시 키는 임베딩·사용자·프로필 해시뿐이라 프롬프트 변경을 모른다.
+Deno.test('캐시 키에 프롬프트 버전이 들어간다', async () => {
+  const src = await Deno.readTextFile(
+    new URL('../chat/context.ts', import.meta.url),
+  );
+  assertStringIncludes(
+    src,
+    'v: CHAT_PROMPT_VERSION',
+    'computeUserContextHash 의 payload 에 프롬프트 버전이 있어야 한다 —' +
+      ' 없으면 프롬프트를 바꿔도 옛 답이 캐시에서 그대로 재사용된다',
+  );
+});
+
 Deno.test('시스템 프롬프트가 id 를 출처로 쓰라고 시키지 않는다', () => {
   const prompt = buildSystemPrompt();
 

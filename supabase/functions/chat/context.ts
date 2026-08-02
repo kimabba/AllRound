@@ -11,7 +11,11 @@ import type {
   UserTennisOrgRow,
   VenueRow,
 } from './types.ts';
-import { REGULATION_BODY_CONTEXT_CAP, REGULATION_BODY_TOP_N } from './types.ts';
+import {
+  CHAT_PROMPT_VERSION,
+  REGULATION_BODY_CONTEXT_CAP,
+  REGULATION_BODY_TOP_N,
+} from './types.ts';
 
 /**
  * user_id SHA-256 prefix (8 hex chars = 32bits).
@@ -54,7 +58,14 @@ export async function computeUserContextHash(
     }))
     .sort((a, b) => a.org.localeCompare(b.org));
 
-  const payload = JSON.stringify({ userId, sports: normalizedSports, orgs: normalizedOrgs });
+  // 프롬프트 버전도 키에 넣는다: 프롬프트·컨텍스트 조립이 바뀌면 옛 답이 그대로
+  // 재사용되면 안 된다. 등급 라벨과 같은 이유이고, 대상이 프롬프트 전체로 넓어진 것뿐이다.
+  const payload = JSON.stringify({
+    v: CHAT_PROMPT_VERSION,
+    userId,
+    sports: normalizedSports,
+    orgs: normalizedOrgs,
+  });
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, '0'))
