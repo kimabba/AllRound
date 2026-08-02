@@ -65,6 +65,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _error;
   bool _existingSportsReady = false;
   bool _existingProfileReady = false;
+  bool _existingOrgsReady = false;
   bool _profilePhotoReady = false;
   bool _sportsTouched = false;
 
@@ -278,6 +279,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     });
   }
 
+  /// 재진입 시 이미 등록한 협회를 화면으로 복원한다(#337).
+  ///
+  /// `saveTennisOrgs` 는 delete-all + insert 라 화면이 보낸 목록이 곧 전부가
+  /// 된다. 복원하지 않으면 협회를 하나 추가해 저장하는 순간 기존 협회가 통째로
+  /// 사라진다. 복원이 끝나기 전에는 `_submit` 이 저장 자체를 건너뛴다.
+  void _prepareExistingOrgs(List<UserTennisOrg>? orgs) {
+    if (_existingOrgsReady || orgs == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _existingOrgsReady) return;
+      // 사용자가 이미 협회를 추가했으면 덮어쓰지 않는다.
+      if (orgs.isEmpty || _orgs.isNotEmpty) {
+        setState(() => _existingOrgsReady = true);
+        return;
+      }
+      setState(() {
+        _orgs.addAll(orgs.map(_OrgDraft.fromSaved));
+        _primaryOrg =
+            (orgs.where((o) => o.isPrimary).firstOrNull ?? orgs.first).org;
+        _existingOrgsReady = true;
+      });
+    });
+  }
+
   void _prepareExistingProfile(UserProfile? profile) {
     // profile == null 은 프로바이더가 아직 로딩 중이거나, 신규 유저라 row가
     // 없다는 뜻이다. 신규 유저는 채울 값이 없으므로 대기만 하면 되고,
@@ -450,7 +475,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await api.saveUserSports(sports);
 
       // 2) user_tennis_orgs (테니스 등록자만)
-      if (_tennisRegistered && _orgs.isNotEmpty) {
+      // 기존 협회 복원이 끝나기 전에는 저장하지 않는다 — saveTennisOrgs 가
+      // delete-all + insert 라, 아직 비어 있는 _orgs 를 보내면 등록해 둔 협회가
+      // 통째로 사라진다(#337). 복원이 끝났다면 빈 목록도 그대로 보낸다:
+      // 사용자가 협회를 전부 지운 것이므로 삭제가 맞다.
+      if (_tennisRegistered && _existingOrgsReady) {
         final orgRows = _orgs.map((o) {
           return UserTennisOrg(
             org: o.org,
@@ -511,6 +540,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _prepareProfilePhoto();
     _prepareExistingProfile(ref.watch(myProfileProvider).value);
     _prepareExistingSports(ref.watch(userSportsProvider).value);
+    _prepareExistingOrgs(ref.watch(userTennisOrgsProvider).value);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -1286,4 +1316,19 @@ class _OrgDraft {
   final Set<String> selectedDivisionCodes = {};
 
   _OrgDraft({required this.org});
+
+  /// DB 에 저장된 협회를 화면 초안으로 되돌린다(#337).
+  factory _OrgDraft.fromSaved(UserTennisOrg saved) {
+    final draft = _OrgDraft(org: saved.org);
+    // 카탈로그에 없는 옛 코드도 그대로 싣는다. 걸러내면 저장 때 사라진다.
+    draft.selectedDivisionCodes.addAll(saved.divisionCodes);
+    // 'default' 는 라벨이 빈 채로 저장될 때 쓰는 대체값이라 화면엔 되돌리지 않는다.
+    if (saved.division != 'default') draft.divisionLocal.text = saved.division;
+    final score = saved.score;
+    if (score != null) {
+      draft.score.text =
+          score == score.roundToDouble() ? '${score.toInt()}' : '$score';
+    }
+    return draft;
+  }
 }

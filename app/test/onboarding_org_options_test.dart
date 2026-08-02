@@ -66,6 +66,31 @@ void main() {
 
     // 위 4개는 함수의 진리표만 본다 — 함수가 _canSubmit 에서 떨어져 나가면
     // 전부 통과하면서 게이트만 사라진다(codex #3). 연결 자체를 못으로 박는다.
+    // #337: saveTennisOrgs 는 delete-all + insert 라 화면이 보낸 목록이 곧
+    // 전부가 된다. 화면이 기존 협회를 복원하지 않으면, 재진입해 협회를 하나
+    // 추가하는 순간 나머지가 사라진다. 위 선례와 같은 이유로 소스 검사다 —
+    // 복원 결과는 private 상태(_orgs)에만 남는다.
+    test('재진입 시 기존 협회를 불러온다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      expect(
+          src, contains('_prepareExistingOrgs(ref.watch(userTennisOrgsProvider'),
+          reason: 'build 가 등록된 협회를 프리로드해야 한다 —'
+              ' 안 하면 재진입 저장이 기존 협회를 통째로 지운다(#337)');
+    });
+
+    test('협회 저장은 복원이 끝난 뒤에만 한다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      final guard =
+          RegExp(r'if \(_tennisRegistered && ([^)]*)\) \{').firstMatch(src);
+      expect(guard, isNotNull, reason: '협회 저장 가드를 찾지 못했다');
+      expect(guard!.group(1), '_existingOrgsReady',
+          reason: '복원 전에는 저장을 막아야 한다 — 아직 빈 _orgs 를 보내면'
+              ' delete-all 로 기존 협회가 사라진다(#337).'
+              ' _orgs.isNotEmpty 가드는 반대로 협회 전체 삭제를 불가능하게 만든다');
+    });
+
     test('_canSubmit 에 연결돼 있다', () {
       final src =
           File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
