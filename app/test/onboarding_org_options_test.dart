@@ -119,6 +119,30 @@ void main() {
       });
     });
 
+    // 협회 선택 시트는 열릴 때의 스냅샷으로 선택지를 만든다. 그 사이 복원이
+    // 같은 협회를 채우면 사용자가 stale 시트에서 그걸 또 고를 수 있다. 같은
+    // org 가 두 번 저장되면 PK 충돌로 insert 가 통째로 실패하는데, 그 앞의
+    // delete-all 은 이미 커밋돼 협회가 전멸한다(codex 2차 #1).
+    test('같은 협회를 두 번 추가하지 않는다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      expect(src, contains('!_orgs.any((o) => o.org == picked)'),
+          reason: '_addOrg 는 이미 있는 협회를 다시 넣지 않아야 한다 —'
+              ' 중복 행은 insert 실패로 이어지고, delete-all 은 이미 커밋된다');
+    });
+
+    // 복원이 늦는 사이 협회를 하나 추가하면 _addOrg 가 그걸 자동으로 주 협회로
+    // 세운다. 그 자동값까지 존중하면 서버의 is_primary 가 조용히 바뀐다
+    // (codex 2차 #2). 라디오로 직접 고른 것만 존중해야 한다.
+    test('주 협회는 직접 고른 것만 존중한다', () {
+      final src =
+          File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
+      expect(src, contains('if (!_primaryOrgTouched) {'),
+          reason: '복원은 _addOrg 가 자동으로 세운 주 협회를 서버 값으로 덮어야 한다');
+      expect(src, contains('_primaryOrgTouched = true;'),
+          reason: '_setPrimaryOrg 가 직접 선택을 표시해야 복원이 그것만 존중한다');
+    });
+
     test('_canSubmit 에 연결돼 있다', () {
       final src =
           File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();

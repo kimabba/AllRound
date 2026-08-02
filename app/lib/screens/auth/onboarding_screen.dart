@@ -71,6 +71,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // Multi-org (테니스 한정, 다중)
   final List<_OrgDraft> _orgs = [];
   String? _primaryOrg;
+  bool _primaryOrgTouched = false;
 
   bool _busy = false;
   String? _error;
@@ -307,10 +308,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _orgs.map((o) => o.org).toSet(),
         );
         _orgs.addAll(missing.map(_OrgDraft.fromSaved));
-        // 사용자가 이미 주 협회를 골랐으면 그 선택을 존중한다.
-        _primaryOrg ??=
-            (orgs.where((o) => o.isPrimary).firstOrNull ?? orgs.firstOrNull)
-                ?.org;
+        // 라디오로 직접 고른 주 협회만 존중한다. `_addOrg` 가 자동으로 세운
+        // 값(먼저 추가한 협회)까지 존중하면, 복원이 늦은 사이 협회를 하나
+        // 추가한 것만으로 서버의 주 협회가 조용히 바뀐다.
+        if (!_primaryOrgTouched) {
+          _primaryOrg =
+              (orgs.where((o) => o.isPrimary).firstOrNull ?? orgs.firstOrNull)
+                      ?.org ??
+                  _primaryOrg;
+        }
         _existingOrgsReady = true;
       });
     });
@@ -426,7 +432,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ),
     );
 
-    if (picked != null) {
+    // 시트가 열려 있는 사이 복원(_prepareExistingOrgs)이 같은 협회를 채웠을 수
+    // 있다 — 선택지는 시트를 열 때의 스냅샷이라 그걸 모른다. 그대로 추가하면
+    // 같은 org 가 두 번 저장돼 PK 충돌로 insert 가 통째로 실패하고, 그 앞의
+    // delete-all 은 이미 커밋돼 협회가 전멸한다.
+    if (picked != null && !_orgs.any((o) => o.org == picked)) {
       setState(() {
         _orgs.add(_OrgDraft(org: picked));
         _primaryOrg ??= picked;
@@ -448,7 +458,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _setPrimaryOrg(String org) {
-    setState(() => _primaryOrg = org);
+    setState(() {
+      _primaryOrgTouched = true;
+      _primaryOrg = org;
+    });
   }
 
   // ───────────────────────────────────────────────────
@@ -464,6 +477,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // delete-all + insert 라, 비어 있는 _orgs 를 보내면 통째로 사라진다(#337).
     // 조용히 건너뛰면 이번에 고른 협회가 안내 없이 유실되므로 이유를 보여준다.
     if (_tennisRegistered && !_existingOrgsReady) {
+      // 조회가 실패한 상태면 다시 눌러도 같은 에러만 뜬다. 재요청을 걸어
+      // 일시적 오류에서 빠져나올 길을 준다.
+      ref.invalidate(userTennisOrgsProvider);
       setState(() => _error = '등록한 협회를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
       return;
     }
@@ -1345,10 +1361,13 @@ class _OrgDraft {
   factory _OrgDraft.fromSaved(UserTennisOrg saved) {
     final draft = _OrgDraft(org: saved.org);
     // 카탈로그에 없는 옛 코드도 그대로 싣는다. 걸러내면 저장 때 사라진다.
-    // ponytail: 그 대가로, 옛 코드만 남은 협회는 칩이 하나도 안 뜨는데
-    // selectedDivisionCodes 는 비어 있지 않아 _canSubmit 의 "부서 1개 이상"
-    // 경고가 뜨지 않는다. 프로덕션 5행에는 그런 코드가 없어 두고 본다 —
-    // 필요해지면 카탈로그 밖 코드를 UI 에 '만료된 부서'로 따로 보여준다.
+    // ponytail: 그 대가로 카탈로그 밖 코드는 화면에 안 보인다. 옛 코드만 남은
+    // 협회는 칩이 하나도 안 뜨는데 selectedDivisionCodes 는 비어 있지 않아
+    // _canSubmit 의 "부서 1개 이상" 경고가 안 뜬다. 옛·현행이 섞인 협회는 현행
+    // 칩만 보이고, 그 칩을 껐다 켜면 divisionLocal 라벨이 현행 카탈로그로만
+    // 다시 만들어져 옛 라벨이 빠진다(코드 자체는 남는다). 프로덕션 5행에는
+    // 카탈로그 밖 코드가 0건이라 두고 본다 — 필요해지면 그 코드를 UI 에
+    // '만료된 부서'로 따로 보여주고 라벨 재계산에 포함한다.
     draft.selectedDivisionCodes.addAll(saved.divisionCodes);
     // 'default' 는 라벨이 빈 채로 저장될 때 쓰는 대체값이라 화면엔 되돌리지 않는다.
     if (saved.division != 'default') draft.divisionLocal.text = saved.division;
