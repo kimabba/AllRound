@@ -57,11 +57,19 @@ mixin RankingApi on ApiBase {
     });
   }
 
-  /// 내 협회 전적 전량(최신 대회순). RLS 가 연결 승인된 본인 것만 돌려준다.
+  /// 내 협회 전적 전량(최신 대회순).
+  ///
+  /// org_code/org_player_id 로 명시 필터한다 — RLS 에 기대면 관리자 계정은
+  /// `org_player_results_admin_all` 정책 때문에 전체 선수 전적을 받는다.
+  /// (RLS 는 그대로 방어선이고, 이건 앱이 "내 것만" 의도를 명시하는 것.)
   Future<List<PlayerResult>> myPlayerResults() async {
+    final link = await myConfirmedLink();
+    if (link == null) return const [];
     final rows = await supabase
         .from('org_player_results')
         .select()
+        .eq('org_code', link['org_code'] as String)
+        .eq('org_player_id', link['org_player_id'] as String)
         .order('played_on', ascending: false);
     return List<Map<String, dynamic>>.from(
       rows,
@@ -69,6 +77,9 @@ mixin RankingApi on ApiBase {
   }
 
   /// 내 확정 연결 1건(없으면 null). 기록 화면이 연결 여부로 갈리므로 필요하다.
+  ///
+  /// DB 제약상 한 유저가 광주·전남 두 협회에 동시에 confirmed 될 수 있어
+  /// org_code 로 정렬해 최소한 결과가 안정적이게 한다(어느 쪽이 나오든 매번 같다).
   Future<Map<String, dynamic>?> myConfirmedLink() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return null;
@@ -77,6 +88,7 @@ mixin RankingApi on ApiBase {
         .select('org_code, org_player_id')
         .eq('user_id', userId)
         .eq('status', 'confirmed')
+        .order('org_code')
         .limit(1);
     final list = List<Map<String, dynamic>>.from(rows);
     return list.isEmpty ? null : list.first;
