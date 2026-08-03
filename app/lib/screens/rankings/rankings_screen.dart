@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/org_ranking.dart';
 import '../../state/providers.dart';
@@ -112,7 +113,13 @@ class _RankingRow extends StatelessWidget {
 
 // ── 출처 표기 ─────────────────────────────────────────────────────────────
 
-/// 앱이 계산한 값이 아니라는 것을 화면이 스스로 말한다. 조건 없이 상시 노출.
+/// 개인정보 보호책임자 연락처(privacy-policy.html 7항과 동일해야 한다).
+/// 이 화면은 앱 미가입자의 실명도 표시하므로, 본인이 발견하고 삭제·정정을
+/// 요청할 수 있는 유일한 창구가 여기다.
+const _kPrivacyContactEmail = 'demian.772@gmail.com';
+
+/// 앱이 계산한 값이 아니라는 것과, 삭제·정정 요청 창구를 화면이 스스로
+/// 말한다. 조건 없이 상시 노출(가입 여부 무관 — 랭킹 명단의 미가입자도 봐야 한다).
 class RankingSourceNotice extends StatelessWidget {
   const RankingSourceNotice({super.key, required this.orgLabel});
 
@@ -121,6 +128,7 @@ class RankingSourceNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
       color: cs.surfaceContainerHighest,
@@ -128,11 +136,27 @@ class RankingSourceNotice extends StatelessWidget {
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
-      child: Text(
-        '$orgLabel 공표 데이터 · 참고용이며 협회 공표가 우선합니다',
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$orgLabel 공표 데이터 · 참고용이며 협회 공표가 우선합니다',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 2),
+          InkWell(
+            onTap: () => launchUrl(
+              Uri.parse('mailto:$_kPrivacyContactEmail'),
+            ),
+            child: Text(
+              '정보 삭제·정정 요청: $_kPrivacyContactEmail',
+              style: tt.bodySmall?.copyWith(
+                color: cs.primary,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
