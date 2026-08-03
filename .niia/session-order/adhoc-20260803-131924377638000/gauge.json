@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "session": "adhoc-20260803-131924377638000",
+  "ts": "2026-08-03T13:19:24.441324+09:00",
+  "source": "gauge",
+  "rung": "HIGH",
+  "overlay": [],
+  "signals": {
+    "verb_class": "research",
+    "recall_hits": 0,
+    "recall_probe": "ok",
+    "risk_words": [],
+    "twin_surface": false,
+    "claim_words": [],
+    "doc_intent": false,
+    "lookup_intent": false,
+    "prompt_chars": 52
+  },
+  "confidence": 0.8,
+  "next": [
+    "/niia-research",
+    "/niia-prepare",
+    "implement",
+    "niia finish"
+  ],
+  "model_reco": {
+    "model": "session",
+    "effort": "max"
+  },
+  "config_fingerprint": {
+    "routing_toml": "63f7a75d",
+    "template": "t2",
+    "source": "deployed"
+  },
+  "transcript_path": null,
+  "cwd": "/Users/ssfak/Documents/01-github/ar",
+  "brand": "adhoc",
+  "prompt_head": "광주·전남 협회 대회 신청 홈페이지와 앱 제안서 검토 및 통합 준비 조사 --rung HIGH",
+  "history": [],
+  "disputed": false
+}

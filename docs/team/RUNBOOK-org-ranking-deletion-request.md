@@ -2,7 +2,7 @@
 
 > 개인정보 보호법 §36(정정·삭제) 대응 창구. `org_rankings`는 협회가 공표한 실명 순위표를
 > 그대로 미러링한 테이블이라, 앱 미가입자도 요청할 수 있어야 의미가 있다(2026-08-03 결정,
-> 관련: `docs/legal/privacy-policy.html` 2항·6항, `docs/legal/org-ranking-crawl-consent.md`).
+> 관련: `docs/legal/privacy-policy.html` 2항·6항).
 
 ## 접수 창구
 
