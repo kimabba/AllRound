@@ -116,7 +116,12 @@ mixin AdminApi on ApiBase {
   Future<List<RankingClaim>> _rankingClaimsByStatus(String status) async {
     final links = await supabase
         .from('org_player_links')
-        .select('org_code, org_player_id, user_id, claimed_at, users(name)')
+        // org_player_links → users FK 가 두 개(user_id, decided_by) 라 힌트 없이
+        // 임베드하면 PGRST201(관계 모호)로 죽는다. 이 레포의 기존 관례(club_api.dart
+        // 의 users!author_id 등)를 따라 컬럼명으로 명시한다.
+        .select(
+          'org_code, org_player_id, user_id, claimed_at, users!user_id(name)',
+        )
         .eq('status', status)
         .order('claimed_at');
     final linkRows = List<Map<String, dynamic>>.from(links as List);
