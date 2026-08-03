@@ -253,7 +253,6 @@ class UserTennisOrg {
   final double? score;
   final bool isPrimary;
   final String? regionCode;
-  final int? rankingPoints;
   final String? playerOrigin;
 
   UserTennisOrg({
@@ -263,7 +262,6 @@ class UserTennisOrg {
     this.score,
     this.isPrimary = false,
     this.regionCode,
-    this.rankingPoints,
     this.playerOrigin,
   });
 
@@ -283,7 +281,6 @@ class UserTennisOrg {
       score: score,
       isPrimary: (j['is_primary'] as bool?) ?? false,
       regionCode: j['region_code'] as String?,
-      rankingPoints: j['ranking_points'] as int?,
       playerOrigin: j['player_origin'] as String?,
     );
   }
@@ -296,7 +293,6 @@ class UserTennisOrg {
         'score': score,
         'is_primary': isPrimary,
         'region_code': regionCode,
-        'ranking_points': rankingPoints,
         'player_origin': playerOrigin,
       };
 }
