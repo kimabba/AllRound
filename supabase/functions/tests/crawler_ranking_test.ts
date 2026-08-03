@@ -65,3 +65,20 @@ Deno.test('헤더 행은 건너뛴다', () => {
   const rows = parseRankingRows(html);
   assertEquals(rows.every((r) => Number.isInteger(r.rank) && r.rank > 0), true);
 });
+
+Deno.test('대용량 입력(500행 이상)에서도 정확히 파싱한다', () => {
+  // fixture(행 7개짜리 표)를 100번 이어붙여 700행 규모를 만든다. deno-dom 시절엔
+  // 이 정도 반복이 실제 협회 페이지 14장 순차 처리에서 리소스 초과로 죽었던 시나리오다.
+  // 메모리 자체는 단언할 수 없으니, 규모가 커져도 파싱 결과가 fixture 단독 검증과
+  // 동일한지로 고정한다.
+  const dataRowsPerFixture = parseRankingRows(html).length;
+  const repeated = html.repeat(100);
+  const rows = parseRankingRows(repeated);
+
+  assertEquals(rows.length, dataRowsPerFixture * 100);
+  assertEquals(rows[0].rank, 1);
+  assertEquals(rows[0].playerName, '김평화');
+  assertEquals(rows[0].orgPlayerId, 'vudghk2116');
+  assertEquals(rows[rows.length - 1].playerName, '강관원');
+  assertEquals(rows.every((r) => Number.isInteger(r.rank) && r.rank > 0), true);
+});
