@@ -25,6 +25,7 @@ import 'screens/home_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/rankings/rankings_screen.dart';
 import 'screens/rules_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
@@ -138,6 +139,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/rules',
             builder: (_, __) => catalogAware(RulesScreen.new),
+          ),
+          GoRoute(
+            path: '/rankings',
+            builder: (_, __) => catalogAware(RankingsScreen.new),
           ),
           GoRoute(
             path: '/profile',
