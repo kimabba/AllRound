@@ -27,8 +27,10 @@
 - [ ] 크롤 대상: 부서별 랭킹표 (현재 구현 = 부서 7개, `gnuboard_ranking.ts`
       `MEMBER_KIND_SUFFIX`와 `docs/superpowers/specs/2026-08-03-org-ranking-mirror-design.md`
       기준) — TODO(Commander): 동의 범위와 일치 확인
-- [ ] 요청 빈도: 하루 1회 (`crawl_sources.schedule_cron`, 매일 KST 07:10 광주 / 07:20 전남 —
-      DB cron 등록값은 UTC 22:10/22:20) — TODO(Commander): 동의 범위와 일치 확인
+- [ ] 요청 빈도: 하루 1회, 매일 KST 06:00경 — 전체 크롤 소스와 함께 단일 스케줄러
+      (pg_cron `crawl-dispatch`, UTC 21:00)가 실행한다. `crawl_sources.schedule_cron`
+      값(광주 UTC 22:10 / 전남 22:20)은 현재 dispatcher 가 평가하지 않는 참고용 값이며
+      실제 실행 시각이 아니다 — TODO(Commander): 동의 범위와 일치 확인
 - [ ] 앱 내 표시 방식: 순위·성명·소속·전체포인트를 로그인 사용자에게만 표시
       (`org_rankings_read` RLS, `auth.role() = 'authenticated'`) — TODO(Commander): 동의
       범위와 일치 확인
