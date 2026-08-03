@@ -73,14 +73,14 @@ tournament_name text not null
 played_on       date not null
 event_raw       text            -- 종목(출전 부서) 원문
 result_raw      text not null   -- 순위 표기 원문
-result_rank     int             -- 정규화값 (1=우승, 2=준우승, 4=4강…), 못 읽으면 NULL
+result_round     int             -- 정규화값 (1=우승, 2=준우승, 4=4강…), 못 읽으면 NULL
 points          int not null default 0
 fetched_at      timestamptz not null default now()
 
 unique (org_code, org_player_id, tournament_name, played_on)
 ```
 
-**`result_raw` 원문 보존이 필수다.** 협회 표기가 `1`·`4`·`8`·`16` 과 `16강`·`4강`·`32강` 으로 한 컬럼에 섞여 있다(선행 설계 §2.2 실측). 파싱이 실패하면 `result_rank` 를 NULL 로 두고 원문을 남긴다 — **추측값이나 0으로 채우지 않는다.** 표기가 더 발견되면 원문에서 소급 정규화한다.
+**`result_raw` 원문 보존이 필수다.** 협회 표기가 `1`·`4`·`8`·`16` 과 `16강`·`4강`·`32강` 으로 한 컬럼에 섞여 있다(선행 설계 §2.2 실측). 파싱이 실패하면 `result_round` 를 NULL 로 두고 원문을 남긴다 — **추측값이나 0으로 채우지 않는다.** 표기가 더 발견되면 원문에서 소급 정규화한다.
 
 `event_raw ≠ 랭킹 부서`다. 골드부 랭킹인 선수가 지동부·남자오픈부로도 출전해 포인트를 얻는다. 화면에서 이 둘을 섞지 않는다.
 
@@ -116,25 +116,31 @@ unique (org_code, division_code, org_player_id, captured_on)
 
 ### 6.1 순위 스냅샷 — 크롤링이 아니라 DB 내 복사
 
-**실행 위치**: 랭킹 크롤 사이클이 부서 전부를 교체한 **뒤** `crawl-dispatch` 안에서 한 번 호출한다(`service_role` 경로). 별도 cron 을 만들지 않는다 — 크롤이 이미 주기적으로 돌고, 스냅샷은 그 결과의 부산물이기 때문이다.
+**실행 위치**: 기존 `replace_org_ranking_division` RPC **안에서** 교체와 같은 트랜잭션으로 적재한다. 새 호출 지점도, 새 cron 도 만들지 않는다.
 
-부서별 교체 직후가 아니라 **사이클 끝**이어야 한다. 부서마다 교체 시각이 달라(순차 실행) 중간에 찍으면 한 `captured_on` 안에 옛 부서와 새 부서가 섞인다.
+이유는 셋이다.
+
+1. **부서 단위로 신선하다.** 부서 교체 직후에 그 부서만 찍으므로 모든 스냅샷 행이 방금 크롤한 값이다. 사이클 끝에 한 번 찍으면 부서마다 교체 시각이 달라(순차 실행) 한 `captured_on` 안에 옛 부서와 새 부서가 섞인다.
+2. **실패한 부서는 그날 점이 안 생긴다.** 0행 가드에 걸려 교체를 건너뛴 부서는 RPC 자체가 호출되지 않으므로 낡은 값이 오늘 날짜로 박히지 않는다. 그래프에 구멍이 남는 편이 거짓 점보다 정직하다.
+3. **원자적이다.** 교체가 롤백되면 스냅샷도 롤백된다. 별도 호출이면 교체 성공 + 스냅샷 실패가 조용히 갈린다.
 
 새 HTTP 요청 0건.
 
 ```sql
+-- replace_org_ranking_division 끝, 새 행을 넣은 직후
 insert into org_ranking_snapshots (org_code, division_code, org_player_id, captured_on, rank, total_points)
 select r.org_code, r.division_code, r.org_player_id, current_date, r.rank, r.total_points
   from org_rankings r
- where r.org_player_id is not null
+ where r.org_code = p_org and r.division_code = p_division
+   and r.org_player_id is not null
 on conflict do nothing;
 ```
 
-`on conflict do nothing` 이라 같은 날 여러 번 돌아도 안전하다.
+`on conflict do nothing` 이라 같은 날 크롤이 여러 번 돌아도 행이 늘지 않는다. **그날 첫 크롤 값이 남는다** — 나중 값으로 덮지 않는다. 하루 한 점이면 충분하고, 덮어쓰기를 넣으면 "언제 찍은 값인가"가 흐려진다.
 
 ### 6.2 개인 이력 — 실제 크롤 (연결 승인자만)
 
-- 대상: `org_player_links.status = 'approved'` 인 사람의 `org_player_id`
+- 대상: `org_player_links.status = 'confirmed'` 인 사람의 `org_player_id`
 - URL: `{base}/sub4_6_rank.php?userid={org_player_id}`
 - 요청 수 = **승인자 수** (선행 설계가 이 크롤을 미룬 이유는 "선수당 1요청 × 수천 명"이었다. 연결자 한정이면 그 이유가 사라진다.)
 - 시점: **연결 승인 직후 1회** + 이후 랭킹 크롤 사이클에 묻어서 갱신
@@ -172,7 +178,7 @@ on conflict do nothing;
 
 - **출처와 갱신 시각을 매 화면에 표시**한다. "협회 공표 기준".
 - 우리가 매긴 점수가 아님이 계속 보여야 한다 (결정 3).
-- `result_rank` 가 NULL 인 행은 `result_raw` 원문을 그대로 보여준다. 빈칸이나 추측값으로 대체하지 않는다.
+- `result_round` 가 NULL 인 행은 `result_raw` 원문을 그대로 보여준다. 빈칸이나 추측값으로 대체하지 않는다.
 
 ### 7.4 시즌 경계
 
