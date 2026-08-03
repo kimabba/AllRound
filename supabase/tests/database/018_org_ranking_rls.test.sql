@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(12);
+select plan(14);
 
 -- 테이블 존재
 select has_table('public', 'org_rankings', 'org_rankings 테이블 존재');
@@ -93,12 +93,56 @@ select throws_ok(
 reset role;
 reset request.jwt.claims;
 
--- confirmed 는 협회 선수당 1명만
+-- admin 쓰기 경로가 실제로 살아 있는지 확인한다. 이 레포엔 별도 admin Postgres role 이
+-- 없다 — 세션 role 은 authenticated 그대로고 is_admin() 이 RLS 안에서 판정한다. grant 에
+-- update/insert 가 없으면 아래 두 동작이 RLS 이전 grant 단계에서 죽는다(코덱스 리뷰로
+-- 실측된 회귀 — Task 5 승인 큐가 통째로 막히는 지점).
+insert into auth.users (id, email) values
+  ('33333333-3333-3333-3333-333333333333', 'admin@test.local')
+on conflict do nothing;
+insert into public.users (id, email, name, role) values
+  ('33333333-3333-3333-3333-333333333333', 'admin@test.local', '관리자', 'admin')
+on conflict (id) do update set role = excluded.role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
+
+-- admin 은 경합 클레임(vudghk2116, 위에서 pending 으로 생성됨)을 confirmed 로 승인할 수 있다
+select lives_ok(
+  $$update public.org_player_links
+    set status = 'confirmed', decided_at = now(),
+        decided_by = '33333333-3333-3333-3333-333333333333'
+    where org_code = 'gj' and org_player_id = 'vudghk2116' and status = 'pending'$$,
+  'admin 은 경합 클레임을 confirmed 로 승인할 수 있다');
+
+-- admin 은 org_rankings 에 수동 교정 행을 넣을 수 있다
+select lives_ok(
+  $$insert into public.org_rankings
+      (org_code, division_code, rank, player_name, org_player_id, club_raw,
+       rank_points, total_points, source_url)
+    values ('gj', 'gj_m_gold', 2, '관리자입력', 'adminplayer', '테스트클럽/',
+            100, 100, 'https://example.test')$$,
+  'admin 은 org_rankings 에 수동 교정 행을 넣을 수 있다');
+
+reset role;
+reset request.jwt.claims;
+
+-- confirmed 는 협회 선수당 1명만.
+--   111 은 위 admin 승인 테스트에서 이미 gj 에 confirmed 행이 하나 있어(org_code, user_id)
+--   유니크에 걸리므로 여기서는 아직 gj 에 confirmed 가 없는 222/444 를 쓴다 — 그래야
+--   이 단언이 노리는 (org_code, org_player_id) 유니크(같은 협회 선수 중복)만 걸린다.
+insert into auth.users (id, email) values
+  ('44444444-4444-4444-4444-444444444444', 'd@test.local')
+on conflict do nothing;
+insert into public.users (id, email, name) values
+  ('44444444-4444-4444-4444-444444444444', 'd@test.local', 'dupe유저')
+on conflict (id) do update set name = excluded.name;
+
 insert into public.org_player_links (org_code, org_player_id, user_id, status)
-values ('gj', 'dupe', '11111111-1111-1111-1111-111111111111', 'confirmed');
+values ('gj', 'dupe', '22222222-2222-2222-2222-222222222222', 'confirmed');
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'dupe', '22222222-2222-2222-2222-222222222222', 'confirmed')$$,
+    values ('gj', 'dupe', '44444444-4444-4444-4444-444444444444', 'confirmed')$$,
   '23505', null, '같은 협회 선수에 confirmed 가 둘일 수 없다');
 
 select * from finish();

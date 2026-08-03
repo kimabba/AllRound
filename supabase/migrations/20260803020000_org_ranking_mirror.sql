@@ -113,16 +113,20 @@ create policy org_player_links_admin on public.org_player_links
   using (public.is_admin()) with check (public.is_admin());
 
 -- ═══════════════════════════════════════════════
--- grant — 클린 재생 시 누락 이력이 있어 명시한다(011_api_role_grants).
---   이 레포는 anon 을 포함해 테이블 권한을 주고 행 단위 통제를 RLS 가 전담한다.
---   실제 anon 차단은 각 정책의 to authenticated 절이 담당한다(anon 세션에는 정책
---   자체가 적용 대상이 아니라 무조건 0행). USING 절의 auth.role() 조건은 그 위에 얹은
---   defense-in-depth — TO 절이 실수로 빠지는 경우에도 anon 을 한 번 더 막는다.
+-- grant — DATABASE_RULES.md 관례: 넓게 주고 통제는 RLS 가 전담한다.
+--   이 레포엔 별도 admin role 이 없다 — 관리자도 세션 role 은 authenticated 이고
+--   is_admin() 은 RLS 안에서만 판정한다. UPDATE/INSERT grant 가 없으면 *_admin 정책이
+--   grant 단계에서 막혀 도달 불가능한 죽은 정책이 된다(org_player_links_admin 의 승인
+--   UPDATE, org_rankings_admin 의 수동 교정 INSERT 가 전부 여기 걸림 — 코덱스 리뷰로
+--   실측 재현됨).
+--   넓혀도 새 구멍은 없다: 쓰기는 각 정책이 좁게 인가한다(claim=pending 만,
+--   withdraw=본인 pending 만, insert/update=admin 만). anon 차단은 각 정책의
+--   to authenticated 절이 담당한다(anon 세션엔 정책 자체가 적용 대상이 아니라
+--   무조건 0행/거부). USING 절의 auth.role() 조건은 TO 절이 실수로 빠질 때를 대비한
+--   defense-in-depth.
 -- ═══════════════════════════════════════════════
-grant select on public.org_rankings to anon, authenticated;
-grant all    on public.org_rankings to service_role;
-grant select, insert, delete on public.org_player_links to anon, authenticated;
-grant all    on public.org_player_links to service_role;
+grant select, insert, update, delete on public.org_rankings to anon, authenticated, service_role;
+grant select, insert, update, delete on public.org_player_links to anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════
 -- 죽은 컬럼 정리 — user_tennis_orgs.ranking_points
