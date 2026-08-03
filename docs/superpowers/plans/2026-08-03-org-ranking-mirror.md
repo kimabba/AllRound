@@ -66,7 +66,7 @@
 | `supabase/functions/_shared/crawler/registry.ts` | 파서 등록 (Task 3, 수정) |
 | `supabase/functions/tests/crawler_ranking_test.ts` | 파서 단위 테스트 (Task 3) |
 | `supabase/functions/tests/fixtures/gj_ranking_gold.html` | 파서 fixture (Task 3) |
-| `supabase/migrations/<ts>_ranking_crawl_sources.sql` | 크롤 소스 2건 + Storage 버킷 (Task 3) |
+| `supabase/migrations/<ts>_ranking_crawl_sources.sql` | 교체 RPC + 크롤 소스 2건 (Task 3) |
 | `supabase/migrations/<ts>_org_ranking_claim_rpc.sql` | 후보 조회 RPC (Task 4) |
 | `supabase/tests/database/019_org_ranking_claim.test.sql` | 클레임 pgTAP (Task 4) |
 | `app/lib/models/org_ranking.dart` | 랭킹 행·클레임 모델 (Task 5) |
@@ -115,12 +115,21 @@ grep -rln "gj_w_winner\|여자우승자부" app/lib/
 
 - [ ] **Step 2: 기존 유저 영향 확인 (읽기 전용)**
 
+**`division_codes` 는 `public.users` 가 아니라 `public.user_tennis_orgs` 에 있다.** PK 가
+`(user_id, org, division)` 이라 유저 1명이 협회별로 여러 행을 가질 수 있다.
+
 ```bash
 psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c \
-  "select count(*) from public.users where division_codes && array['gj_w_winner','jn_w_winner'];"
+  "select count(*) from public.user_tennis_orgs where division_codes && array['gj_w_winner','jn_w_winner'];"
 ```
 
-0이 아니면 그 유저들은 그대로 둔다(마이그레이션에서 강제 이전하지 않는다). 결과를 마이그레이션 주석에 기록한다.
+**프로덕션 실측(2026-08-03): 0건.** (전체 유저 19명, 협회 등록 5행.) 이 값이 0이므로:
+
+- 우산 부서(`*_w_winner`) 유저를 국화/금배로 이전할 필요가 없다
+- Task 4 후보 RPC 에 우산 브리지가 필요 없다
+- winner 의 synonyms 에서 '국화'·'금배' 를 떼도 자격 매칭 회귀가 공집합이라 무해하다
+
+**로컬에서 0이 아니게 나오면 멈추고 보고한다** — 위 세 가지가 전부 뒤집힌다.
 
 - [ ] **Step 3: 실패하는 pgTAP 테스트를 먼저 쓴다**
 
@@ -202,24 +211,51 @@ Expected: FAIL — `gj_w_gukhwa` 등이 없어 첫 번째 단언부터 `7`이 �
 begin;
 
 -- 1) 기존 winner 에서 국화·금배 alias 제거
+--    Step 2 실측으로 *_w_winner 등록 유저가 0건임을 확인했으므로 자격 매칭 회귀는 공집합이다.
 update public.tennis_divisions
 set synonyms = array_remove(array_remove(synonyms, '국화'), '금배')
 where code in ('gj_w_winner', 'jn_w_winner');
 
 -- 2) 국화부 · 여자금배부 신설 (광주·전남 동일 구조)
+--    champion_only = true: 광주 규정 제12조가 국화부·금배부를 "우승자 랭킹 포인트" 배점표에
+--    넣는다(신인부/개나리부 우승 → 국화부 승격 구조). 기존 *_w_winner 도 true 다.
+--    이 값이 틀리면 에러 없이 자격 판정만 조용히 어긋나므로 명시한다.
+--    equiv_group: gj/jn 이 같은 suffix 를 공유해야 협회 경계를 넘는 동치 매칭이 선다.
 insert into public.tennis_divisions
-  (code, org, label, synonyms, level, gender, score_max, is_ranking_grade, format, std_key)
+  (code, org_code, label_ko, synonyms, skill_tier, gender, event_type,
+   equiv_group, age_min, champion_only, is_active, is_ranking_grade)
 values
-  ('gj_w_gukhwa',  'gj', '국화부',     array['국화부','국화'],       'advanced', 'female', null, true, 'doubles', 'sido_std:w_gukhwa'),
-  ('gj_w_geumbae', 'gj', '여자금배부', array['여자금배부','금배부','금배'], 'advanced', 'female', null, true, 'doubles', 'sido_std:w_geumbae'),
-  ('jn_w_gukhwa',  'jn', '국화부',     array['국화부','국화'],       'advanced', 'female', null, true, 'doubles', 'sido_std:w_gukhwa'),
-  ('jn_w_geumbae', 'jn', '여자금배부', array['여자금배부','금배부','금배'], 'advanced', 'female', null, true, 'doubles', 'sido_std:w_geumbae')
-on conflict (code) do nothing;
+  ('gj_w_gukhwa', 'gj', '국화부', array['국화부', '국화'],
+   'advanced', 'female', 'doubles', 'sido_std:w_gukhwa', null, true, true, true),
+  ('gj_w_geumbae', 'gj', '여자금배부', array['여자금배부', '금배부', '금배'],
+   'advanced', 'female', 'doubles', 'sido_std:w_geumbae', null, true, true, true),
+  ('jn_w_gukhwa', 'jn', '국화부', array['국화부', '국화'],
+   'advanced', 'female', 'doubles', 'sido_std:w_gukhwa', null, true, true, true),
+  ('jn_w_geumbae', 'jn', '여자금배부', array['여자금배부', '금배부', '금배'],
+   'advanced', 'female', 'doubles', 'sido_std:w_geumbae', null, true, true, true)
+on conflict (code) do update set
+  org_code = excluded.org_code,
+  label_ko = excluded.label_ko,
+  synonyms = excluded.synonyms,
+  skill_tier = excluded.skill_tier,
+  gender = excluded.gender,
+  event_type = excluded.event_type,
+  equiv_group = excluded.equiv_group,
+  age_min = excluded.age_min,
+  champion_only = excluded.champion_only,
+  is_active = excluded.is_active,
+  is_ranking_grade = excluded.is_ranking_grade;
 
 commit;
 ```
 
-**주의**: 컬럼 목록과 순서는 `supabase/migrations/20260710020000_tennis_orgs_divisions_catalog.sql:77-88`의 실제 INSERT를 그대로 따라야 한다. Step 1에서 확인한 실제 컬럼과 다르면 실제 것을 쓴다. `is_active` 컬럼이 별도로 있으면 `true`를 명시한다.
+**컬럼 목록은 실측으로 확정한 것이다** — `20260730010000_gwangju_gu_divisions_and_sources.sql:34-36` 의
+실제 INSERT 와 동일하다. 초안에 썼던 `org`·`label`·`level`·`format`·`std_key` 는 **존재하지 않는
+컬럼명**이었다(실제: `org_code`·`label_ko`·`skill_tier`·`event_type`·`equiv_group`). 이 목록을 임의로
+바꾸지 마라.
+
+`on conflict do update` 인 이유: 이 레포는 카탈로그를 "재실행하면 정본으로 수렴"시키는 관례다
+(`20260729020000` 참조). `do nothing` 이면 값이 어긋난 채 남는다.
 
 - [ ] **Step 6: 테스트가 통과하는 것을 확인한다**
 
@@ -265,12 +301,22 @@ git commit -m "feat(db): 국화부·여자금배부 부서 신설 — 협회 랭
 
 협회 랭킹표는 국화부와 여자금배부를 별도 랭킹으로 공표하는데 카탈로그는
 *_w_winner 하나에 alias 로 합쳐놨다. org_rankings.division_code FK 를 걸려면
-별도 행이 필요하다. winner 는 유지(요강에 실제 등장 + 기존 유저 등급).
+별도 행이 필요하다. winner 는 유지(요강에 실제 등장).
+
+*_w_winner 등록 유저 0건 실측 → 이전 작업·우산 브리지 불필요.
+champion_only=true (광주 규정 제12조가 국화·금배를 우승자 배점표에 포함).
 
 스냅샷 다리 3곳 동기화: DB ↔ fixture ↔ Dart 폴백."
 git push -u origin feature/JY-ranking-division-split
 gh pr create --fill
 ```
+
+**PR 본문에 반드시 적을 것 (Commander 판단 대기 항목)**:
+
+> 온보딩 부서 선택 화면에 여성 랭킹 등급이 **3개로 늘어난다** — `여자우승자부`(기존 우산) ·
+> `국화부` · `여자금배부`. 셋 다 `is_ranking_grade = true` 라 나란히 뜬다.
+> 우산인 `여자우승자부`를 온보딩에서 내릴지(`is_ranking_grade = false`)는 기존 데이터 영향이 있어
+> 이 PR 에서 결정하지 않는다. 칩이 중복된다는 사실만 남긴다.
 
 CI 5체크 통과 후 codex 리뷰 GATE PASS를 받고 머지한다.
 
@@ -281,6 +327,7 @@ CI 5체크 통과 후 codex 리뷰 GATE PASS를 받고 머지한다.
 **Files:**
 - Create: `supabase/migrations/<타임스탬프>_org_ranking_mirror.sql`
 - Create: `supabase/tests/database/018_org_ranking_rls.test.sql`
+- Modify: `app/lib/models/tournament.dart` (`rankingPoints` 필드 제거 — 죽은 컬럼 정리에 딸림)
 
 **Interfaces:**
 - Consumes: Task 1의 부서 코드
@@ -302,11 +349,15 @@ cat supabase/tests/database/011_api_role_grants.test.sql | head -40
 
 ```sql
 begin;
-select plan(9);
+select plan(12);
 
 -- 테이블 존재
 select has_table('public', 'org_rankings', 'org_rankings 테이블 존재');
 select has_table('public', 'org_player_links', 'org_player_links 테이블 존재');
+
+-- 죽은 컬럼 제거 확인
+select hasnt_column('public', 'user_tennis_orgs', 'ranking_points',
+  'user_tennis_orgs.ranking_points 제거됨');
 
 -- RLS 활성화
 select is(
@@ -324,12 +375,36 @@ values
   ('gj', 'gj_m_gold', 1, '김평화', 'vudghk2116', '어등산/', 2649, 2649,
    'https://gjtennis.kr/sub4_5.php?member_kind=골드부');
 
--- anon 은 정책이 없어 0행이어야 한다 (grant 가 있어도)
+-- 확정 연결 1건을 미리 넣어 anon 노출 검사의 대조군으로 쓴다
+insert into auth.users (id, email)
+values ('99999999-9999-9999-9999-999999999999', 'seed@test.local')
+on conflict do nothing;
+insert into public.users (id, name)
+values ('99999999-9999-9999-9999-999999999999', '시드')
+on conflict do nothing;
+insert into public.org_player_links (org_code, org_player_id, user_id, status)
+values ('gj', 'seedplayer', '99999999-9999-9999-9999-999999999999', 'confirmed');
+
+-- anon 은 두 테이블 다 못 읽는다.
+--   org_player_links 를 빠뜨리면 status='confirmed' 조건만으로 통과하는 구멍이 생긴다.
 set local role anon;
 select is(
   (select count(*)::int from public.org_rankings),
   0, 'anon 은 org_rankings 를 볼 수 없다');
+select is(
+  (select count(*)::int from public.org_player_links where status = 'confirmed'),
+  0, 'anon 은 확정된 계정 연결을 볼 수 없다');
 reset role;
+
+-- 로그인 유저는 확정 연결을 볼 수 있어야 한다(랭킹 화면 배지용) — 위 단언이
+-- "아무도 못 읽음"으로 과하게 잠긴 게 아님을 확인하는 긍정 대조.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"99999999-9999-9999-9999-999999999999","role":"authenticated"}';
+select is(
+  (select count(*)::int from public.org_player_links where status = 'confirmed'),
+  1, '로그인 유저는 확정 연결을 볼 수 있다');
+reset role;
+reset request.jwt.claims;
 
 -- 유저가 남의 클레임을 confirmed 로 만들 수 없다
 insert into auth.users (id, email) values
@@ -473,8 +548,15 @@ alter table public.org_player_links enable row level security;
 create policy org_player_links_claim on public.org_player_links
   for insert with check (user_id = (select auth.uid()) and status = 'pending');
 
+-- 읽기: 본인 것 전부 + 타인 것은 confirmed 만(랭킹 화면의 "앱 유저" 배지용).
+--   auth.role() 조건이 반드시 필요하다 — 없으면 비로그인 세션이 status='confirmed' 만으로
+--   통과해 확정 연결 전체(user_id·org_player_id·decided_by)를 읽는다. org_player_id 는
+--   org_rankings 를 통해 실명과 이어지므로 org_rankings 를 anon 에게 막은 것과 같은 이유로 막는다.
 create policy org_player_links_read on public.org_player_links
-  for select using (user_id = (select auth.uid()) or status = 'confirmed');
+  for select using (
+    auth.role() = 'authenticated'
+    and (user_id = (select auth.uid()) or status = 'confirmed')
+  );
 
 create policy org_player_links_withdraw on public.org_player_links
   for delete using (user_id = (select auth.uid()) and status = 'pending');
@@ -484,16 +566,29 @@ create policy org_player_links_admin on public.org_player_links
 
 -- ═══════════════════════════════════════════════
 -- grant — 클린 재생 시 누락 이력이 있어 명시한다. 실제 게이트는 RLS.
+--   두 테이블 다 anon 에게는 아무 권한도 주지 않는다.
 -- ═══════════════════════════════════════════════
-grant select on public.org_rankings to anon, authenticated;
+grant select on public.org_rankings to authenticated;
 grant all    on public.org_rankings to service_role;
-grant select, insert, delete on public.org_player_links to anon, authenticated;
+grant select, insert, delete on public.org_player_links to authenticated;
 grant all    on public.org_player_links to service_role;
+
+-- ═══════════════════════════════════════════════
+-- 죽은 컬럼 정리 — user_tennis_orgs.ranking_points
+--   056 에서 추가만 되고 채우는 경로도 읽는 경로도 없다(프로덕션 전 행 null, 2026-08-03 실측).
+--   이름이 org_rankings 의 rank_points/total_points 와 겹쳐, 나중에 누가 여기에 자기신고 값을
+--   넣으면 20260724040000 에서 match_entries 를 잠근 이유가 그대로 무너진다. Commander 지시로 제거.
+-- ═══════════════════════════════════════════════
+alter table public.user_tennis_orgs drop column if exists ranking_points;
 
 commit;
 ```
 
 **주의**: `grant` 대상과 형식은 Step 1에서 확인한 `20260724060000` 관례를 따른다. 다르면 실제 관례를 쓴다.
+
+**`ranking_points` 제거는 앱 코드도 함께 고쳐야 한다** — `app/lib/models/tournament.dart` 의
+`rankingPoints` 필드와 `fromJson`/`toJson` 매핑을 지운다. 지우지 않으면 `flutter analyze` 는
+통과하지만 런타임에 없는 컬럼을 요청하게 된다.
 
 - [ ] **Step 5: 테스트가 통과하는 것을 확인한다**
 
@@ -505,11 +600,17 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
 
 Expected: PASS 9/9
 
-- [ ] **Step 6: 변이 주입으로 역검증**
+- [ ] **Step 6: 변이 주입으로 역검증 (2회)**
 
-초록불이 증거인지 확인한다. 마이그레이션에서 `org_rankings_read` 정책의 `auth.role() = 'authenticated'`를 잠시 `true`로 바꾸고 `supabase db reset` 후 테스트를 다시 돌린다.
+초록불이 증거인지 확인한다. 두 정책을 각각 망가뜨려 본다.
 
-Expected: "anon 은 org_rankings 를 볼 수 없다" 단언이 **실패**해야 한다. 실패하지 않으면 그 테스트는 아무것도 검사하지 않는 것이다. 확인 후 원복한다.
+① `org_rankings_read` 의 `auth.role() = 'authenticated'` 를 `true` 로 바꾸고 `supabase db reset` → 테스트 재실행.
+Expected: "anon 은 org_rankings 를 볼 수 없다" 가 **실패**.
+
+② 원복 후, `org_player_links_read` 에서 `auth.role() = 'authenticated' and` 를 지우고 같은 절차.
+Expected: "anon 은 확정된 계정 연결을 볼 수 없다" 가 **실패**.
+
+둘 중 하나라도 실패하지 않으면 그 단언은 아무것도 검사하지 않는 것이다. 확인 후 전부 원복한다.
 
 - [ ] **Step 7: advisor 확인**
 
@@ -518,12 +619,17 @@ Supabase MCP `get_advisors`로 security·performance lint를 확인한다. 새 �
 - [ ] **Step 8: 커밋 & PR**
 
 ```bash
-git add supabase/migrations supabase/tests/database/018_org_ranking_rls.test.sql
+cd app && flutter analyze && flutter test && cd ..
+git add supabase/migrations supabase/tests/database/018_org_ranking_rls.test.sql app/lib
 git commit -m "feat(db): 협회 랭킹 미러 테이블 2개 + RLS
 
 org_rankings(미러, 크롤마다 갈아엎음) / org_player_links(계정 연결, 독립 생존).
-anon 읽기 정책 없음 — 비로그인 인터넷에 실명 명단을 재공개하지 않는다.
-confirmed 는 부분 유니크 인덱스로 협회 선수당 1명 강제."
+두 테이블 다 anon 권한·정책 없음 — 비로그인 인터넷에 실명 명단을 재공개하지 않는다.
+org_player_id 는 org_rankings 를 통해 실명과 이어지므로 링크 테이블도 같이 막는다.
+confirmed 는 부분 유니크 인덱스로 협회 선수당 1명 강제.
+
+곁들여: user_tennis_orgs.ranking_points 제거(056 에서 추가만 되고 전 행 null).
+이름이 org_rankings 의 포인트 컬럼과 겹쳐 자기신고 값이 흘러들 자리가 된다."
 git push -u origin feature/JY-ranking-tables
 gh pr create --fill
 ```
@@ -540,8 +646,12 @@ gh pr create --fill
 - Create: `supabase/migrations/<타임스탬프>_ranking_crawl_sources.sql`
 
 **Interfaces:**
-- Consumes: Task 2의 `org_rankings`, Task 1의 부서 코드
-- Produces: `parseRankingRows(html: string): RankingRow[]` — 순수 함수, 테스트가 이것만 검증한다. `RankingRow = { rank: number; playerName: string; orgPlayerId: string | null; clubRaw: string | null; rankPoints: number; totalPoints: number }`. 파서 키 `'gnuboard-ranking'`
+- Consumes: Task 2의 `org_rankings` 테이블, Task 1의 부서 코드. **Task 1·2가 먼저 머지되어야 한다** (FK 대상과 교체 RPC의 대상 테이블)
+- Produces:
+  - `parseRankingRows(html: string): RankingRow[]` — 순수 함수, 테스트가 이것만 검증한다.
+    `RankingRow = { rank: number; playerName: string; orgPlayerId: string | null; clubRaw: string | null; rankPoints: number; totalPoints: number }`
+  - 파서 키 `'gnuboard-ranking'`
+  - RPC `public.replace_org_ranking_division(p_org text, p_division text, p_source_url text, p_rows jsonb) → int` (service_role 전용)
 
 - [ ] **Step 1: 브랜치 + fixture 확보**
 
@@ -666,7 +776,7 @@ Expected: FAIL — `gnuboard_ranking.ts` 모듈이 없다
 // 설계: docs/superpowers/specs/2026-08-03-org-ranking-mirror-design.md
 
 import { DOMParser } from 'deno-dom';
-import { serviceClient } from '../../supabase.ts';
+import { saveRawDocument } from '../../crawler.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
@@ -759,12 +869,12 @@ export function parseRankingRows(html: string): RankingRow[] {
 }
 
 /**
- * 한 협회의 랭킹 부서 7개를 순회해 org_rankings 를 부서 단위로 갈아엎는다.
+ * 한 협회의 랭킹 부서 7개를 순회해 org_rankings 를 부서 단위로 교체한다.
  * source.url 은 base URL(예: 'https://gjtennis.kr'), source.org_code 는 'gj' | 'jn'.
  */
 export const gnuboardRankingParser: ParserFn = async (
   source: CrawlSource,
-  _ctx: ParserContext,
+  ctx: ParserContext,
 ): Promise<CrawlResult> => {
   const org = source.org_code;
   if (!org) {
@@ -777,10 +887,10 @@ export const gnuboardRankingParser: ParserFn = async (
     };
   }
 
-  const db = serviceClient();
+  // dispatcher 가 startAudit 에서 만든 클라이언트를 재사용한다(기존 파서 관례).
+  // serviceClient() 를 새로 부르면 같은 키로 클라이언트만 하나 더 생긴다.
+  const db = ctx.audit.supabase;
   const base = source.url.replace(/\/+$/, '');
-  let fetched = 0;
-  let inserted = 0;
   const failures: string[] = [];
 
   for (const [memberKind, suffix] of Object.entries(MEMBER_KIND_SUFFIX)) {
@@ -801,72 +911,69 @@ export const gnuboardRankingParser: ParserFn = async (
     }
 
     const rows = parseRankingRows(html);
-    fetched += rows.length;
+
+    // 0행 가드 — 반드시 교체 **앞**에 온다.
+    //   협회가 레이아웃을 바꾸거나 HTTP 200 으로 에러 페이지를 주면(그누보드에서 흔하다)
+    //   rows 가 빈다. 이때 교체를 실행하면 그 부서 랭킹이 통째로 지워지고 실패 기록도
+    //   안 남아 'ok' 로 보고된다. 기존 데이터를 보존하고 시끄럽게 실패한다.
+    if (rows.length === 0) {
+      failures.push(`${memberKind}: 파싱 0행 — 기존 데이터 보존`);
+      await saveRawDocument(ctx.audit, url, html, null, 'failed', '랭킹 행 0개');
+      continue;
+    }
+
+    // audit 카운터는 dispatcher 의 finishAudit 이 crawl_audit 에 기록하는 값이다.
+    // 직접 insert 하는 파서는 이걸 손으로 올려야 한다(upsertTournament 를 쓰지 않으므로).
+    ctx.audit.fetched += rows.length;
 
     // 0점 선수 미저장 — 개인정보 최소화. 순위는 협회 값 그대로라 안 깨진다.
     const scored = rows.filter((r) => r.totalPoints > 0 || r.rankPoints > 0);
 
-    // 원본 보관: 연말 리셋이 미러를 덮어쓰기 전의 유일한 보험이다.
-    await archiveSnapshot(db, org, divisionCode, html);
+    // 원본 보관 — 기존 crawl_documents(raw zone) 인프라를 그대로 쓴다.
+    await saveRawDocument(ctx.audit, url, html, null, 'parsed');
 
-    const { error: delErr } = await db
-      .from('org_rankings')
-      .delete()
-      .eq('org_code', org)
-      .eq('division_code', divisionCode);
-    if (delErr) {
-      failures.push(`${memberKind}: delete ${delErr.message}`);
-      continue;
-    }
-
-    if (scored.length === 0) continue;
-
-    const { error: insErr } = await db.from('org_rankings').insert(
-      scored.map((r) => ({
-        org_code: org,
-        division_code: divisionCode,
+    // 교체는 RPC 한 번으로. PostgREST 로 delete → insert 를 나눠 쏘면 둘이 별도 커밋이라
+    // delete 성공 + insert 실패 시 그 부서가 다음 크롤(최대 24h)까지 빈 채로 남는다.
+    const { error: rpcErr } = await db.rpc('replace_org_ranking_division', {
+      p_org: org,
+      p_division: divisionCode,
+      p_source_url: url,
+      p_rows: scored.map((r) => ({
         rank: r.rank,
         player_name: r.playerName,
         org_player_id: r.orgPlayerId,
         club_raw: r.clubRaw,
         rank_points: r.rankPoints,
         total_points: r.totalPoints,
-        source_url: url,
       })),
-    );
-    if (insErr) {
-      failures.push(`${memberKind}: insert ${insErr.message}`);
+    });
+    if (rpcErr) {
+      failures.push(`${memberKind}: replace ${rpcErr.message}`);
       continue;
     }
-    inserted += scored.length;
+
+    ctx.audit.inserted += scored.length;
   }
 
   return {
-    fetched_count: fetched,
-    inserted_count: inserted,
+    fetched_count: ctx.audit.fetched,
+    inserted_count: ctx.audit.inserted,
     updated_count: 0,
+    // 기존 파서 관례를 따른다(gnuboard_sub5_5_contest.ts 의 allFailed 판정).
+    // 부분 실패는 error 메시지로 드러나고, dispatcher 가 crawl_audit 을 'partial' 로 내린다.
     status: failures.length === Object.keys(MEMBER_KIND_SUFFIX).length ? 'error' : 'ok',
     error: failures.length > 0 ? failures.join(' | ') : undefined,
   };
 };
-
-/** 크롤한 원본 HTML 을 비공개 버킷에 보관한다. 실패해도 크롤 자체는 계속한다. */
-async function archiveSnapshot(
-  db: ReturnType<typeof serviceClient>,
-  org: string,
-  divisionCode: string,
-  html: string,
-): Promise<void> {
-  const day = new Date().toISOString().slice(0, 10);
-  const path = `${org}/${divisionCode}/${day}.html`;
-  const { error } = await db.storage
-    .from('ranking-snapshots')
-    .upload(path, new Blob([html], { type: 'text/html' }), { upsert: true });
-  if (error) console.error(`[ranking] 원본 보관 실패 ${path}: ${error.message}`);
-}
 ```
 
-**주의**: `serviceClient()`의 실제 import 경로와 시그니처는 기존 파서(`kato_openlist.ts`)와 `_shared/supabase.ts`를 확인해 맞춘다. Storage API 호출 형식도 기존 사용처(`account_deletion_storage_test.ts`가 참조하는 코드)를 따른다.
+**import 에 `saveRawDocument` 를 추가한다**: `import { saveRawDocument } from '../../crawler.ts';`
+(`serviceClient` import 는 필요 없다 — `ctx.audit.supabase` 를 쓴다.)
+
+**Storage 버킷은 만들지 않는다.** 초안은 `ranking-snapshots` 버킷에 날짜별로 쌓으려 했으나,
+이 레포엔 이미 `crawl_documents`(raw zone) + `saveRawDocument()` 가 있다. 같은 URL 을 upsert 하므로
+항상 최신 1벌만 남는다 — 매일 14개 × 360KB 를 날짜별로 쌓는 것보다 이쪽이 맞다.
+연말 리셋 대비는 **12월 마지막 주 수동 백업 1회**로 처리한다(아래 "완료 판정" 다음 항목).
 
 - [ ] **Step 5: 테스트가 통과하는 것을 확인한다**
 
@@ -890,36 +997,90 @@ import { gnuboardRankingParser } from './parsers/gnuboard_ranking.ts';
   'gnuboard-ranking': gnuboardRankingParser,
 ```
 
-- [ ] **Step 7: Storage 버킷 + 크롤 소스 마이그레이션**
+- [ ] **Step 7: 교체 RPC + 크롤 소스 마이그레이션**
 
 `supabase/migrations/<타임스탬프>_ranking_crawl_sources.sql`:
 
 ```sql
--- 협회 랭킹 크롤 소스 + 원본 보관 버킷
+-- 협회 랭킹 크롤 소스 + 부서 단위 교체 RPC
 --
 -- 소스는 협회당 1건. 파서가 랭킹 부서 7개를 순회한다(부서별 URL 을 소스로 쪼개면
 -- 14건이 되고 부서 추가마다 소스 관리가 따라온다).
 --
--- 원본 보관이 필수인 이유: 호남 3개 협회 모두 연초에 포인트를 리셋한다.
--- 2027년 1월 첫 크롤이 2026 최종 순위를 영영 덮으므로, 12월 마지막 크롤 원본이
--- 유일한 보험이다. 설계 §7 ①.
+-- cron 시각: DB 타임존은 UTC 다(실측). 기존 소스들이 21시대(UTC)=KST 새벽 6시대에 돌고,
+-- 랭킹은 그 뒤 22:10 / 22:20 (UTC) = KST 07:10 / 07:20 에 흩어 넣는다.
 
 begin;
 
-insert into storage.buckets (id, name, public)
-values ('ranking-snapshots', 'ranking-snapshots', false)
-on conflict (id) do nothing;
+-- ═══════════════════════════════════════════════
+-- 부서 단위 교체 — delete + insert 를 한 트랜잭션으로
+--   PostgREST 로 나눠 쏘면 별도 커밋이라, delete 성공 후 insert 실패 시
+--   그 부서가 다음 크롤(최대 24h)까지 빈 채로 남는다. 한 함수로 묶으면
+--   그 조합 자체가 불가능해진다.
+-- ═══════════════════════════════════════════════
+create or replace function public.replace_org_ranking_division(
+  p_org        text,
+  p_division   text,
+  p_source_url text,
+  p_rows       jsonb
+)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_inserted int;
+begin
+  -- 빈 배열로 기존 데이터를 지우는 사고를 막는다(파서에도 0행 가드가 있으나 2중으로).
+  if p_rows is null or jsonb_array_length(p_rows) = 0 then
+    raise exception 'replace_org_ranking_division: 빈 목록으로 % / % 를 교체할 수 없다',
+      p_org, p_division;
+  end if;
 
+  delete from public.org_rankings
+  where org_code = p_org and division_code = p_division;
+
+  insert into public.org_rankings
+    (org_code, division_code, rank, player_name, org_player_id,
+     club_raw, rank_points, total_points, source_url)
+  select
+    p_org,
+    p_division,
+    (r ->> 'rank')::int,
+    r ->> 'player_name',
+    r ->> 'org_player_id',
+    r ->> 'club_raw',
+    (r ->> 'rank_points')::int,
+    (r ->> 'total_points')::int,
+    p_source_url
+  from jsonb_array_elements(p_rows) as r;
+
+  get diagnostics v_inserted = row_count;
+  return v_inserted;
+end;
+$$;
+
+comment on function public.replace_org_ranking_division is
+  '한 협회·부서의 랭킹 미러를 한 트랜잭션으로 교체한다. service_role 전용(크롤러).';
+
+revoke all on function public.replace_org_ranking_division(text, text, text, jsonb) from public;
+grant execute on function public.replace_org_ranking_division(text, text, text, jsonb)
+  to service_role;
+
+-- ═══════════════════════════════════════════════
+-- 크롤 소스 2건
+-- ═══════════════════════════════════════════════
 insert into public.crawl_sources
-  (slug, name, url, sport, region, org_code, source_type,
+  (slug, name, url, sport, region, region_code, org_code, source_type,
    parser_module, schedule_cron, enabled, notes)
 values
   ('tennis-gwangju-ranking', '광주테니스협회 부서별랭킹',
-   'https://gjtennis.kr', 'tennis', '광주', 'gj', 'board',
+   'https://gjtennis.kr', 'tennis', '광주', 'gwangju', 'gj', 'board',
    'gnuboard-ranking', '10 22 * * *', true,
    '부서 7개 순회. 0점 선수 미저장. 협회 동의 하에 크롤.'),
   ('tennis-jeonnam-ranking', '전남테니스협회 부서별랭킹',
-   'https://jntennis.kr', 'tennis', '전남', 'jn', 'board',
+   'https://jntennis.kr', 'tennis', '전남', 'jeonnam', 'jn', 'board',
    'gnuboard-ranking', '20 22 * * *', true,
    '광주와 동일 CMS. 2026년부터 광주와 랭킹 분리 운영.')
 on conflict (slug) do nothing;
@@ -927,7 +1088,12 @@ on conflict (slug) do nothing;
 commit;
 ```
 
-**주의**: `crawl_sources`의 실제 컬럼 목록은 `019_crawl_sources.sql`과 `20260730010000_gwangju_gu_divisions_and_sources.sql:92-104`를 확인해 맞춘다(`region_code` 컬럼이 있으면 함께 넣는다).
+`security definer` 인 이유: 크롤러는 service_role 로 돌아 RLS 를 우회하지만, 이 함수는
+`revoke all from public` + `grant execute to service_role` 로 **호출 자체를 service_role 에만** 연다.
+일반 유저가 랭킹 미러를 갈아엎을 경로를 만들지 않는다.
+
+**`region_code` 를 빠뜨리지 마라** — 기존 소스는 전부 채운다(`20260730010000:92-94`). 비면 이 두
+소스만 관리자 화면·지역 필터에서 다르게 취급된다.
 
 - [ ] **Step 8: 로컬 통합 확인**
 
@@ -954,8 +1120,11 @@ git commit -m "feat(crawler): 협회 부서별 랭킹표 파서
 파싱 함정 3개: 순위/전체 포인트가 같은 data-table=wr_6 라 순서로만 갈린다,
 포인트에 천 단위 콤마, 사진 없는 행은 성명 셀에서 아이디를 뽑아야 한다.
 
-0점 선수 미저장(개인정보 최소화). 크롤 원본은 비공개 버킷에 보관 —
-연초 포인트 리셋이 미러를 덮기 전의 유일한 보험."
+0점 선수 미저장(개인정보 최소화). 원본은 기존 crawl_documents(raw zone) 재사용.
+
+파싱 0행이면 교체를 건너뛰고 실패로 기록한다 — 협회가 레이아웃을 바꿨을 때
+부서 랭킹이 통째로 지워지고 'ok' 로 보고되는 경로를 막는다.
+교체는 replace_org_ranking_division RPC 한 번(delete+insert 한 트랜잭션)."
 git push -u origin feature/JY-ranking-crawler
 gh pr create --fill
 ```
@@ -1004,42 +1173,58 @@ cat supabase/tests/database/007_security_definer_acl.test.sql | head -40
 
 ```sql
 begin;
-select plan(5);
+select plan(6);
 
 select has_function('public', 'my_ranking_candidates', '후보 조회 함수 존재');
 
--- 시드
-insert into auth.users (id, email)
-values ('33333333-3333-3333-3333-333333333333', 'c@test.local')
+-- ── 시드 ────────────────────────────────────────────────────────────
+-- division_codes 는 user_tennis_orgs 에 있다(users 아님). PK 는 (user_id, org, division).
+insert into auth.users (id, email) values
+  ('33333333-3333-3333-3333-333333333333', 'c@test.local'),
+  ('44444444-4444-4444-4444-444444444444', 'd@test.local')
 on conflict do nothing;
-insert into public.users (id, name, division_codes)
-values ('33333333-3333-3333-3333-333333333333', '김평화', array['gj_m_gold'])
-on conflict (id) do update set name = excluded.name, division_codes = excluded.division_codes;
+
+insert into public.users (id, name) values
+  ('33333333-3333-3333-3333-333333333333', '김평화'),
+  ('44444444-4444-4444-4444-444444444444', '없는이름')
+on conflict (id) do update set name = excluded.name;
+
+insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary) values
+  ('33333333-3333-3333-3333-333333333333', 'gj', 'default', array['gj_m_gold'], true),
+  -- 같은 이름·부서지만 협회가 다른 유저 — 협회 일치 조건 검증용
+  ('44444444-4444-4444-4444-444444444444', 'jn', 'default', array['jn_m_gold'], true)
+on conflict (user_id, org, division) do update set
+  division_codes = excluded.division_codes;
 
 insert into public.org_rankings
   (org_code, division_code, rank, player_name, org_player_id, club_raw,
    rank_points, total_points, source_url)
 values
-  ('gj', 'gj_m_gold', 1, '김평화',   'vudghk2116', '어등산/', 2649, 2649, 'https://x'),
-  ('gj', 'gj_m_gold', 2, '이기영',   'lkybks',     '전라/',   2562, 2562, 'https://x'),
-  ('gj', 'gj_w_rookie', 1, '김평화', 'other',      '다른부서/', 100, 100, 'https://x');
+  ('gj', 'gj_m_gold',   1, '김평화', 'vudghk2116', '어등산/',   2649, 2649, 'https://x'),
+  ('gj', 'gj_m_gold',   2, '이기영', 'lkybks',     '전라/',     2562, 2562, 'https://x'),
+  ('gj', 'gj_w_rookie', 1, '김평화', 'other',      '다른부서/',  100,  100, 'https://x');
 
+-- ── 이름 + 협회 + 부서가 모두 맞는 행만 후보 ─────────────────────────
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
 
--- 이름 + 내 부서가 맞는 행만 후보로 나온다
 select is(
   (select count(*)::int from public.my_ranking_candidates()),
-  1, '이름·부서가 맞는 후보 1건만');
+  1, '이름·협회·부서가 맞는 후보 1건만');
 
 select is(
   (select org_player_id from public.my_ranking_candidates()),
   'vudghk2116', '후보의 협회 아이디가 맞다');
 
+-- 앱 모델이 rank_points 를 필수로 읽는다 — 반환에서 빠지면 런타임에 죽는다
+select isnt(
+  (select rank_points from public.my_ranking_candidates()),
+  null, '후보에 rank_points 가 포함된다');
+
 reset role;
 reset request.jwt.claims;
 
--- 이미 confirmed 된 선수는 후보에서 빠진다
+-- ── 이미 confirmed 된 선수는 후보에서 빠진다 ─────────────────────────
 insert into public.org_player_links (org_code, org_player_id, user_id, status)
 values ('gj', 'vudghk2116', '33333333-3333-3333-3333-333333333333', 'confirmed');
 
@@ -1051,19 +1236,14 @@ select is(
 reset role;
 reset request.jwt.claims;
 
--- 이름이 없는 유저는 후보가 0건이어야 한다 (전체 명단이 새지 않는다)
-insert into auth.users (id, email)
-values ('44444444-4444-4444-4444-444444444444', 'd@test.local')
-on conflict do nothing;
-insert into public.users (id, name, division_codes)
-values ('44444444-4444-4444-4444-444444444444', null, array['gj_m_gold'])
-on conflict (id) do update set name = null;
-
+-- ── 일치하는 이름이 없는 유저에게 명단이 새지 않는다 ──────────────────
+-- (users.name 은 NOT NULL 이라 "이름 없는 유저" 시나리오는 스키마상 불가능하다.
+--  대신 랭킹표에 없는 이름 + 다른 협회 유저로 검증한다.)
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated"}';
 select is(
   (select count(*)::int from public.my_ranking_candidates()),
-  0, '이름 없는 유저에게 명단이 새지 않는다');
+  0, '이름·협회가 안 맞는 유저에게 명단이 새지 않는다');
 reset role;
 reset request.jwt.claims;
 
@@ -1104,6 +1284,7 @@ returns table (
   player_name   text,
   org_player_id text,
   club_raw      text,
+  rank_points   int,
   total_points  int
 )
 language sql
@@ -1112,13 +1293,19 @@ security invoker
 set search_path = public
 as $$
   select r.org_code, r.division_code, r.rank, r.player_name,
-         r.org_player_id, r.club_raw, r.total_points
+         r.org_player_id, r.club_raw, r.rank_points, r.total_points
   from public.org_rankings r
-  join public.users u on u.id = (select auth.uid())
-  where u.name is not null
-    and r.player_name = u.name
+  join public.users u
+    on u.id = (select auth.uid())
+  -- division_codes 는 users 가 아니라 user_tennis_orgs 에 있다.
+  -- PK 가 (user_id, org, division) 이라 유저 1명이 협회별로 여러 행을 갖는다 —
+  -- 조인이 협회 일치 조건(uto.org = r.org_code)을 자연히 만들어 준다.
+  join public.user_tennis_orgs uto
+    on uto.user_id = u.id
+   and uto.org = r.org_code
+   and r.division_code = any(uto.division_codes)
+  where r.player_name = u.name
     and r.org_player_id is not null
-    and r.division_code = any(u.division_codes)
     -- 이미 누군가와 연결 확정된 선수는 후보에서 제외
     and not exists (
       select 1 from public.org_player_links l
@@ -1136,14 +1323,21 @@ as $$
 $$;
 
 comment on function public.my_ranking_candidates is
-  '내 이름·등록 부서와 일치하는 협회 랭킹 행을 후보로 제시한다. security invoker 라 org_rankings RLS 를 그대로 통과한다(로그인 필수).';
+  '내 이름·소속 협회·등록 부서가 모두 일치하는 협회 랭킹 행을 후보로 제시한다. security invoker 라 org_rankings RLS 를 그대로 통과한다(로그인 필수).';
 
 grant execute on function public.my_ranking_candidates to authenticated;
 
 commit;
 ```
 
-`security invoker`인 이유: 호출자의 권한으로 `org_rankings`를 읽으므로 RLS가 그대로 적용된다. `definer`로 만들면 anon에게도 명단이 새는 경로가 열린다.
+**`users.name is not null` 가드는 넣지 않는다** — `users.name` 은 스키마상 `NOT NULL` 이라(055)
+그 조건은 항상 참인 죽은 코드다.
+
+**`rank_points` 를 반환 목록에 반드시 포함한다** — 앱 모델(`OrgRankingRow`, Task 5)이 이 값을
+필수로 선언한다. 빠지면 후보 카드를 그리는 순간 null 을 int 로 캐스팅하다 런타임에 죽는다.
+
+`security invoker`인 이유: 호출자의 권한으로 `org_rankings`를 읽으므로 RLS가 그대로 적용된다.
+`definer`로 만들면 anon에게도 명단이 새는 경로가 열린다.
 
 - [ ] **Step 5: 테스트가 통과하는 것을 확인한다**
 
@@ -1157,9 +1351,15 @@ Expected: PASS 5/5
 
 - [ ] **Step 6: 변이 주입으로 역검증**
 
-`and r.division_code = any(u.division_codes)` 줄을 잠시 지우고 `supabase db reset` 후 재실행한다.
+`and r.division_code = any(uto.division_codes)` 줄을 잠시 지우고 `supabase db reset` 후 재실행한다.
 
-Expected: "이름·부서가 맞는 후보 1건만" 단언이 **실패**(2건이 나온다)해야 한다. 확인 후 원복한다.
+Expected: "이름·협회·부서가 맞는 후보 1건만" 단언이 **실패**(2건이 나온다 — `gj_w_rookie` 행까지 걸린다)해야 한다.
+
+이어서 원복하고, 이번엔 `and uto.org = r.org_code` 를 지운다.
+Expected: 마지막 단언("이름·협회가 안 맞는 유저에게 명단이 새지 않는다")은 그대로 통과하지만
+— 이름이 다르므로 — 협회 조건이 실제로 무언가를 막는지 보려면 시드에서 유저 44444444 의 이름을
+`'김평화'` 로 바꿔 재실행한다. 그러면 그 단언이 **실패**해야 한다(전남 유저에게 광주 행이 뜬다).
+확인 후 전부 원복한다.
 
 - [ ] **Step 7: 커밋 & PR**
 
@@ -1184,7 +1384,9 @@ gh pr create --fill
 - Create: `app/lib/models/org_ranking.dart`
 - Create: `app/lib/screens/admin/ranking_claims_tab.dart`
 - Create: `app/test/ranking_claims_test.dart`
-- Modify: `app/lib/screens/admin/admin_shell.dart` (탭 추가)
+- Modify: `app/lib/screens/admin/admin_screen.dart` — **실제 탭이 여기 있다** (`TabController(length: 6)` → `7`)
+- Modify: `app/lib/router.dart` — 라우트 추가 (없으면 화면에 도달할 방법이 없다)
+- Modify: `app/lib/screens/admin/admin_shell.dart` — 사이드바 항목 추가 (탭이 아니라 좌측 메뉴다)
 
 **Interfaces:**
 - Consumes: Task 2의 `org_player_links`
@@ -1195,8 +1397,20 @@ gh pr create --fill
 ```bash
 git fetch origin && git checkout -b feature/JY-ranking-admin-queue origin/main
 sed -n '1,60p' app/lib/screens/admin/crawl_sources_tab.dart
-grep -n "Tab\|tabs" app/lib/screens/admin/admin_shell.dart | head -20
+grep -n "TabController\|TabBar\|Tab(" app/lib/screens/admin/admin_screen.dart | head -20
+grep -n "admin" app/lib/router.dart | head -20
+grep -n "_items\|path" app/lib/screens/admin/admin_shell.dart | head -20
 ```
+
+**관리자 화면 구조를 오해하지 마라** — 세 파일이 각각 다른 일을 한다:
+
+| 파일 | 역할 |
+|---|---|
+| `admin_screen.dart` | **실제 탭.** `TabController(length: 6)` + `TabBar`/`TabBarView` (크롤 현황·Draft 승인·크롤 소스·클럽 승인·지식베이스·Gemini 사용량) |
+| `router.dart` | `ShellRoute` 안의 `GoRoute` 가 `AdminScreen(initialTab: N)` 으로 연결 |
+| `admin_shell.dart` | 좌측 **사이드바 메뉴**(경로→라벨). 탭이 아니다 |
+
+세 곳을 다 고쳐야 관리자가 화면에 도달한다. 하나라도 빠지면 화면은 만들어지되 **갈 길이 없다.**
 
 `crawl_sources_tab.dart`는 데이터를 주입받는 `StatelessWidget` 카드(`SourceCard`)와 로딩·에러를 다루는 상위 위젯으로 나뉘어 있다. **같은 구조를 따라야 네트워크 없이 테스트된다.**
 
@@ -1411,13 +1625,23 @@ List<ClaimGroup> groupClaimsByPlayer(List<RankingClaim> claims) {
 - 신청자 목록: 각 신청자의 이름과 신청 시각. **경합이면 전부 보인다**
 - 신청자마다 승인 / 반려 버튼
 
-- [ ] **Step 6: 상위 위젯 + 승인 처리**
+- [ ] **Step 6: 상위 위젯 + 승인 처리 + 진입 경로 3곳**
 
-`pending` 조회와 승인·반려 mutation을 담당하는 상위 위젯을 작성하고 `admin_shell.dart` 에 탭으로 등록한다.
+`pending` 조회와 승인·반려를 담당하는 상위 위젯을 작성한다.
 
 - 승인: `status='confirmed'`, `decided_at=now()`, `decided_by=<현재 관리자 id>` 를 함께 쓴다
 - 승인이 유니크 인덱스 위반(Postgres `23505`)으로 실패하면 **"이미 다른 사람에게 연결된 선수입니다"** 로 안내한다. 이건 정상 동작이지 버그가 아니다
+- **반려 취소 = 행 삭제.** `rejected` 행이 남아 있으면 유니크 제약이 재신청을 영구히 막는다. 오심을 되돌릴 수 있게 반려된 항목에 "취소(삭제)" 버튼을 둔다
+- 콜백 시그니처는 `void Function(RankingClaim)` 이다 — 경합 시 어느 신청자를 승인/반려할지 지정해야 한다
 - `dynamic` 대신 명시적 타입을 쓴다. **`dart format` 실행 금지** — 주변 스타일에 손으로 맞춘다
+
+그 다음 진입 경로 **세 곳**을 연결한다:
+
+1. `admin_screen.dart` — `TabController(length: 6)` → `7`, `Tab(text: '랭킹 클레임')` 추가, `TabBarView` 자식 추가, 탭별 로드 분기에 항목 추가
+2. `router.dart` — `/admin/ranking-claims` → `AdminScreen(initialTab: 6)` GoRoute 추가
+3. `admin_shell.dart` — 사이드바 항목 추가
+
+하나라도 빠지면 화면은 만들어지되 도달할 수 없다.
 
 - [ ] **Step 7: 테스트 통과 확인 + 전체 테스트**
 
@@ -1454,8 +1678,8 @@ gh pr create --fill
 ## Task 6: 랭킹 화면
 
 **Files:**
-- Create: `app/lib/screens/rankings/rankings_screen.dart`
-- Create: `app/lib/screens/rankings/ranking_claim_card.dart`
+- Create: `app/lib/screens/rankings/rankings_screen.dart` — 위젯 셋을 **한 파일에** 둔다. 테스트가 이 파일 하나만 import 한다
+- Create: `app/test/rankings_screen_test.dart`
 - Modify: 네비게이션 진입점 (Step 1에서 확인)
 
 **Interfaces:**
@@ -1586,8 +1810,10 @@ Expected: FAIL — `rankings_screen.dart` 가 없다
 `app/lib/screens/rankings/rankings_screen.dart` 에 위 테스트가 요구하는 위젯 셋을 먼저 만들고(전부 데이터 주입형 `StatelessWidget`), 그 위에 조회를 담당하는 화면을 얹는다.
 
 - `RankingList({required List<OrgRankingRow> rows, required String? linkedOrgPlayerId})`
-  — 순위 · 성명 · 소속 · 순위포인트 · 전체포인트. `row.orgPlayerId == linkedOrgPlayerId` 인 행에
-  `key: ValueKey('ranking-row-mine')` 를 주고 강조 스타일을 입힌다
+  — 순위 · 성명 · 소속 · **포인트 한 컬럼**. `row.orgPlayerId == linkedOrgPlayerId` 인 행에
+  `key: ValueKey('ranking-row-mine')` 를 주고 강조 스타일을 입힌다.
+  **화면에는 `totalPoints` 하나만 보여준다** — 두 값이 현재 전 행에서 같아서 유저에겐 같은 숫자가
+  두 번 나올 뿐이다. 두 컬럼을 유지하는 건 저장 층 이야기지 표시 층이 아니다
 - `RankingSourceNotice({required String orgLabel})`
   — `"$orgLabel 공표 데이터 · 참고용이며 협회 공표가 우선합니다"`. **상시 노출**이다.
   앱이 계산한 값이 아니라는 것을 화면이 스스로 말해야 한다
@@ -1681,7 +1907,20 @@ grep -rn "org_player_links" supabase/functions/delete-account/ || \
 
 `user_id`에 `on delete cascade`가 걸려 있어 링크는 자동 소멸한다. **미러의 실명 행은 남는다**(협회가 여전히 공표 중이므로 탈퇴자는 미가입 선수와 같은 취급). 이 동작이 의도된 것임을 `delete-account` 주석에 남긴다.
 
-- [ ] **Step 5: 커밋 & PR**
+- [ ] **Step 5: 협회 크롤링 동의를 문서로 확보**
+
+설계 스펙 §6이 **"민원 시 유일한 방어 근거"**로 못박은 항목이다. 미가입 선수 실명을 표시하는
+결정을 지탱하는 것이 이 문서 하나다.
+
+- Commander가 협회에서 받은 동의(구두였다면 메일 회신 등)를 텍스트로 확보한다
+- 저장 위치를 정한다 — 이 저장소는 **PUBLIC**이므로 담당자 연락처·서명 이미지가 들어간 원본은
+  커밋하지 않는다. 저장소에는 **동의 사실·일자·범위·담당 부서**만 요약해 남기고, 원본은 별도
+  보관처(Drive 등)에 두고 링크만 적는다
+- 동의 범위에 다음이 포함되는지 확인한다: 크롤 대상(부서별 랭킹표), 요청 빈도(하루 1회),
+  앱 내 표시 방식, 출처 표기 문구
+- 확보 못 하면 **Task 6(랭킹 화면) 공개를 보류한다.** 크롤·저장은 가도 되지만 노출은 근거가 필요하다
+
+- [ ] **Step 6: 커밋 & PR**
 
 ```bash
 git add docs app
@@ -1717,7 +1956,11 @@ curl -s "$SUPABASE_URL/rest/v1/org_rankings?select=player_name&limit=1" \
 # Expected: 빈 배열 [] — 행이 새면 실패
 
 # 4. 원본이 보관되는가
-# Supabase Studio → Storage → ranking-snapshots 버킷에 org/division/날짜.html 존재 확인
+psql "$PROD_READONLY_URL" -c \
+  "select source, source_url, length(raw_html) bytes, fetched_at
+   from public.crawl_documents
+   where source like '%-ranking' order by fetched_at desc limit 5;"
+# Expected: 협회당 7행(부서별 URL 1행씩), raw_html 이 비어 있지 않음
 
 # 5. 하네스 전체
 bash scripts/harness/run_all.sh
@@ -1733,4 +1976,24 @@ bash scripts/harness/run_all.sh
 | 대회별 입상 원천 (`tournament_results`) | 계산 단계. 그때 협회에서 정식으로 받는다 |
 | 순위 변동 추이 | 요구사항 없음. 원본 아카이브로 소급 생성 가능 |
 | KTA·KATO·전북 | 광주·전남 파일럿 성과 확인 후 |
-| 연말 리셋 대응 자동화 | 2026년 12월 전까지. 지금은 원본 보관이 유일한 보험이다 |
+| 연말 리셋 대응 자동화 | 아래 수동 절차로 대체 |
+
+## 날짜가 박힌 후속 작업 — 2026년 12월 마지막 주
+
+호남 3개 협회는 **연초에 포인트를 0으로 리셋**한다. 2027년 1월 첫 크롤이 2026 최종 순위를 덮고,
+`crawl_documents`는 같은 URL을 upsert하므로 **원본도 함께 덮인다.**
+
+12월 마지막 주에 사람이 한 번 해야 한다:
+
+```bash
+# 1. 미러 스냅샷을 파일로 뜬다
+psql "$PROD_READONLY_URL" -c "\copy (select * from public.org_rankings order by org_code, division_code, rank) to '2026-final-rankings.csv' csv header"
+
+# 2. 원본 HTML 도 함께
+psql "$PROD_READONLY_URL" -c "\copy (select source, source_url, raw_html, fetched_at from public.crawl_documents where source like '%-ranking') to '2026-final-raw.csv' csv header"
+```
+
+**이게 2026 시즌 최종 순위를 남기는 유일한 경로다.** 스냅샷 테이블은 여전히 불필요하다 —
+연 1회 수동 백업이 매일 수천 행을 쌓는 것보다 싸다.
+
+작업 시작 시 이 항목을 백로그(Linear)에 **2026-12-21 due**로 등록한다.
