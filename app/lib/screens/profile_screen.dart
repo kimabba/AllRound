@@ -13,6 +13,7 @@ import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
+import '../widgets/profile/my_record_widgets.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
@@ -397,7 +398,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
                 const MyClubsSection(),
                 const SizedBox(height: AppSpacing.xl),
-                const MyTournamentRecordsSection(),
+                const MyRecordSection(),
                 const SizedBox(height: AppSpacing.xl),
                 Align(
                   alignment: Alignment.centerRight,
