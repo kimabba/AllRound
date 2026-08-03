@@ -8,11 +8,28 @@ const html = await Deno.readTextFile(
   new URL('./fixtures/gj_player_history.html', import.meta.url),
 );
 
-Deno.test('개인 이력 행을 파싱한다', () => {
+Deno.test('픽스처 첫 행 필드를 전부 대조한다 (컬럼이 뒤바뀌면 실패해야 한다)', () => {
   const rows = parsePlayerHistoryRows(html);
-  assertEquals(rows.length > 0, true);
-  assertEquals(typeof rows[0].tournamentName, 'string');
-  assertEquals(/^\d{4}-\d{2}-\d{2}$/.test(rows[0].playedOn), true);
+  assertEquals(rows.length, 15);
+  const first = rows[0];
+  assertEquals(first.tournamentName, '2026 가상새봄배 전국대회 및 광주생활체육 테니스대회');
+  assertEquals(first.eventRaw, '지동부');
+  assertEquals(first.resultRaw, '8');
+  assertEquals(first.resultRound, 8);
+  assertEquals(first.points, 91);
+  assertEquals(first.playedOn, '2026-07-05');
+});
+
+Deno.test('픽스처에 순위 표기 혼재가 실제로 존재한다 (맨숫자·N강 둘 다)', () => {
+  const rows = parsePlayerHistoryRows(html);
+  const plainDigit = rows.filter((r) => /^\d+$/.test(r.resultRaw));
+  const nGang = rows.filter((r) => /^\d+강$/.test(r.resultRaw));
+  // 이 파서의 존재 이유 — 협회가 같은 페이지에서 두 표기를 섞어 준다.
+  assertEquals(plainDigit.length >= 1, true);
+  assertEquals(nGang.length >= 1, true);
+  // 같은 라운드값(16강)이 두 표기 방식 모두에서 나오는지도 확인한다.
+  assertEquals(plainDigit.some((r) => r.resultRound === 16), true);
+  assertEquals(nGang.some((r) => r.resultRound === 16), true);
 });
 
 Deno.test('맨숫자 표기를 진출 라운드로 정규화한다', () => {
