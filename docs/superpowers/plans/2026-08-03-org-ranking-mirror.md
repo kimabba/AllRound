@@ -1997,3 +1997,44 @@ psql "$PROD_READONLY_URL" -c "\copy (select source, source_url, raw_html, fetche
 연 1회 수동 백업이 매일 수천 행을 쌓는 것보다 싸다.
 
 작업 시작 시 이 항목을 백로그(Linear)에 **2026-12-21 due**로 등록한다.
+
+---
+
+## 부록: 구현 중 정정된 것 (2026-08-03 실행 후 기록)
+
+이 계획서는 **실행 전** 문서다. 아래는 실행하면서 틀린 것으로 드러나 바뀐 부분이다.
+계획 본문은 당시 그대로 두고, 차이만 여기 남긴다 — 다음에 비슷한 계획을 쓸 때의 재료다.
+
+| 계획 | 실제 | 어떻게 드러났나 |
+|---|---|---|
+| Task 1 INSERT 컬럼 `org`·`label`·`level`·`format`·`std_key` | `org_code`·`label_ko`·`skill_tier`·`event_type`·`equiv_group` + `champion_only` | 코덱스가 `\d` 로 실측 대조. 그대로 실행했으면 즉시 실패 |
+| Task 4 RPC 가 `users.division_codes` 참조 | `user_tennis_orgs.division_codes` | 프로덕션 조회로 컬럼 부재 확인. 함수 생성 자체가 실패했을 것. 그 조인이 협회 일치 조건도 만들어 줘 오히려 정확해짐 |
+| Task 2 grant 에서 `anon` 제외 | `anon` 포함 (`select, insert, update, delete`) | 구현자가 "테스트가 이 grant 로는 성립 안 한다"고 보고. 실측 결과 이 레포는 **모든 테이블에 anon 포함 grant + RLS 전담**이 관례(`011_api_role_grants`, `DATABASE_RULES.md:16`). 우리만 예외로 두면 다음 grant 일괄 보충 때 조용히 열린다 |
+| Task 2 정책에 `TO` 절 없음 | 모든 정책에 `to authenticated` | 구현 중 레포 전역 결함 발견 — `is_admin()` 은 anon EXECUTE 가 없어 PUBLIC 정책이면 anon 쿼리가 `42501` 로 죽는다. `grades`·`tennis_divisions` 에 이미 존재(이슈 #365) |
+| Task 2 `decided_by` 에 `on delete` 절 없음 | `on delete set null` | 자체 pgTAP 14/14 + 코덱스 리뷰 통과했는데 **CI 의 `005_storage_privacy`** 가 잡았다. 관리자 탈퇴가 막히는 상태였다 |
+| Task 3 새 Storage 버킷 `ranking-snapshots` | 기존 `saveRawDocument()`(crawl_documents raw zone) 재사용 | 구현 직전 `_shared/crawler.ts` 에서 같은 일을 하는 함수 발견. 버킷·마이그레이션 한 덩어리가 통째로 빠졌다 |
+| Task 3 파서가 `serviceClient()` 직접 호출 | `ctx.audit.supabase` 재사용 + `ctx.audit.fetched/inserted` 수동 증가 | 코덱스: 직접 insert 하는 파서는 `upsertTournament` 자동 증가가 없어 `crawl_audit` 이 항상 0이 된다 |
+| Task 5 `admin_shell.dart` 에 탭 추가 | `admin_screen.dart`(탭) + `router.dart`(라우트) + `admin_shell.dart`(사이드바) **3곳** | 코덱스: `admin_shell.dart` 엔 탭이 없다. 계획대로면 화면은 만들어지되 **갈 길이 없다** |
+| Task 5 신청자명 `nickname` 우선 | `users.name`(실명) | 이 화면은 경합 판정용인데 협회 데이터가 실명이라, 닉네임으로 뜨면 대조할 축이 사라진다 |
+| Task 5 `users(name)` 임베드 | `users!user_id(name)` | `org_player_links` 는 `users` 로 가는 FK 가 둘(`user_id`·`decided_by`)이라 PostgREST 가 `PGRST201` 로 실패. **`analyze`·`test` 로는 안 잡힌다** — 실제 서버 왕복에서만 드러남 |
+| Task 3 crawl_sources INSERT 에 `region_code` 없음 | 포함 | 기존 소스는 전부 채운다 |
+| Task 3 `schedule_cron` 이 실제 스케줄이라고 전제 | **평가되지 않는 참고 값** | 마무리 리뷰: dispatcher 가 그 컬럼을 SELECT 조차 안 한다. 실제는 단일 cron `crawl-dispatch`(UTC 21:00 = KST 06:00). 법적 문서에 틀린 시각이 들어갔었다 |
+| Task 2 정책에 initplan 래핑 없음 | `(select auth.role())`·`(select public.is_admin())` | 마무리 리뷰: 이 레포가 **하루 전** 정리한 관례(JY-108)를 어겼다. 후속 마이그레이션 `20260803050000` 로 복원 |
+| 계획서에 없던 것 | 랭킹 화면에 **삭제 요청 연락처** + **데이터 기준일** | 전자는 §36 창구가 미가입자에게 닫혀 있던 것(Task 7 리뷰), 후자는 연초 리셋 시 앱이 작년 순위를 "현재"로 보여주는 것(마무리 리뷰) |
+
+### 계획이 맞았던 것
+
+- **테이블 2개 분리**(미러/링크) — 크롤이 갈아엎어도 계정 연결이 살아남는 구조가 그대로 작동
+- **0행 가드를 교체 앞에** — 마무리 리뷰가 "데이터 파괴 경로 없음"을 확인
+- **교체를 RPC 한 트랜잭션으로** — 반쪽 상태가 물리적으로 불가능
+- **0점 선수 미저장** — 보유 실명이 절반 이하로
+- **부서 코드 14개**가 네 곳(카탈로그·파서·화면·pgTAP)에서 일치
+
+### 연초 리셋 — 예상과 다르게 동작한다
+
+설계 §7 ① 은 "2027년 1월 첫 크롤이 2026 최종 순위를 덮는다"고 예상했다. **실제로는 덮이지 않는다** —
+전원 0점 → 저장 대상 0건 → 교체 RPC 의 빈 배열 가드가 예외를 던져 **미러가 12월 상태로 보존**된다.
+
+다만 **원본 HTML 은 덮인다.** `saveRawDocument()` 가 RPC 실패보다 **먼저** 실행되고 같은 URL 을
+upsert 하기 때문이다. 그래서 12월 수동 백업(JY-153, 2026-12-21 due)이 2026 시즌을 남기는
+유일한 경로라는 결론은 유효하다.
