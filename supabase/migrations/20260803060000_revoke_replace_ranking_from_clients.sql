@@ -29,8 +29,11 @@ grant execute on function
 -- PUBLIC 도 함께 떼야 한다 — 이 함수의 ACL 에는 `=X/postgres`(PUBLIC grant)가 있고
 -- anon 은 PUBLIC 의 멤버라, anon 개별 grant 만 회수하면 PUBLIC 경유로 여전히 실행된다.
 -- (같은 함정에 두 번 걸렸다: 위 replace_org_ranking_division 이 첫 번째다.)
--- PUBLIC 을 떼면 authenticated 도 함께 잃으므로 명시적으로 다시 부여한다.
+-- PUBLIC 을 떼면 그 경유로만 권한을 갖던 롤이 전부 잃는다. 클린 재생에서는
+-- service_role 도 PUBLIC 경유가 유일한 경로라 함께 사라진다(프로덕션에는 Supabase 가 준
+-- 개별 grant 가 있어 안 드러났고, 011_api_role_grants 가 이걸 잡았다).
+-- 필요한 롤을 전부 명시적으로 다시 부여한다.
 revoke execute on function public.my_ranking_candidates() from public, anon;
-grant execute on function public.my_ranking_candidates() to authenticated;
+grant execute on function public.my_ranking_candidates() to authenticated, service_role;
 
 commit;
