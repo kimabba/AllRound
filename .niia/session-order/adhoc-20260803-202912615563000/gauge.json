@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "session": "adhoc-20260803-202912615563000",
+  "ts": "2026-08-03T20:29:12.646860+09:00",
+  "source": "user",
+  "rung": "HIGH",
+  "overlay": [],
+  "signals": {
+    "verb_class": "none",
+    "recall_hits": 2,
+    "recall_probe": "ok",
+    "risk_words": [],
+    "twin_surface": false,
+    "claim_words": [],
+    "doc_intent": false,
+    "lookup_intent": false,
+    "prompt_chars": 45
+  },
+  "confidence": 0.4,
+  "next": [
+    "/niia-research",
+    "/niia-prepare",
+    "implement",
+    "niia finish"
+  ],
+  "model_reco": {
+    "model": "session",
+    "effort": "max"
+  },
+  "config_fingerprint": {
+    "routing_toml": "63f7a75d",
+    "template": "t2",
+    "source": "deployed"
+  },
+  "transcript_path": null,
+  "cwd": "/Users/ssfak/Documents/01-github/ar",
+  "brand": "adhoc",
+  "prompt_head": "JY-135 tennis divisions 등급과 대회 종목 분리 및 온보딩 반영",
+  "history": [
+    {
+      "ts": "2026-08-03T20:29:12.646670+09:00",
+      "event": "DISPUTE",
+      "from": "MODERATE",
+      "to": "HIGH",
+      "reason": "user override"
+    }
+  ],
+  "disputed": true
+}
