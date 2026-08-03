@@ -326,6 +326,16 @@ const _kFallbackDivisions = <TennisDivision>[
       isRankingGrade: false,
       gender: 'female'),
   TennisDivision(
+      code: 'gj_w_geumbae',
+      org: 'gj',
+      label: '여자금배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'gj_w_gukhwa',
+      org: 'gj',
+      label: '국화부',
+      gender: 'female'),
+  TennisDivision(
       code: 'gj_w_open',
       org: 'gj',
       label: '여자오픈부',
@@ -368,6 +378,16 @@ const _kFallbackDivisions = <TennisDivision>[
       org: 'jn',
       label: '베테랑부',
       gender: 'male'),
+  TennisDivision(
+      code: 'jn_w_geumbae',
+      org: 'jn',
+      label: '여자금배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jn_w_gukhwa',
+      org: 'jn',
+      label: '국화부',
+      gender: 'female'),
   TennisDivision(
       code: 'jn_w_open',
       org: 'jn',
