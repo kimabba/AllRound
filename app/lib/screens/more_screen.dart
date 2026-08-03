@@ -43,6 +43,12 @@ class MoreScreen extends ConsumerWidget {
         subtitle: '테니스와 풋살 규칙 확인',
         onTap: () => context.push('/rules'),
       ),
+      _MenuItem(
+        icon: Icons.leaderboard_rounded,
+        label: '협회 랭킹',
+        subtitle: '광주·전남 협회 공표 순위표',
+        onTap: () => context.push('/rankings'),
+      ),
       if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
