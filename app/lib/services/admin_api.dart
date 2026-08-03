@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/admin.dart';
 import '../models/crawl_source.dart';
 import '../models/format_review.dart';
+import '../models/org_ranking.dart';
 import '../models/tournament.dart';
 import 'api_base.dart';
 
@@ -99,6 +100,109 @@ mixin AdminApi on ApiBase {
       processed++;
     }
     return processed;
+  }
+
+  // ── 협회 랭킹 클레임 ──────────────────────────────────────────
+
+  Future<List<RankingClaim>> pendingRankingClaims() =>
+      _rankingClaimsByStatus('pending');
+
+  Future<List<RankingClaim>> rejectedRankingClaims() =>
+      _rankingClaimsByStatus('rejected');
+
+  /// org_player_links 는 org_rankings 와 FK 로 묶여있지 않다(랭킹표는 크롤마다
+  /// 갈아엎히므로 링크는 텍스트 org_player_id 로만 느슨하게 참조한다). 그래서
+  /// 두 번 조회해 클라이언트에서 org_code/org_player_id 키로 합친다.
+  Future<List<RankingClaim>> _rankingClaimsByStatus(String status) async {
+    final links = await supabase
+        .from('org_player_links')
+        .select(
+          'org_code, org_player_id, user_id, claimed_at, users(name, nickname)',
+        )
+        .eq('status', status)
+        .order('claimed_at');
+    final linkRows = List<Map<String, dynamic>>.from(links as List);
+    if (linkRows.isEmpty) return [];
+
+    final orgCodes =
+        linkRows.map((r) => r['org_code'] as String).toSet().toList();
+    final playerIds =
+        linkRows.map((r) => r['org_player_id'] as String).toSet().toList();
+    final rankingRows = await supabase
+        .from('org_rankings')
+        .select(
+          'org_code, org_player_id, division_code, rank, player_name, club_raw',
+        )
+        .inFilter('org_code', orgCodes)
+        .inFilter('org_player_id', playerIds);
+
+    final rankingByKey = <String, Map<String, dynamic>>{};
+    for (final r in List<Map<String, dynamic>>.from(rankingRows as List)) {
+      rankingByKey.putIfAbsent(
+        '${r['org_code']}/${r['org_player_id']}',
+        () => r,
+      );
+    }
+
+    return linkRows.map((link) {
+      final key = '${link['org_code']}/${link['org_player_id']}';
+      final ranking = rankingByKey[key];
+      final userRow = link['users'] as Map<String, dynamic>?;
+      final nickname = userRow?['nickname'] as String?;
+      final claimantName = (nickname != null && nickname.trim().isNotEmpty)
+          ? nickname
+          : (userRow?['name'] as String? ?? '(이름 없음)');
+      return RankingClaim(
+        orgCode: link['org_code'] as String,
+        orgPlayerId: link['org_player_id'] as String,
+        playerName: ranking?['player_name'] as String? ?? '(정보 없음)',
+        divisionCode: ranking?['division_code'] as String? ?? '',
+        rank: (ranking?['rank'] as num?)?.toInt() ?? 0,
+        clubRaw: ranking?['club_raw'] as String?,
+        claimantName: claimantName,
+        claimantId: link['user_id'] as String,
+        claimedAt: DateTime.parse(link['claimed_at'] as String),
+      );
+    }).toList();
+  }
+
+  /// 승인: status='confirmed' + decided_at/decided_by. 유니크 인덱스 위반(23505)은
+  /// 정상 동작(경합에서 진 쪽)이라 여기서 삼키지 않고 그대로 던진다 — 호출자가
+  /// PostgrestException.code 로 구분해 안내 문구를 고른다.
+  Future<void> approveRankingClaim(RankingClaim claim) async {
+    await _decideRankingClaim(claim, status: 'confirmed');
+  }
+
+  Future<void> rejectRankingClaim(RankingClaim claim) async {
+    await _decideRankingClaim(claim, status: 'rejected');
+  }
+
+  Future<void> _decideRankingClaim(
+    RankingClaim claim, {
+    required String status,
+  }) async {
+    final adminId = supabase.auth.currentUser?.id;
+    if (adminId == null) throw StateError('Not authenticated');
+    await supabase
+        .from('org_player_links')
+        .update({
+          'status': status,
+          'decided_at': DateTime.now().toUtc().toIso8601String(),
+          'decided_by': adminId,
+        })
+        .eq('org_code', claim.orgCode)
+        .eq('org_player_id', claim.orgPlayerId)
+        .eq('user_id', claim.claimantId);
+  }
+
+  /// 반려 취소 = 행 삭제. rejected 행이 남으면 유니크 제약이 재신청을 영구히 막는다.
+  Future<void> undoRejectedRankingClaim(RankingClaim claim) async {
+    await supabase
+        .from('org_player_links')
+        .delete()
+        .eq('org_code', claim.orgCode)
+        .eq('org_player_id', claim.orgPlayerId)
+        .eq('user_id', claim.claimantId);
   }
 
   // ── 크롤 소스 ─────────────────────────────────────────────────
