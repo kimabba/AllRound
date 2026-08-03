@@ -7,8 +7,9 @@
 ## 접수 창구
 
 - 이메일: `demian.772@gmail.com` (개인정보 보호책임자, 처리방침 7항과 동일)
-- 앱 미가입자는 이 이메일이 유일한 접근 경로다. 랭킹 화면 자체에 삭제 요청 UI는 없다
-  (Task 6 `RankingSourceNotice` 위젯 — 별도 확인 필요, 아래 "확인할 것" 참고).
+- 앱 미가입자는 이 이메일이 유일한 접근 경로다. 랭킹 화면 자체에 삭제 요청 UI는 없지만,
+  `RankingSourceNotice` 위젯(`app/lib/screens/rankings/rankings_screen.dart`)이 이
+  이메일을 상시 노출한다.
 
 ## 처리 절차
 
@@ -26,10 +27,11 @@
 
 `org_rankings`는 크롤마다 `replace_org_ranking_division()` RPC가 **부서 단위로
 delete+insert**한다(`supabase/migrations/20260803030000_ranking_crawl_sources.sql`).
-협회가 다음 날에도 같은 선수를 계속 공표하면, 하루 1회 도는 크롤(매일 KST 07:10 광주,
-07:20 전남 — DB cron 은 UTC 22:10/22:20 로 등록돼 있으니 혼동 주의)이
-**삭제한 행을 그대로 되살린다.** 억제(suppress)·블록리스트 메커니즘은 현재 코드베이스에
-없다(2026-08-03 확인).
+협회가 다음 날에도 같은 선수를 계속 공표하면, 하루 1회 도는 크롤(매일 KST 06:00경 —
+전체 크롤 소스와 함께 단일 스케줄러 `crawl-dispatch` cron, UTC 21:00 이 실행한다.
+`crawl_sources.schedule_cron` 값은 현재 dispatcher 가 평가하지 않는 참고용 값이라
+실제 실행 시각이 아니다)이 **삭제한 행을 그대로 되살린다.** 억제(suppress)·블록리스트
+메커니즘은 현재 코드베이스에 없다(2026-08-03 확인).
 
 **임시 대응**: 요청이 들어오면 삭제 후, 다음 크롤 이후 행이 재등장하는지 수동으로
 확인한다(`select * from org_rankings where player_name = '...'`). 재등장하면 다시 삭제하고
@@ -43,6 +45,5 @@ delete+insert**한다(`supabase/migrations/20260803030000_ranking_crawl_sources.
 
 ## 확인할 것
 
-- [ ] 랭킹 화면(`app/lib/screens/rankings/rankings_screen.dart`, `feature/JY-ranking-screen`
-      브랜치)의 `RankingSourceNotice` 하단에 이 이메일이 표시되는지 — 이 문서 작성 시점
-      (2026-08-03) 기준 표시되지 않는다. Task 6 담당 또는 후속 작업에서 추가 확인 필요.
+- [x] 랭킹 화면(`app/lib/screens/rankings/rankings_screen.dart`)의 `RankingSourceNotice`
+      하단에 이 이메일이 표시된다(Task 6, `0463622` 로 반영 완료, 2026-08-03 확인).

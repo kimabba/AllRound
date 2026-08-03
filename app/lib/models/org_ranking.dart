@@ -9,6 +9,7 @@ class OrgRankingRow {
     required this.totalPoints,
     this.orgPlayerId,
     this.clubRaw,
+    this.fetchedAt,
   });
 
   final String orgCode;
@@ -19,6 +20,9 @@ class OrgRankingRow {
   final int totalPoints;
   final String? orgPlayerId;
   final String? clubRaw;
+  // my_ranking_candidates() RPC 는 이 컬럼을 안 돌려준다(후보 카드에는 기준일이
+  // 필요 없다) — null 허용.
+  final DateTime? fetchedAt;
 
   factory OrgRankingRow.fromJson(Map<String, dynamic> j) {
     return OrgRankingRow(
@@ -30,6 +34,9 @@ class OrgRankingRow {
       totalPoints: j['total_points'] as int,
       orgPlayerId: j['org_player_id'] as String?,
       clubRaw: j['club_raw'] as String?,
+      fetchedAt: j['fetched_at'] == null
+          ? null
+          : DateTime.parse(j['fetched_at'] as String),
     );
   }
 }

@@ -60,6 +60,22 @@ void main() {
     // 상시 노출돼야 한다(privacy-policy.html 7항과 같은 주소).
     expect(find.textContaining('삭제'), findsOneWidget);
     expect(find.textContaining('demian.772@gmail.com'), findsOneWidget);
+    // fetchedAt 을 안 주면 기준일 줄은 생략된다(로드 전·행 없음 케이스).
+    expect(find.textContaining('기준'), findsNothing);
+  });
+
+  testWidgets('기준일이 주어지면 표시된다', (tester) async {
+    // 연초 협회 포인트 리셋 등으로 미러가 갱신을 건너뛰면 화면이 옛 데이터를
+    // "현재"처럼 보여줄 위험이 있다 — fetched_at 표시가 그 방지책이다.
+    await _pump(
+      tester,
+      RankingSourceNotice(
+        orgLabel: '광주광역시테니스협회',
+        fetchedAt: DateTime.utc(2026, 8, 3, 21),
+      ),
+    );
+
+    expect(find.textContaining('기준'), findsOneWidget);
   });
 
   testWidgets('내 계정과 연결된 행은 강조된다', (tester) async {
