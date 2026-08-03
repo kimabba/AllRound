@@ -21,7 +21,16 @@
 --
 -- service_role 은 rolbypassrls=true 라 정책 범위와 무관하다(확인함). 서버 경로 영향 없음.
 --
--- 예외 하나: tournaments_published_read 는 anon 도 읽어야 하는 정책이라 아래에서 분리한다.
+-- 공개 분기(로그인을 요구하지 않는 OR 분기)가 섞인 정책은 딱 둘이었다. 나머지 55개는
+-- 전부 순수 is_admin() 이거나 모든 분기가 로그인·멤버십을 요구한다(전수 확인).
+--
+--   1) tournaments_published_read — 아래에서 분리한다. 비로그인 대회 조회는 살려야 한다.
+--   2) clubs_select — `status='approved' or created_by=uid or is_admin()`.
+--      같은 형태지만 **의도적으로 분리하지 않고 authenticated 로 좁힌다**(2026-08-03 Commander 결정).
+--      clubs 에는 contact·address·latitude/longitude 가 있어 승인 클럽을 비로그인에 공개하면
+--      연락처·위치가 그대로 열린다. 지금까지 anon 은 이 정책이 42501 로 죽어 어차피 못 봤으므로
+--      닫아 두는 쪽이 동작 변화가 없다. 여는 것은 공개할 컬럼을 고른 뒤 별건으로 결정한다.
+--      (022 가 anon 의 clubs 조회가 0행임을 고정한다 — 나중에 버그로 오인해 조용히 열지 않도록.)
 
 begin;
 

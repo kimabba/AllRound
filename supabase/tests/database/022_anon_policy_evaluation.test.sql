@@ -16,7 +16,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(3);
+select plan(4);
 
 -- 1) anon 으로 모든 RLS 테이블을 SELECT 했을 때 권한 오류가 나면 안 된다.
 --    정책 평가를 실제로 시켜보는 것이므로 이게 정본이다.
@@ -84,6 +84,21 @@ select is(
      from (select distinct status from public.tournaments) s),
   'closed, published',
   'anon 은 공개 상태 대회만 보고 미공개 대회는 못 본다'
+);
+-- 4) clubs 는 비로그인에게 열지 않는다는 결정을 고정한다.
+--    clubs_select 에는 `status='approved'` 라는 공개 분기가 있어 tournaments 와 같은 형태지만,
+--    clubs 에는 contact·address·좌표가 있어 의도적으로 분리하지 않았다(2026-08-03 Commander 결정).
+--    이 단언이 없으면 나중에 "승인 클럽이 왜 안 보이지"를 버그로 오인해 조용히 열 수 있다.
+--    여는 것은 공개할 컬럼을 고른 뒤 별건으로 결정한다 — 그때 이 단언을 함께 고친다.
+set local role postgres;
+insert into public.clubs (id, name, sport, status)
+values ('00000000-0000-4000-8000-0000000009f2', 'zz 승인 클럽', 'tennis', 'approved');
+
+set local role anon;
+select is(
+  (select count(*)::int from public.clubs),
+  0,
+  'anon 은 승인된 클럽도 보지 않는다 (의도된 결정, 연락처·주소 보호)'
 );
 reset role;
 
