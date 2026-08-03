@@ -1,4 +1,4 @@
-import { assertEquals } from 'jsr:@std/assert';
+import { assertEquals } from 'std/assert/mod.ts';
 import { parseRankingRows } from '../_shared/crawler/parsers/gnuboard_ranking.ts';
 
 const html = await Deno.readTextFile(
