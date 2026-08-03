@@ -10,6 +10,20 @@
 --
 -- 확장(pgvector 등) 소유 함수는 제외한다 — 우리가 관리하는 대상이 아니고
 -- 로컬/프로덕션의 확장 버전이 달라 개수가 어긋난다(011 과 같은 이유).
+--
+-- ⚠️ 이 테스트가 잡지 **못하는** 것 (실측으로 확인, 추정 아님):
+--   #377 의 원인인 "새 함수가 자동으로 anon 에게 열린다"는 CI 에서 재현되지 않는다.
+--   프로덕션은 supabase_admin 의 기본 권한 설정 때문에 새 함수 ACL 이
+--     {postgres=X, anon=X, authenticated=X, service_role=X}
+--   이 되지만, 로컬은 마이그레이션이 postgres 롤로 돌아 {postgres=X/postgres} 뿐이다.
+--   그래서 `revoke ... from public` 만 한 새 함수는 **로컬에서는 anon 이 못 부르고
+--   프로덕션에서만 열린다** — 즉 CI 는 초록불인데 배포하면 뚫린다.
+--   (검증: 로컬에서 새 SECURITY DEFINER 함수 생성 → revoke from public →
+--    has_function_privilege('anon', …) = false. 프로덕션 실측은 true 였다.)
+--
+--   따라서 프로덕션 쪽 탐지기는 여전히 Supabase advisor 다(#377 을 잡은 것도 advisor).
+--   이 파일이 지키는 것은 **이미 회수한 것이 다시 열리지 않는 것**과
+--   **트리거 함수 규칙**이다. 새 함수를 배포한 뒤에는 advisor 를 확인해야 한다.
 
 create extension if not exists pgtap with schema extensions;
 
