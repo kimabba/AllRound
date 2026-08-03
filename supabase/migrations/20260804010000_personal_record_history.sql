@@ -27,6 +27,9 @@ create table public.org_player_results (
   -- 진출 라운드 정규화값(1=우승, 2=준우승, 4=4강 …). 못 읽으면 NULL.
   -- 추측값이나 0으로 채우지 않는다.
   result_round    int,
+  -- 협회 표의 포인트 칸은 항상 숫자이고 빈칸이 관측된 적이 없다. result_round 와
+  -- 달리 "못 읽음" 자체가 관측되지 않으므로 0 을 기본값으로 둬도 추측값을 채우는
+  -- 게 아니다 — 실제 0점이거나 파싱이 확정적으로 성공한 값만 들어온다.
   points          int not null default 0,
   fetched_at      timestamptz not null default now(),
   unique (org_code, org_player_id, tournament_name, played_on)
@@ -50,9 +53,12 @@ create policy org_player_results_own_select on public.org_player_results
        and l.status = 'confirmed'
   ));
 
+-- 쓰기는 service_role 전용(rolbypassrls)이라 admin 쓰기 정책을 두지 않는다.
+-- authenticated 에 select 만 grant 돼 있어(아래) for all 정책은 INSERT/UPDATE/
+-- DELETE 를 grant 단계에서 막힌 죽은 정책이 된다 — for select 로 좁힌다.
 create policy org_player_results_admin_all on public.org_player_results
-  for all to authenticated
-  using (is_admin()) with check (is_admin());
+  for select to authenticated
+  using (is_admin());
 
 -- 쓰기는 크롤러(service_role) 전용. service_role 은 rolbypassrls 라 정책이 없어도 통과한다.
 
@@ -88,9 +94,10 @@ create policy org_ranking_snapshots_own_select on public.org_ranking_snapshots
        and l.status = 'confirmed'
   ));
 
+-- 쓰기는 service_role 전용(rolbypassrls)이라 admin 쓰기 정책을 두지 않는다.
 create policy org_ranking_snapshots_admin_all on public.org_ranking_snapshots
-  for all to authenticated
-  using (is_admin()) with check (is_admin());
+  for select to authenticated
+  using (is_admin());
 
 -- 클라이언트 롤 테이블 권한 — 이 레포 모델은 "권한은 넓게 + 행 통제는 RLS".
 -- 권한이 없으면 RLS 이전에 permission denied 로 죽는다(011_api_role_grants).
