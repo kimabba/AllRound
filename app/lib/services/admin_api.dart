@@ -116,9 +116,7 @@ mixin AdminApi on ApiBase {
   Future<List<RankingClaim>> _rankingClaimsByStatus(String status) async {
     final links = await supabase
         .from('org_player_links')
-        .select(
-          'org_code, org_player_id, user_id, claimed_at, users(name, nickname)',
-        )
+        .select('org_code, org_player_id, user_id, claimed_at, users(name)')
         .eq('status', status)
         .order('claimed_at');
     final linkRows = List<Map<String, dynamic>>.from(links as List);
@@ -148,10 +146,9 @@ mixin AdminApi on ApiBase {
       final key = '${link['org_code']}/${link['org_player_id']}';
       final ranking = rankingByKey[key];
       final userRow = link['users'] as Map<String, dynamic>?;
-      final nickname = userRow?['nickname'] as String?;
-      final claimantName = (nickname != null && nickname.trim().isNotEmpty)
-          ? nickname
-          : (userRow?['name'] as String? ?? '(이름 없음)');
+      // 경합 판정의 대조 축은 실명이다(협회 데이터도 실명) — 닉네임이면 관리자가
+      // "같은 김평화인지" 비교할 수 없다. users.name 은 NOT NULL, 폴백 불필요.
+      final claimantName = userRow?['name'] as String;
       return RankingClaim(
         orgCode: link['org_code'] as String,
         orgPlayerId: link['org_player_id'] as String,
