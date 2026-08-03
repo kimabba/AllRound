@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/org_ranking.dart';
@@ -118,12 +119,20 @@ class _RankingRow extends StatelessWidget {
 /// 요청할 수 있는 유일한 창구가 여기다.
 const _kPrivacyContactEmail = 'demian.772@gmail.com';
 
+final _kFetchedAtFormat = DateFormat('yyyy-MM-dd');
+
 /// 앱이 계산한 값이 아니라는 것과, 삭제·정정 요청 창구를 화면이 스스로
 /// 말한다. 조건 없이 상시 노출(가입 여부 무관 — 랭킹 명단의 미가입자도 봐야 한다).
+///
+/// [fetchedAt] 은 이 표가 마지막으로 협회 원본에서 수집된 시각(org_rankings.fetched_at).
+/// 연초 협회 포인트 리셋 등으로 크롤이 빈 배열 가드에 걸려 저장을 건너뛰면 미러가
+/// 옛 상태로 남는데, 이 값이 없으면 화면이 그걸 "현재"인 것처럼 보여준다 — null 이면
+/// (아직 로드 전이거나 행이 없으면) 이 줄만 생략한다.
 class RankingSourceNotice extends StatelessWidget {
-  const RankingSourceNotice({super.key, required this.orgLabel});
+  const RankingSourceNotice({super.key, required this.orgLabel, this.fetchedAt});
 
   final String orgLabel;
+  final DateTime? fetchedAt;
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +152,11 @@ class RankingSourceNotice extends StatelessWidget {
             '$orgLabel 공표 데이터 · 참고용이며 협회 공표가 우선합니다',
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
+          if (fetchedAt != null)
+            Text(
+              '${_kFetchedAtFormat.format(fetchedAt!.toLocal())} 기준',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
           const SizedBox(height: 2),
           InkWell(
             onTap: () => launchUrl(
@@ -277,6 +291,19 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     );
   }
 
+  /// 표의 대표 기준일 — 행마다 미세하게 다를 수 있어(부서 교체 RPC 가 순차 실행)
+  /// 최신값(가장 늦은 fetched_at)을 쓴다.
+  DateTime? _latestFetchedAt(List<OrgRankingRow>? rows) {
+    if (rows == null || rows.isEmpty) return null;
+    return rows
+        .map((r) => r.fetchedAt)
+        .whereType<DateTime>()
+        .fold<DateTime?>(
+          null,
+          (latest, d) => latest == null || d.isAfter(latest) ? d : latest,
+        );
+  }
+
   void _reload() {
     setState(() {
       _future = _load();
@@ -345,7 +372,13 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          RankingSourceNotice(orgLabel: tennisOrgLabel(_orgCode)),
+          FutureBuilder<_RankingScreenData>(
+            future: _future,
+            builder: (context, snap) => RankingSourceNotice(
+              orgLabel: tennisOrgLabel(_orgCode),
+              fetchedAt: _latestFetchedAt(snap.data?.rows),
+            ),
+          ),
           Expanded(
             child: FutureBuilder<_RankingScreenData>(
               future: _future,
