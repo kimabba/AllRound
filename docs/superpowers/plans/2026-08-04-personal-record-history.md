@@ -456,24 +456,33 @@ git commit -m "feat(db): 개인 전적·순위 스냅샷 테이블 + 스냅샷 �
 
 - [ ] **Step 1: 실제 마크업을 확보하고 익명화한다**
 
-**이 저장소는 공개다.** 실명 + 개인 대회 이력을 그대로 커밋하지 않는다. 구조만 남기고 식별 정보를 바꾼다.
+**이 페이지는 이미 실측했다 (2026-08-04).** 아래는 확인된 사실이니 다시 조사하지 말고 그대로 쓴다.
+
+| 항목 | 실측값 |
+|---|---|
+| URL | `https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116` (HTTP 200) |
+| 컬럼 순서 | `대회명 | 순위 | 종목 | 포인트 | 대회일` — 인덱스 0~4, 계획과 일치 |
+| 날짜 표기 | **`2026년 7월 05일`** (하이픈 아님) |
+| 순위 표기 | `1` `2` `4` `8` `16` 과 `4강` `16강` `32강` **한 페이지에 공존** |
+| 페이지당 | 15행 |
+| 페이지네이션 | `&page=2`, `page=3`, `page=4`. 범위 밖(`page=5`, `page=99`)은 **0행** |
+| 이 선수 총계 | 15+15+15+1 = **46행** (설계 문서의 "김평화 46건"과 일치) |
+
+**이 저장소는 공개다.** 실명 + 개인 대회 이력을 그대로 커밋하지 않는다.
 
 ```bash
-# 실제 org_player_id 하나를 고른다 (DB 에 3,540행 있다)
-PID=$(psql "$DATABASE_URL" -tAc \
-  "select org_player_id from org_rankings where org_code='gj' and org_player_id is not null limit 1")
-
 curl -s -A 'MatchUpBot/1.0 (+https://matchup.app)' \
-  "https://gjtennis.kr/sub4_6_rank.php?userid=${PID}" \
+  'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116' \
   -o /tmp/player_history_raw.html
-
-# 구조를 확인한다 — 컬럼 순서와 태그를 눈으로 본다
-grep -o '<t[dr][^>]*>' /tmp/player_history_raw.html | sort | uniq -c | head
 ```
 
-원본을 보고 **선수명·아이디·소속을 가짜 값으로 치환**한 뒤 `supabase/functions/tests/fixtures/gj_player_history.html` 로 저장한다. 대회명·날짜·포인트는 구조 검증에 필요하므로 형태를 유지하되 대회명은 가공한다.
+받은 HTML 에서 **선수명·협회 아이디·소속을 가짜 값으로 치환**하고 **대회명도 가공**한 뒤 `supabase/functions/tests/fixtures/gj_player_history.html` 로 저장한다. 페이지 1 하나면 충분하다.
 
-**픽스처에 반드시 포함할 것**: 순위 표기가 `1` 형태인 행과 `16강` 형태인 행이 **둘 다** 있어야 한다. 원본에 하나만 있으면 다른 하나를 손으로 추가한다 — 혼재가 이 파서의 핵심 위험이다.
+**보존해야 할 것** — 이게 픽스처의 존재 이유다:
+- 표 구조와 태그(`<tr>`/`<td>`), 컬럼 순서
+- **날짜 표기 `YYYY년 M월 DD일` 형태 그대로**
+- **순위 표기 혼재** — `1`/`4`/`8` 같은 맨숫자 행과 `4강`/`16강`/`32강` 행이 둘 다 남아야 한다. 원본에 자연히 둘 다 있으니 지우지만 않으면 된다.
+- 포인트의 천 단위 콤마가 있는 행이 있으면 남긴다
 
 - [ ] **Step 2: 실패하는 테스트를 쓴다**
 
@@ -529,6 +538,22 @@ Deno.test('정규화에 실패해도 원문은 남는다', () => {
   const rows = parsePlayerHistoryRows(oddRow);
   assertEquals(rows[0].resultRound, null);
   assertEquals(rows[0].resultRaw, '예선탈락');
+});
+
+Deno.test('협회 날짜 표기를 ISO 로 바꾼다 (실측: 2026년 7월 05일)', () => {
+  const row = `
+    <table><tr>
+      <td>zz대회</td><td>1</td><td>골드부</td><td>10</td><td>2026년 7월 05일</td>
+    </tr></table>`;
+  assertEquals(parsePlayerHistoryRows(row)[0].playedOn, '2026-07-05');
+});
+
+Deno.test('날짜를 못 읽는 행은 버린다 — 유니크 키를 만들 수 없다', () => {
+  const row = `
+    <table><tr>
+      <td>zz대회</td><td>1</td><td>골드부</td><td>10</td><td>미정</td>
+    </tr></table>`;
+  assertEquals(parsePlayerHistoryRows(row).length, 0);
 });
 
 Deno.test('천 단위 콤마를 제거한다', () => {
@@ -593,9 +618,15 @@ function toPoints(raw: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** '2026-05-01' | '2026.05.01' | '2026/05/01' → '2026-05-01'. 못 읽으면 null. */
+/**
+ * 대회일 → 'YYYY-MM-DD'. 못 읽으면 null.
+ *
+ * 실측(2026-08-04): 협회는 **'2026년 7월 05일'** 형태로 준다. 숫자 사이 구분자가
+ * 한글이라 `[.\-/]` 만으로는 한 행도 못 읽고 전부 조용히 버려진다.
+ * 다른 표기로 바뀔 수 있어 구분자를 넓게 잡는다.
+ */
 function normalizeDate(raw: string): string | null {
-  const m = raw.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  const m = raw.match(/(\d{4})\s*[년.\-/]\s*(\d{1,2})\s*[월.\-/]\s*(\d{1,2})/);
   if (!m) return null;
   const [, y, mo, d] = m;
   return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
@@ -709,24 +740,28 @@ fetch 는 IO 라 테스트하지 않는다. **URL 을 만드는 규칙**만 순�
 ```ts
 import { playerHistoryUrl } from '../_shared/crawler/parsers/gnuboard_player_history.ts';
 
-Deno.test('개인 이력 URL 을 만든다', () => {
+Deno.test('개인 이력 URL 을 만든다 (페이지 포함)', () => {
   assertEquals(
-    playerHistoryUrl('https://gjtennis.kr', 'vudghk2116'),
-    'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116',
+    playerHistoryUrl('https://gjtennis.kr', 'vudghk2116', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116&page=1',
+  );
+  assertEquals(
+    playerHistoryUrl('https://gjtennis.kr', 'vudghk2116', 3),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116&page=3',
   );
 });
 
 Deno.test('base 의 후행 슬래시를 정리한다', () => {
   assertEquals(
-    playerHistoryUrl('https://gjtennis.kr/', 'abc'),
-    'https://gjtennis.kr/sub4_6_rank.php?userid=abc',
+    playerHistoryUrl('https://gjtennis.kr/', 'abc', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=abc&page=1',
   );
 });
 
 Deno.test('아이디를 URL 인코딩한다', () => {
   assertEquals(
-    playerHistoryUrl('https://gjtennis.kr', 'a b&c'),
-    'https://gjtennis.kr/sub4_6_rank.php?userid=a%20b%26c',
+    playerHistoryUrl('https://gjtennis.kr', 'a b&c', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=a%20b%26c&page=1',
   );
 });
 ```
@@ -751,11 +786,21 @@ const COMMON_HEADERS: Record<string, string> = {
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
 };
 
-export function playerHistoryUrl(base: string, orgPlayerId: string): string {
+export function playerHistoryUrl(
+  base: string,
+  orgPlayerId: string,
+  page: number,
+): string {
   return `${base.replace(/\/+$/, '')}/sub4_6_rank.php?userid=${
     encodeURIComponent(orgPlayerId)
-  }`;
+  }&page=${page}`;
 }
+
+// 한 선수의 이력은 페이지당 15행으로 잘려 온다(실측 2026-08-04). 한 페이지만 긁으면
+// 최근 15건만 들어와 "과거가 즉시 채워진다"는 이 기능의 전제가 깨진다.
+// 범위를 넘긴 페이지는 0행을 주므로(page=5·99 실측) 그걸 중단 조건으로 쓴다.
+// 상한은 폭주 방지용이다 — 46행짜리 선수가 4페이지였으니 20이면 300행까지 커버한다.
+const MAX_HISTORY_PAGES = 20;
 
 /** 이 파일이 DB 에 요구하는 최소 형태. supabase-js 클라이언트가 이걸 만족한다. */
 interface SupabaseLike {
@@ -796,25 +841,42 @@ export async function crawlPlayerHistories(
   if (!links || links.length === 0) return failures;
 
   for (const link of links) {
-    const url = playerHistoryUrl(base, link.org_player_id);
-    let html: string;
-    try {
-      const res = await fetch(url, { headers: COMMON_HEADERS });
-      if (!res.ok) {
-        failures.push(`이력 ${link.org_player_id}: HTTP ${res.status}`);
-        continue;
+    // 페이지를 끝까지 모은다. 0행이 나오면 그 페이지가 범위 밖이다.
+    const rows: PlayerHistoryRow[] = [];
+    let pageFailed = false;
+
+    for (let page = 1; page <= MAX_HISTORY_PAGES; page++) {
+      const url = playerHistoryUrl(base, link.org_player_id, page);
+      let html: string;
+      try {
+        const res = await fetch(url, { headers: COMMON_HEADERS });
+        if (!res.ok) {
+          failures.push(`이력 ${link.org_player_id} p${page}: HTTP ${res.status}`);
+          pageFailed = true;
+          break;
+        }
+        html = await res.text();
+      } catch (e) {
+        failures.push(
+          `이력 ${link.org_player_id} p${page}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+        pageFailed = true;
+        break;
       }
-      html = await res.text();
-    } catch (e) {
-      failures.push(
-        `이력 ${link.org_player_id}: ${e instanceof Error ? e.message : String(e)}`,
-      );
-      continue;
+
+      const pageRows = parsePlayerHistoryRows(html);
+      if (pageRows.length === 0) break; // 범위 밖 — 여기서 끝
+      rows.push(...pageRows);
     }
 
-    const rows = parsePlayerHistoryRows(html);
+    // 중간 페이지에서 실패하면 그 선수는 이번 회차를 통째로 건너뛴다.
+    // 부분 적재는 upsert 라 데이터를 지우진 않지만, "몇 페이지까지 받았나"를
+    // 알 수 없는 채로 남는 것보다 다음 크롤에 온전히 받는 편이 낫다.
+    if (pageFailed) continue;
+
     // 0행은 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
-    // 다만 기존 데이터를 지우지 않는다(upsert 라 애초에 지우지 않는다).
     if (rows.length === 0) continue;
 
     const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
