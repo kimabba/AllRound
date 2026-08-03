@@ -267,6 +267,20 @@
     },
     {
         "org": "gj",
+        "code": "gj_w_geumbae",
+        "label": "여자금배부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
+        "code": "gj_w_gukhwa",
+        "label": "국화부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "gj",
         "code": "gj_w_open",
         "label": "여자오픈부",
         "isActive": true,
@@ -339,6 +353,20 @@
         "org": "jn",
         "code": "jn_m_veteran",
         "label": "베테랑부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_w_geumbae",
+        "label": "여자금배부",
+        "isActive": true,
+        "isRankingGrade": true
+    },
+    {
+        "org": "jn",
+        "code": "jn_w_gukhwa",
+        "label": "국화부",
         "isActive": true,
         "isRankingGrade": true
     },
