@@ -111,9 +111,10 @@ select is(
 );
 
 -- 4) 랭킹 교체가 스냅샷을 남긴다
+--    `perform` 은 plpgsql 전용이라 .sql 파일에서 쓰면 문법 오류다. 평범한 select 로 부른다.
 reset role;
 set local role postgres;
-perform public.replace_org_ranking_division(
+select public.replace_org_ranking_division(
   'gj', 'zz_div', 'https://example.test/zz',
   '[{"rank":1,"player_name":"zz선수","org_player_id":"zz_mine",
      "club_raw":null,"rank_points":100,"total_points":100}]'::jsonb
@@ -126,7 +127,7 @@ select is(
 );
 
 -- 5) 같은 날 두 번 돌아도 안 는다
-perform public.replace_org_ranking_division(
+select public.replace_org_ranking_division(
   'gj', 'zz_div', 'https://example.test/zz',
   '[{"rank":2,"player_name":"zz선수","org_player_id":"zz_mine",
      "club_raw":null,"rank_points":90,"total_points":90}]'::jsonb
@@ -226,7 +227,10 @@ create table public.org_ranking_snapshots (
   captured_on   date not null,
   rank          int not null,
   total_points  int not null,
-  unique (org_code, division_code, org_player_id, captured_on)
+  -- 제약에 이름을 준다. 자동 생성 이름은 길이 제한에 잘려 예측이 안 되고,
+  -- 검증 단계에서 이 제약을 떼었다 붙였다 해야 한다.
+  constraint org_ranking_snapshots_daily_key
+    unique (org_code, division_code, org_player_id, captured_on)
 );
 
 create index org_ranking_snapshots_player_idx
@@ -413,8 +417,13 @@ psql "$DB" -qc 'alter policy org_player_results_admin_all on public.org_player_r
 run
 psql "$DB" -qc 'alter policy org_player_results_admin_all on public.org_player_results to authenticated;'
 
-# 변이 3: on conflict 를 빼면 같은 날 두 번에 행이 늘어야 한다 → 단언 6 뒤집힘
-#   (RPC 를 임시로 바꿔 확인한 뒤 마이그레이션을 다시 적용해 원복한다)
+# 변이 3: 유니크 제약을 떼면 같은 날 두 번에 행이 늘어야 한다 → 단언 6 뒤집힘
+#   on conflict do nothing 은 충돌할 제약이 없으면 아무것도 막지 못한다.
+psql "$DB" -qc 'alter table public.org_ranking_snapshots drop constraint org_ranking_snapshots_daily_key;'
+run
+psql "$DB" -qc 'alter table public.org_ranking_snapshots
+  add constraint org_ranking_snapshots_daily_key
+  unique (org_code, division_code, org_player_id, captured_on);'
 ```
 
 Expected: 각 변이에서 지정한 단언만 `not ok`, 원복 후 전부 `ok`
