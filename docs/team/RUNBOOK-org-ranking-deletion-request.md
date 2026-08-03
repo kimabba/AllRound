@@ -26,7 +26,8 @@
 
 `org_rankings`는 크롤마다 `replace_org_ranking_division()` RPC가 **부서 단위로
 delete+insert**한다(`supabase/migrations/20260803030000_ranking_crawl_sources.sql`).
-협회가 다음 날에도 같은 선수를 계속 공표하면, 하루 1회 도는 크롤(광주 22:10, 전남 22:20 KST)이
+협회가 다음 날에도 같은 선수를 계속 공표하면, 하루 1회 도는 크롤(매일 KST 07:10 광주,
+07:20 전남 — DB cron 은 UTC 22:10/22:20 로 등록돼 있으니 혼동 주의)이
 **삭제한 행을 그대로 되살린다.** 억제(suppress)·블록리스트 메커니즘은 현재 코드베이스에
 없다(2026-08-03 확인).
 
