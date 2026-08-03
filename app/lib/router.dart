@@ -223,6 +223,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 4)),
           ),
           GoRoute(
+            path: '/admin/ranking-claims',
+            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 6)),
+          ),
+          GoRoute(
             path: '/admin/tournaments',
             builder: (_, __) => catalogAware(_AdminTournamentListScreen.new),
           ),
