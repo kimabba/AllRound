@@ -977,7 +977,7 @@ git commit -m "feat(crawler): 연결 승인자 개인 이력 수집을 랭킹 �
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/player_result.dart';
+import 'package:allround/models/player_result.dart';
 
 void main() {
   test('JSON 을 모델로 옮긴다', () {
@@ -1186,10 +1186,10 @@ git commit -m "feat(app): 개인 전적 모델·API
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup/models/org_ranking.dart';
-import 'package:matchup/models/player_result.dart';
-import 'package:matchup/theme/app_theme.dart';
-import 'package:matchup/widgets/profile/my_record_widgets.dart';
+import 'package:allround/models/org_ranking.dart';
+import 'package:allround/models/player_result.dart';
+import 'package:allround/theme/app_theme.dart';
+import 'package:allround/widgets/profile/my_record_widgets.dart';
 
 // AppTheme.light 는 게터가 아니라 메서드다(app/lib/theme/app_theme.dart:9).
 // 테마를 빼면 안 된다 — 이 프로젝트 테마가 버튼 폭을 무한으로 강제해서,
