@@ -22,7 +22,6 @@
 //
 // 설계: docs/superpowers/specs/2026-08-03-org-ranking-mirror-design.md
 
-import { DOMParser } from 'deno-dom';
 import { saveRawDocument } from '../../crawler.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
@@ -53,12 +52,33 @@ export interface RankingRow {
   totalPoints: number;
 }
 
-type El = {
-  getAttribute(name: string): string | null;
-  textContent: string;
-  querySelector(sel: string): El | null;
-  querySelectorAll(sel: string): ArrayLike<El> & Iterable<El>;
+// deno-dom(DOMParser)은 HTML 전체를 WASM 힙에 DOM 트리로 올린다. 페이지 14개(부서 7×협회 2)를
+// 한 함수 실행에서 순차 처리하면 3개째부터 리소스 초과로 죽는 게 실측됐다(2026-08-03, 12초/546).
+// 대신 <tr>...<tr> 단위로 정규식 스캔하며 즉시 처리·폐기한다 — DOM 트리를 만들지 않는다.
+// 전체 HTML 을 한 정규식으로 한 번에 매치하지 않는다(그것도 큰 배열을 남긴다) — exec 루프로
+// 행 하나씩만 메모리에 올린다.
+const ROW_RE = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+const CELL_RE = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
+const PLAYER_ID_RE = /player_rank\(\s*'([^']+)'/;
+
+// 실측 fixture 에는 없지만 이름·소속에 나올 수 있는 최소 엔티티만 디코딩한다(그누보드 표준 이스케이프).
+const ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+  nbsp: ' ',
 };
+
+function decodeEntities(s: string): string {
+  return s.replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (_, name: string) => ENTITY_MAP[name]);
+}
+
+/** 셀 내부 HTML(중첩 <a><b> 등 포함) → 태그 제거·엔티티 디코딩·공백 정리된 텍스트. */
+function textOf(cellHtml: string): string {
+  return decodeEntities(cellHtml.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
 
 /** '2,649' → 2649. 숫자가 아니면 0. */
 function toPoints(raw: string): number {
@@ -67,16 +87,9 @@ function toPoints(raw: string): number {
 }
 
 /** javascript:player_rank('vudghk2116','골드부') → 'vudghk2116' */
-function extractPlayerId(cell: El | null): string | null {
-  if (!cell) return null;
-  const anchor = cell.querySelector('a');
-  const href = anchor?.getAttribute('href') ?? '';
-  const m = href.match(/player_rank\(\s*'([^']+)'/);
+function extractPlayerId(cellHtml: string): string | null {
+  const m = cellHtml.match(PLAYER_ID_RE);
   return m ? m[1] : null;
-}
-
-function textOf(cell: El | null): string {
-  return (cell?.textContent ?? '').trim();
 }
 
 /**
@@ -84,19 +97,26 @@ function textOf(cell: El | null): string {
  * 0점 필터는 여기서 하지 않는다 — 호출자 책임.
  */
 export function parseRankingRows(html: string): RankingRow[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  if (!doc) return [];
-
   const out: RankingRow[] = [];
-  for (const tr of doc.querySelectorAll('tr') as unknown as Iterable<El>) {
-    const cells = Array.from(tr.querySelectorAll('td') as unknown as Iterable<El>);
+
+  ROW_RE.lastIndex = 0;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = ROW_RE.exec(html)) !== null) {
+    const rowHtml = rowMatch[1];
+
+    const cells: string[] = [];
+    CELL_RE.lastIndex = 0;
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = CELL_RE.exec(rowHtml)) !== null) {
+      cells.push(cellMatch[1]);
+    }
     if (cells.length < 7) continue; // 헤더 행(th) · 안내 행
 
     const rank = Number.parseInt(textOf(cells[0]).replace(/[^0-9]/g, ''), 10);
     if (!Number.isInteger(rank) || rank <= 0) continue;
 
-    const nameCell = cells[3];
-    const playerName = textOf(nameCell);
+    const nameCellHtml = cells[3];
+    const playerName = textOf(nameCellHtml);
     if (!playerName) continue;
 
     const club = textOf(cells[4]);
@@ -105,7 +125,7 @@ export function parseRankingRows(html: string): RankingRow[] {
       rank,
       playerName,
       // 성명 셀에서 뽑는다 — 사진이 없는 행은 wr_3 의 <a> 가 비어 있다
-      orgPlayerId: extractPlayerId(nameCell) ?? extractPlayerId(cells[2]),
+      orgPlayerId: extractPlayerId(nameCellHtml) ?? extractPlayerId(cells[2]),
       clubRaw: club === '' ? null : club,
       // wr_6 이 두 번 나오므로 순서로 가른다
       rankPoints: toPoints(textOf(cells[5])),
