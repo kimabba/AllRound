@@ -73,7 +73,10 @@ create table public.org_player_links (
                 check (status in ('pending','confirmed','rejected')),
   claimed_at    timestamptz not null default now(),
   decided_at    timestamptz,
-  decided_by    uuid references public.users(id),
+  -- 승인·반려한 관리자. 그 관리자가 탈퇴하면 누가 처리했는지만 사라지고
+  -- 승인 사실(status·decided_at)은 남는다. on delete 절이 없으면 NO ACTION 이라
+  -- 관리자 탈퇴 자체가 막힌다(005_storage_privacy 가 지키는 불변식).
+  decided_by    uuid references public.users(id) on delete set null,
   unique (org_code, org_player_id, user_id)
 );
 
