@@ -2,6 +2,7 @@ import { assertEquals } from 'std/assert/mod.ts';
 import {
   normalizeResultRound,
   parsePlayerHistoryRows,
+  playerHistoryUrl,
 } from '../_shared/crawler/parsers/gnuboard_player_history.ts';
 
 const html = await Deno.readTextFile(
@@ -88,4 +89,29 @@ Deno.test('천 단위 콤마를 제거한다', () => {
       <td>zz대회</td><td>1</td><td>골드부</td><td>1,000</td><td>2026-05-01</td>
     </tr></table>`;
   assertEquals(parsePlayerHistoryRows(row)[0].points, 1000);
+});
+
+Deno.test('개인 이력 URL 을 만든다 (페이지 포함)', () => {
+  assertEquals(
+    playerHistoryUrl('https://gjtennis.kr', 'vudghk2116', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116&page=1',
+  );
+  assertEquals(
+    playerHistoryUrl('https://gjtennis.kr', 'vudghk2116', 3),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=vudghk2116&page=3',
+  );
+});
+
+Deno.test('base 의 후행 슬래시를 정리한다', () => {
+  assertEquals(
+    playerHistoryUrl('https://gjtennis.kr/', 'abc', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=abc&page=1',
+  );
+});
+
+Deno.test('아이디를 URL 인코딩한다', () => {
+  assertEquals(
+    playerHistoryUrl('https://gjtennis.kr', 'a b&c', 1),
+    'https://gjtennis.kr/sub4_6_rank.php?userid=a%20b%26c&page=1',
+  );
 });

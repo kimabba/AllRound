@@ -110,3 +110,119 @@ export function parsePlayerHistoryRows(html: string): PlayerHistoryRow[] {
   }
   return out;
 }
+
+const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
+const COMMON_HEADERS: Record<string, string> = {
+  'User-Agent': USER_AGENT,
+  'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+};
+
+export function playerHistoryUrl(
+  base: string,
+  orgPlayerId: string,
+  page: number,
+): string {
+  return `${base.replace(/\/+$/, '')}/sub4_6_rank.php?userid=${
+    encodeURIComponent(orgPlayerId)
+  }&page=${page}`;
+}
+
+// 한 선수의 이력은 페이지당 15행으로 잘려 온다(실측 2026-08-04). 한 페이지만 긁으면
+// 최근 15건만 들어와 "과거가 즉시 채워진다"는 이 기능의 전제가 깨진다.
+// 범위를 넘긴 페이지는 0행을 주므로(page=5·99 실측) 그걸 중단 조건으로 쓴다.
+// 상한은 폭주 방지용이다 — 46행짜리 선수가 4페이지였으니 20이면 300행까지 커버한다.
+const MAX_HISTORY_PAGES = 20;
+
+/** 이 파일이 DB 에 요구하는 최소 형태. supabase-js 클라이언트가 이걸 만족한다. */
+export interface SupabaseLike {
+  from(table: string): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        eq(column: string, value: string): PromiseLike<
+          { data: { org_player_id: string }[] | null; error: { message: string } | null }
+        >;
+      };
+    };
+  };
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ error: { message: string } | null }>;
+}
+
+/**
+ * 연결 승인(confirmed)된 선수의 대회 이력을 수집한다.
+ * 요청 수 = 승인자 수. 승인자가 없으면 요청 0건으로 즉시 끝난다.
+ * 한 명이 실패해도 나머지는 계속한다 — 실패는 메시지로 모아 돌려준다.
+ */
+export async function crawlPlayerHistories(
+  db: SupabaseLike,
+  org: string,
+  base: string,
+): Promise<string[]> {
+  const failures: string[] = [];
+
+  const { data: links, error } = await db
+    .from('org_player_links')
+    .select('org_player_id')
+    .eq('org_code', org)
+    .eq('status', 'confirmed');
+
+  if (error) return [`연결 목록 조회 실패: ${error.message}`];
+  if (!links || links.length === 0) return failures;
+
+  for (const link of links) {
+    // 페이지를 끝까지 모은다. 0행이 나오면 그 페이지가 범위 밖이다.
+    const rows: PlayerHistoryRow[] = [];
+    let pageFailed = false;
+
+    for (let page = 1; page <= MAX_HISTORY_PAGES; page++) {
+      const url = playerHistoryUrl(base, link.org_player_id, page);
+      let html: string;
+      try {
+        const res = await fetch(url, { headers: COMMON_HEADERS });
+        if (!res.ok) {
+          failures.push(`이력 ${link.org_player_id} p${page}: HTTP ${res.status}`);
+          pageFailed = true;
+          break;
+        }
+        html = await res.text();
+      } catch (e) {
+        failures.push(
+          `이력 ${link.org_player_id} p${page}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        pageFailed = true;
+        break;
+      }
+
+      const pageRows = parsePlayerHistoryRows(html);
+      if (pageRows.length === 0) break; // 범위 밖 — 여기서 끝
+      rows.push(...pageRows);
+    }
+
+    // 중간 페이지에서 실패하면 그 선수는 이번 회차를 통째로 건너뛴다.
+    // 부분 적재는 upsert 라 데이터를 지우진 않지만, "몇 페이지까지 받았나"를
+    // 알 수 없는 채로 남는 것보다 다음 크롤에 온전히 받는 편이 낫다.
+    if (pageFailed) continue;
+
+    // 0행은 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
+    if (rows.length === 0) continue;
+
+    const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
+      p_org: org,
+      p_org_player_id: link.org_player_id,
+      p_rows: rows.map((r) => ({
+        tournament_name: r.tournamentName,
+        played_on: r.playedOn,
+        event_raw: r.eventRaw,
+        result_raw: r.resultRaw,
+        result_round: r.resultRound,
+        points: r.points,
+      })),
+    });
+    if (rpcErr) failures.push(`이력 ${link.org_player_id}: upsert ${rpcErr.message}`);
+  }
+
+  return failures;
+}
