@@ -146,6 +146,7 @@ class RecordContent extends StatelessWidget {
       children: [
         nowBlock,
         AppCard(
+          key: const Key('best-moment-card'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

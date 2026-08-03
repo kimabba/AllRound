@@ -65,7 +65,17 @@ void main() {
       _r(name: '작은대회', raw: '4강', round: 4, points: 100, on: '2026-06-01'),
       _r(name: '큰대회', raw: '1', round: 1, points: 1000, on: '2026-05-01'),
     ])));
-    expect(find.textContaining('큰대회'), findsWidgets);
+    // 두 대회 모두 전적 타임라인에는 나열되므로, textContaining 만으로는
+    // best 선택 로직을 검증하지 못한다 — "최고의 순간" 카드 안으로 좁힌다.
+    final bestCard = find.byKey(const Key('best-moment-card'));
+    expect(
+      find.descendant(of: bestCard, matching: find.textContaining('큰대회')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: bestCard, matching: find.textContaining('작은대회')),
+      findsNothing,
+    );
   });
 
   testWidgets('정규화 실패 행은 협회 원문을 그대로 보여준다', (tester) async {
