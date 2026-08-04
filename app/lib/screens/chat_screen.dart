@@ -14,6 +14,7 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../widgets/moderation/ugc_moderation_widgets.dart';
+import '../widgets/chat_ai_disclosure.dart';
 import '../widgets/chat_club_card.dart';
 import '../widgets/chat_tournament_card.dart';
 
@@ -622,49 +623,57 @@ class _InputBar extends StatelessWidget {
           color: cs.surface,
           border: Border(top: BorderSide(color: cs.outlineVariant)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minHeight: 48,
-                  maxHeight: AppSizes.chatComposerMax,
-                ),
-                child: TextField(
-                  key: AllRoundE2EKeys.chatInput,
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: '메시지를 입력하세요',
-                    fillColor: cs.surfaceContainerLowest,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minHeight: 48,
+                      maxHeight: AppSizes.chatComposerMax,
+                    ),
+                    child: TextField(
+                      key: AllRoundE2EKeys.chatInput,
+                      controller: controller,
+                      decoration: InputDecoration(
+                        hintText: '메시지를 입력하세요',
+                        fillColor: cs.surfaceContainerLowest,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.md,
+                        ),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      minLines: 1,
+                      maxLines: 4,
+                      onSubmitted: (_) => onSend(),
                     ),
                   ),
-                  textInputAction: TextInputAction.send,
-                  minLines: 1,
-                  maxLines: 4,
-                  onSubmitted: (_) => onSend(),
                 ),
-              ),
+                const SizedBox(width: AppSpacing.sm),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) {
+                    final canSend = value.text.trim().isNotEmpty;
+                    return _ChatComposerAction(
+                      onPressed: busy ? onStop : (canSend ? onSend : null),
+                      icon:
+                          busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
+                      tooltip: busy ? '응답 중지' : '메시지 보내기',
+                      backgroundColor: busy ? cs.error : cs.primary,
+                      foregroundColor: busy ? cs.onError : cs.onPrimary,
+                      disabledBackgroundColor: cs.surfaceContainerHighest,
+                      disabledForegroundColor: cs.onSurfaceVariant,
+                    );
+                  },
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                final canSend = value.text.trim().isNotEmpty;
-                return _ChatComposerAction(
-                  onPressed: busy ? onStop : (canSend ? onSend : null),
-                  icon: busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
-                  tooltip: busy ? '응답 중지' : '메시지 보내기',
-                  backgroundColor: busy ? cs.error : cs.primary,
-                  foregroundColor: busy ? cs.onError : cs.onPrimary,
-                  disabledBackgroundColor: cs.surfaceContainerHighest,
-                  disabledForegroundColor: cs.onSurfaceVariant,
-                );
-              },
-            ),
+            const SizedBox(height: AppSpacing.sm),
+            const ChatAiDisclosure(),
           ],
         ),
       ),
