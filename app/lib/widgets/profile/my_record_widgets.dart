@@ -195,14 +195,11 @@ class _ResultTile extends StatelessWidget {
             ),
           ),
           // 정규화 실패 행은 resultLabel 이 협회 원문을 그대로 돌려준다(예: '예선탈락').
-          // 짧은 라벨('우승'·'16강')과 달리 길이가 예측 안 되므로 Flexible 로 감싼다 —
-          // 원문은 자르지 않고 넘치지 않게만 만든다.
+          // "원문을 그대로 보여준다"는 이 화면의 규칙이라 ellipsis 로 잘라내지 않는다 —
+          // Flexible 이 폭을 제한해 줄바꿈만으로 오버플로우를 막는다. 짧은 라벨
+          // ('우승'·'16강')은 한 줄에 그대로라 보기에 달라지지 않는다.
           Flexible(
-            child: Text(
-              result.resultLabel,
-              style: tt.bodyLarge,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(result.resultLabel, style: tt.bodyLarge),
           ),
           const SizedBox(width: AppSpacing.md),
           Text('+${result.points}', style: tt.bodyLarge),

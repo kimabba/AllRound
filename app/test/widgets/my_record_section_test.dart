@@ -90,7 +90,7 @@ void main() {
     expect(find.textContaining('전적'), findsWidgets);
   });
 
-  testWidgets('긴 협회 원문 결과 라벨이 있어도 좁은 화면에서 오버플로우가 나지 않는다',
+  testWidgets('긴 협회 원문 결과 라벨이 있어도 좁은 화면에서 오버플로우가 나지 않고 잘리지도 않는다',
       (tester) async {
     // 넓은 기본 테스트 캔버스(800x600)에서는 이 정도 길이로도 넘치지 않는다 —
     // 실제로 문제가 재현되는 작은 화면 폭으로 좁혀야 회귀를 잡는 테스트가 된다.
@@ -99,10 +99,11 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    const raw = '예선탈락(1회전 세트스코어 0:2 패배로 조기 탈락, 재경기 없음)';
     await tester.pumpWidget(_wrap(RecordContent(results: [
       _r(
         name: '전남지사배 전국테니스대회',
-        raw: '예선탈락(1회전 세트스코어 0:2 패배로 조기 탈락, 재경기 없음)',
+        raw: raw,
         round: null,
         points: 5,
         on: '2026-05-01',
@@ -110,7 +111,15 @@ void main() {
     ])));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    // 원문은 자르지 않고 그대로 보여준다 — 레이아웃만 안전해야 한다.
-    expect(find.text('예선탈락(1회전 세트스코어 0:2 패배로 조기 탈락, 재경기 없음)'), findsOneWidget);
+
+    // "정규화 실패 시 원문을 그대로 보여준다"는 이 화면의 규칙이다 — ellipsis 로 잘려도
+    // Text.data 자체(원문 전체)는 위젯 트리에 남아 있어 find.text 만으로는 잘림을
+    // 못 잡는다. Text 위젯의 overflow/maxLines 를 직접 확인해야 "화면에 실제로 다
+    // 보이는지"를 증명한다.
+    final textFinder = find.text(raw);
+    expect(textFinder, findsOneWidget);
+    final textWidget = tester.widget<Text>(textFinder);
+    expect(textWidget.overflow, isNot(TextOverflow.ellipsis));
+    expect(textWidget.maxLines, isNull);
   });
 }
