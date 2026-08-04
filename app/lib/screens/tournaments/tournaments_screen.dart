@@ -900,24 +900,18 @@ class _TournamentMonthCalendar extends StatelessWidget {
                                   row * 7 + col,
                                 ),
                             ];
-                            final bands =
-                                bandFlagsForWeek(weekDates, tournaments);
+                            final layout =
+                                laneLayoutForWeek(weekDates, tournaments);
                             return Row(
                               children: List.generate(7, (col) {
                                 final cellDate = weekDates[col];
-                                final band = bands[col];
                                 return Expanded(
                                   child: _CalendarDayCell(
                                     date: cellDate,
                                     today: today,
                                     selectedDate: selectedDate,
-                                    count: _tournamentCountOnDate(
-                                      cellDate,
-                                      tournaments,
-                                    ),
-                                    hasBand: band.hasBand,
-                                    isBandStart: band.isBandStart,
-                                    isBandEnd: band.isBandEnd,
+                                    laneSlots: layout.laneGrid[col],
+                                    overflowCount: layout.overflowCounts[col],
                                     onTap: onDateSelected,
                                   ),
                                 );
@@ -978,26 +972,27 @@ class _CalendarMonthButton extends StatelessWidget {
   }
 }
 
+// 날짜 칸 전체 높이: 날짜 숫자 + 최대 4줄 대회 바 + overflow 텍스트.
+const double _kCalendarCellHeight = 78;
+const double _kCalendarLaneHeight = 5;
+const double _kCalendarLaneGap = 2;
+
 class _CalendarDayCell extends StatelessWidget {
   final DateTime? date;
   final DateTime today;
   final DateTime? selectedDate;
-  // 그 날짜에 걸친 대회 수. 0이면 표시하지 않는다.
-  final int count;
-  // 멀티데이 대회 범위 밴드: 그날 걸침 여부 + Row 단위 구간 시작/끝(둥근 모서리).
-  final bool hasBand;
-  final bool isBandStart;
-  final bool isBandEnd;
+  // 이 칸에서 레인(줄)별로 걸린 대회의 모서리 플래그. null이면 그 레인엔 대회 없음.
+  final List<LaneSlot?> laneSlots;
+  // kCalendarMaxLanes를 넘어 줄로 못 그린 대회 수.
+  final int overflowCount;
   final ValueChanged<DateTime> onTap;
 
   const _CalendarDayCell({
     required this.date,
     required this.today,
     required this.selectedDate,
-    required this.count,
-    required this.hasBand,
-    required this.isBandStart,
-    required this.isBandEnd,
+    required this.laneSlots,
+    required this.overflowCount,
     required this.onTap,
   });
 
@@ -1007,7 +1002,7 @@ class _CalendarDayCell extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final currentDate = date;
     if (currentDate == null) {
-      return const SizedBox(height: AppSizes.touchTarget);
+      return const SizedBox(height: _kCalendarCellHeight);
     }
 
     final isSelected =
@@ -1017,90 +1012,89 @@ class _CalendarDayCell extends StatelessWidget {
     return InkWell(
       onTap: () => onTap(currentDate),
       borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: SizedBox(
-        height: AppSizes.touchTarget,
-        child: Stack(
-          alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _kCalendarCellHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // 멀티데이 대회 범위 밴드: 셀 폭을 꽉 채워 인접 셀과 이어붙고,
-            // 날짜 원 뒤(맨 아래) 레이어에 그린다.
-            if (hasBand)
-              Container(
-                height: 30,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.horizontal(
-                    left: isBandStart
-                        ? const Radius.circular(AppRadius.xxl)
-                        : Radius.zero,
-                    right: isBandEnd
-                        ? const Radius.circular(AppRadius.xxl)
-                        : Radius.zero,
+            const SizedBox(height: AppSpacing.xs),
+            // 선택 시 원이 26→30 으로 커지는데, 고정 30 슬롯 안에서 커지게 해야
+            // 옆 칸과 레인 바 높이가 어긋나지 않는다(선택 칸만 아래로 밀리는 문제 방지).
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: isSelected ? 30 : 26,
+                  height: isSelected ? 30 : 26,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: cs.primary, width: 1.3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${currentDate.day}',
+                    style: tt.labelMedium?.copyWith(
+                      color: isSelected ? cs.onPrimary : cs.onSurface,
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-            Center(
-              child: SizedBox.square(
-                dimension: AppSizes.touchTarget,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: isSelected ? 40 : 36,
-                      height: isSelected ? 40 : 36,
-                      decoration: BoxDecoration(
-                        color: isSelected ? cs.primary : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: isToday && !isSelected
-                            ? Border.all(color: cs.primary, width: 1.3)
-                            : null,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${currentDate.day}',
-                        style: tt.labelLarge?.copyWith(
-                          color: isSelected ? cs.onPrimary : cs.onSurface,
-                          fontWeight: isSelected || isToday
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (count > 0)
-                      Positioned(
-                        top: 2,
-                        right: 2,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: isSelected ? cs.onPrimary : cs.primary,
-                            shape: BoxShape.circle,
-                            // 캘린더 카드 배경(surfaceContainerLow)과 동일한 테두리로 배지 분리.
-                            border: Border.all(
-                              color: cs.surfaceContainerLow,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            count > 9 ? '9+' : '$count',
-                            style: tt.labelSmall?.copyWith(
-                              color: isSelected ? cs.primary : cs.onPrimary,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            for (final slot in laneSlots) ...[
+              _CalendarLaneBar(slot: slot),
+              const SizedBox(height: _kCalendarLaneGap),
+            ],
+            Text(
+              overflowCount > 0 ? '+$overflowCount' : '',
+              style: tt.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+                fontSize: 9,
+                height: 1,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// 대회 하나가 그 칸에서 차지하는 한 줄. 인접 칸의 같은 레인과 색이 이어지고
+// 시작/끝 칸만 모서리가 둥글어 하나의 이어진 바처럼 보인다.
+class _CalendarLaneBar extends StatelessWidget {
+  final LaneSlot? slot;
+
+  const _CalendarLaneBar({required this.slot});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentSlot = slot;
+    if (currentSlot == null) {
+      return const SizedBox(height: _kCalendarLaneHeight);
+    }
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: _kCalendarLaneHeight,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.horizontal(
+          left: currentSlot.isBandStart
+              ? const Radius.circular(AppRadius.xs)
+              : Radius.zero,
+          right: currentSlot.isBandEnd
+              ? const Radius.circular(AppRadius.xs)
+              : Radius.zero,
         ),
       ),
     );
@@ -1209,38 +1203,107 @@ int _tournamentCountOnDate(DateTime? date, List<Tournament> tournaments) {
       .length;
 }
 
-/// 그 날짜에 2일 이상짜리(멀티데이) 대회가 걸쳐 있으면 true.
-/// null 셀(월 앞뒤 여백)은 false로 흡수해 호출부 인접 비교를 단순화한다.
-@visibleForTesting
-bool multiDayBandOnDate(DateTime? date, List<Tournament> tournaments) {
-  if (date == null) return false;
-  return tournaments.any(
-    (t) =>
-        t.endDate != null &&
-        _dateOnly(t.endDate!).isAfter(_dateOnly(t.startDate)) &&
-        _isDateInTournament(date, t),
-  );
+/// 한 셀 안에서 대회 하나가 차지하는 레인의 모서리 플래그.
+typedef LaneSlot = ({bool isBandStart, bool isBandEnd});
+
+/// 한 주(week row)의 레인 배치 결과.
+/// [laneGrid]는 [dayIndex][lane] → 그 칸에 걸친 대회의 모서리 플래그(없으면 null).
+/// [overflowCounts]는 [maxLanes]를 넘어 표시 못한 대회 수(날짜별).
+class WeekLaneLayout {
+  final List<List<LaneSlot?>> laneGrid;
+  final List<int> overflowCounts;
+  const WeekLaneLayout(this.laneGrid, this.overflowCounts);
 }
 
-/// 셀별 밴드 표시/모서리 플래그. Row(주) 단위 인접 비교라 주간 경계는 자동 처리된다.
-typedef BandFlags = ({bool hasBand, bool isBandStart, bool isBandEnd});
+/// 캘린더 한 칸에 동시에 그릴 수 있는 최대 대회 줄 수.
+const int kCalendarMaxLanes = 4;
 
-/// 한 주(7칸, null = 빈 셀) 날짜 배열에 대해 셀별 밴드 플래그를 계산한다.
+/// 한 주(7칸, null = 빈 셀)에 걸친 대회들을 겹치지 않는 레인에 배치한다.
+/// 칸(col)을 왼쪽부터 훑으며(sweep line) 그날 걸치는데 레인이 없는 대회를
+/// 빈 레인에 배정한다 — 한 번 레인을 잡으면 자기 끝 칸까지 계속 그 레인을
+/// 쓰고, 끝나야 레인이 풀린다. 시작 시점엔 4레인이 다 차 있어도 나중에
+/// 레인이 비면 그때부터 새로 시작하는 바로 이어서 그려진다(전체를
+/// overflow 처리하지 않음).
+/// [maxLanes]를 넘는 날엔 그 칸만 overflowCounts로 넘긴다.
+// ponytail: 레인 배정은 주(week row) 단위로 독립 계산한다. 여러 주에 걸친
+// 대회는 주가 바뀌면 다른 레인에 놓일 수 있음(레인엔 색 구분이 없어 기능상
+// 문제는 아님). 주 간 레인을 맞추려면 이전 주 배정을 이어받는 로직이 필요 —
+// 필요해지면 그때 추가.
 @visibleForTesting
-List<BandFlags> bandFlagsForWeek(
+WeekLaneLayout laneLayoutForWeek(
   List<DateTime?> weekDates,
-  List<Tournament> tournaments,
-) {
-  final hasBand =
-      weekDates.map((d) => multiDayBandOnDate(d, tournaments)).toList();
-  return [
-    for (var i = 0; i < weekDates.length; i++)
-      (
-        hasBand: hasBand[i],
-        isBandStart: hasBand[i] && (i == 0 || !hasBand[i - 1]),
-        isBandEnd: hasBand[i] && (i == weekDates.length - 1 || !hasBand[i + 1]),
-      ),
+  List<Tournament> tournaments, {
+  int maxLanes = kCalendarMaxLanes,
+}) {
+  final entries = <({Tournament tournament, int startCol, int endCol})>[];
+  for (final tournament in tournaments) {
+    int? startCol;
+    var endCol = -1;
+    for (var col = 0; col < weekDates.length; col++) {
+      final date = weekDates[col];
+      if (date == null || !_isDateInTournament(date, tournament)) continue;
+      startCol ??= col;
+      endCol = col;
+    }
+    if (startCol != null) {
+      entries.add((tournament: tournament, startCol: startCol, endCol: endCol));
+    }
+  }
+  // 같은 칸에 새로 레인을 못 받은 대회가 여럿이면 이 순서로 우선순위를 준다:
+  // 먼저 시작한 대회, 그중 더 길게 걸치는 대회, 그래도 같으면 시작일 순.
+  entries.sort((a, b) {
+    final byStart = a.startCol.compareTo(b.startCol);
+    if (byStart != 0) return byStart;
+    final byLength = (b.endCol - b.startCol).compareTo(a.endCol - a.startCol);
+    if (byLength != 0) return byLength;
+    return a.tournament.startDate.compareTo(b.tournament.startDate);
+  });
+
+  final laneGrid = List.generate(
+    weekDates.length,
+    (_) => List<LaneSlot?>.filled(maxLanes, null),
+  );
+  // 레인별로 지금 그 레인을 쓰고 있는 entries 인덱스(-1=빈 레인)와,
+  // 그 대회가 이 레인에서 그려지기 시작한 칸.
+  final laneOccupant = List<int>.filled(maxLanes, -1);
+  final laneRunStart = List<int>.filled(maxLanes, -1);
+
+  for (var col = 0; col < weekDates.length; col++) {
+    // 오늘 이후로 안 걸치는 점유자는 레인을 비운다.
+    for (var lane = 0; lane < maxLanes; lane++) {
+      final occupant = laneOccupant[lane];
+      if (occupant != -1 && col > entries[occupant].endCol) {
+        laneOccupant[lane] = -1;
+      }
+    }
+    // 오늘 걸치는데 레인이 없는 대회를 우선순위대로 빈 레인에 배정한다.
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      if (col < entry.startCol || col > entry.endCol) continue;
+      if (laneOccupant.contains(i)) continue;
+      final freeLane = laneOccupant.indexOf(-1);
+      if (freeLane == -1) continue; // 이번 칸은 자리 없음 → overflow로 집계
+      laneOccupant[freeLane] = i;
+      laneRunStart[freeLane] = col;
+    }
+    // 오늘 레인을 쓰는 대회를 그린다.
+    for (var lane = 0; lane < maxLanes; lane++) {
+      final occupant = laneOccupant[lane];
+      if (occupant == -1) continue;
+      laneGrid[col][lane] = (
+        isBandStart: laneRunStart[lane] == col,
+        isBandEnd: col == entries[occupant].endCol,
+      );
+    }
+  }
+
+  final overflowCounts = [
+    for (var col = 0; col < weekDates.length; col++)
+      _tournamentCountOnDate(weekDates[col], tournaments) -
+          laneGrid[col].where((slot) => slot != null).length,
   ];
+
+  return WeekLaneLayout(laneGrid, overflowCounts);
 }
 
 List<Tournament> _tournamentsOnDate(
