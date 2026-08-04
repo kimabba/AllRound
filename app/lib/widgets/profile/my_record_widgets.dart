@@ -194,8 +194,16 @@ class _ResultTile extends StatelessWidget {
               ],
             ),
           ),
-          // 정규화 실패 행은 resultLabel 이 협회 원문을 그대로 돌려준다.
-          Text(result.resultLabel, style: tt.bodyLarge),
+          // 정규화 실패 행은 resultLabel 이 협회 원문을 그대로 돌려준다(예: '예선탈락').
+          // 짧은 라벨('우승'·'16강')과 달리 길이가 예측 안 되므로 Flexible 로 감싼다 —
+          // 원문은 자르지 않고 넘치지 않게만 만든다.
+          Flexible(
+            child: Text(
+              result.resultLabel,
+              style: tt.bodyLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const SizedBox(width: AppSpacing.md),
           Text('+${result.points}', style: tt.bodyLarge),
         ],

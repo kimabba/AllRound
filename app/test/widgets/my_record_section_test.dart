@@ -89,4 +89,28 @@ void main() {
     await tester.pumpWidget(_wrap(const RecordContent(results: [])));
     expect(find.textContaining('전적'), findsWidgets);
   });
+
+  testWidgets('긴 협회 원문 결과 라벨이 있어도 좁은 화면에서 오버플로우가 나지 않는다',
+      (tester) async {
+    // 넓은 기본 테스트 캔버스(800x600)에서는 이 정도 길이로도 넘치지 않는다 —
+    // 실제로 문제가 재현되는 작은 화면 폭으로 좁혀야 회귀를 잡는 테스트가 된다.
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_wrap(RecordContent(results: [
+      _r(
+        name: '전남지사배 전국테니스대회',
+        raw: '예선탈락(1회전 세트스코어 0:2 패배로 조기 탈락, 재경기 없음)',
+        round: null,
+        points: 5,
+        on: '2026-05-01',
+      ),
+    ])));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    // 원문은 자르지 않고 그대로 보여준다 — 레이아웃만 안전해야 한다.
+    expect(find.text('예선탈락(1회전 세트스코어 0:2 패배로 조기 탈락, 재경기 없음)'), findsOneWidget);
+  });
 }

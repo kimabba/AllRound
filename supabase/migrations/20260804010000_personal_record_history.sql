@@ -208,7 +208,9 @@ begin
     r ->> 'event_raw',
     r ->> 'result_raw',
     nullif(r ->> 'result_round', '')::int,
-    coalesce((r ->> 'points')::int, 0),
+    -- nullif 가 캐스팅보다 먼저 와야 한다. coalesce((r->>'points')::int, 0) 순서면
+    -- 빈 문자열이 캐스팅에서 먼저 예외를 던져 upsert 전체가 롤백된다.
+    coalesce(nullif(r ->> 'points', '')::int, 0),
     now()
   from jsonb_array_elements(p_rows) as r
   on conflict (org_code, org_player_id, tournament_name, played_on)

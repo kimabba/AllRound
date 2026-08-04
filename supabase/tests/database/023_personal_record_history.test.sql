@@ -11,7 +11,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(15);
+select plan(17);
 
 -- ── 픽스처: 두 사용자, 각자 다른 협회 선수에 연결 ────────────────
 set local role postgres;
@@ -155,14 +155,35 @@ select is(
   99,
   '재적재 시 points 가 갱신된다'
 );
-select ok(
-  (select result_round from public.org_player_results where org_player_id = 'zz_upsert') is null,
-  'result_round 가 없는 값은 NULL 로 들어간다(0 으로 추측해 채우지 않는다)'
+-- ok(... is null) 은 행이 아예 없어도 참이 된다(공허하게 통과). 행 존재와
+-- NULL 값을 한 단언으로 묶어 앞 단언이 실패해도 여기서 공허 통과하지 않게 한다.
+select is(
+  (select count(*)::int from public.org_player_results
+    where org_player_id = 'zz_upsert' and result_round is null),
+  1,
+  'result_round 가 없는 값은 NULL 로 들어간다(0 으로 추측해 채우지 않는다) — 행 존재까지 확인'
 );
 select is(
   public.upsert_org_player_results('gj', 'zz_upsert_empty', '[]'::jsonb),
   0,
   '빈 배열은 예외 없이 0 을 반환한다(전적 없는 선수는 정상)'
+);
+
+-- points 가 빈 문자열로 와도(협회 표에서 관측된 적은 없지만) 캐스팅 전에 nullif 로
+-- 막아야 한다 — coalesce((r->>'points')::int, 0) 순서면 ''::int 캐스팅에서 예외가
+-- 나서 upsert 전체가 롤백된다. lives_ok 로 예외 없이 끝나는지부터 확인한다.
+select lives_ok(
+  $$select public.upsert_org_player_results(
+    'gj', 'zz_upsert_blank_points',
+    '[{"tournament_name":"zz 포인트빈값","played_on":"2026-07-02",
+       "event_raw":null,"result_raw":"8강","result_round":8,"points":""}]'::jsonb
+  )$$,
+  '포인트 칸이 빈 문자열이어도 예외 없이 처리된다(캐스팅 전에 nullif 로 방어)'
+);
+select is(
+  (select points from public.org_player_results where org_player_id = 'zz_upsert_blank_points'),
+  0,
+  '빈 문자열 포인트는 0 으로 들어간다(추측값이 아니라 명시적 기본값)'
 );
 
 select * from finish();

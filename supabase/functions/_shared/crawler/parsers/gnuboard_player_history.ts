@@ -163,19 +163,29 @@ export async function crawlPlayerHistories(
 ): Promise<string[]> {
   const failures: string[] = [];
 
-  const { data: links, error } = await db
-    .from('org_player_links')
-    .select('org_player_id')
-    .eq('org_code', org)
-    .eq('status', 'confirmed');
-
-  if (error) return [`연결 목록 조회 실패: ${error.message}`];
+  let links: { org_player_id: string }[] | null;
+  try {
+    const { data, error } = await db
+      .from('org_player_links')
+      .select('org_player_id')
+      .eq('org_code', org)
+      .eq('status', 'confirmed');
+    if (error) return [`연결 목록 조회 실패: ${error.message}`];
+    links = data;
+  } catch (e) {
+    // supabase-js 가 에러 객체 대신 예외를 던지는 경로 — 여기서 막지 않으면
+    // 랭킹 파서 전체(gnuboardRankingParser)를 뚫고 나가 부서 교체까지 죽인다.
+    return [`연결 목록 조회 예외: ${e instanceof Error ? e.message : String(e)}`];
+  }
   if (!links || links.length === 0) return failures;
 
   for (const link of links) {
     // 페이지를 끝까지 모은다. 0행이 나오면 그 페이지가 범위 밖이다.
     const rows: PlayerHistoryRow[] = [];
     let pageFailed = false;
+    // 0행을 만나지 못한 채 루프가 끝나면(=MAX_HISTORY_PAGES 를 다 채움) 뒤쪽
+    // 이력이 잘렸을 수 있다. 0행 페이지를 만나면 false 로 내려 정상 종료를 표시한다.
+    let reachedPageLimit = true;
 
     for (let page = 1; page <= MAX_HISTORY_PAGES; page++) {
       const url = playerHistoryUrl(base, link.org_player_id, page);
@@ -197,7 +207,16 @@ export async function crawlPlayerHistories(
       }
 
       const pageRows = parsePlayerHistoryRows(html);
-      if (pageRows.length === 0) break; // 범위 밖 — 여기서 끝
+      if (pageRows.length === 0) {
+        reachedPageLimit = false; // 정상 종료 — 범위 밖
+        // 1페이지 0행은 "아직 이력 없음"과 구별이 안 되지만, HTTP 200 으로 오는
+        // 에러/차단/로그인 페이지·레이아웃 변경도 똑같이 0행으로 보인다(gnuboard_ranking.ts
+        // 의 0행 가드와 같은 이유). 조용히 성공시키지 않고 신호를 남긴다.
+        if (page === 1) {
+          failures.push(`이력 ${link.org_player_id}: 1페이지 파싱 0행 — 레이아웃 변경 의심`);
+        }
+        break;
+      }
       rows.push(...pageRows);
     }
 
@@ -206,22 +225,38 @@ export async function crawlPlayerHistories(
     // 알 수 없는 채로 남는 것보다 다음 크롤에 온전히 받는 편이 낫다.
     if (pageFailed) continue;
 
-    // 0행은 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
+    // 상한까지 꽉 채우고 끝났다 — 데이터는 있는 만큼 적재하되(아래 계속) 잘렸다는
+    // 사실을 알린다. 조용히 뒤쪽 이력이 사라지는 것보다 낫다.
+    if (reachedPageLimit) {
+      failures.push(
+        `이력 ${link.org_player_id}: ${MAX_HISTORY_PAGES}페이지 상한 도달 — 이후 이력 잘림 가능`,
+      );
+    }
+
+    // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
+    // (1페이지 0행은 위에서 이미 failures 에 남겼다.)
     if (rows.length === 0) continue;
 
-    const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
-      p_org: org,
-      p_org_player_id: link.org_player_id,
-      p_rows: rows.map((r) => ({
-        tournament_name: r.tournamentName,
-        played_on: r.playedOn,
-        event_raw: r.eventRaw,
-        result_raw: r.resultRaw,
-        result_round: r.resultRound,
-        points: r.points,
-      })),
-    });
-    if (rpcErr) failures.push(`이력 ${link.org_player_id}: upsert ${rpcErr.message}`);
+    try {
+      const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
+        p_org: org,
+        p_org_player_id: link.org_player_id,
+        p_rows: rows.map((r) => ({
+          tournament_name: r.tournamentName,
+          played_on: r.playedOn,
+          event_raw: r.eventRaw,
+          result_raw: r.resultRaw,
+          result_round: r.resultRound,
+          points: r.points,
+        })),
+      });
+      if (rpcErr) failures.push(`이력 ${link.org_player_id}: upsert ${rpcErr.message}`);
+    } catch (e) {
+      // db.rpc 도 예외를 던질 수 있다 — 여기서 막아 랭킹 파서 전체가 죽지 않게 한다.
+      failures.push(
+        `이력 ${link.org_player_id}: upsert 예외 ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   return failures;

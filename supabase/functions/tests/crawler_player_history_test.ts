@@ -1,8 +1,10 @@
-import { assertEquals } from 'std/assert/mod.ts';
+import { assertEquals, assertStringIncludes } from 'std/assert/mod.ts';
 import {
+  crawlPlayerHistories,
   normalizeResultRound,
   parsePlayerHistoryRows,
   playerHistoryUrl,
+  type SupabaseLike,
 } from '../_shared/crawler/parsers/gnuboard_player_history.ts';
 
 const html = await Deno.readTextFile(
@@ -114,4 +116,108 @@ Deno.test('아이디를 URL 인코딩한다', () => {
     playerHistoryUrl('https://gjtennis.kr', 'a b&c', 1),
     'https://gjtennis.kr/sub4_6_rank.php?userid=a%20b%26c&page=1',
   );
+});
+
+// ── crawlPlayerHistories — 조용한 성공을 만드는 세 함정 (codex 적대 리뷰 채택분) ──────
+
+function withFetch(handler: (url: string) => Response, fn: () => Promise<void>): Promise<void> {
+  const original = globalThis.fetch;
+  globalThis.fetch =
+    ((url: string | URL) => Promise.resolve(handler(url.toString()))) as typeof fetch;
+  return fn().finally(() => {
+    globalThis.fetch = original;
+  });
+}
+
+const ONE_ROW_HTML = `
+  <table><tr>
+    <td>zz대회</td><td>1</td><td>골드부</td><td>10</td><td>2026-05-01</td>
+  </tr></table>`;
+// 헤더/안내 행만 있는 표 — 5셀 미만이라 파싱 결과가 0행이다.
+const ZERO_ROW_HTML = `<table><tr><td>등록된 전적이 없습니다</td></tr></table>`;
+
+function makeDb(opts: {
+  links?: { org_player_id: string }[];
+  fromThrows?: boolean;
+  rpcThrows?: boolean;
+}): { db: SupabaseLike; rpcCalls: unknown[] } {
+  const rpcCalls: unknown[] = [];
+  const db: SupabaseLike = {
+    from() {
+      if (opts.fromThrows) throw new Error('boom: from');
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                eq() {
+                  return Promise.resolve({ data: opts.links ?? [], error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    rpc(_fn, args) {
+      if (opts.rpcThrows) throw new Error('boom: rpc');
+      rpcCalls.push(args);
+      return Promise.resolve({ error: null });
+    },
+  };
+  return { db, rpcCalls };
+}
+
+Deno.test('1페이지가 0행이면 failures 에 기록한다 (레이아웃 변경·차단 페이지가 조용히 성공하지 않게)', async () => {
+  await withFetch(() => new Response(ZERO_ROW_HTML, { status: 200 }), async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures.length, 1);
+    assertStringIncludes(failures[0], '1페이지 파싱 0행');
+    assertEquals(rpcCalls.length, 0); // 0행이라 upsert 도 호출되지 않는다
+  });
+});
+
+Deno.test('둘째 페이지부터의 0행은 정상 종료다 — failures 에 남지 않는다', async () => {
+  let call = 0;
+  await withFetch(() => {
+    call++;
+    return new Response(call === 1 ? ONE_ROW_HTML : ZERO_ROW_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    assertEquals(rpcCalls.length, 1);
+  });
+});
+
+Deno.test('MAX_HISTORY_PAGES(20) 전부 꽉 채우면 잘렸다는 신호를 failures 에 남긴다', async () => {
+  await withFetch(() => new Response(ONE_ROW_HTML, { status: 200 }), async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures.length, 1);
+    assertStringIncludes(failures[0], '20페이지 상한 도달');
+    // 데이터는 있는 만큼(20페이지 분) 그대로 적재한다 — 잘렸다는 신호와 적재는 별개다.
+    assertEquals(rpcCalls.length, 1);
+  });
+});
+
+Deno.test('org_player_links 조회가 예외를 던져도 크롤 전체가 죽지 않는다', async () => {
+  const { db } = makeDb({ fromThrows: true });
+  const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+  assertEquals(failures.length, 1);
+  assertStringIncludes(failures[0], '연결 목록 조회 예외');
+});
+
+Deno.test('upsert RPC 가 예외를 던져도 크롤 전체가 죽지 않는다', async () => {
+  // 실제로 upsert 를 타려면 rows 가 있어야 하므로 첫 페이지만 값을 주고 끝낸다.
+  await withFetch((url) => {
+    const page = new URL(url).searchParams.get('page');
+    return new Response(page === '1' ? ONE_ROW_HTML : ZERO_ROW_HTML, { status: 200 });
+  }, async () => {
+    const { db } = makeDb({ links: [{ org_player_id: 'p1' }], rpcThrows: true });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures.length, 1);
+    assertStringIncludes(failures[0], 'upsert 예외');
+  });
 });
