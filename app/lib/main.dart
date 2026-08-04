@@ -15,12 +15,14 @@ import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
 import 'services/notification_events.dart';
+import 'services/release_gate.dart';
 import 'state/chat_state.dart';
 import 'state/providers.dart';
 import 'state/theme_provider.dart';
 import 'theme/app_theme.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/allround_logo.dart';
+import 'widgets/update_required_view.dart';
 
 bool _allRoundServicesInitialized = false;
 
@@ -226,6 +228,10 @@ class _AllRoundStartupSplash extends StatefulWidget {
 class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   bool _visible = true;
 
+  /// 최소 지원 빌드 미달이면 여기에 게이트가 담기고, 앱 대신 업데이트 화면이 나간다.
+  /// null 이면 통과 — 조회 실패도 null 이다(fail-open, release_gate.dart 참고).
+  ReleaseGate? _blockingGate;
+
   @override
   void initState() {
     super.initState();
@@ -238,6 +244,11 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   Future<void> _dismissSplashWhenReady() async {
     final waits = <Future<void>>[
       Future<void>.delayed(const Duration(milliseconds: 1800)),
+      // 최소 지원 빌드 확인. 어차피 기다리는 1800ms 안에 끝나므로 체감 지연이 없다.
+      // 느리면 상한 3초에서 포기하고 통과시킨다(막지 않는 쪽이 안전한 실패다).
+      checkForcedUpdate(Supabase.instance.client)
+          .timeout(const Duration(milliseconds: 3000), onTimeout: () => null)
+          .then((gate) => _blockingGate = gate),
     ];
     if (Supabase.instance.client.auth.currentSession != null) {
       waits.add(
@@ -269,7 +280,11 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
         // 화면들이 카탈로그 로드 전 fallback 라벨로 먼저 빌드되고, plain singleton
         // 이라 리빌드 트리거가 없어 stale kato 라벨이 남는다. child 를 로드 완료
         // 후 최초 빌드시켜 첫 프레임부터 kato 한글 라벨이 나오게 한다.
-        if (!_visible) widget.child,
+        if (!_visible)
+          if (_blockingGate case final gate?)
+            UpdateRequiredView(gate: gate)
+          else
+            widget.child,
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(

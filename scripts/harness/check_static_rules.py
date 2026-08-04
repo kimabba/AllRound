@@ -127,6 +127,33 @@ def check_tournament_closed_is_automation_only() -> None:
     print(f"✓ 대회 상태 'closed' 는 자동화 전용 (드롭다운: {', '.join(sorted(values))})")
 
 
+def check_app_build_number_matches_pubspec() -> None:
+    """`AppConfig.appBuildNumber` 가 pubspec 의 빌드번호와 같은지.
+
+    강제 업데이트 게이트(app_release_gate)가 이 상수로 자기 빌드를 판정한다. 어긋나면
+    게이트가 엉뚱한 버전을 막거나(상수가 낮음) 막아야 할 버전을 통과시킨다(상수가 높음).
+    package_info_plus 를 안 쓰는 대신 이 검사가 일치를 지킨다 — 정본은 pubspec 이다.
+    """
+    pubspec = read("app/pubspec.yaml")
+    match = re.search(r"^version:\s*\d+\.\d+\.\d+\+(\d+)\s*$", pubspec, re.MULTILINE)
+    if not match:
+        fail("app/pubspec.yaml 의 `version: x.y.z+N` 을 읽지 못했다 — 형식이 바뀌었는지 확인할 것")
+    pubspec_build = int(match.group(1))
+
+    config = read("app/lib/config.dart")
+    const_match = re.search(r"static const appBuildNumber\s*=\s*(\d+)\s*;", config)
+    if not const_match:
+        fail("app/lib/config.dart 에서 appBuildNumber 상수를 찾지 못했다 (강제 업데이트 게이트가 이 값을 쓴다)")
+    config_build = int(const_match.group(1))
+
+    if pubspec_build != config_build:
+        fail(
+            f"빌드번호 불일치: pubspec={pubspec_build}, AppConfig.appBuildNumber={config_build}.\n"
+            "pubspec 이 정본이다 — config.dart 의 상수를 맞출 것."
+        )
+    print(f"✓ 앱 빌드번호 일치: {pubspec_build}")
+
+
 def check_pureform_literal_contracts() -> None:
     roots = [ROOT / "app/lib/screens", ROOT / "app/lib/widgets"]
     excluded_parts = {"admin"}
@@ -599,6 +626,7 @@ def main() -> int:
     check_github_templates()
     check_no_shell_background_wrappers_in_harness()
     check_tournament_closed_is_automation_only()
+    check_app_build_number_matches_pubspec()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
     print("✅ static repository rules passed")
