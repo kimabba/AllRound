@@ -28,6 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   bool _marketingConsent = false;
   String? _error;
+  String? _info;
   StreamSubscription<AuthState>? _authSubscription;
 
   @override
@@ -81,6 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     set(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
       final supa = ref.read(supabaseProvider);
@@ -107,7 +109,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /// 비밀번호 재설정 메일 발송. 성공 시 시트를 닫고 스낵바로 안내한다.
+  /// 비밀번호 재설정 메일 발송. 성공해도 이메일 로그인 시트를 유지하고
+  /// 시트 안에서 안내한다. 사용자는 입력한 이메일을 확인하거나 메일을
+  /// 다시 보낼 수 있어야 한다.
   /// 메일 링크는 구글 로그인과 동일한 딥링크 스킴으로 복귀해 passwordRecovery
   /// 이벤트를 발생시키고, 라우터가 새 비번 설정 화면으로 보낸다.
   Future<void> _forgotPassword({VoidCallback? onChanged}) async {
@@ -143,6 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     set(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
       await ref.read(supabaseProvider).auth.resetPasswordForEmail(
@@ -150,11 +155,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
           );
       if (!mounted) return;
-      setState(() => _busy = false);
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('재설정 메일을 보냈어요. 메일함을 확인해 주세요.')),
-      );
+      set(() {
+        _busy = false;
+        _info = '재설정 메일을 보냈어요. 메일함을 확인해 주세요.';
+      });
     } on AuthException catch (e) {
       if (!mounted) return;
       set(() {
@@ -178,8 +182,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // 입력을 수정하면 이전 에러를 즉시 지운다. 기존엔 제출할 때만 지워져,
   // 비번을 바꿔도 옛 에러가 남아 "계속 거절되는 것처럼" 보였다.
   void _clearAuthError(StateSetter setSheetState) {
-    if (_error == null) return;
-    setState(() => _error = null);
+    if (_error == null && _info == null) return;
+    setState(() {
+      _error = null;
+      _info = null;
+    });
     setSheetState(() {});
   }
 
@@ -188,6 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _signUp = signUp;
       _error = null;
+      _info = null;
       _password.clear();
       _passwordConfirm.clear();
       _signupBirthDate = null;
@@ -442,6 +450,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             color: cs.error,
                             fontWeight: FontWeight.w700,
                           ),
+                        ),
+                      ],
+                      if (_info != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.mark_email_read_outlined,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                _info!,
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                       const SizedBox(height: AppSpacing.lg),
