@@ -75,7 +75,7 @@
 | 🔴 | JY-113 구글 로그아웃 세션 잔존 버그 | **[드론]** | signOut 스코프/OAuth 쿠키 |
 | 🔴 | JY-114 정책·법무·컴플라이언스 체크리스트 | **[kimabba/백과장]** | 개인정보·약관·데이터고지·리스팅, due 7/14 |
 | 🔴 | JY-115 클럽 UGC 신고·차단(애플 1.2) | **[시리]** | UGC 앱 제출 블로커, due 7/15 |
-| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 7/14, 불변. redirect `io.matchup.app` 표기 확인 |
+| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 7/14, 불변. redirect `kr.allround.app` 표기 확인 |
 | ✅결정 | 애플 로그인 생략 · 카카오 출시후로 연기(JY-7) | **[kimabba]** | **구글 + 이메일**로 진행. 이메일 로그인이 애플 4.8 면제 |
 | High | JY-1 스토어 에셋 | **[백과장]** | 아이콘/스플래시/스크린샷 |
 | High | JY-6 메타데이터·릴리스 빌드 준비 | **[드론]** | dev-auth 프로덕션 차단 포함 |
@@ -174,7 +174,10 @@ Linear backlog에 보관. 시연/제출 이후.
 - ✅ 안드로이드 `.aab` 빌드 완료 (키스토어 alias `allround-upload`, 재현정보 메모리화)
 - ✅ Supabase Redirect URL `kr.allround.app://login-callback/` 등록 (JY-113 콜백)
 - ✅ Supabase Redirect URL에서 옛 스킴 `io.matchup.app://login-callback/` 삭제 (잔재 정리)
-- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일 확정 (#197~199). 2026-08-04 ssfak@jyoungad.kr 로 변경
+- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일 확정 (#197~199)
+- ⚠️ 지원이메일: 2026-08-04 `ssfak@jyoungad.kr` 로 바꿨다가 **같은 날 `play@jyoungad.kr` 로 재변경**.
+  `ssfak@` 는 열 수 없는 주소였다. `jyoungad.kr` 메일은 Google 이 아니라 **Daum 스마트워크**(MX `aspmx.daum.net`)로 간다.
+  **연락처를 바꿀 때는 그 주소로 실제 메일을 받아본 뒤 반영한다** — 처리방침이 공개하는 삭제 요청 접수처다.
 - ⏳ 개발자 계정 = **조직(제이영컨설팅)**, D-U-N-S 발급 대기 → Play/Apple 가입 (JY-118/117)
 - ⏳ Play 내부 트랙 `.aab` 업로드 (조직 계정 활성화 후. .aab는 빌드 완료)
 - ⏳ 실기기 검증: JY-113 재로그인 계정선택 노출 / JY-112 탈퇴 E2E
@@ -190,6 +193,14 @@ Linear backlog에 보관. 시연/제출 이후.
 - 공통: JY-114 컴플라이언스, JY-1 스토어 에셋(백과장)
 
 ---
+
+## 8. 최신 출시 확인 (2026-08-04)
+
+- Apple App Store 한국 제품 페이지 정식 출시 완료: 1.0.0 (5), Apple ID `6792671473`
+- 7/30 심사 미통과 1회 후 8/4 승인·배포 완료
+- 심사용 계정·심사 노트·연령 등급·App Privacy·법적 문서 경로 등록 확인
+- 현재 앱과 스토어의 개인정보 처리방침 주소: `https://kimabba.github.io/AllRound/legal/privacy-policy.html`
+- 다음 출시 트랙은 Google Play 조직 계정 등록 및 Android 배포이며, Play 관련 미완료 항목은 기존 체크리스트를 따른다.
 
 ## 관련 문서
 - 프로세스·하네스·PR 기준: [`docs/team-collaboration.md`](../team-collaboration.md)
