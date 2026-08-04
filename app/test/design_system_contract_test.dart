@@ -128,7 +128,7 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
     expect(
       tester.getSize(find.byType(AppBottomNav)),
-      const Size(320, AppSizes.bottomNavigation + bottomNavDialProtrusion),
+      const Size(320, AppSizes.bottomNavigation),
     );
   });
 }
