@@ -228,15 +228,19 @@ export async function crawlPlayerHistories(
 
       const pageRows = parsePlayerHistoryRows(html);
       if (pageRows.length === 0) {
-        reachedPageLimit = false; // 정상 종료 — 범위 밖
-        // 1페이지 0행은 "아직 이력 없음"(정상)과 "에러/차단/로그인 페이지·레이아웃 변경"
-        // (실패)을 가른다. 표 헤더(<th>)는 이력이 0건이어도 그대로 나오므로
-        // looksLikeHistoryPage 로 구분한다 — 헤더가 있으면 조용히 넘어가고, 없으면
-        // 우리가 아는 페이지가 아니라는 뜻이라 신호를 남긴다.
-        if (page === 1 && !looksLikeHistoryPage(html)) {
+        // 0행이 나온 페이지는 몇 번째든 같은 규칙으로 가른다 — 페이지 번호로 분기하지
+        // 않는다. 1페이지만 봤던 이전 버전은 2페이지 이후 에러/차단/로그인 페이지를
+        // 그대로 "범위 밖"으로 삼켜, 뒤 페이지 데이터가 실패 기록 없이 통째로 사라질
+        // 수 있었다(1페이지에서 고친 것과 같은 결함이 옆 페이지로 옮겨간 것).
+        // 표 헤더(<th>)는 이력이 0건이어도 그대로 나오므로 looksLikeHistoryPage 로
+        // "아직 이력 없음/더 볼 페이지 없음"(정상)과 "레이아웃 변경"(실패)을 가른다.
+        if (looksLikeHistoryPage(html)) {
+          reachedPageLimit = false; // 정상 종료 — 범위 밖(또는 애초에 이력 없음)
+        } else {
           failures.push(
-            `이력 ${link.org_player_id}: 1페이지 파싱 0행, 표 헤더 없음 — 레이아웃 변경 의심`,
+            `이력 ${link.org_player_id} p${page}: 0행, 표 헤더 없음 — 레이아웃 변경 의심`,
           );
+          pageFailed = true;
         }
         break;
       }
@@ -257,7 +261,7 @@ export async function crawlPlayerHistories(
     }
 
     // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
-    // (1페이지 0행이 표 헤더 없이 왔다면 위에서 이미 failures 에 남겼다.)
+    // (표 헤더 없이 0행이 왔다면 pageFailed 로 위에서 이미 걸러졌다.)
     if (rows.length === 0) continue;
 
     try {

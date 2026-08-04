@@ -195,9 +195,7 @@ Deno.test('1페이지가 0행 + 표 헤더 없으면 failures 에 기록한다 (
   await withFetch(() => new Response(ZERO_ROW_HTML, { status: 200 }), async () => {
     const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
-    assertEquals(failures.length, 1);
-    assertStringIncludes(failures[0], '1페이지 파싱 0행');
-    assertStringIncludes(failures[0], '표 헤더 없음');
+    assertEquals(failures, ['이력 p1 p1: 0행, 표 헤더 없음 — 레이아웃 변경 의심']);
     assertEquals(rpcCalls.length, 0); // 0행이라 upsert 도 호출되지 않는다
   });
 });
@@ -211,16 +209,51 @@ Deno.test('1페이지가 0행이어도 표 헤더가 있으면 failures 에 남�
   });
 });
 
-Deno.test('둘째 페이지부터의 0행은 정상 종료다 — failures 에 남지 않는다', async () => {
+Deno.test('둘째 페이지부터의 0행 + 표 헤더 있음은 정상 종료다 — failures 에 남지 않는다', async () => {
   let call = 0;
   await withFetch(() => {
     call++;
-    return new Response(call === 1 ? ONE_ROW_HTML : ZERO_ROW_HTML, { status: 200 });
+    return new Response(call === 1 ? ONE_ROW_HTML : HEADER_ONLY_HTML, { status: 200 });
   }, async () => {
     const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
     assertEquals(failures, []);
     assertEquals(rpcCalls.length, 1);
+  });
+});
+
+// 2라운드 codex 리뷰가 잡은 결함: looksLikeHistoryPage 판정을 1페이지에만 걸면
+// 2페이지 이후 에러/차단/로그인 페이지가 그대로 "범위 밖"으로 삼켜져, 1페이지
+// 데이터만 적재되고 나머지가 실패 기록 없이 사라진다. 페이지 번호로 분기하지
+// 않고 0행이 나온 모든 페이지에 같은 판정을 걸어야 이게 안 생긴다.
+Deno.test('1페이지 정상 + 2페이지가 표 헤더 없는 0행이면 failures 에 기록하고 적재하지 않는다', async () => {
+  let call = 0;
+  await withFetch(() => {
+    call++;
+    // 1페이지는 정상, 2페이지부터 차단/에러 페이지(표 헤더 없음)를 흉내낸다.
+    return new Response(call === 1 ? ONE_ROW_HTML : NO_HEADER_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures.length, 1);
+    assertStringIncludes(failures[0], 'p2');
+    assertStringIncludes(failures[0], '표 헤더 없음');
+    // 1페이지 15행이 있어도 upsert 하지 않는다 — 몇 페이지까지 받았는지 모르는 채
+    // 부분 적재하는 것보다 다음 크롤에서 온전히 받는 편이 낫다(다른 pageFailed 경로와 동일).
+    assertEquals(rpcCalls.length, 0);
+  });
+});
+
+Deno.test('1페이지 정상 + 2페이지가 표 헤더만 있는 0행이면 실패 없이 정상 종료한다', async () => {
+  let call = 0;
+  await withFetch(() => {
+    call++;
+    return new Response(call === 1 ? ONE_ROW_HTML : HEADER_ONLY_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    assertEquals(rpcCalls.length, 1); // 1페이지 1행이 정상 적재된다
   });
 });
 
@@ -246,7 +279,7 @@ Deno.test('upsert RPC 가 예외를 던져도 크롤 전체가 죽지 않는다'
   // 실제로 upsert 를 타려면 rows 가 있어야 하므로 첫 페이지만 값을 주고 끝낸다.
   await withFetch((url) => {
     const page = new URL(url).searchParams.get('page');
-    return new Response(page === '1' ? ONE_ROW_HTML : ZERO_ROW_HTML, { status: 200 });
+    return new Response(page === '1' ? ONE_ROW_HTML : HEADER_ONLY_HTML, { status: 200 });
   }, async () => {
     const { db } = makeDb({ links: [{ org_player_id: 'p1' }], rpcThrows: true });
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
