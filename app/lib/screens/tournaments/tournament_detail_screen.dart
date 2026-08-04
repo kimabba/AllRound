@@ -725,6 +725,13 @@ class _TournamentApplyBar extends StatelessWidget {
                         uri,
                         mode: LaunchMode.inAppBrowserView,
                       );
+                    } else if (uri.scheme != 'https') {
+                      // 평문 http 공고는 앱 UI 를 두르지 않는다 — 주소창이 보이는
+                      // 기본 브라우저로 넘겨 사용자가 어디에 있는지 알게 한다.
+                      ok = await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
                     } else if (context.mounted) {
                       await Navigator.of(context).push<void>(
                         MaterialPageRoute<void>(

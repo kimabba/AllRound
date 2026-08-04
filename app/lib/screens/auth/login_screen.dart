@@ -325,6 +325,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            // 메일 발송·로그인 같은 비동기 작업이 끝났을 때 사용자가 이미 시트를
+            // 내렸을 수 있다. 그때 화면(State)은 살아 있어 !mounted 가드를 통과하지만
+            // 시트는 dispose 된 뒤라 setSheetState 가 예외를 던진다. 시트 자신의
+            // context 로 한 번 더 확인한다.
+            void refreshSheet() {
+              if (context.mounted) setSheetState(() {});
+            }
+
             final cs = Theme.of(context).colorScheme;
             final tt = Theme.of(context).textTheme;
             return SafeArea(
@@ -382,7 +390,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onSubmitted: (_) => _busy
                             ? null
                             : _emailAuth(
-                                onChanged: () => setSheetState(() {}),
+                                onChanged: refreshSheet,
                               ),
                         onChanged: (_) => _clearAuthError(setSheetState),
                       ),
@@ -399,7 +407,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onSubmitted: (_) => _busy
                               ? null
                               : _emailAuth(
-                                  onChanged: () => setSheetState(() {}),
+                                  onChanged: refreshSheet,
                                 ),
                           onChanged: (_) => _clearAuthError(setSheetState),
                         ),
@@ -423,7 +431,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onPressed: _busy
                               ? null
                               : () => _pickSignupBirthDate(
-                                    onChanged: () => setSheetState(() {}),
+                                    onChanged: refreshSheet,
                                   ),
                         ),
                       ],
@@ -437,7 +445,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             onPressed: _busy
                                 ? null
                                 : () => _forgotPassword(
-                                      onChanged: () => setSheetState(() {}),
+                                      onChanged: refreshSheet,
                                     ),
                             child: const Text('비밀번호를 잊으셨나요?'),
                           ),
@@ -480,7 +488,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _busy
                             ? null
                             : () => _emailAuth(
-                                  onChanged: () => setSheetState(() {}),
+                                  onChanged: refreshSheet,
                                 ),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(AppSizes.control),
