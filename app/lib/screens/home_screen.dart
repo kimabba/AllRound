@@ -22,7 +22,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  _HomeTournamentFilter _filter = _HomeTournamentFilter.recommended;
+  _HomeTournamentFilter _filter = _HomeTournamentFilter.all;
 
   Future<void> _refresh() async {
     ref.invalidate(homeTournamentsProvider);
@@ -61,13 +61,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
-        title: Text(
-          '올라운드',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
-              ),
-        ),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -119,8 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               sliver: SliverToBoxAdapter(
                 child: _HomeSectionHeader(
-                  title: '다가오는 대회',
-                  actionLabel: '전체 보기',
+                  title: '신청 가능한 대회',
                   // 대회가 탭에서 빠진 뒤로 여기가 대회 목록의 주 진입점이다.
                   actionKey: AllRoundE2EKeys.navTournaments,
                   onAction: () => context.push('/tournaments'),
@@ -219,32 +211,12 @@ class _HomeIntro extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    date,
-                    style: tt.labelMedium?.copyWith(
-                      color: cs.onPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    child: Icon(
-                      Icons.bolt_rounded,
-                      size: 20,
-                      color: cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              date,
+              style: tt.labelMedium?.copyWith(
+                color: cs.onPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: AppSpacing.xxl),
             Text(
@@ -403,32 +375,25 @@ class _PersonalScheduleCard extends StatelessWidget {
 }
 
 class _HomeSectionHeader extends StatelessWidget {
-  const _HomeSectionHeader({
-    required this.title,
-    this.actionLabel,
-    this.onAction,
-    this.actionKey,
-  });
+  const _HomeSectionHeader({required this.title, this.onAction, this.actionKey});
 
   final String title;
-  final String? actionLabel;
   final VoidCallback? onAction;
   final Key? actionKey;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Row(
+    final row = Row(
       children: [
         Expanded(child: Text(title, style: tt.titleLarge)),
-        if (actionLabel != null && onAction != null)
-          TextButton(
-            key: actionKey,
-            onPressed: onAction,
-            child: Text(actionLabel!),
-          ),
+        if (onAction != null)
+          Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
       ],
     );
+    if (onAction == null) return row;
+    return InkWell(key: actionKey, onTap: onAction, child: row);
   }
 }
 
@@ -450,9 +415,9 @@ class _HomeFilterTabs extends StatelessWidget {
         children: [
           Expanded(
             child: _FilterTab(
-              label: '추천',
-              selected: selected == _HomeTournamentFilter.recommended,
-              onTap: () => onSelected(_HomeTournamentFilter.recommended),
+              label: '전체',
+              selected: selected == _HomeTournamentFilter.all,
+              onTap: () => onSelected(_HomeTournamentFilter.all),
             ),
           ),
           Expanded(
@@ -464,9 +429,9 @@ class _HomeFilterTabs extends StatelessWidget {
           ),
           Expanded(
             child: _FilterTab(
-              label: '전체',
-              selected: selected == _HomeTournamentFilter.all,
-              onTap: () => onSelected(_HomeTournamentFilter.all),
+              label: '추천',
+              selected: selected == _HomeTournamentFilter.recommended,
+              onTap: () => onSelected(_HomeTournamentFilter.recommended),
             ),
           ),
         ],
