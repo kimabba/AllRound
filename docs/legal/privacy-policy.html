@@ -9,6 +9,9 @@
   h1 { font-size: 1.5rem; border-bottom: 2px solid #111; padding-bottom: 8px; }
   h2 { font-size: 1.1rem; margin-top: 2rem; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  /* 국외이전 표는 열이 5개라 좁은 화면에서 찌그러진다. 표만 가로로 스크롤시킨다. */
+  .scroll-x { overflow-x: auto; }
+  .scroll-x table { min-width: 560px; }
   th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; font-size: 0.9rem; }
   th { background: #f5f5f5; }
   .meta { color: #666; font-size: 0.85rem; }
@@ -85,7 +88,45 @@
 <li>디바이스 토큰 수 제한 (사용자당 최대 10개)</li>
 </ul>
 
-<h2>9. 변경 사항 고지</h2>
+<h2>9. 개인정보의 국외 이전</h2>
+<p>서비스 제공을 위해 아래와 같이 개인정보가 국외로 이전됩니다. 이전을 원하지 않으시면
+아래 7항의 연락처로 거부를 요청하실 수 있으며, 이 경우 해당 기능(AI 챗봇·푸시 알림)의
+이용이 제한될 수 있습니다.</p>
+<div class="scroll-x">
+<table>
+<tr><th>이전받는 자</th><th>이전 국가</th><th>이전 항목</th><th>이전 시기·방법</th><th>이용 목적 및 보유 기간</th></tr>
+<tr>
+  <td>Google LLC (Gemini API)</td>
+  <td>미국</td>
+  <td>이용자가 챗봇에 입력한 질문, 답변 생성에 필요한 프로필 정보(등록 종목·등급·지역)</td>
+  <td>챗봇 이용 시점에 네트워크를 통해 전송</td>
+  <td>AI 답변 생성. 처리 후 지체 없이 파기(별도 보관하지 않음)</td>
+</tr>
+<tr>
+  <td>Google LLC (Firebase Cloud Messaging)</td>
+  <td>미국</td>
+  <td>기기 푸시 토큰, 알림 제목·내용</td>
+  <td>알림 발송 시점에 네트워크를 통해 전송</td>
+  <td>푸시 알림 발송. 발송 후 지체 없이 파기</td>
+</tr>
+</table>
+</div>
+<p>데이터베이스(Supabase)는 대한민국 리전(서울)에 저장되어 운영됩니다.</p>
+
+<h2>10. 권익침해 구제 방법</h2>
+<p>개인정보 침해로 인한 상담·신고가 필요하신 경우 아래 기관에 문의하실 수 있습니다.</p>
+<table>
+<tr><th>기관</th><th>전화</th><th>홈페이지</th></tr>
+<tr><td>개인정보 분쟁조정위원회</td><td>1833-6972</td><td>www.kopico.go.kr</td></tr>
+<tr><td>개인정보침해 신고센터 (한국인터넷진흥원)</td><td>국번없이 118</td><td>privacy.kisa.or.kr</td></tr>
+<tr><td>대검찰청 사이버수사과</td><td>국번없이 1301</td><td>www.spo.go.kr</td></tr>
+<tr><td>경찰청 사이버수사국</td><td>국번없이 182</td><td>ecrm.police.go.kr</td></tr>
+</table>
+<p>또한 「개인정보 보호법」 제35조(열람), 제36조(정정·삭제), 제37조(처리정지)에 따른 요구에 대하여
+공공기관의 장이 한 처분 또는 부작위로 권리·이익을 침해받은 경우에는 행정심판법에 따라
+행정심판을 청구할 수 있습니다.</p>
+
+<h2>11. 변경 사항 고지</h2>
 <p>본 방침이 변경되는 경우, 앱 내 공지 또는 이메일을 통해 사전 안내합니다.</p>
 
 </body>
