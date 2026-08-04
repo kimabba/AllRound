@@ -39,7 +39,7 @@ const COMMON_HEADERS: Record<string, string> = {
  * 남자신인부는 2026-08 협회가 남자일반부로 통합해 공표를 중단했다(표 머리글만 남고
  * 데이터 0행). 계속 긁으면 매일 partial 실패만 쌓이므로 대상에서 뺐다.
  * 카탈로그에서는 지우지 않고 is_active=false 로 내렸다 — 옛 대회가 그 코드를 참조한다
- * (20260804030000_retire_male_rookie_division.sql). 여자신인부는 살아 있다. */
+ * (20260804050000_retire_male_rookie_division.sql). 여자신인부는 살아 있다. */
 const MEMBER_KIND_SUFFIX: Record<string, string> = {
   '골드부': '_m_gold',
   '남자일반부': '_m_general',
