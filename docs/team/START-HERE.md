@@ -174,7 +174,7 @@ Linear backlog에 보관. 시연/제출 이후.
 - ✅ 안드로이드 `.aab` 빌드 완료 (키스토어 alias `allround-upload`, 재현정보 메모리화)
 - ✅ Supabase Redirect URL `kr.allround.app://login-callback/` 등록 (JY-113 콜백)
 - ✅ Supabase Redirect URL에서 옛 스킴 `io.matchup.app://login-callback/` 삭제 (잔재 정리)
-- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일(demian.772) 확정 (#197~199)
+- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일 확정 (#197~199). 2026-08-04 ssfak@jyoungad.kr 로 변경
 - ⏳ 개발자 계정 = **조직(제이영컨설팅)**, D-U-N-S 발급 대기 → Play/Apple 가입 (JY-118/117)
 - ⏳ Play 내부 트랙 `.aab` 업로드 (조직 계정 활성화 후. .aab는 빌드 완료)
 - ⏳ 실기기 검증: JY-113 재로그인 계정선택 노출 / JY-112 탈퇴 E2E

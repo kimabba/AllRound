@@ -117,7 +117,7 @@ class _RankingRow extends StatelessWidget {
 /// 개인정보 보호책임자 연락처(privacy-policy.html 7항과 동일해야 한다).
 /// 이 화면은 앱 미가입자의 실명도 표시하므로, 본인이 발견하고 삭제·정정을
 /// 요청할 수 있는 유일한 창구가 여기다.
-const _kPrivacyContactEmail = 'demian.772@gmail.com';
+const _kPrivacyContactEmail = 'ssfak@jyoungad.kr';
 
 final _kFetchedAtFormat = DateFormat('yyyy-MM-dd');
 
