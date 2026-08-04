@@ -27,33 +27,69 @@
 
 1. 요청자 본인 확인: 성명 + 소속(클럽) + 협회(광주/전남) + 부서로 `org_rankings` 행을 특정한다.
    본인 확인이 애매하면(동명이인 등) 회신으로 추가 정보를 요청한다.
-2. 해당 행 삭제:
+2. **억제 목록에 먼저 등록한다.** 이걸 빼먹고 삭제만 하면 다음 크롤이 되살린다.
+
+   `org_player_id` 가 있으면 그걸로 특정하는 게 정확하다:
+   ```sql
+   insert into public.org_ranking_suppressions (org_code, org_player_id, note)
+   values ('<gj|jn>', '<협회아이디>', '2026-__-__ 본인 삭제 요청, 메일 접수');
+   ```
+
+   아이디가 없는 행이면 성명 + **소속 원문 그대로**:
+   ```sql
+   insert into public.org_ranking_suppressions (org_code, player_name, club_raw, note)
+   values ('<gj|jn>', '<성명>', '<소속 원문>', '2026-__-__ 본인 삭제 요청, 메일 접수');
+   ```
+   > `club_raw` 는 협회 표기 그대로 넣는다(후행 슬래시 포함, 예: `어등산/`).
+   > 소속이 다르면 **다른 사람으로 취급해 안 지운다** — 동명이인 보호 장치다.
+   > 반대로 소속을 비우면(`null`) 같은 이름 전체가 지워지니 쓰지 않는다.
+
+3. 이미 저장된 행을 지운다:
    ```sql
    delete from public.org_rankings
-   where org_code = '<gj|jn>' and division_code = '<부서코드>' and player_name = '<성명>'
-     and club_raw = '<소속 원문>';  -- 동명이인 방지, org_player_id 가 있으면 그걸로 특정
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
+   -- 아이디가 없으면: and player_name = '<성명>' and club_raw = '<소속 원문>'
+
+   delete from public.org_ranking_snapshots
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
    ```
-3. 처리 결과를 요청자에게 회신한다.
 
-## ⚠️ 알려진 한계 — 삭제가 영구적이지 않다
+4. **다음 크롤 이후 재등장하지 않는지 확인한다.** 억제가 걸렸으면 안 돌아온다:
+   ```sql
+   select count(*) from public.org_rankings
+   where org_code = '<gj|jn>' and player_name = '<성명>';
+   ```
 
-`org_rankings`는 크롤마다 `replace_org_ranking_division()` RPC가 **부서 단위로
-delete+insert**한다(`supabase/migrations/20260803030000_ranking_crawl_sources.sql`).
-협회가 다음 날에도 같은 선수를 계속 공표하면, 하루 1회 도는 크롤(매일 KST 06:00경 —
-전체 크롤 소스와 함께 단일 스케줄러 `crawl-dispatch` cron, UTC 21:00 이 실행한다.
-`crawl_sources.schedule_cron` 값은 현재 dispatcher 가 평가하지 않는 참고용 값이라
-실제 실행 시각이 아니다)이 **삭제한 행을 그대로 되살린다.** 억제(suppress)·블록리스트
-메커니즘은 현재 코드베이스에 없다(2026-08-03 확인).
+5. 처리 결과를 요청자에게 회신한다. **원본은 협회에 있다는 점을 함께 안내한다**
+   (아래 "남아 있는 한계" 참조).
 
-**임시 대응**: 요청이 들어오면 삭제 후, 다음 크롤 이후 행이 재등장하는지 수동으로
-확인한다(`select * from org_rankings where player_name = '...'`). 재등장하면 다시 삭제하고
-요청자에게 "협회가 원본에서 계속 공표 중이라 저희 쪽에서 지워도 다시 나타날 수 있다"고
-안내하며, 근본 해결을 원하면 협회 원본 게시물에도 정정을 요청하도록 안내한다.
+## ✅ 해결됨 — 삭제가 재크롤로 되살아나지 않는다 (2026-08-04)
 
-**구조적 해결(백로그, 미구현)**: `org_player_id`(또는 성명+소속) 기준 억제 테이블을 만들어
-크롤 RPC가 insert 시 걸러내게 하는 것이 정답이다. 스키마 변경이므로 구현 전
-`backend-architect` 소환 대상이다. 삭제 요청이 실제로 들어오기 전까지는 만들지 않는다
-(YAGNI) — 다만 §36 실효성 문제이므로 **첫 요청이 들어오면 바로 만들어야 한다.**
+이전에는 크롤이 부서 단위로 delete+insert 하기 때문에, 삭제한 행을 다음 크롤이
+그대로 되살렸다. 억제 메커니즘이 없어서 "처리했습니다"라고 회신한 다음 날 그 사람이
+다시 앱에 떴다.
+
+`org_ranking_suppressions` 테이블과 `replace_org_ranking_division()` 의 필터로 해결했다
+(`supabase/migrations/20260804020000_org_ranking_suppressions.sql`).
+크롤이 insert 할 때 억제 대상을 걸러내므로, **위 절차 2번을 밟았다면 다시 들어오지 않는다.**
+
+`supabase/tests/database/024_ranking_suppression.test.sql` 이 이걸 지킨다(단언 7개).
+필터를 제거하면 4개가 실제로 뒤집히는 것을 변이 주입으로 확인했다.
+
+## ⚠️ 남아 있는 한계 — 원본은 협회에 있다
+
+우리가 지우는 것은 **우리 사본**이다. 협회 홈페이지의 원본 순위표는 그대로 남는다.
+서비스에는 그걸 수정할 권한이 없다.
+
+→ 회신할 때 **"원본까지 지우려면 협회에 직접 요청해야 한다"**를 반드시 함께 안내한다.
+   이 안내는 랭킹 화면과 처리방침 2항에도 상시 노출된다.
+
+### 억제 목록을 다룰 때 주의
+
+- **소속(`club_raw`)을 비우면 같은 이름 전체가 지워진다.** 동명이인이 함께 사라지므로
+  아이디가 없을 때는 반드시 소속을 함께 넣는다.
+- 억제 목록 자체가 개인정보다(삭제를 요청한 사람의 성명·소속). RLS 로 관리자만 읽는다.
+- 요청자가 나중에 "다시 올려달라"고 하면 억제 행을 지우면 된다. 다음 크롤에 복원된다.
 
 ## 확인할 것
 
