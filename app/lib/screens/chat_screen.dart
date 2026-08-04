@@ -879,6 +879,8 @@ String _cleanAssistantContent(String content) {
   // "(출처: id xxx-xxx, ...)" or "(출처: xxx-xxx)" 패턴 제거
   return content
       .replaceAll(RegExp(r'\(출처:?\s*(?:id\s*)?[a-f0-9\-,\s]+\)'), '')
+      // "(id: xxx-xxx, ...)" — 규정/대회 컨텍스트의 raw DB id 인라인 노출 제거
+      .replaceAll(RegExp(r'\s*\(id:\s*[a-f0-9\-,\s]+\)'), '')
       .replaceAll(
           RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'),
           '')

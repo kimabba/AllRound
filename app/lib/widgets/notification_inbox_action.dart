@@ -29,13 +29,15 @@ class NotificationInboxAction extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(unreadNotificationCountProvider).value ?? 0;
-    return Badge(
-      isLabelVisible: unread > 0,
-      label: Text(unread > 99 ? '99+' : '$unread'),
-      child: IconButton(
-        tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
-        onPressed: () => context.push('/notifications'),
-        icon: const Icon(Icons.notifications_none_rounded),
+    return IconButton(
+      tooltip: unread > 0 ? '읽지 않은 알림 $unread개' : '알림함',
+      onPressed: () => context.push('/notifications'),
+      icon: Badge(
+        isLabelVisible: unread > 0,
+        label: Text(unread > 99 ? '99+' : '$unread'),
+        // IconButton 전체(48x48 터치 영역)가 아니라 아이콘 자체에 배지를 붙여야
+        // 종처럼 붙어 보인다 — IconButton 을 통째로 감싸면 배지가 모서리로 밀린다.
+        child: const Icon(Icons.notifications_none_rounded),
       ),
     );
   }
