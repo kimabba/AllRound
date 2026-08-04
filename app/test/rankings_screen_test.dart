@@ -59,7 +59,7 @@ void main() {
     // 미가입자도 자기 이름을 발견하는 유일한 자리라, 삭제·정정 요청 연락처가
     // 상시 노출돼야 한다(privacy-policy.html 7항과 같은 주소).
     expect(find.textContaining('삭제'), findsOneWidget);
-    expect(find.textContaining('ssfak@jyoungad.kr'), findsOneWidget);
+    expect(find.textContaining('play@jyoungad.kr'), findsOneWidget);
     // fetchedAt 을 안 주면 기준일 줄은 생략된다(로드 전·행 없음 케이스).
     expect(find.textContaining('기준'), findsNothing);
   });
