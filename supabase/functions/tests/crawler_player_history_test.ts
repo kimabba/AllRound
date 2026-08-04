@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from 'std/assert/mod.ts';
 import {
   crawlPlayerHistories,
+  looksLikeHistoryPage,
   normalizeResultRound,
   parsePlayerHistoryRows,
   playerHistoryUrl,
@@ -133,8 +134,16 @@ const ONE_ROW_HTML = `
   <table><tr>
     <td>zz대회</td><td>1</td><td>골드부</td><td>10</td><td>2026-05-01</td>
   </tr></table>`;
-// 헤더/안내 행만 있는 표 — 5셀 미만이라 파싱 결과가 0행이다.
+// 헤더/안내 행만 있는 표 — 5셀 미만이라 파싱 결과가 0행이다. 표 헤더(<th>)가 없어
+// looksLikeHistoryPage 는 거짓이다 — 차단·에러 페이지를 흉내낸다.
 const ZERO_ROW_HTML = `<table><tr><td>등록된 전적이 없습니다</td></tr></table>`;
+// 실제 협회 헤더 그대로, 데이터 행은 없다 — "아직 이력 없는 선수"를 흉내낸다.
+const HEADER_ONLY_HTML = `
+  <table><tr>
+    <th width="">대회명</th><th width="">순위</th><th width="">종목</th>
+    <th width="">포인트</th><th width="">대회일</th>
+  </tr></table>`;
+const NO_HEADER_HTML = `<html><body>로그인이 필요합니다</body></html>`;
 
 function makeDb(opts: {
   links?: { org_player_id: string }[];
@@ -168,13 +177,37 @@ function makeDb(opts: {
   return { db, rpcCalls };
 }
 
-Deno.test('1페이지가 0행이면 failures 에 기록한다 (레이아웃 변경·차단 페이지가 조용히 성공하지 않게)', async () => {
+// ── looksLikeHistoryPage — "아직 이력 없음"과 "차단/레이아웃 변경"을 가르는 신호 ──────
+
+Deno.test('looksLikeHistoryPage: 실제 픽스처는 참이다', () => {
+  assertEquals(looksLikeHistoryPage(html), true);
+});
+
+Deno.test('looksLikeHistoryPage: 헤더만 있고 데이터 행이 없어도 참이다 (이력 없음과 차단을 가르는 신호)', () => {
+  assertEquals(looksLikeHistoryPage(HEADER_ONLY_HTML), true);
+});
+
+Deno.test('looksLikeHistoryPage: 헤더가 없는 페이지는 거짓이다', () => {
+  assertEquals(looksLikeHistoryPage(NO_HEADER_HTML), false);
+});
+
+Deno.test('1페이지가 0행 + 표 헤더 없으면 failures 에 기록한다 (레이아웃 변경·차단 페이지가 조용히 성공하지 않게)', async () => {
   await withFetch(() => new Response(ZERO_ROW_HTML, { status: 200 }), async () => {
     const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
     assertEquals(failures.length, 1);
     assertStringIncludes(failures[0], '1페이지 파싱 0행');
+    assertStringIncludes(failures[0], '표 헤더 없음');
     assertEquals(rpcCalls.length, 0); // 0행이라 upsert 도 호출되지 않는다
+  });
+});
+
+Deno.test('1페이지가 0행이어도 표 헤더가 있으면 failures 에 남지 않는다 (아직 이력 없는 선수)', async () => {
+  await withFetch(() => new Response(HEADER_ONLY_HTML, { status: 200 }), async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    assertEquals(rpcCalls.length, 0);
   });
 });
 

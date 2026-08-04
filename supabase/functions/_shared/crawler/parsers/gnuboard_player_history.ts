@@ -15,6 +15,7 @@
 
 const ROW_RE = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
 const CELL_RE = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
+const TH_RE = /<th\b[^>]*>([\s\S]*?)<\/th>/gi;
 
 const ENTITY_MAP: Record<string, string> = {
   amp: '&',
@@ -36,6 +37,25 @@ function textOf(cellHtml: string): string {
 function toPoints(raw: string): number {
   const n = Number.parseInt(raw.replace(/[^0-9]/g, ''), 10);
   return Number.isNaN(n) ? 0 : n;
+}
+
+/**
+ * 표 헤더에 이 페이지의 컬럼명이 있는지 판정한다.
+ *
+ * 이력이 0건인 선수도 표 헤더(<th>대회명·순위·종목·포인트·대회일)는 그대로 나온다
+ * (실측 2026-08-04) — "아직 이력 없음"(정상)과 "에러/차단/로그인 페이지·레이아웃 변경"
+ * (실패)을 가르는 신호로 쓴다. 문구가 통째로 바뀌면 이것도 깨지므로 헤더 전체가 아니라
+ * 핵심 단어 몇 개만 본다(과한 매칭 금지).
+ */
+export function looksLikeHistoryPage(html: string): boolean {
+  const headers: string[] = [];
+  TH_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = TH_RE.exec(html)) !== null) {
+    headers.push(textOf(m[1]));
+  }
+  const need = ['대회명', '순위', '대회일'];
+  return need.every((k) => headers.some((h) => h.includes(k)));
 }
 
 /**
@@ -209,11 +229,14 @@ export async function crawlPlayerHistories(
       const pageRows = parsePlayerHistoryRows(html);
       if (pageRows.length === 0) {
         reachedPageLimit = false; // 정상 종료 — 범위 밖
-        // 1페이지 0행은 "아직 이력 없음"과 구별이 안 되지만, HTTP 200 으로 오는
-        // 에러/차단/로그인 페이지·레이아웃 변경도 똑같이 0행으로 보인다(gnuboard_ranking.ts
-        // 의 0행 가드와 같은 이유). 조용히 성공시키지 않고 신호를 남긴다.
-        if (page === 1) {
-          failures.push(`이력 ${link.org_player_id}: 1페이지 파싱 0행 — 레이아웃 변경 의심`);
+        // 1페이지 0행은 "아직 이력 없음"(정상)과 "에러/차단/로그인 페이지·레이아웃 변경"
+        // (실패)을 가른다. 표 헤더(<th>)는 이력이 0건이어도 그대로 나오므로
+        // looksLikeHistoryPage 로 구분한다 — 헤더가 있으면 조용히 넘어가고, 없으면
+        // 우리가 아는 페이지가 아니라는 뜻이라 신호를 남긴다.
+        if (page === 1 && !looksLikeHistoryPage(html)) {
+          failures.push(
+            `이력 ${link.org_player_id}: 1페이지 파싱 0행, 표 헤더 없음 — 레이아웃 변경 의심`,
+          );
         }
         break;
       }
@@ -234,7 +257,7 @@ export async function crawlPlayerHistories(
     }
 
     // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
-    // (1페이지 0행은 위에서 이미 failures 에 남겼다.)
+    // (1페이지 0행이 표 헤더 없이 왔다면 위에서 이미 failures 에 남겼다.)
     if (rows.length === 0) continue;
 
     try {
