@@ -173,7 +173,7 @@ void main() {
       );
       // 19(일)에 waiting이 자연스럽게 끝난다(그 사이 같은 레인을 계속 쓴다).
       expect(layout.laneGrid[6][waitingLane]!.isBandEnd, isTrue);
-      expect(layout.overflowCounts[1], 0); // 14: 5개 중 4개가 다 레인에 들어갔다
+      expect(layout.overflowCounts[1], 0); // 14: t1은 이미 끝나 4개만 겹치고, 4개 다 레인에 들어갔다
     });
 
     test('maxLanes를 넘는 대회는 줄로 못 그리고 overflow로 집계된다', () {
