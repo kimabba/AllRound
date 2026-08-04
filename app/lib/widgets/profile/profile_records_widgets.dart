@@ -272,6 +272,7 @@ class MyClubEmptyContent extends StatelessWidget {
 // 내 대회 기록 섹션
 // ────────────────────────────────────────────────────────────
 
+/// 즐겨찾기한 대회 목록. (이름과 달리 성적 기록이 아니다 — 성적은 MyRecordSection)
 class MyTournamentRecordsSection extends ConsumerWidget {
   const MyTournamentRecordsSection({super.key});
 

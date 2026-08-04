@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_recruiting.dart';
+import '../models/org_ranking.dart';
+import '../models/player_result.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
 
@@ -115,6 +117,30 @@ final myTournamentRecordsProvider =
   return api
       .myFavoriteTournaments(limit: 5)
       .timeout(const Duration(seconds: 2));
+});
+
+/// 내 협회 전적(연결 승인된 경우에만 행이 온다)
+final myPlayerResultsProvider =
+    FutureProvider<List<PlayerResult>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myPlayerResults();
+});
+
+/// 내 확정 연결 — 없으면 연결 유도를 띄운다
+final myConfirmedLinkProvider =
+    FutureProvider<Map<String, dynamic>?>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myConfirmedLink();
+});
+
+/// 연결된 내 현재 순위(부서별). 스펙 §7.2 블록 1 "지금".
+final myCurrentRankingsProvider =
+    FutureProvider<List<OrgRankingRow>>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myCurrentRankings();
 });
 
 /// 관심 화면용 스크랩 대회
