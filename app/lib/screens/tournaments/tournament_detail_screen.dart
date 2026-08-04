@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_schedule.dart';
+import '../in_app_browser_screen.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
@@ -702,8 +703,10 @@ class _TournamentApplyBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isClosed = tournament.isRegistrationClosed;
     final sourceUrl = tournament.sourceUrl?.trim();
-    final hasSourceUrl =
-        !isPreview && sourceUrl != null && sourceUrl.isNotEmpty;
+    final sourceUri = Uri.tryParse(sourceUrl ?? '');
+    final hasSourceUrl = !isPreview &&
+        sourceUri != null &&
+        (sourceUri.scheme == 'http' || sourceUri.scheme == 'https');
 
     // 앱 내 신청은 아직 준비 중. 원본 공고 URL이 있으면 실제 접수 경로로 연결하고,
     // 없으면 준비 중임을 명확히 안내한다.
@@ -716,10 +719,20 @@ class _TournamentApplyBar extends StatelessWidget {
                 () async {
                   var ok = false;
                   try {
-                    ok = await launchUrl(
-                      Uri.parse(sourceUrl),
-                      mode: LaunchMode.externalApplication,
-                    );
+                    final uri = sourceUri;
+                    if (kIsWeb) {
+                      ok = await launchUrl(
+                        uri,
+                        mode: LaunchMode.inAppBrowserView,
+                      );
+                    } else if (context.mounted) {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => InAppBrowserScreen(uri: uri),
+                        ),
+                      );
+                      ok = true;
+                    }
                   } catch (_) {
                     ok = false;
                   }

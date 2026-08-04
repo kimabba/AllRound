@@ -34,11 +34,15 @@ const COMMON_HEADERS: Record<string, string> = {
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
 };
 
-/** 협회 랭킹표 member_kind → 부서 코드 접미사. 광주·전남 동일 7개. */
+/** 협회 랭킹표 member_kind → 부서 코드 접미사. 광주·전남 동일.
+ *
+ * 남자신인부는 2026-08 협회가 남자일반부로 통합해 공표를 중단했다(표 머리글만 남고
+ * 데이터 0행). 계속 긁으면 매일 partial 실패만 쌓이므로 대상에서 뺐다.
+ * 카탈로그에서는 지우지 않고 is_active=false 로 내렸다 — 옛 대회가 그 코드를 참조한다
+ * (20260804030000_retire_male_rookie_division.sql). 여자신인부는 살아 있다. */
 const MEMBER_KIND_SUFFIX: Record<string, string> = {
   '골드부': '_m_gold',
   '남자일반부': '_m_general',
-  '남자신인부': '_m_rookie',
   '지도자부': '_m_instructor',
   '여자신인부': '_w_rookie',
   '국화부': '_w_gukhwa',
