@@ -92,8 +92,17 @@ begin
     (r ->> 'total_points')::int,
     p_source_url
   from jsonb_array_elements(p_rows) as r
-  -- 억제 대상 제외. 아이디가 있으면 아이디로, 없으면 성명 + 소속 원문으로 맞춘다.
-  -- 소속은 협회 표기가 비어 있거나 후행 슬래시가 붙는 경우가 있어 coalesce 로 맞춘다.
+  -- 억제 대상 제외. **두 경로 중 하나라도 맞으면** 제외한다.
+  --
+  -- 왜 "둘 중 하나"인가: 파서가 협회 HTML 에서 org_player_id 를 **매번 뽑는다는
+  -- 보장이 없다**(성명 셀의 player_rank('아이디') 링크가 없는 행이 있어 fallback 을 탄다).
+  -- 아이디로만 매칭하면, 억제해 둔 사람이 다음 크롤에 아이디 없이(null) 들어올 때
+  -- `'abc' = null` 이 NULL 이 되어 매칭이 빗나가고 **그대로 되살아난다.**
+  -- 그래서 억제 행에 아이디와 성명+소속을 **둘 다** 기록하고, 어느 쪽으로든 걸리게 한다.
+  --
+  -- 소속은 협회 표기가 비어 있거나 후행 슬래시가 붙어 coalesce 로 맞춘다.
+  -- 주의: 성명+소속 경로는 **같은 이름 + 같은 소속인 동명이인을 구분하지 못한다.**
+  -- 그 경우는 아이디로만 특정할 수 있다(런북 참조).
   where not exists (
     select 1
       from public.org_ranking_suppressions s
@@ -101,7 +110,7 @@ begin
        and (
          (s.org_player_id is not null
             and s.org_player_id = (r ->> 'org_player_id'))
-         or (s.org_player_id is null
+         or (s.player_name is not null
             and s.player_name = (r ->> 'player_name')
             and coalesce(s.club_raw, '') = coalesce(r ->> 'club_raw', ''))
        )

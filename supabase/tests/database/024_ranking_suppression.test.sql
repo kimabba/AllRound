@@ -11,7 +11,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(7);
+select plan(8);
 
 set local role postgres;
 
@@ -21,8 +21,10 @@ values ('zz_sup_div', 'gj', 'zz 억제 테스트 부서')
 on conflict (code) do nothing;
 
 -- ── 억제 목록: 아이디 기준 1건 + 성명·소속 기준 1건 ──────────────────
-insert into public.org_ranking_suppressions (org_code, org_player_id, note)
-values ('gj', 'zz_gone_id', '테스트: 아이디 기준 삭제 요청');
+-- 아이디 기준 억제는 성명+소속도 함께 기록한다. 협회가 다음 크롤에 아이디를
+-- 안 주면(파서 fallback 실패) 아이디 매칭이 빗나가 되살아나기 때문이다.
+insert into public.org_ranking_suppressions (org_code, org_player_id, player_name, club_raw, note)
+values ('gj', 'zz_gone_id', 'zz아이디삭제', 'zz다른클럽/', '테스트: 아이디 기준 삭제 요청');
 
 insert into public.org_ranking_suppressions (org_code, player_name, club_raw, note)
 values ('gj', 'zz삭제요청자', 'zz클럽/', '테스트: 성명+소속 기준 삭제 요청');
@@ -96,7 +98,25 @@ select is(
   '억제 대상은 순위 스냅샷에도 남지 않는다'
 );
 
--- 7) 억제 목록 자체는 클라이언트에 안 보인다 (삭제 요청자의 성명·소속이 들어 있다)
+-- 7) **아이디로 억제한 사람이 아이디 없이 들어와도 막힌다**
+--    협회가 player_rank('아이디') 링크를 안 주면 파서가 org_player_id 를 null 로
+--    넣는다. 아이디로만 매칭하면 'zz_gone_id' = null 이 NULL 이라 빗나가 되살아난다.
+--    성명+소속 경로가 함께 걸려야 한다.
+select public.replace_org_ranking_division(
+  'gj', 'zz_sup_div', 'https://example.test/zz',
+  '[{"rank":1,"player_name":"zz정상자","org_player_id":"zz_stay_id",
+     "club_raw":"zz클럽/","rank_points":100,"total_points":100},
+    {"rank":2,"player_name":"zz아이디삭제","org_player_id":null,
+     "club_raw":"zz다른클럽/","rank_points":80,"total_points":80}]'::jsonb
+);
+select is(
+  (select count(*)::int from public.org_rankings
+    where division_code = 'zz_sup_div' and player_name = 'zz아이디삭제'),
+  0,
+  '아이디로 억제한 사람은 다음 크롤에 아이디가 빠져 들어와도 막힌다'
+);
+
+-- 8) 억제 목록 자체는 클라이언트에 안 보인다 (삭제 요청자의 성명·소속이 들어 있다)
 reset role;
 set local role anon;
 select is(
