@@ -7,10 +7,26 @@ import '../models/org_ranking.dart';
 import '../models/tournament.dart';
 import 'api_base.dart';
 
+/// 검수 큐에 남길 최소 시작일 — 'YYYY-MM-DD'.
+///
+/// 오늘 시작하는 대회는 남긴다(당일 접수가 열려 있을 수 있다). `start_date` 는
+/// date 컬럼이라 시각 없이 날짜만 비교한다. 기기 로컬 날짜를 쓰는 건
+/// `Tournament.isRegistrationClosed` 와 같은 기준이다.
+String reviewQueueCutoff(DateTime now) =>
+    '${now.year.toString().padLeft(4, '0')}-'
+    '${now.month.toString().padLeft(2, '0')}-'
+    '${now.day.toString().padLeft(2, '0')}';
+
 /// 어드민 전용: 심사 큐·크롤 소스·클럽 승인 API.
 mixin AdminApi on ApiBase {
   // ── 대회 심사 큐 ──────────────────────────────────────────────
 
+  /// 검수 대기(draft) 대회 목록. **시작일이 지난 대회는 제외한다.**
+  ///
+  /// 승인해봐야 소용이 없기 때문이다 — published 로 올려도 다음 크롤에서
+  /// syncTournamentStatus 가 start_date 과거를 보고 곧바로 closed 로 되돌린다.
+  /// 그런데 그 sync 는 published 만 다루므로 draft 는 영영 정리되지 않아,
+  /// 거를 방법이 없으면 검수 큐에 지난 대회가 계속 쌓인다(2026-08-04: 14건 중 8건).
   Future<List<Map<String, dynamic>>> tournamentReviewQueue() async {
     final rows = await supabase
         .from('tournaments')
@@ -20,6 +36,7 @@ mixin AdminApi on ApiBase {
           'format, source, source_url, poster_url, submitted_by, created_at',
         )
         .eq('status', 'draft')
+        .gte('start_date', reviewQueueCutoff(DateTime.now()))
         .order('created_at', ascending: false);
     return (rows as List).map((r) {
       final m = Map<String, dynamic>.from(r as Map);
