@@ -1219,8 +1219,12 @@ class WeekLaneLayout {
 const int kCalendarMaxLanes = 4;
 
 /// 한 주(7칸, null = 빈 셀)에 걸친 대회들을 겹치지 않는 레인에 배치한다.
-/// 그리디 구간 스케줄링: 시작 칸이 빠르고 길게 걸치는 대회부터 먼저
-/// 빈 레인에 배정하고, [maxLanes]를 넘어가면 overflowCounts로 넘긴다.
+/// 칸(col)을 왼쪽부터 훑으며(sweep line) 그날 걸치는데 레인이 없는 대회를
+/// 빈 레인에 배정한다 — 한 번 레인을 잡으면 자기 끝 칸까지 계속 그 레인을
+/// 쓰고, 끝나야 레인이 풀린다. 시작 시점엔 4레인이 다 차 있어도 나중에
+/// 레인이 비면 그때부터 새로 시작하는 바로 이어서 그려진다(전체를
+/// overflow 처리하지 않음).
+/// [maxLanes]를 넘는 날엔 그 칸만 overflowCounts로 넘긴다.
 // ponytail: 레인 배정은 주(week row) 단위로 독립 계산한다. 여러 주에 걸친
 // 대회는 주가 바뀌면 다른 레인에 놓일 수 있음(레인엔 색 구분이 없어 기능상
 // 문제는 아님). 주 간 레인을 맞추려면 이전 주 배정을 이어받는 로직이 필요 —
@@ -1245,6 +1249,8 @@ WeekLaneLayout laneLayoutForWeek(
       entries.add((tournament: tournament, startCol: startCol, endCol: endCol));
     }
   }
+  // 같은 칸에 새로 레인을 못 받은 대회가 여럿이면 이 순서로 우선순위를 준다:
+  // 먼저 시작한 대회, 그중 더 길게 걸치는 대회, 그래도 같으면 시작일 순.
   entries.sort((a, b) {
     final byStart = a.startCol.compareTo(b.startCol);
     if (byStart != 0) return byStart;
@@ -1253,23 +1259,40 @@ WeekLaneLayout laneLayoutForWeek(
     return a.tournament.startDate.compareTo(b.tournament.startDate);
   });
 
-  final laneLastEndCol = <int>[];
   final laneGrid = List.generate(
     weekDates.length,
     (_) => List<LaneSlot?>.filled(maxLanes, null),
   );
-  for (final entry in entries) {
-    var lane = laneLastEndCol.indexWhere((endCol) => endCol < entry.startCol);
-    if (lane == -1) {
-      if (laneLastEndCol.length >= maxLanes) continue; // 넘치면 overflow로 집계
-      lane = laneLastEndCol.length;
-      laneLastEndCol.add(-1);
+  // 레인별로 지금 그 레인을 쓰고 있는 entries 인덱스(-1=빈 레인)와,
+  // 그 대회가 이 레인에서 그려지기 시작한 칸.
+  final laneOccupant = List<int>.filled(maxLanes, -1);
+  final laneRunStart = List<int>.filled(maxLanes, -1);
+
+  for (var col = 0; col < weekDates.length; col++) {
+    // 오늘 이후로 안 걸치는 점유자는 레인을 비운다.
+    for (var lane = 0; lane < maxLanes; lane++) {
+      final occupant = laneOccupant[lane];
+      if (occupant != -1 && col > entries[occupant].endCol) {
+        laneOccupant[lane] = -1;
+      }
     }
-    laneLastEndCol[lane] = entry.endCol;
-    for (var col = entry.startCol; col <= entry.endCol; col++) {
+    // 오늘 걸치는데 레인이 없는 대회를 우선순위대로 빈 레인에 배정한다.
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      if (col < entry.startCol || col > entry.endCol) continue;
+      if (laneOccupant.contains(i)) continue;
+      final freeLane = laneOccupant.indexOf(-1);
+      if (freeLane == -1) continue; // 이번 칸은 자리 없음 → overflow로 집계
+      laneOccupant[freeLane] = i;
+      laneRunStart[freeLane] = col;
+    }
+    // 오늘 레인을 쓰는 대회를 그린다.
+    for (var lane = 0; lane < maxLanes; lane++) {
+      final occupant = laneOccupant[lane];
+      if (occupant == -1) continue;
       laneGrid[col][lane] = (
-        isBandStart: col == entry.startCol,
-        isBandEnd: col == entry.endCol,
+        isBandStart: laneRunStart[lane] == col,
+        isBandEnd: col == entries[occupant].endCol,
       );
     }
   }

@@ -107,6 +107,39 @@ void main() {
       expect(layout.overflowCounts, everyElement(0));
     });
 
+    test('시작 시점엔 레인이 다 찼어도 나중에 비면 그때부터 이어서 그려진다', () {
+      // 13~15(월~수) 4개가 레인을 다 채우고, 14~18(화~토)짜리가 하나 더 있다.
+      // 화/수는 5개가 겹쳐 1개가 진짜로 못 들어가지만, 목~토는 4개가 끝나서
+      // 자리가 남는데도 전체를 overflow 처리하면 안 된다.
+      final week = [
+        for (var d = 13; d <= 19; d++) DateTime(2026, 7, d),
+      ];
+      final fullDays = [
+        for (var i = 0; i < 4; i++)
+          _t(start: DateTime(2026, 7, 13), end: DateTime(2026, 7, 15))
+      ];
+      final longRunning =
+          _t(start: DateTime(2026, 7, 14), end: DateTime(2026, 7, 18));
+      final layout = laneLayoutForWeek(week, [...fullDays, longRunning]);
+
+      // 화(14)/수(15): 5개 겹침 → 1개는 이번 칸엔 자리가 없다.
+      expect(layout.overflowCounts[1], 1); // 14
+      expect(layout.overflowCounts[2], 1); // 15
+      // 목~토(16~18): fullDays는 끝났고 longRunning만 남았으니 자리가 있어야 한다.
+      for (final col in [3, 4, 5]) {
+        expect(layout.overflowCounts[col], 0);
+        expect(
+          layout.laneGrid[col].where((slot) => slot != null).length,
+          1,
+        );
+      }
+      // 목(16)에서 새로 레인을 잡아 시작 모서리가 생기고, 토(18)에서 끝난다.
+      final laneIndex =
+          layout.laneGrid[3].indexWhere((slot) => slot != null);
+      expect(layout.laneGrid[3][laneIndex]!.isBandStart, isTrue);
+      expect(layout.laneGrid[5][laneIndex]!.isBandEnd, isTrue);
+    });
+
     test('maxLanes를 넘는 대회는 줄로 못 그리고 overflow로 집계된다', () {
       final week = [
         for (var d = 13; d <= 19; d++) DateTime(2026, 7, d),
