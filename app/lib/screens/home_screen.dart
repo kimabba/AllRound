@@ -38,7 +38,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final upcoming = sorted
-        .where((item) => !item.startDate.isBefore(today))
+        .where(
+          (item) =>
+              !item.startDate.isBefore(today) && !item.isRegistrationClosed,
+        )
         .toList(growable: false);
 
     return switch (_filter) {
@@ -393,7 +396,14 @@ class _HomeSectionHeader extends StatelessWidget {
       ],
     );
     if (onAction == null) return row;
-    return InkWell(key: actionKey, onTap: onAction, child: row);
+    return InkWell(
+      key: actionKey,
+      onTap: onAction,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+        child: Align(alignment: Alignment.centerLeft, child: row),
+      ),
+    );
   }
 }
 
