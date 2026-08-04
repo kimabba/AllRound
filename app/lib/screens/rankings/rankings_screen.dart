@@ -170,6 +170,13 @@ class RankingSourceNotice extends StatelessWidget {
               ),
             ),
           ),
+          // 이 앱은 협회 공표 자료를 미러링한다. 우리 쪽에서 지워도 협회가 계속
+          // 공표하면 원본이 남는다 — 요청자가 그걸 모르면 헛수고를 한다.
+          // (우리 쪽 삭제는 억제 목록으로 유지되므로 다시 살아나지는 않는다.)
+          Text(
+            '협회 공표 자료를 옮긴 것이라, 원본까지 지우려면 협회에도 함께 요청해야 합니다',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
         ],
       ),
     );
