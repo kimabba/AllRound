@@ -7,11 +7,39 @@ import '../models/org_ranking.dart';
 import '../models/tournament.dart';
 import 'api_base.dart';
 
+/// 검수 큐에 남길 최소 시작일 — KST 기준 오늘, 'YYYY-MM-DD'.
+///
+/// 오늘 시작하는 대회는 남긴다(당일 접수가 열려 있을 수 있다). `start_date` 는
+/// date 컬럼이라 시각 없이 날짜만 비교한다.
+///
+/// **기기 로컬이 아니라 KST 로 고정한다** — 서버의 자동 마감
+/// (`_shared/tournament_status.ts` `syncTournamentStatus`)이 KST 로 판정하므로,
+/// 기기 시간대를 쓰면 KST 보다 앞선 곳(예: 시드니)에서 한국 자정 전에 오늘자
+/// 대회가 큐에서 먼저 사라진다.
+String reviewQueueCutoff(DateTime now) {
+  final kst = now.toUtc().add(const Duration(hours: 9));
+  return '${kst.year.toString().padLeft(4, '0')}-'
+      '${kst.month.toString().padLeft(2, '0')}-'
+      '${kst.day.toString().padLeft(2, '0')}';
+}
+
 /// 어드민 전용: 심사 큐·크롤 소스·클럽 승인 API.
 mixin AdminApi on ApiBase {
   // ── 대회 심사 큐 ──────────────────────────────────────────────
 
+  /// 검수 대기(draft) 대회 목록. **시작일이 지난 크롤 대회는 제외한다.**
+  ///
+  /// 승인해봐야 소용이 없기 때문이다 — published 로 올려도 다음 크롤에서
+  /// syncTournamentStatus 가 start_date 과거를 보고 곧바로 closed 로 되돌린다.
+  /// 그런데 그 sync 는 published 만 다루므로 draft 는 영영 정리되지 않아,
+  /// 거를 방법이 없으면 검수 큐에 지난 대회가 계속 쌓인다(2026-08-04: 14건 중 8건).
+  ///
+  /// **사람이 낸 대회(`user_submission`·제보자 있음)는 날짜와 무관하게 남긴다.**
+  /// 크롤 대회는 날짜를 잘못 뽑아도 재크롤이 고쳐 주지만, 제보 대회는 다시
+  /// 긁을 원본이 없다. 날짜 오타 하나로 큐에서 사라지면 그 사람은 자기 제보가
+  /// 왜 처리되지 않는지 알 방법이 없다 — 반려도 승인도 못 받는다.
   Future<List<Map<String, dynamic>>> tournamentReviewQueue() async {
+    final cutoff = reviewQueueCutoff(DateTime.now());
     final rows = await supabase
         .from('tournaments')
         .select(
@@ -20,6 +48,11 @@ mixin AdminApi on ApiBase {
           'format, source, source_url, poster_url, submitted_by, created_at',
         )
         .eq('status', 'draft')
+        .or(
+          'source.eq.user_submission,'
+          'submitted_by.not.is.null,'
+          'start_date.gte.$cutoff',
+        )
         .order('created_at', ascending: false);
     return (rows as List).map((r) {
       final m = Map<String, dynamic>.from(r as Map);
