@@ -31,7 +31,7 @@
 ### 법적·개인정보
 - [x] **개인정보 처리방침 공개 URL** (렌더 O, 수정불가, 비-PDF) — GitHub Pages: `https://kimabba.github.io/AllRound/legal/privacy-policy.html` ✅
 - [x] **이용약관 공개 URL** — `https://kimabba.github.io/AllRound/legal/terms-of-service.html` ✅
-- [x] 개인정보 방침 연락처 이메일 **실제 수신 가능** (`demian.772@gmail.com`) ✅
+- [x] 개인정보 방침 연락처 이메일 **실제 수신 가능** (`ssfak@jyoungad.kr`) ✅
 - [ ] 개인정보 방침 링크가 **앱 내부 + 스토어 리스팅 둘 다**에 노출 (앱 내부 = 더보기 화면 ✅, 스토어 = 제출 시 입력)
 - [ ] **회원 탈퇴(계정 삭제)** 인앱 제공 + 실제 동작 (JY-112, 코드 완료 → **E2E 검증 필요**). Apple·Play 둘 다 필수.
 

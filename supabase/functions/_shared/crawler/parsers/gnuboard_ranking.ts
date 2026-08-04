@@ -16,7 +16,8 @@
 // 규약:
 //   - 0점 선수는 저장하지 않는다(개인정보 최소화). 순위는 협회 값을 그대로 쓰므로
 //     0점 구간을 버려도 남는 행의 rank 가 깨지지 않는다.
-//   - 개인 상세(sub4_6_rank.php)는 fetch 하지 않는다. 선수당 1요청 × 수천 명 방지 겸.
+//   - 개인 상세(sub4_6_rank.php)는 연결 승인자에 한해 fetch 한다(crawlPlayerHistories).
+//     요청 수 = 승인자 수라 선수 전체(수천 명) 순회 우려는 해당하지 않는다.
 //   - 협회가 시즌·공표일을 주지 않으므로 부서 단위 delete+insert 로 현재상태만 유지한다.
 //   - 앱은 점수를 계산하지 않는다. 협회 공표값을 그대로 옮긴다.
 //
@@ -24,6 +25,7 @@
 
 import { saveRawDocument } from '../../crawler.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
+import { crawlPlayerHistories, type SupabaseLike } from './gnuboard_player_history.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
 const COMMON_HEADERS: Record<string, string> = {
@@ -163,6 +165,9 @@ export const gnuboardRankingParser: ParserFn = async (
   const db = ctx.audit.supabase;
   const base = source.url.replace(/\/+$/, '');
   const failures: string[] = [];
+  // 부서 실패만 따로 센다 — 아래 status 판정이 "부서 전부 실패"를 뜻하기 때문이다.
+  // 개인 이력 실패는 failures 에는 남기되 이 카운터에는 넣지 않는다.
+  let divisionFailures = 0;
 
   for (const [memberKind, suffix] of Object.entries(MEMBER_KIND_SUFFIX)) {
     const divisionCode = `${org}${suffix}`;
@@ -173,11 +178,13 @@ export const gnuboardRankingParser: ParserFn = async (
       const res = await fetch(url, { headers: COMMON_HEADERS });
       if (!res.ok) {
         failures.push(`${memberKind}: HTTP ${res.status}`);
+        divisionFailures++;
         continue;
       }
       html = await res.text();
     } catch (e) {
       failures.push(`${memberKind}: ${e instanceof Error ? e.message : String(e)}`);
+      divisionFailures++;
       continue;
     }
 
@@ -189,6 +196,7 @@ export const gnuboardRankingParser: ParserFn = async (
     //   안 남아 'ok' 로 보고된다. 기존 데이터를 보존하고 시끄럽게 실패한다.
     if (rows.length === 0) {
       failures.push(`${memberKind}: 파싱 0행 — 기존 데이터 보존`);
+      divisionFailures++;
       await saveRawDocument(ctx.audit, url, html, null, 'failed', '랭킹 행 0개');
       continue;
     }
@@ -220,11 +228,21 @@ export const gnuboardRankingParser: ParserFn = async (
     });
     if (rpcErr) {
       failures.push(`${memberKind}: replace ${rpcErr.message}`);
+      divisionFailures++;
       continue;
     }
 
     ctx.audit.inserted += scored.length;
   }
+
+  // 부서 교체가 끝난 뒤 연결 승인자의 개인 대회 이력을 수집한다.
+  // 요청 수 = 승인자 수라 부담이 작다(선행 설계가 이 크롤을 미룬 이유였던
+  // '선수당 1요청 × 수천 명'이 연결자 한정에는 해당하지 않는다).
+  // 이력 수집 실패가 랭킹 미러링 성공을 뒤집지 않게 failures 에만 합친다.
+  // SupabaseClient 의 쿼리빌더 제네릭이 깊어 SupabaseLike 로의 구조적 할당 검사가
+  // "Type instantiation is excessively deep" 로 죽는다(실측). db 는 실제로 이 최소
+  // 형태를 만족하므로(기존 파서들의 `as unknown as` 관례를 따라) 좁혀서 넘긴다.
+  failures.push(...await crawlPlayerHistories(db as unknown as SupabaseLike, org, base));
 
   return {
     fetched_count: ctx.audit.fetched,
@@ -232,7 +250,9 @@ export const gnuboardRankingParser: ParserFn = async (
     updated_count: 0,
     // 기존 파서 관례를 따른다(gnuboard_sub5_5_contest.ts 의 allFailed 판정).
     // 부분 실패는 error 메시지로 드러나고, dispatcher 가 crawl_audit 을 'partial' 로 내린다.
-    status: failures.length === Object.keys(MEMBER_KIND_SUFFIX).length ? 'error' : 'ok',
+    // divisionFailures 로 보는 이유: failures 에는 이력 수집 실패도 섞여 들어와
+    // "부서 전부 실패"의 신호로 쓸 수 없다.
+    status: divisionFailures === Object.keys(MEMBER_KIND_SUFFIX).length ? 'error' : 'ok',
     error: failures.length > 0 ? failures.join(' | ') : undefined,
   };
 };
