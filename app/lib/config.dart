@@ -72,7 +72,7 @@ class AppConfig {
   ///
   /// package_info_plus 를 쓰지 않는 이유: 플랫폼 채널을 타므로 웹 빌드(JY-81)까지
   /// 신경 써야 하고, 이 값 하나를 위해 의존성을 늘릴 이유가 없다. 대신 pubspec 과의
-  /// 일치는 harness(`check_static_rules.py`)가 강제한다 — 손으로 맞추다 어긋나는
+  /// 일치는 `app/test/release_gate_test.dart` 가 강제한다 — 손으로 맞추다 어긋나는
   /// 경로를 막는다.
   static const appBuildNumber = 5;
 
