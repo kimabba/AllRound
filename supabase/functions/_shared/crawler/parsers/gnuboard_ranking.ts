@@ -34,11 +34,15 @@ const COMMON_HEADERS: Record<string, string> = {
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
 };
 
-/** 협회 랭킹표 member_kind → 부서 코드 접미사. 광주·전남 동일 7개. */
+/** 협회 랭킹표 member_kind → 부서 코드 접미사. 광주·전남 동일.
+ *
+ * 남자신인부는 2026-08 협회가 남자일반부로 통합해 공표를 중단했다(표 머리글만 남고
+ * 데이터 0행). 계속 긁으면 매일 partial 실패만 쌓이므로 대상에서 뺐다.
+ * 카탈로그에서는 지우지 않고 is_active=false 로 내렸다 — 옛 대회가 그 코드를 참조한다
+ * (20260804050000_retire_male_rookie_division.sql). 여자신인부는 살아 있다. */
 const MEMBER_KIND_SUFFIX: Record<string, string> = {
   '골드부': '_m_gold',
   '남자일반부': '_m_general',
-  '남자신인부': '_m_rookie',
   '지도자부': '_m_instructor',
   '여자신인부': '_w_rookie',
   '국화부': '_w_gukhwa',
@@ -54,7 +58,7 @@ export interface RankingRow {
   totalPoints: number;
 }
 
-// deno-dom(DOMParser)은 HTML 전체를 WASM 힙에 DOM 트리로 올린다. 페이지 14개(부서 7×협회 2)를
+// deno-dom(DOMParser)은 HTML 전체를 WASM 힙에 DOM 트리로 올린다. 페이지 12개(부서 6×협회 2)를
 // 한 함수 실행에서 순차 처리하면 3개째부터 리소스 초과로 죽는 게 실측됐다(2026-08-03, 12초/546).
 // 대신 <tr>...<tr> 단위로 정규식 스캔하며 즉시 처리·폐기한다 — DOM 트리를 만들지 않는다.
 // 전체 HTML 을 한 정규식으로 한 번에 매치하지 않는다(그것도 큰 배열을 남긴다) — exec 루프로
@@ -142,7 +146,7 @@ export function parseRankingRows(html: string): RankingRow[] {
 }
 
 /**
- * 한 협회의 랭킹 부서 7개를 순회해 org_rankings 를 부서 단위로 교체한다.
+ * 한 협회의 랭킹 부서 6개를 순회해 org_rankings 를 부서 단위로 교체한다.
  * source.url 은 base URL(예: 'https://gjtennis.kr'), source.org_code 는 'gj' | 'jn'.
  */
 export const gnuboardRankingParser: ParserFn = async (

@@ -313,7 +313,13 @@ const _kFallbackDivisions = <TennisDivision>[
       isRankingGrade: false,
       gender: 'male'),
   TennisDivision(code: 'gj_m_open', org: 'gj', label: '오픈부', gender: 'male'),
-  TennisDivision(code: 'gj_m_rookie', org: 'gj', label: '신인부', gender: 'male'),
+  // 2026-08 남자일반부로 통합돼 폐지. 라벨 해석은 유지(옛 대회가 참조).
+  TennisDivision(
+      code: 'gj_m_rookie',
+      org: 'gj',
+      label: '신인부',
+      gender: 'male',
+      isActive: false),
   TennisDivision(
       code: 'gj_m_veteran',
       org: 'gj',
@@ -372,7 +378,13 @@ const _kFallbackDivisions = <TennisDivision>[
       isRankingGrade: false,
       gender: 'male'),
   TennisDivision(code: 'jn_m_open', org: 'jn', label: '오픈부', gender: 'male'),
-  TennisDivision(code: 'jn_m_rookie', org: 'jn', label: '신인부', gender: 'male'),
+  // 2026-08 남자일반부로 통합돼 폐지. 라벨 해석은 유지(옛 대회가 참조).
+  TennisDivision(
+      code: 'jn_m_rookie',
+      org: 'jn',
+      label: '신인부',
+      gender: 'male',
+      isActive: false),
   TennisDivision(
       code: 'jn_m_veteran',
       org: 'jn',

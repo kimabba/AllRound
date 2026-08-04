@@ -8,14 +8,15 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 
-/// 협회 랭킹표가 실제로 공표하는 부서 7개(광주·전남 동일, gnuboard_ranking 파서와
+/// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
 /// 일치). 부서 카탈로그 전체(rankingGradesForOrg)와 다르다 — 오픈부·베테랑부 등은
 /// 대회 자격에는 쓰이지만 협회가 별도 랭킹표로 공표하지 않는다.
+/// 남자신인부는 2026-08 남자일반부로 통합돼 빠졌다(카탈로그에는 is_active=false 로 남아
+/// 옛 대회 라벨 해석은 계속 된다). 여자신인부는 살아 있다.
 const _kRankingDivisions = <String, List<String>>{
   'gj': [
     'gj_m_gold',
     'gj_m_general',
-    'gj_m_rookie',
     'gj_m_instructor',
     'gj_w_rookie',
     'gj_w_gukhwa',
@@ -24,7 +25,6 @@ const _kRankingDivisions = <String, List<String>>{
   'jn': [
     'jn_m_gold',
     'jn_m_general',
-    'jn_m_rookie',
     'jn_m_instructor',
     'jn_w_rookie',
     'jn_w_gukhwa',
