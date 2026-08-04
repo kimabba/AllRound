@@ -140,6 +140,42 @@ void main() {
       expect(layout.laneGrid[5][laneIndex]!.isBandEnd, isTrue);
     });
 
+    test('레인 한 개만 풀려도 나머지가 계속 점유 중인 채로 즉시 배정된다', () {
+      // 4개가 서로 다른 날 끝나서(13/14/15/16) 레인이 한 번에 하나씩만 빈다.
+      // "전부 다 풀려야 재배정" 하는 잘못된 구현이면 이 테스트가 실패해야 한다.
+      final week = [
+        for (var d = 13; d <= 19; d++) DateTime(2026, 7, d),
+      ];
+      final t1 = _t(start: DateTime(2026, 7, 13), end: DateTime(2026, 7, 13));
+      final t2 = _t(start: DateTime(2026, 7, 13), end: DateTime(2026, 7, 14));
+      final t3 = _t(start: DateTime(2026, 7, 13), end: DateTime(2026, 7, 15));
+      final t4 = _t(start: DateTime(2026, 7, 13), end: DateTime(2026, 7, 16));
+      final waiting =
+          _t(start: DateTime(2026, 7, 14), end: DateTime(2026, 7, 19));
+      final layout = laneLayoutForWeek(week, [t1, t2, t3, t4, waiting]);
+
+      // 13(월): t1~t4가 4레인을 다 채운다. waiting은 아직 시작 전이라 없다.
+      expect(layout.laneGrid[0].where((slot) => slot != null).length, 4);
+
+      // 14(화): t1만 끝나 레인 하나만 빈다. t2/t3/t4는 그대로 자기 레인을
+      // 이어서 쓰는 채(새로 시작한 게 아님)인데도, waiting이 그 하나 빈
+      // 레인을 그 즉시 잡는다 — "전부 다 풀려야 재배정" 하는 구현이면
+      // waiting 몫의 isBandStart가 하나도 안 잡혀야 한다.
+      final startedAt14 =
+          layout.laneGrid[1].where((slot) => slot?.isBandStart == true);
+      expect(startedAt14.length, 1); // 새로 시작한 건 waiting 하나뿐
+      expect(
+        layout.laneGrid[1].where((slot) => slot != null).length,
+        4, // t2,t3,t4 계속 + waiting 신규 = 4레인 다 참
+      );
+      final waitingLane = layout.laneGrid[1].indexWhere(
+        (slot) => slot?.isBandStart == true,
+      );
+      // 19(일)에 waiting이 자연스럽게 끝난다(그 사이 같은 레인을 계속 쓴다).
+      expect(layout.laneGrid[6][waitingLane]!.isBandEnd, isTrue);
+      expect(layout.overflowCounts[1], 0); // 14: 5개 중 4개가 다 레인에 들어갔다
+    });
+
     test('maxLanes를 넘는 대회는 줄로 못 그리고 overflow로 집계된다', () {
       final week = [
         for (var d = 13; d <= 19; d++) DateTime(2026, 7, d),
