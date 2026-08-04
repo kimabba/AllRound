@@ -130,10 +130,14 @@ def check_tournament_closed_is_automation_only() -> None:
 def check_ai_disclosure_present() -> None:
     """인공지능기본법 §31·§43: 생성형 AI 이용 사실과 AI 생성물임을 이용자에게 알린다.
 
-    챗봇 화면의 고지 한 줄은 UI 정리 중에 조용히 사라지기 쉽다. 사라져도 앱은
-    잘 돌아가고 테스트도 통과하므로, 없어진 걸 알아채는 경로가 이 검사뿐이다.
+    챗봇 화면의 고지 한 줄은 UI 정리 중에 조용히 사라지기 쉽다. 앱 화면·이용약관·
+    개인정보 처리방침 세 곳이 함께 있어야 고지가 성립한다.
 
-    앱 화면·이용약관·개인정보 처리방침 세 곳이 함께 있어야 고지가 성립한다.
+    한계: 이 검사는 **문자열만 본다.** 호출을 남긴 채 `Offstage`·`Visibility(false)`·
+    `Opacity(0)` 로 감싸거나 위젯의 build 를 빈 것으로 바꾸면 그대로 통과한다(실측).
+    "실제로 보이는지"는 `app/test/chat_ui_states_test.dart` 의 위젯 테스트가 본다 —
+    렌더된 크기·화면 안 위치·semantics 를 확인한다. 둘 다 있어야 방어가 된다.
+    이 검사의 몫은 파일·조항이 통째로 사라지는 경우다.
     """
     screen = "app/lib/screens/chat_screen.dart"
     widget = "app/lib/widgets/chat_ai_disclosure.dart"
