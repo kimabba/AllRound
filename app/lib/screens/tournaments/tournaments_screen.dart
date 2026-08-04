@@ -1018,25 +1018,33 @@ class _CalendarDayCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: AppSpacing.xs),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: isSelected ? 30 : 26,
-              height: isSelected ? 30 : 26,
-              decoration: BoxDecoration(
-                color: isSelected ? cs.primary : Colors.transparent,
-                shape: BoxShape.circle,
-                border: isToday && !isSelected
-                    ? Border.all(color: cs.primary, width: 1.3)
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '${currentDate.day}',
-                style: tt.labelMedium?.copyWith(
-                  color: isSelected ? cs.onPrimary : cs.onSurface,
-                  fontWeight: isSelected || isToday
-                      ? FontWeight.w900
-                      : FontWeight.w700,
+            // 선택 시 원이 26→30 으로 커지는데, 고정 30 슬롯 안에서 커지게 해야
+            // 옆 칸과 레인 바 높이가 어긋나지 않는다(선택 칸만 아래로 밀리는 문제 방지).
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: isSelected ? 30 : 26,
+                  height: isSelected ? 30 : 26,
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: cs.primary, width: 1.3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${currentDate.day}',
+                    style: tt.labelMedium?.copyWith(
+                      color: isSelected ? cs.onPrimary : cs.onSurface,
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1213,6 +1221,10 @@ const int kCalendarMaxLanes = 4;
 /// 한 주(7칸, null = 빈 셀)에 걸친 대회들을 겹치지 않는 레인에 배치한다.
 /// 그리디 구간 스케줄링: 시작 칸이 빠르고 길게 걸치는 대회부터 먼저
 /// 빈 레인에 배정하고, [maxLanes]를 넘어가면 overflowCounts로 넘긴다.
+// ponytail: 레인 배정은 주(week row) 단위로 독립 계산한다. 여러 주에 걸친
+// 대회는 주가 바뀌면 다른 레인에 놓일 수 있음(레인엔 색 구분이 없어 기능상
+// 문제는 아님). 주 간 레인을 맞추려면 이전 주 배정을 이어받는 로직이 필요 —
+// 필요해지면 그때 추가.
 @visibleForTesting
 WeekLaneLayout laneLayoutForWeek(
   List<DateTime?> weekDates,
