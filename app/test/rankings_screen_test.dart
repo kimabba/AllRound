@@ -1,9 +1,14 @@
 import 'package:allround/models/org_ranking.dart';
+import 'package:allround/models/player_result.dart';
+import 'package:allround/models/tournament.dart';
 import 'package:allround/screens/rankings/rankings_screen.dart';
+import 'package:allround/services/api.dart';
+import 'package:allround/state/providers.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 OrgRankingRow _row({
   required int rank,
@@ -21,6 +26,80 @@ OrgRankingRow _row({
     orgPlayerId: orgPlayerId,
     clubRaw: '어등산/',
   );
+}
+
+/// 화면 통합용 — _load() 가 실제로 쓰는 네 조회만 갈아끼운다.
+/// (단위 테스트가 판정 함수를 고정해도, 화면이 그 판정을 안 쓰면 소용없다.)
+class _FakeRankingApi extends ApiService {
+  _FakeRankingApi({required this.rows, required this.links})
+      : super(
+          SupabaseClient(
+            'http://127.0.0.1:54321',
+            'qa-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  final List<OrgRankingRow> rows;
+  final List<Map<String, dynamic>> links;
+
+  @override
+  Future<List<OrgRankingRow>> orgRankings({
+    required String orgCode,
+    required String divisionCode,
+  }) async =>
+      rows;
+
+  @override
+  Future<List<Map<String, dynamic>>> orgPlayerLinks(String orgCode) async =>
+      links;
+
+  @override
+  Future<List<OrgRankingRow>> myRankingCandidates() async => const [];
+
+  @override
+  Future<List<UserTennisOrg>> myTennisOrgs() async => [
+        UserTennisOrg(
+          org: 'gj',
+          division: 'default',
+          divisionCodes: const ['gj_m_gold'],
+        ),
+      ];
+
+  @override
+  Future<List<PlayerResult>> myPlayerResults() async => const [];
+}
+
+const _kTestUserId = 'me-uuid';
+
+Future<void> _pumpScreen(
+  WidgetTester tester, {
+  required List<OrgRankingRow> rows,
+  required List<Map<String, dynamic>> links,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        apiProvider.overrideWithValue(
+          _FakeRankingApi(rows: rows, links: links),
+        ),
+        currentUserProvider.overrideWithValue(
+          User(
+            id: _kTestUserId,
+            appMetadata: const {},
+            userMetadata: const {},
+            aud: 'authenticated',
+            createdAt: '2026-08-05T00:00:00Z',
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const RankingsScreen(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) {
@@ -138,6 +217,14 @@ void main() {
       expect(compute(links), {'b'});
     });
 
+    test('남이 신청 중(pending)인 선수는 아직 내가 신청할 수 있다', () {
+      // 승인 전이라 주인이 정해지지 않았다 — 경합은 관리자 승인 큐가 가린다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'pending', 'user_id': 'other-uuid'},
+      ];
+      expect(compute(links), {'a', 'b'});
+    });
+
     test('내가 이미 신청한(pending) 선수는 빠진다', () {
       final links = [
         {'org_player_id': 'a', 'status': 'pending', 'user_id': me},
@@ -196,6 +283,44 @@ void main() {
     );
 
     expect(find.text('본인'), findsNothing);
+  });
+
+  group('화면이 판정을 실제로 반영한다', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+
+    testWidgets('검색어를 넣으면 그 행만 남는다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+      expect(find.text('이기영'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '평화');
+      await tester.pumpAndSettle();
+
+      expect(find.text('김평화'), findsOneWidget);
+      expect(find.text('이기영'), findsNothing);
+    });
+
+    testWidgets('반려된 내 신청의 선수에는 본인 버튼이 안 붙는다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {
+            'org_player_id': 'a',
+            'status': 'rejected',
+            'user_id': _kTestUserId,
+          },
+        ],
+      );
+
+      // 등록 부서(gj_m_gold)라 b 에는 버튼이 있고, 반려된 a 에는 없어야 한다.
+      expect(find.text('본인'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '평화');
+      await tester.pumpAndSettle();
+      expect(find.text('본인'), findsNothing);
+    });
   });
 
   testWidgets('후보가 있으면 클레임 카드가 뜬다', (tester) async {

@@ -336,6 +336,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   String _orgCode = 'gj';
   String _divisionCode = _kRankingDivisions['gj']!.first;
   String _query = '';
+  bool _claiming = false;
   late Future<_RankingScreenData> _future;
 
   @override
@@ -430,6 +431,10 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   }
 
   Future<void> _claim(OrgRankingRow candidate) async {
+    // 연타 방어. 같은 선수로 INSERT 가 둘 나가면 하나는
+    // unique(org_code, org_player_id, user_id) 로 23505 를 받는다.
+    if (_claiming) return;
+    _claiming = true;
     try {
       await ref.read(apiProvider).claimRanking(candidate);
       if (mounted) {
@@ -443,6 +448,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('신청 실패: $e')));
+    } finally {
+      _claiming = false;
     }
   }
 
