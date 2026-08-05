@@ -12,6 +12,38 @@
 --
 -- 이미 다른 사람과 confirmed 된 선수의 중복 신청은 여기서 막지 않는다 —
 -- 화면이 그 행의 버튼을 숨기고, 최종 판단은 관리자 승인 큐가 한다.
+-- (다른 사람끼리 같은 선수를 놓고 경합하는 pending 은 정상이다.)
+
+-- 한 협회에서 이미 confirmed 인 사람의 추가 신청은 막는다.
+-- org_player_links_confirmed_user_key(협회당 유저 1명 1선수, partial unique)가
+-- 승인 시점에 23505 를 내므로, 막지 않으면 "승인할 수 없는 pending"이 관리자
+-- 큐에 쌓인다. 정책 표현식 안에서 org_player_links 를 직접 참조하면 정책이
+-- 자기 자신에 재귀 적용되므로 security definer 함수로 감싼다.
+create or replace function public.has_confirmed_org_link(p_org_code text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.org_player_links
+    where org_code = p_org_code
+      and user_id = (select auth.uid())
+      and status = 'confirmed'
+  );
+$$;
+
+-- 새 함수는 프로덕션에서 anon 에게 EXECUTE 가 기본 부여된다(로컬과 다름) —
+-- 명시로 회수한다.
+-- service_role 은 PUBLIC 기본 실행권한에 기대고 있어, revoke 하면 함께 사라진다
+-- (011_api_role_grants 가 이 회귀를 잡는다) — 명시로 다시 부여한다.
+revoke all on function public.has_confirmed_org_link(text) from public, anon;
+grant execute on function public.has_confirmed_org_link(text)
+  to authenticated, service_role;
+
+comment on function public.has_confirmed_org_link is
+  '내가 이 협회에서 이미 확정 연결된 상태인가. org_player_links_claim 정책 전용 — 정책이 자기 테이블을 참조해 재귀하는 것을 피하려고 분리했다.';
 
 drop policy if exists org_player_links_claim on public.org_player_links;
 
@@ -35,7 +67,8 @@ create policy org_player_links_claim
       where r.org_code = org_player_links.org_code
         and r.org_player_id = org_player_links.org_player_id
     )
+    and not public.has_confirmed_org_link(org_code)
   );
 
 comment on policy org_player_links_claim on public.org_player_links is
-  '본인 연결 신청: 내 계정으로, pending 으로만, 내가 등록한 협회·부서 랭킹에 있는 선수에 한해.';
+  '본인 연결 신청: 내 계정으로, pending 으로만, 내가 등록한 협회·부서 랭킹에 있는 선수에 한해, 그 협회에 아직 확정 연결이 없을 때.';

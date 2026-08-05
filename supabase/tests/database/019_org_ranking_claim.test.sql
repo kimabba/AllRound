@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(13);
+select plan(14);
 
 select has_function('public', 'my_ranking_candidates', '후보 조회 함수 존재');
 
@@ -111,20 +111,36 @@ values
   ('jn', 'jn_m_gold', 1, '남의협회', 'jn_player', '전남/', 900, 900, 'https://x'),
   ('gj', 'gj_m_gold', 3, '홍길동',   'gildong',   '어등산/', 100, 100, 'https://x');
 
-set local role authenticated;
-set local request.jwt.claims to '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
+-- 신청자는 아직 확정 연결이 없는 별도 유저를 쓴다. 유저 3333 은 위에서 이미
+-- vudghk2116 에 confirmed 가 붙어 있어, 그 상태로는 어느 선수든 신청이 막힌다
+-- (협회당 유저 1명 1선수) — 아래에서 그것도 따로 검증한다.
+insert into auth.users (id, email) values
+  ('66666666-6666-6666-6666-666666666666', 'f@test.local')
+on conflict do nothing;
 
--- 유저 3333 의 등록: gj / gj_m_gold. 같은 부서의 다른 선수는 신청할 수 있다
+insert into public.users (id, email, name) values
+  ('66666666-6666-6666-6666-666666666666', 'f@test.local', '신청자')
+on conflict (id) do update set name = excluded.name;
+
+insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary) values
+  ('66666666-6666-6666-6666-666666666666', 'gj', 'default', array['gj_m_gold'], true)
+on conflict (user_id, org, division) do update set
+  division_codes = excluded.division_codes;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
+
+-- 유저 6666 의 등록: gj / gj_m_gold. 같은 부서의 다른 선수는 신청할 수 있다
 -- (이름이 달라도 된다 — 자동 매칭이 못 잡는 표기 차이를 사람이 직접 고르는 게 이 동선의 목적).
 select lives_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'lkybks', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+    values ('gj', 'lkybks', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '등록한 협회·부서 안의 선수는 신청할 수 있다');
 
 -- 같은 협회라도 등록하지 않은 부서(gj_w_rookie)의 선수는 막힌다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'other', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+    values ('gj', 'other', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '42501',
   null,
   '등록하지 않은 부서의 선수는 신청할 수 없다');
@@ -132,7 +148,7 @@ select throws_ok(
 -- 등록하지 않은 협회(jn)의 선수도 막힌다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('jn', 'jn_player', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+    values ('jn', 'jn_player', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '42501',
   null,
   '등록하지 않은 협회의 선수는 신청할 수 없다');
@@ -140,7 +156,7 @@ select throws_ok(
 -- 랭킹표에 아예 없는 아이디를 지어내도 막힌다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'made-up-id', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+    values ('gj', 'made-up-id', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '42501',
   null,
   '랭킹표에 없는 협회 아이디는 신청할 수 없다');
@@ -150,17 +166,39 @@ select throws_ok(
 -- (23505 가 먼저 나면 42501 을 검증하지 못한다).
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'gildong', '33333333-3333-3333-3333-333333333333', 'confirmed')$$,
+    values ('gj', 'gildong', '66666666-6666-6666-6666-666666666666', 'confirmed')$$,
   '42501',
   null,
   'confirmed 로 직접 넣을 수 없다 — 승인은 관리자만');
+
+reset role;
+reset request.jwt.claims;
+
+-- 이미 이 협회에 확정 연결이 있는 사람은 다른 선수를 신청할 수 없다.
+-- org_player_links_confirmed_user_key(협회당 유저 1명 1선수)가 승인 시점에
+-- 23505 를 내므로, 받아두면 승인 불가한 대기 건만 관리자 큐에 쌓인다.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
+
+select throws_ok(
+  $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
+    values ('gj', 'gildong', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+  '42501',
+  null,
+  '이미 확정 연결된 사람은 같은 협회의 다른 선수를 신청할 수 없다');
+
+reset role;
+reset request.jwt.claims;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
 
 -- 내가 만든 pending 을 스스로 confirmed 로 UPDATE 하는 경로도 없어야 한다.
 -- UPDATE 를 허용하는 정책은 org_player_links_admin 뿐이라 에러 없이 0행 갱신으로
 -- 끝난다 — 조용히 통과하는 종류라 결과 상태로 확인한다.
 update public.org_player_links set status = 'confirmed'
 where org_code = 'gj' and org_player_id = 'lkybks'
-  and user_id = '33333333-3333-3333-3333-333333333333';
+  and user_id = '66666666-6666-6666-6666-666666666666';
 
 reset role;
 reset request.jwt.claims;
@@ -168,7 +206,7 @@ reset request.jwt.claims;
 select is(
   (select status from public.org_player_links
    where org_code = 'gj' and org_player_id = 'lkybks'
-     and user_id = '33333333-3333-3333-3333-333333333333'),
+     and user_id = '66666666-6666-6666-6666-666666666666'),
   'pending', '본인 신청을 스스로 승인으로 바꿀 수 없다');
 
 select * from finish();

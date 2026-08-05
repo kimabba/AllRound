@@ -43,6 +43,10 @@ const _kRankingDivisions = <String, List<String>>{
 /// 내 링크는 status 를 가리지 않고 전부 뺀다. rejected 도 마찬가지다 —
 /// unique(org_code, org_player_id, user_id) 가 상태와 무관해서 재신청 INSERT 가
 /// 반드시 실패하는데, 버튼만 다시 떠 있으면 사용자는 이유 모를 에러만 본다.
+///
+/// 이 협회에 내 확정 연결이 이미 있으면 아무 행도 신청할 수 없다. 협회당
+/// 유저 1명 1선수(org_player_links_confirmed_user_key)라 승인 시점에 막히므로,
+/// 신청을 받아두면 관리자가 승인할 수 없는 대기 건만 쌓인다.
 Set<String> computeClaimableIds({
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
@@ -53,7 +57,9 @@ Set<String> computeClaimableIds({
   final blocked = <String>{};
   for (final link in links) {
     final orgPlayerId = link['org_player_id'] as String;
-    if (link['user_id'] == myUserId || link['status'] == 'confirmed') {
+    final isMine = link['user_id'] == myUserId;
+    if (isMine && link['status'] == 'confirmed') return const {};
+    if (isMine || link['status'] == 'confirmed') {
       blocked.add(orgPlayerId);
     }
   }

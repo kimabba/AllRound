@@ -210,6 +210,15 @@ void main() {
       expect(compute(const []), {'a', 'b'});
     });
 
+    test('이 협회에 내 확정 연결이 있으면 다른 선수도 신청할 수 없다', () {
+      // 협회당 유저 1명 1선수(org_player_links_confirmed_user_key). 받아두면
+      // 관리자가 승인할 수 없는 대기 건만 쌓인다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': me},
+      ];
+      expect(compute(links), isEmpty);
+    });
+
     test('남이 이미 확정한 선수는 빠진다', () {
       final links = [
         {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
