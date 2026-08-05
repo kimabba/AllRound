@@ -123,6 +123,36 @@ List<RegulationLine> parseRegulationBody(String body) {
   return out;
 }
 
+/// 사용자용 대회 상세에서 노출하지 않는 수집 메타데이터/운영 안내 라벨.
+///
+/// 원문과 관리자 데이터는 보존하고, 사용자 화면을 그릴 때만 제외한다.
+bool isHiddenPublicRegulationLabel(String? label) {
+  if (label == null) return false;
+  final normalized = label.toLowerCase().replaceAll(RegExp(r'[\s_\-·:]'), '');
+  // '안내' 는 숨기지 않는다. 크롤한 요강의 안내문에는 입금계좌·신청 변경 규칙처럼
+  // 사용자가 반드시 봐야 하는 내용이 들어 있다(published 대회 37건 중 35건이 보유).
+  // 숨길 대상은 수집 메타데이터(출처·내부 ID)뿐이다.
+  return normalized == '출처' ||
+      normalized == 'source' ||
+      normalized == 'sourceurl' ||
+      normalized == '풋살허브id' ||
+      normalized == 'futsalhubid';
+}
+
+/// 전체 요강에서 사용자에게 필요한 대회 정보만 반환한다.
+///
+/// `※` 안내문과 수집 출처/내부 ID/안내 라벨은 사용자 상세에서 숨긴다.
+List<RegulationLine> publicRegulationBodyLines(String body) {
+  return parseRegulationBody(body)
+      .where(
+        (line) =>
+            line.kind != RegulationLineKind.note &&
+            !(line.kind == RegulationLineKind.labelValue &&
+                isHiddenPublicRegulationLabel(line.label)),
+      )
+      .toList(growable: false);
+}
+
 /// ※ 가 없는 단일 줄을 분류한다(0~1개 결과; 순수 헤더 표는 0개).
 List<RegulationLine> _classify(String line) {
   // 1) 대분류 헤더 ● / ◎
@@ -232,6 +262,10 @@ List<String> cleanPlainRegulationLines(String description) {
   return body
       .split('\n')
       .map((l) => l.replaceAll(RegExp(r'[ \t]+'), ' ').trim())
-      .where((l) => l.isNotEmpty)
+      .where(
+        (l) =>
+            l.isNotEmpty &&
+            !isHiddenPublicRegulationLabel(l.split(':').firstOrNull),
+      )
       .toList(growable: false);
 }

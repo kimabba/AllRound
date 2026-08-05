@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'api_base.dart';
+import 'chat_client.dart';
 
 /// AI 채팅 SSE 스트리밍 API.
 mixin ChatApi on ApiBase {
@@ -29,7 +30,7 @@ mixin ChatApi on ApiBase {
       if (tournamentRefine != null) 'tournament_refine': tournamentRefine,
     });
 
-    final client = http.Client();
+    final client = createStreamingClient();
     try {
       final streamed = await client.send(request);
       if (streamed.statusCode != 200) {

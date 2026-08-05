@@ -6,7 +6,7 @@
 
 **Architecture:** 순수 함수 `mapDivisionsByDict(text, dict)`(신규 모듈 `_shared/crawler/divisions.ts`)가 부서 사전으로 매핑하고, `loadDivisionDict(supabase, orgCode)`가 크롤 시점에 사전을 로드한다. gnuboard 파서는 크롤 1회당 사전을 로드해 detail마다 이 해석기를 호출하며, `crawler.ts`의 `extractSidoStdDivisions` 하드코딩은 삭제된다. 순수 코드(마이그레이션 없음).
 
-**Tech Stack:** Deno, TypeScript. 테스트 `deno test`, 타입 `deno check`. 파서 DB 접근은 `ctx.audit.supabase`(SupabaseClient). 배포 `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json`.
+**Tech Stack:** Deno, TypeScript. 테스트 `deno test`, 타입 `deno check`. 파서 DB 접근은 `ctx.audit.supabase`(SupabaseClient). 배포 `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json`.
 
 ## Global Constraints
 
@@ -248,7 +248,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 5: (컨트롤러) 배포 + 라이브 스모크** — 이 스텝은 구현 서브에이전트가 아니라 컨트롤러가 머지 후 수행.
 
-배포: `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json`
+배포: `supabase functions deploy crawl-dispatch --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json`
 스모크: `execute_sql`로 `update crawl_sources set last_crawled_at=null, last_etag=null where slug in ('tennis-gwangju','tennis-jeonnam')` 후 크롤 유발 → gj/jn 대회 eligible_grades가 여전히 `gj_*`/`jn_*` 코드인지, last_status가 error 아닌지 확인.
 
 ---

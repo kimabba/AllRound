@@ -1,6 +1,15 @@
+<!--
+  ⚠️ 이 PR 글은 그대로 Discord 알림으로 갑니다.
+  개발자가 아닌 팀원(kimabba·백과장)이 읽고 이해할 수 있게 쉬운 한글로 써주세요.
+  전문용어는 괄호로 한 번 풀어주고, 파일명·함수명 같은 기술 상세는 맨 아래 "기술 메모"로 미세요.
+  규칙 전문: docs/team/START-HERE.md → "5-2. PR·이슈는 쉬운 한글로 쓴다"
+-->
+
 ## 요약
 
--
+**무엇이 달라지나** —
+**왜 했나** —
+**확인하는 법** —
 
 ## 작업 영역
 
@@ -13,6 +22,15 @@
 - [ ] Auth/security/AI/RAG/cron — `docs/rules/SECURITY_RULES.md`
 - [ ] Speed Gun/video — `docs/rules/SPEED_GUN_RULES.md`
 - [ ] CI/harness/rules — `docs/rules/HARNESS.md`
+
+## 새 부품(의존성)
+
+> `app/pubspec.yaml` 의 **`dependencies` · `dev_dependencies` 둘 다** 대상입니다. 추가/삭제했으면 `docs/team/dependencies.md` 대장에도 적어야 CI 가 통과합니다.
+> (dev 도 봅니다 — `integration_test` 처럼 dev 부품이 iOS 네이티브 등록에 실제로 들어갑니다)
+
+- [ ] 이 PR은 부품을 **추가/삭제하지 않음** (했으면 아래 작성)
+- [ ] 추가한 부품: `___` · 네이티브인가: 예 / 아니오
+- [ ] **네이티브라면** — 아이폰 실기기에서 확인했는가: 예 / 아니오(→ 확인 전 스토어 빌드 금지)
 
 ## 운영 배포 / 버전 관리
 
@@ -50,6 +68,10 @@
 - [ ] enum/label 값이 Dart/TS/SQL 사이에서 동기화되어 있는가?
 - [ ] AI/RAG/외부 크롤링 데이터는 untrusted data로 취급되는가?
 - [ ] 스피드건 결과는 낮은 품질 입력에 대해 경고/차단/낮은 신뢰도를 표시하는가?
+
+## 기술 메모
+
+파일명·함수명·SQL 등 기술 상세는 여기에. (위쪽 요약은 쉬운 말로)
 
 ## 스크린샷 / 로그
 

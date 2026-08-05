@@ -13,7 +13,7 @@
 - Plan 1 선행: 트리거 `invalidate_tournament_embedding`가 콘텐츠 변경 시 `embedding_input_revision++`, 신규 컬럼 `embedding_input_revision bigint`, `format_status` 존재 전제.
 - `rule_articles` 경로는 건드리지 않음(tournaments만).
 - TypeScript `any` 금지. CI가 warning도 에러 처리.
-- 배포: `supabase functions deploy embed-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json`.
+- 배포: `supabase functions deploy embed-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json`.
 - 커밋 끝: `Refs: JY-137` + `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 ---
@@ -213,7 +213,7 @@ Expected: PASS.
 
 ```bash
 cd /Users/ssfak/Documents/01-github/AllRound
-supabase functions deploy embed-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json
+supabase functions deploy embed-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json
 git add supabase/functions/embed-pending/index.ts supabase/functions/tests/embed_pending_revision_test.ts
 git commit -m "fix(embed): revision optimistic write + 미정형 제외 (stale 임베딩 경합 차단)
 

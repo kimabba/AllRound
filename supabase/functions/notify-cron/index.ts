@@ -1,6 +1,12 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
-import { jsonResponse, preflight } from '../_shared/cors.ts';
-import { sendFcm } from '../_shared/fcm.ts';
+import {
+  needsReminderAttempt,
+  parseClubEventReminders,
+  parseUserIds,
+  tomorrowKstBounds,
+} from '../_shared/club_event_reminders.ts';
+import { jsonResponse, preflight, withCors } from '../_shared/cors.ts';
+import { sendReminderIfClaimed } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 /**
@@ -9,7 +15,12 @@ import { serviceClient } from '../_shared/supabase.ts';
  * 즐겨찾기한 대회의:
  *   - D-3 (start_date - 3일 == 오늘)
  *   - 신청 마감일 == 오늘
- * 알림을 발송한다. notifications 의 unique idx (user, reference, type) 로 중복 방지.
+ * + 클럽 모임 D-1 알림을 발송한다.
+ *
+ * 중복 방지: notifications 의 unique idx (user, reference, type) 기준으로
+ * 'sent'/'failed' 기록이 있으면 스킵하고, 'pending'(그때 기기 토큰이 없었음)
+ * 은 재시도 대상이다. 매시간 실행이 겹치는 경우까지 대비해 `sendReminderIfClaimed`
+ * 가 원자적으로 선점한 실행만 실제로 발송한다(`_shared/notifications.ts` 참고).
  *
  * FCM HTTP v1 발송은 FIREBASE_SERVICE_ACCOUNT_JSON secret 을 사용한다.
  */
@@ -21,11 +32,6 @@ interface NotifyTask {
   title: string;
   start_date: string;
   application_deadline: string | null;
-}
-
-interface DeviceTokenRow {
-  token: string;
-  platform: 'ios' | 'android' | 'web';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -71,7 +77,7 @@ function parseTasks(rows: unknown, today: string, dPlus3: string): NotifyTask[] 
   return tasks;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -100,65 +106,134 @@ Deno.serve(async (req) => {
   let sent = 0, dedupSkipped = 0, failed = 0;
 
   for (const task of tasks) {
-    // dedup: 이미 같은 (user, reference, type) 발송 기록이 있으면 skip
+    // dedup: 이미 같은 (user, reference, type) 발송 기록이 있으면 skip.
+    // 단 'pending'(그때 기기 토큰이 없었음)은 재시도 대상 — sendReminderIfClaimed
+    // 가 원자적으로 선점한 실행만 실제로 발송한다(중복 실행 레이스 방지).
     const notifType = task.type === 'd_minus_3' ? 'tournament_d3' : 'tournament_deadline';
     const { data: existing } = await supabase
       .from('notifications')
-      .select('id')
+      .select('id, status')
       .eq('user_id', task.user_id)
       .eq('reference_type', 'tournament')
       .eq('reference_id', task.tournament_id)
       .eq('type', notifType)
       .maybeSingle();
 
-    if (existing) {
+    if (!needsReminderAttempt(existing?.status)) {
       dedupSkipped++;
       continue;
     }
 
-    // 디바이스 토큰
-    const { data: tokensRow } = await supabase
-      .from('device_tokens')
-      .select('token, platform')
-      .eq('user_id', task.user_id)
-      .eq('enabled', true);
-
-    const tokens = ((tokensRow ?? []) as DeviceTokenRow[]).map((t) => t.token);
-
     const message = task.type === 'd_minus_3'
       ? `대회 3일 전: ${task.title} — ${task.start_date}`
       : `오늘 신청 마감: ${task.title}`;
+    const notifTitle = task.type === 'd_minus_3' ? '대회 3일 전 알림' : '신청 마감 알림';
 
-    const result = await sendFcm(tokens, {
-      title: '대회 알림',
-      body: message,
+    const outcome = await sendReminderIfClaimed(supabase, existing ?? null, {
+      userId: task.user_id,
       type: notifType,
+      title: notifTitle,
+      body: message,
       referenceType: 'tournament',
       referenceId: task.tournament_id,
     });
 
-    const notifTitle = task.type === 'd_minus_3' ? '대회 3일 전 알림' : '신청 마감 알림';
-    await supabase.from('notifications').insert({
-      user_id: task.user_id,
-      type: notifType,
-      title: notifTitle,
-      body: message,
-      reference_type: 'tournament',
-      reference_id: task.tournament_id,
-      status: result.status === 'skipped' ? 'pending' : result.status,
-      error: result.error,
-      sent_at: result.status === 'sent' ? new Date().toISOString() : null,
-    });
+    if (outcome === 'sent') sent++;
+    else if (outcome === 'failed') failed++;
+    else dedupSkipped++;
+  }
 
-    if (result.status === 'sent') sent++;
-    else failed++;
+  // KST 기준 내일 00:00~24:00 사이의 활성 클럽 일정.
+  // 삭제된 일정은 조회되지 않고, 조기 종료 일정은 ended_early_at 필터로 제외한다.
+  const tomorrow = tomorrowKstBounds(new Date());
+  const { data: eventRows, error: eventError } = await supabase
+    .from('club_events')
+    .select('id, club_id, title, starts_at, created_by, clubs(name)')
+    .is('ended_early_at', null)
+    .gte('starts_at', tomorrow.start)
+    .lt('starts_at', tomorrow.end);
+  if (eventError) {
+    return jsonResponse({ error: eventError.message }, { status: 500 });
+  }
+
+  const eventReminders = parseClubEventReminders(eventRows as unknown);
+
+  // club_events SELECT RLS 는 차단 관계를 숨기므로, D-1 알림도 같은 기준으로
+  // 수신자를 걸러야 한다(제목이 알림으로 새어 나가지 않게).
+  const authorIds = [
+    ...new Set(
+      eventReminders
+        .map((event) => event.createdBy)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const blockedByAuthor = new Map<string, Set<string>>();
+  if (authorIds.length > 0) {
+    const { data: blockRows } = await supabase
+      .from('user_blocks')
+      .select('blocker_id, blocked_id')
+      .or(
+        `blocker_id.in.(${authorIds.join(',')}),blocked_id.in.(${authorIds.join(',')})`,
+      );
+    for (const row of blockRows ?? []) {
+      const blocker = row.blocker_id as string;
+      const blocked = row.blocked_id as string;
+      for (const [author, other] of [[blocker, blocked], [blocked, blocker]]) {
+        if (!authorIds.includes(author)) continue;
+        const set = blockedByAuthor.get(author) ?? new Set<string>();
+        set.add(other);
+        blockedByAuthor.set(author, set);
+      }
+    }
+  }
+
+  for (const event of eventReminders) {
+    const blockedForEvent = event.createdBy === null
+      ? new Set<string>()
+      : blockedByAuthor.get(event.createdBy) ?? new Set<string>();
+    const { data: members, error: membersError } = await supabase
+      .from('club_members')
+      .select('user_id')
+      .eq('club_id', event.clubId)
+      .eq('status', 'active');
+    if (membersError) {
+      failed++;
+      continue;
+    }
+    for (const userId of parseUserIds(members as unknown)) {
+      if (blockedForEvent.has(userId)) continue;
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id, status')
+        .eq('user_id', userId)
+        .eq('type', 'club_event_reminder')
+        .eq('reference_id', event.id)
+        .maybeSingle();
+      if (!needsReminderAttempt(existing?.status)) {
+        dedupSkipped++;
+        continue;
+      }
+      const outcome = await sendReminderIfClaimed(supabase, existing ?? null, {
+        userId,
+        type: 'club_event_reminder',
+        title: `${event.clubName} 일정 하루 전`,
+        body: event.title,
+        referenceType: 'club_event',
+        referenceId: event.id,
+        clubId: event.clubId,
+      });
+      if (outcome === 'sent') sent++;
+      else if (outcome === 'failed') failed++;
+      else dedupSkipped++;
+    }
   }
 
   return jsonResponse({
     today,
-    candidate_count: tasks.length,
+    candidate_count: tasks.length + eventReminders.length,
+    club_event_candidate_count: eventReminders.length,
     sent,
     dedup_skipped: dedupSkipped,
     failed,
   });
-});
+}));

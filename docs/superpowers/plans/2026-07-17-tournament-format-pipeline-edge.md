@@ -14,7 +14,7 @@
 - `format_flags`에는 원문 민감값(계좌번호 등)을 **절대 원문 그대로 넣지 않음** — `{code, field, masked}`만.
 - config.toml에 `[functions.format-pending] verify_jwt = false`(cron 호출).
 - TypeScript `any` 금지. CI warning=error.
-- 배포: `supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json`.
+- 배포: `supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json`.
 - 커밋 끝: `Refs: JY-137` + `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 ---
@@ -454,7 +454,7 @@ verify_jwt = false
 Run:
 ```bash
 cd /Users/ssfak/Documents/01-github/AllRound
-supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/import_map.json
+supabase functions deploy format-pending --project-ref bsjdgwmveokanclqwtvx --import-map supabase/functions/deno.json
 ```
 Expected: 배포 성공.
 

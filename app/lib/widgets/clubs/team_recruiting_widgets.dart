@@ -13,29 +13,26 @@ import 'club_tiles.dart';
 
 class TeamRecruitingBoard extends StatelessWidget {
   final List<RecruitingPostPreview> posts;
-  final bool showOpenOnly;
   final bool isLoading;
   final Set<String> managedClubIds;
-  final ValueChanged<bool> onShowOpenOnlyChanged;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
+  final VoidCallback onViewAll;
 
   const TeamRecruitingBoard({
     super.key,
     required this.posts,
-    required this.showOpenOnly,
     required this.isLoading,
     required this.managedClubIds,
-    required this.onShowOpenOnlyChanged,
     required this.onClosePost,
     required this.onOpenPost,
+    required this.onViewAll,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final openCount = posts.where((post) => !post.isClosed).length;
 
     return Container(
       width: double.infinity,
@@ -48,25 +45,26 @@ class TeamRecruitingBoard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '팀원모집 글',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '팀원모집 글',
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton(
+                onPressed: posts.isEmpty ? null : onViewAll,
+                child: const Text('전체 보기'),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
-            showOpenOnly ? '모집중인 글만 보고 있어요.' : '모집중 글과 마감글을 함께 보여줘요.',
+            '팀원 모집글을 확인하세요.',
             style: tt.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilterChip(
-              selected: showOpenOnly,
-              label: Text('모집중만 $openCount'),
-              onSelected: onShowOpenOnlyChanged,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -87,7 +85,7 @@ class TeamRecruitingBoard extends StatelessWidget {
               ),
             )
           else
-            for (final post in posts)
+            for (final post in posts.take(3))
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: TeamRecruitingPostCard(
@@ -98,6 +96,98 @@ class TeamRecruitingBoard extends StatelessWidget {
                 ),
               ),
         ],
+      ),
+    );
+  }
+}
+
+class TeamRecruitingListScreen extends StatefulWidget {
+  const TeamRecruitingListScreen({
+    super.key,
+    required this.posts,
+    required this.managedClubIds,
+    required this.onClosePost,
+    required this.onOpenPost,
+    this.capped = false,
+  });
+
+  final List<RecruitingPostPreview> posts;
+  final Set<String> managedClubIds;
+
+  /// 마감 처리 후 갱신된 목록을 돌려준다 — 이 화면은 스냅샷을 들고 있어서
+  /// 반환값으로 갱신하지 않으면 마감한 글이 그대로 열린 상태로 남는다.
+  final Future<List<RecruitingPostPreview>> Function(RecruitingPostPreview)
+      onClosePost;
+  final ValueChanged<RecruitingPostPreview> onOpenPost;
+
+  /// 조회 상한에 걸려 목록이 잘렸는지. true 면 "전체"가 아님을 하단에 알린다.
+  final bool capped;
+
+  @override
+  State<TeamRecruitingListScreen> createState() =>
+      _TeamRecruitingListScreenState();
+}
+
+class _TeamRecruitingListScreenState extends State<TeamRecruitingListScreen> {
+  late List<RecruitingPostPreview> _posts = widget.posts;
+
+  Future<void> _close(RecruitingPostPreview post) async {
+    final updated = await widget.onClosePost(post);
+    if (!mounted) return;
+    setState(() => _posts = updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final posts = _posts;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('전체 팀원모집'),
+      ),
+      body: posts.isEmpty
+          ? const Center(
+              child: Text('등록된 팀원모집 글이 없습니다.'),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xxl,
+              ),
+              itemCount: posts.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return TeamRecruitingPostCard(
+                  post: post,
+                  canManage: widget.managedClubIds.contains(post.clubId),
+                  onClose: () => _close(post),
+                  onTap: () => widget.onOpenPost(post),
+                );
+              },
+            ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xs,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            widget.capped
+                ? '최신 등록순 · ${posts.length}개 (최신 글만 표시)'
+                : '최신 등록순 · ${posts.length}개',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ),
       ),
     );
   }
@@ -715,14 +805,25 @@ class _TeamRecruitingDraftSheetState
   static const _genders = ['무관', '여성', '남성', '혼성'];
   static const _ages = ['무관', '20대', '30대', '40대', '50대 이상'];
   static const _futsalPositions = ['필드·키퍼', '필드', '키퍼'];
-  static const _futsalGrades = ['무관', '입문', '초급', '중급', '고급', '선출'];
-  static const _tennisGrades = ['무관', '신입', '5부', '4부', '3부', '2부', '1부'];
+  // 등급 선택지는 종목별 등급 정본(grade_labels.dart)에서 파생한다.
+  // 직접 나열하면 등급 개편 때 여기만 남아 조용히 갈라진다(JY-146).
+  //
+  // static final 이 아니라 getter 다. static final 은 클래스 최초 접근 때 한 번만
+  // 평가돼 앱 수명 내내 고정되므로, 카탈로그가 나중에 로드돼도 폴백 등급이 그대로 남는다.
+  List<String> get _futsalGrades => [
+        anyGradeLabel,
+        ...gradesFor(Sport.futsal).map(gradeLabel),
+      ];
+  List<String> get _tennisGrades => [
+        anyGradeLabel,
+        ...gradesFor(Sport.tennis).map(gradeLabel),
+      ];
 
   late String _selectedClubId = widget.managedClubs.first.id;
   String _gender = _genders.first;
   String _age = _ages.first;
   String _position = _futsalPositions.first;
-  String _grade = _futsalGrades.first;
+  late String _grade = _futsalGrades.first;
   int _fieldCount = 4;
   int _keeperCount = 1;
   int _tennisCount = 2;
@@ -813,6 +914,7 @@ class _TeamRecruitingDraftSheetState
     try {
       await ref.read(apiProvider).createTeamRecruitingPost(
             clubId: _selectedClub.id,
+            sport: sportFromString(_selectedClub.sport),
             title: title,
             place: place,
             schedule: '$date $time',
@@ -837,8 +939,12 @@ class _TeamRecruitingDraftSheetState
     }
   }
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서 등급 선택지가 폴백 라벨로 굳는다. 여기서 감싼다.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -960,7 +1066,7 @@ class _TeamRecruitingDraftSheetState
               ),
               const SizedBox(height: AppSpacing.md),
               RecruitingSection(
-                title: _isFutsal ? '풋살 모집 상세' : '테니스 모집 상세',
+                title: '${sportLabelFromString(_selectedClub.sport)} 모집 상세',
                 child: _isFutsal
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

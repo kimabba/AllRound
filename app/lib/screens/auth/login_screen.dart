@@ -28,6 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   bool _marketingConsent = false;
   String? _error;
+  String? _info;
   StreamSubscription<AuthState>? _authSubscription;
 
   @override
@@ -81,6 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     set(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
       final supa = ref.read(supabaseProvider);
@@ -107,7 +109,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /// 비밀번호 재설정 메일 발송. 성공 시 시트를 닫고 스낵바로 안내한다.
+  /// 비밀번호 재설정 메일 발송. 성공해도 이메일 로그인 시트를 유지하고
+  /// 시트 안에서 안내한다. 사용자는 입력한 이메일을 확인하거나 메일을
+  /// 다시 보낼 수 있어야 한다.
   /// 메일 링크는 구글 로그인과 동일한 딥링크 스킴으로 복귀해 passwordRecovery
   /// 이벤트를 발생시키고, 라우터가 새 비번 설정 화면으로 보낸다.
   Future<void> _forgotPassword({VoidCallback? onChanged}) async {
@@ -143,6 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     set(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
       await ref.read(supabaseProvider).auth.resetPasswordForEmail(
@@ -150,11 +155,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
           );
       if (!mounted) return;
-      setState(() => _busy = false);
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('재설정 메일을 보냈어요. 메일함을 확인해 주세요.')),
-      );
+      set(() {
+        _busy = false;
+        _info = '재설정 메일을 보냈어요. 메일함을 확인해 주세요.';
+      });
     } on AuthException catch (e) {
       if (!mounted) return;
       set(() {
@@ -178,8 +182,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // 입력을 수정하면 이전 에러를 즉시 지운다. 기존엔 제출할 때만 지워져,
   // 비번을 바꿔도 옛 에러가 남아 "계속 거절되는 것처럼" 보였다.
   void _clearAuthError(StateSetter setSheetState) {
-    if (_error == null) return;
-    setState(() => _error = null);
+    if (_error == null && _info == null) return;
+    setState(() {
+      _error = null;
+      _info = null;
+    });
     setSheetState(() {});
   }
 
@@ -188,6 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _signUp = signUp;
       _error = null;
+      _info = null;
       _password.clear();
       _passwordConfirm.clear();
       _signupBirthDate = null;
@@ -317,6 +325,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            // 메일 발송·로그인 같은 비동기 작업이 끝났을 때 사용자가 이미 시트를
+            // 내렸을 수 있다. 그때 화면(State)은 살아 있어 !mounted 가드를 통과하지만
+            // 시트는 dispose 된 뒤라 setSheetState 가 예외를 던진다. 시트 자신의
+            // context 로 한 번 더 확인한다.
+            void refreshSheet() {
+              if (context.mounted) setSheetState(() {});
+            }
+
             final cs = Theme.of(context).colorScheme;
             final tt = Theme.of(context).textTheme;
             return SafeArea(
@@ -374,7 +390,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onSubmitted: (_) => _busy
                             ? null
                             : _emailAuth(
-                                onChanged: () => setSheetState(() {}),
+                                onChanged: refreshSheet,
                               ),
                         onChanged: (_) => _clearAuthError(setSheetState),
                       ),
@@ -391,7 +407,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onSubmitted: (_) => _busy
                               ? null
                               : _emailAuth(
-                                  onChanged: () => setSheetState(() {}),
+                                  onChanged: refreshSheet,
                                 ),
                           onChanged: (_) => _clearAuthError(setSheetState),
                         ),
@@ -399,14 +415,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Text(
                           '6자 이상 · 다른 사이트에서 쓰지 않은 비밀번호를 권장해요. '
                           '유출된 흔한 비밀번호는 보안을 위해 사용할 수 없어요.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         _SignupBirthDateField(
@@ -417,7 +431,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onPressed: _busy
                               ? null
                               : () => _pickSignupBirthDate(
-                                    onChanged: () => setSheetState(() {}),
+                                    onChanged: refreshSheet,
                                   ),
                         ),
                       ],
@@ -431,7 +445,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             onPressed: _busy
                                 ? null
                                 : () => _forgotPassword(
-                                      onChanged: () => setSheetState(() {}),
+                                      onChanged: refreshSheet,
                                     ),
                             child: const Text('비밀번호를 잊으셨나요?'),
                           ),
@@ -446,13 +460,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ],
+                      if (_info != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.mark_email_read_outlined,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                _info!,
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.lg),
                       FilledButton(
                         key: AllRoundE2EKeys.authSubmitButton,
                         onPressed: _busy
                             ? null
                             : () => _emailAuth(
-                                  onChanged: () => setSheetState(() {}),
+                                  onChanged: refreshSheet,
                                 ),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(AppSizes.control),
@@ -500,7 +536,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // 로컬 관리자 모드(make admin): 마케팅·온보딩 카피를 숨기고
     // 이메일·구글 로그인만 노출. 실제 권한은 서버 RLS.
     final adminMode = AppConfig.adminMode;
-    final showTestShortcuts = kDebugMode;
     // App Store 첫 출시는 자체 이메일 인증만 제공한다. iOS에서 Google 같은
     // 제3자 로그인을 노출하면 App Review Guideline 4.8에 따라 동등한
     // Sign in with Apple 옵션이 필요하다. Android/Web의 기존 Google 로그인은
@@ -528,25 +563,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const _IntroSportBalls(),
-                      const SizedBox(height: AppSpacing.huge + AppSpacing.xxl),
-                      Text(
-                        adminMode ? '관리자 로그인' : '운동할 곳을\n빠르게 찾아보세요.',
-                        style: tt.headlineLarge?.copyWith(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w900,
-                          height: 1.08,
-                          letterSpacing: -1.2,
+                      const _LoginHeader(),
+                      const SizedBox(height: AppSpacing.xxl),
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.xxl),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(AppRadius.xxl),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        adminMode
-                            ? '관리자 계정으로 안전하게 로그인하세요.'
-                            : '풋살과 테니스 대회, 클럽, 룰북을 한곳에서 확인할 수 있어요.',
-                        style: tt.bodyLarge?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          height: 1.6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (adminMode)
+                              _SportBubble(
+                                icon: Icons.admin_panel_settings_rounded,
+                                backgroundColor: cs.primary,
+                                foregroundColor: cs.onPrimary,
+                              )
+                            else
+                              const _AllRoundMascot(),
+                            const SizedBox(height: AppSpacing.xxl),
+                            Text(
+                              adminMode ? '관리자 로그인' : '운동 친구를\n만나러 가볼까요?',
+                              textAlign: TextAlign.center,
+                              style: tt.headlineLarge?.copyWith(
+                                color: cs.onPrimaryContainer,
+                                fontWeight: FontWeight.w800,
+                                height: 1.12,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              adminMode
+                                  ? '관리자 계정으로 안전하게 로그인하세요.'
+                                  : '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
+                              textAlign: TextAlign.center,
+                              style: tt.bodyMedium?.copyWith(
+                                // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
+                                // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
+                                color: cs.onPrimaryContainer.withValues(
+                                  alpha: 0.8,
+                                ),
+                                height: 1.55,
+                              ),
+                            ),
+                            if (!adminMode) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              const Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
+                                children: [
+                                  _FeaturePill(
+                                    emoji: '👥',
+                                    label: '내 주변 모임',
+                                  ),
+                                  _FeaturePill(
+                                    emoji: '🏆',
+                                    label: '대회 일정',
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       if (_error != null) ...[
@@ -580,28 +660,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       FilledButton(
                         key: AllRoundE2EKeys.emailFlowButton,
                         onPressed: _busy ? null : _showEmailAuthSheet,
-                        child: const Text('이메일로 계속하기'),
-                      ),
-                      if (showTestShortcuts) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        _TestLoginShortcutCard(
-                          adminEmail: AppConfig.testAdminEmail,
-                          userEmail: AppConfig.testUserEmail,
-                          busy: _busy,
-                          onAdminLogin: () => _openEmailFlow(
-                            signUp: false,
-                            presetEmail: AppConfig.testAdminEmail,
-                          ),
-                          onUserLogin: () => _openEmailFlow(
-                            signUp: false,
-                            presetEmail: AppConfig.testUserEmail,
-                          ),
-                          onUserSignUp: () => _openEmailFlow(
-                            signUp: true,
-                            presetEmail: AppConfig.testUserEmail,
+                        style: FilledButton.styleFrom(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(AppRadius.xxl),
+                            ),
                           ),
                         ),
-                      ],
+                        child: const Text('이메일로 계속하기'),
+                      ),
                       if (!adminMode) ...[
                         const SizedBox(height: AppSpacing.lg),
                         Text(
@@ -631,171 +698,132 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _TestLoginShortcutCard extends StatelessWidget {
-  const _TestLoginShortcutCard({
-    required this.adminEmail,
-    required this.userEmail,
-    required this.busy,
-    required this.onAdminLogin,
-    required this.onUserLogin,
-    required this.onUserSignUp,
-  });
-
-  final String adminEmail;
-  final String userEmail;
-  final bool busy;
-  final VoidCallback onAdminLogin;
-  final VoidCallback onUserLogin;
-  final VoidCallback onUserSignUp;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final hasPresetUserEmail = userEmail.trim().isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '로컬 테스트 바로가기',
-            style: tt.titleMedium?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '운영진 계정과 일반 계정 진입을 빠르게 열어줍니다. 실제 권한은 서버 기준입니다.',
-            style: tt.bodySmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _TestLoginItem(
-            icon: Icons.admin_panel_settings_outlined,
-            title: '운영진 계정',
-            subtitle: adminEmail,
-            buttonLabel: '운영진 로그인',
-            busy: busy,
-            onPressed: onAdminLogin,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _TestLoginItem(
-            icon: Icons.person_outline_rounded,
-            title: '일반 계정',
-            subtitle: hasPresetUserEmail ? userEmail : '회원가입 또는 일반 로그인 테스트',
-            buttonLabel: hasPresetUserEmail ? '일반 로그인' : '일반 로그인 열기',
-            busy: busy,
-            onPressed: onUserLogin,
-            secondaryLabel: '새 일반 계정 회원가입',
-            onSecondaryPressed: onUserSignUp,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TestLoginItem extends StatelessWidget {
-  const _TestLoginItem({
+class _SportBubble extends StatelessWidget {
+  const _SportBubble({
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.busy,
-    required this.onPressed,
-    this.secondaryLabel,
-    this.onSecondaryPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
   });
 
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final String buttonLabel;
-  final bool busy;
-  final VoidCallback onPressed;
-  final String? secondaryLabel;
-  final VoidCallback? onSecondaryPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: AppSizes.touchTarget,
+      height: AppSizes.touchTarget,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: foregroundColor, size: 23),
+    );
+  }
+}
+
+class _AllRoundMascot extends StatelessWidget {
+  const _AllRoundMascot();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: AppSizes.touchTarget * 2,
+          height: AppSizes.touchTarget * 2,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(AppRadius.xxl * 2),
+          ),
+          child: Icon(
+            Icons.sentiment_satisfied_alt_rounded,
+            color: cs.onPrimary,
+            size: AppSizes.touchTarget,
+          ),
+        ),
+        Positioned(
+          right: -AppSpacing.sm,
+          bottom: -AppSpacing.sm,
+          child: Container(
+            width: AppSizes.touchTarget,
+            height: AppSizes.touchTarget,
+            decoration: BoxDecoration(
+              color: cs.surface,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: cs.primaryContainer,
+                width: AppSpacing.xs,
+              ),
+            ),
+            child: Icon(
+              Icons.sports_tennis_rounded,
+              color: cs.primary,
+              size: 22,
+            ),
+          ),
+        ),
+        Positioned(
+          left: -AppSpacing.lg,
+          top: AppSpacing.sm,
+          child: Icon(
+            Icons.auto_awesome_rounded,
+            color: cs.primary.withValues(alpha: 0.58),
+            size: 22,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({
+    required this.emoji,
+    required this.label,
+  });
+
+  final String emoji;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: cs.onPrimaryContainer.withValues(alpha: 0.08),
+        borderRadius: AppRadius.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: cs.primary, size: 20),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: tt.titleSmall?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          FilledButton(
-            onPressed: busy ? null : onPressed,
-            child: Text(
-              buttonLabel,
-              style: const TextStyle(fontWeight: FontWeight.w900),
+          Text(emoji, style: tt.bodyMedium),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            // pill 배경이 onPrimaryContainer 계열이므로 전경도 같은 role 을 쓴다.
+            // cs.primary 는 다크에서 4.04:1 로 AA 미달이었다(교체 후 라이트 7.66 / 다크 6.53).
+            style: tt.labelMedium?.copyWith(
+              color: cs.onPrimaryContainer,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          if (secondaryLabel != null && onSecondaryPressed != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            TextButton(
-              onPressed: busy ? null : onSecondaryPressed,
-              style: TextButton.styleFrom(
-                minimumSize: const Size.fromHeight(AppSizes.touchTarget),
-              ),
-              child: Text(
-                secondaryLabel!,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-class _IntroSportBalls extends StatelessWidget {
-  const _IntroSportBalls();
+class _LoginHeader extends StatelessWidget {
+  const _LoginHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -846,6 +874,8 @@ class _MarketingConsentRow extends StatelessWidget {
               value: value,
               onChanged: onChanged,
               side: BorderSide(color: cs.outline, width: 1.4),
+              // 레이블이 없으면 스크린리더가 무엇에 대한 체크박스인지 알리지 못한다.
+              semanticLabel: '마케팅 정보 수신 동의 (선택)',
             ),
             Expanded(
               child: Text(

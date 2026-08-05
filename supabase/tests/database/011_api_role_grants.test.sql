@@ -12,32 +12,66 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(5);
+select plan(6);
 
 -- 1) 모든 public 테이블·뷰를 authenticated 가 읽을 수 있어야 한다.
 --    (행 단위 통제는 RLS 가 한다. 권한이 없으면 RLS 이전에 permission denied 로 죽는다.)
+--
+--    예외: OTP 계열 4개는 grant 자체를 주지 않는다. 담긴 값이 코드 해시·발송 이력이라
+--    "읽을 수 있는 행이 0" 이 아니라 "읽을 권한이 없음" 이어야 한다 — 정책을 하나
+--    잘못 추가하는 순간 열리는 구조를 만들지 않는다. 이 테이블들은 정책 0개 +
+--    service_role RPC 전용이며, 아래 3번이 그 RPC 의 실행 권한을 지킨다.
 select is(
   (select coalesce(string_agg(c.relname, ', ' order by c.relname), '(없음)')
      from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind in ('r','p','v','m')
+      and c.relname not in (
+        'phone_otp', 'phone_otp_daily', 'phone_otp_user_daily',
+        'phone_verification_log'
+      )
       and not has_table_privilege('authenticated', c.oid, 'SELECT')),
   '(없음)',
-  'authenticated 가 SELECT 못 하는 public 테이블이 없다'
+  'authenticated 가 SELECT 못 하는 public 테이블이 없다 (OTP 계열 제외)'
 );
 
--- 2) 클럽 문의 2개 테이블은 쓰기를 서버(Edge) 경로로만 연다.
+-- 1-b) 그 예외들이 실제로 닫혀 있는지 반대 방향으로 고정한다.
+--      위 목록에 이름만 올려두고 grant 가 슬쩍 생기는 것을 막는다.
 select is(
   (select coalesce(string_agg(format('%s:%s', c.relname, r.who), ', '
                               order by c.relname, r.who), '(없음)')
      from pg_class c join pg_namespace n on n.oid = c.relnamespace
      cross join (values ('anon'),('authenticated')) as r(who)
     where n.nspname = 'public'
-      and c.relname in ('club_inquiry_threads','club_inquiry_messages')
-      and (has_table_privilege(r.who, c.oid, 'INSERT')
-        or has_table_privilege(r.who, c.oid, 'UPDATE')
+      and c.relname in (
+        'phone_otp', 'phone_otp_daily', 'phone_otp_user_daily',
+        'phone_verification_log'
+      )
+      and has_any_column_privilege(r.who, c.oid, 'SELECT')),
+  '(없음)',
+  'OTP 계열 테이블은 anon/authenticated 에게 읽기 권한이 없다'
+);
+
+-- 2) 쓰기를 서버 경로로만 여는 테이블에 클라이언트 DML 권한이 없어야 한다.
+--    club_inquiry_*: Edge 전용. club_dues_*: 운영진 RPC 전용.
+--    user_sports: save_user_sports RPC 전용(#320).
+select is(
+  (select coalesce(string_agg(format('%s:%s', c.relname, r.who), ', '
+                              order by c.relname, r.who), '(없음)')
+     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     cross join (values ('anon'),('authenticated')) as r(who)
+    where n.nspname = 'public'
+      and c.relname in (
+        'club_inquiry_threads','club_inquiry_messages',
+        'club_dues_periods','club_dues_payments','club_dues_audit',
+        'user_sports'
+      )
+      -- has_table_privilege 만 보면 컬럼 단위 grant(예: grant insert (grade) on ...)를
+      -- 놓친다. has_any_column_privilege 는 테이블 권한과 컬럼 권한을 함께 본다.
+      and (has_any_column_privilege(r.who, c.oid, 'INSERT')
+        or has_any_column_privilege(r.who, c.oid, 'UPDATE')
         or has_table_privilege(r.who, c.oid, 'DELETE'))),
   '(없음)',
-  '클럽 문의 테이블에 anon/authenticated 쓰기 권한이 없다'
+  '서버 경로 전용 테이블에 anon/authenticated 쓰기 권한이 없다'
 );
 
 -- 3) 모든 public 함수(확장 제외)를 service_role 이 실행할 수 있어야 한다.

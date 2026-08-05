@@ -9,6 +9,7 @@ import 'api.dart';
 import 'notification_events.dart';
 
 bool _messageListenersInitialized = false;
+const _notificationSoundPreferenceKey = 'notify.sound';
 
 NotificationEvent _eventFromMessage(
   RemoteMessage message, {
@@ -30,7 +31,8 @@ NotificationEvent _eventFromMessage(
 /// 없는 환경에서는 조용히 skip — 개발 단계에서 앱이 부팅 자체를 막지 않도록.
 Future<void> initNotifications(ApiService api) async {
   try {
-    await Firebase.initializeApp();
+    // main() 이 이미 초기화했을 수 있다(Crashlytics 용) — 중복 호출은 예외를 던진다.
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp();
   } catch (_) {
     // 구성 파일 없으면 skip
     return;
@@ -44,20 +46,29 @@ Future<void> initNotifications(ApiService api) async {
     final platform =
         Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
     await api.registerDeviceToken(token, platform);
+    final preferences = await SharedPreferences.getInstance();
+    final soundEnabled =
+        preferences.getBool(_notificationSoundPreferenceKey) ?? true;
+    await api.setDeviceTokenSound(token, soundEnabled);
   }
 
   if (_messageListenersInitialized) return;
   _messageListenersInitialized = true;
 
-  messaging.onTokenRefresh.listen((t) {
+  messaging.onTokenRefresh.listen((t) async {
     final platform =
         Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'web');
-    api.registerDeviceToken(t, platform);
+    await api.registerDeviceToken(t, platform);
+    final preferences = await SharedPreferences.getInstance();
+    final soundEnabled =
+        preferences.getBool(_notificationSoundPreferenceKey) ?? true;
+    await api.setDeviceTokenSound(t, soundEnabled);
   });
 
   FirebaseMessaging.onMessage.listen((message) async {
     final preferences = await SharedPreferences.getInstance();
-    final soundEnabled = preferences.getBool('notify.sound') ?? true;
+    final soundEnabled =
+        preferences.getBool(_notificationSoundPreferenceKey) ?? true;
     if (soundEnabled) {
       await SystemSound.play(SystemSoundType.alert);
     }
@@ -71,4 +82,17 @@ Future<void> initNotifications(ApiService api) async {
       _eventFromMessage(message, openedFromSystem: true),
     );
   });
+}
+
+/// 현재 기기의 알림음 설정을 서버와 동기화한다.
+///
+/// 토큰이 아직 발급되지 않은 경우에는 다음 앱 시작 또는 토큰 갱신 때
+/// 로컬 설정이 자동으로 동기화된다.
+Future<void> syncNotificationSoundPreference(
+  ApiService api, {
+  required bool enabled,
+}) async {
+  final token = await FirebaseMessaging.instance.getToken();
+  if (token == null) return;
+  await api.setDeviceTokenSound(token, enabled);
 }

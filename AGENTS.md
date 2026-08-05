@@ -17,6 +17,7 @@ Detailed rules live under `docs/rules/` and should be loaded only when the task 
    - Dart/Flutter: avoid `dynamic` except JSON boundaries; convert immediately to typed models.
    - SQL: new tables require explicit types, RLS enabled, and policies.
 5. Root rule files stay small. Add detailed guidance under `docs/rules/`, then add a link here if needed.
+5-1. **PR·이슈 본문은 쉬운 한글로 쓴다** — 그대로 Discord 알림으로 가고 개발자가 아닌 팀원이 읽는다. 「무엇이 달라지나 / 왜 했나 / 확인하는 법」을 맨 위에, 기술 상세는 맨 아래 "기술 메모"로. 정본: [`docs/team/START-HERE.md`](docs/team/START-HERE.md) §5-2. (커밋 메시지는 해당 없음)
 6. Before finalizing, run the checks relevant to the files changed, or state exactly why they were not run.
 
 ## Loop prevention

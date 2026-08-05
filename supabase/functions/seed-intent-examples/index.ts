@@ -21,7 +21,7 @@
  *   { inserted: number, intents: Record<Intent, number> }
  */
 
-import { corsHeaders, errorResponse, preflight } from '../_shared/cors.ts';
+import { corsHeaders, errorResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { embedBatch, toVectorLiteral } from '../_shared/embedding.ts';
@@ -120,7 +120,7 @@ interface SeedRow {
   embedding: string; // pgvector literal
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -193,4 +193,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     },
   );
-});
+}));

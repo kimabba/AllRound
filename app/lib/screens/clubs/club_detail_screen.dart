@@ -17,11 +17,14 @@ import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
+import '../../utils/google_calendar.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
+import 'club_dues_screen.dart';
 import 'club_inquiry_screen.dart';
+import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
@@ -299,11 +302,15 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       }
     } catch (e) {
       if (mounted) {
+        final banned = e.toString().contains('CLUB_BANNED');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              ugcActionErrorMessage(e, fallback: '가입 신청을 완료하지 못했습니다.'),
-            ),
+            content: Text(banned
+                ? '이 클럽에서는 영구 차단되어 가입을 신청할 수 없습니다.'
+                : ugcActionErrorMessage(
+                    e,
+                    fallback: '가입 신청을 완료하지 못했습니다.',
+                  )),
           ),
         );
       }
@@ -920,7 +927,7 @@ class _IntroTab extends StatelessWidget {
               ),
               if (club.introImageUrls.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                _ClubIntroPhotoStrip(imageUrls: club.introImageUrls),
+                ClubIntroPhotoStrip(imageUrls: club.introImageUrls),
               ],
             ],
           ),
@@ -1134,50 +1141,6 @@ class _ClubFlatSection extends StatelessWidget {
         ),
       ),
       child: child,
-    );
-  }
-}
-
-class _ClubIntroPhotoStrip extends StatelessWidget {
-  const _ClubIntroPhotoStrip({required this.imageUrls});
-
-  final List<String> imageUrls;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final urls = imageUrls
-        .map((url) => url.trim())
-        .where((url) => url.isNotEmpty)
-        .toList(growable: false);
-    if (urls.isEmpty) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: 132,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: urls.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          return Container(
-            width: 168,
-            height: 132,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Image.network(
-              urls[index],
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.image_not_supported_outlined,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }
@@ -1590,6 +1553,11 @@ class _ClubManagementTab extends ConsumerWidget {
                 icon: const Icon(Icons.forum_outlined),
                 label: const Text('운영진 문의함 열기'),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              _InquiryLinkPolicyTile(
+                club: club,
+                onChanged: onChanged,
+              ),
             ],
           ),
         ),
@@ -1605,6 +1573,8 @@ class _ClubManagementTab extends ConsumerWidget {
           onChanged: onMonthlyFeeChanged,
         ),
         const SizedBox(height: AppSpacing.md),
+        _ClubDuesLedgerCard(club: club),
+        const SizedBox(height: AppSpacing.md),
         _JoinRequestManageCard(
           club: club,
           onChanged: onChanged,
@@ -1614,6 +1584,11 @@ class _ClubManagementTab extends ConsumerWidget {
           _MemberRoleManageCard(
             club: club,
             future: membersFuture,
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _FormerMemberBanCard(
+            club: club,
             onChanged: onChanged,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -2349,6 +2324,56 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
   }
 }
 
+class _ClubDuesLedgerCard extends StatelessWidget {
+  final Club club;
+
+  const _ClubDuesLedgerCard({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _ClubFlatSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: cs.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  '월별 회비 장부',
+                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '멤버별 납부·미납·면제를 체크하고 미납 멤버에게 앱 알림을 보낼 수 있어요.',
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton.icon(
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClubDuesScreen(club: club),
+              ),
+            ),
+            icon: const Icon(Icons.checklist_rounded),
+            label: const Text('회비 장부 열기'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MemberRoleManageCard extends ConsumerWidget {
   final Club club;
   final Future<List<ClubMember>> future;
@@ -2392,6 +2417,227 @@ class _MemberRoleManageCard extends ConsumerWidget {
                       club: club,
                       member: member,
                       onChanged: onChanged,
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InquiryLinkPolicyTile extends ConsumerStatefulWidget {
+  const _InquiryLinkPolicyTile({
+    required this.club,
+    required this.onChanged,
+  });
+
+  final Club club;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_InquiryLinkPolicyTile> createState() =>
+      _InquiryLinkPolicyTileState();
+}
+
+class _InquiryLinkPolicyTileState
+    extends ConsumerState<_InquiryLinkPolicyTile> {
+  bool _busy = false;
+
+  Future<void> _update(bool enabled) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).updateClubInquiryLinks(
+            widget.club.id,
+            enabled: enabled,
+          );
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled ? '문의에서 링크 전송을 허용했습니다.' : '문의의 링크 전송을 차단했습니다.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('링크 설정을 변경하지 못했습니다: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      value: widget.club.inquiryLinksEnabled,
+      onChanged: _busy ? null : _update,
+      secondary: const Icon(Icons.link_rounded),
+      title: const Text('문의 링크 허용'),
+      subtitle: Text(
+        widget.club.inquiryLinksEnabled
+            ? '가입 전 1:1 문의에서 웹 링크를 보낼 수 있습니다.'
+            : '가입 전 1:1 문의에서 텍스트 웹 링크를 차단합니다.',
+        style: tt.bodySmall,
+      ),
+    );
+  }
+}
+
+class _FormerMemberBanCard extends ConsumerStatefulWidget {
+  const _FormerMemberBanCard({
+    required this.club,
+    required this.onChanged,
+  });
+
+  final Club club;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_FormerMemberBanCard> createState() =>
+      _FormerMemberBanCardState();
+}
+
+class _FormerMemberBanCardState extends ConsumerState<_FormerMemberBanCard> {
+  late Future<List<ClubMember>> _formerMembers;
+  String? _busyUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _formerMembers = ref.read(apiProvider).formerClubMembers(widget.club.id);
+  }
+
+  void _reload() {
+    setState(() {
+      _formerMembers = ref.read(apiProvider).formerClubMembers(widget.club.id);
+    });
+  }
+
+  Future<void> _ban(ClubMember member) async {
+    final name = _clubMemberDisplayName(member);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('이전 멤버 영구 차단'),
+        content: Text(
+          '$name 님을 영구 차단할까요?\n'
+          '앞으로 이 계정은 클럽 가입 신청과 가입 전 문의를 보낼 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: const Text('영구 차단'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busyUserId = member.userId);
+    try {
+      await ref.read(apiProvider).banClubMember(
+            widget.club.id,
+            member.userId,
+          );
+      widget.onChanged();
+      _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$name 님을 영구 차단했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('영구 차단 실패: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyUserId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return _ClubFlatSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '이전 멤버',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '먼저 탈퇴한 회원도 이곳에서 영구 차단할 수 있습니다.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FutureBuilder<List<ClubMember>>(
+            future: _formerMembers,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return TextButton.icon(
+                  onPressed: _reload,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('이전 멤버 다시 불러오기'),
+                );
+              }
+              final members = snapshot.data ?? const [];
+              if (members.isEmpty) {
+                return const Text('차단할 이전 멤버가 없습니다.');
+              }
+              return Column(
+                children: [
+                  for (final member in members)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: cs.surfaceContainerHighest,
+                        child: Text(
+                          _clubMemberDisplayName(member).characters.first,
+                        ),
+                      ),
+                      title: Text(_clubMemberDisplayName(member)),
+                      subtitle: const Text('탈퇴한 멤버'),
+                      trailing: TextButton(
+                        onPressed:
+                            _busyUserId == null ? () => _ban(member) : null,
+                        child: _busyUserId == member.userId
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(
+                                '영구 차단',
+                                style: TextStyle(color: cs.error),
+                              ),
+                      ),
                     ),
                 ],
               );
@@ -2495,6 +2741,57 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
     }
   }
 
+  Future<void> _ban() async {
+    final name = _clubMemberDisplayName(widget.member);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('영구 차단'),
+        content: Text(
+          '$name 님을 영구 차단할까요?\n'
+          '즉시 클럽에서 내보내며, 클럽을 나갔다 다시 신청해도 이 계정으로는 재가입할 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: const Text('영구 차단'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).banClubMember(
+            widget.club.id,
+            widget.member.userId,
+          );
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$name 님을 영구 차단했습니다.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('영구 차단 실패: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2551,10 +2848,18 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
               onPressed: _busy ? null : () => _setRole('manager'),
               child: const Text('지정'),
             ),
-          IconButton(
-            tooltip: '강퇴',
-            onPressed: _busy ? null : _kick,
-            icon: Icon(Icons.person_remove_rounded, color: cs.error),
+          PopupMenuButton<String>(
+            tooltip: '멤버 관리',
+            enabled: !_busy,
+            onSelected: (value) {
+              if (value == 'kick') _kick();
+              if (value == 'ban') _ban();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'kick', child: Text('강퇴')),
+              PopupMenuItem(value: 'ban', child: Text('영구 차단')),
+            ],
+            icon: Icon(Icons.more_vert_rounded, color: cs.onSurfaceVariant),
           ),
         ],
       ),
@@ -2720,6 +3025,7 @@ class _EventsTab extends ConsumerWidget {
                   itemBuilder: (context, i) => _EventCard(
                     event: events[i],
                     members: members,
+                    canManage: canCreateEvent,
                     onChanged: onChanged,
                   ),
                 );
@@ -2755,10 +3061,12 @@ class _EventsTab extends ConsumerWidget {
 class _EventCard extends ConsumerStatefulWidget {
   final ClubEvent event;
   final List<ClubMember> members;
+  final bool canManage;
   final VoidCallback onChanged;
   const _EventCard({
     required this.event,
     required this.members,
+    required this.canManage,
     required this.onChanged,
   });
 
@@ -2817,6 +3125,68 @@ class _EventCardState extends ConsumerState<_EventCard> {
     if (blocked) widget.onChanged();
   }
 
+  Future<void> _manageEvent({required bool delete}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(delete ? '일정을 삭제할까요?' : '일정을 조기 종료할까요?'),
+        content: Text(
+          delete
+              ? '삭제한 일정은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
+              : '종료한 일정은 목록에서 내려가고 예정 알림도 발송되지 않습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(delete ? '삭제' : '종료'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final api = ref.read(apiProvider);
+      if (delete) {
+        await api.deleteClubEvent(widget.event.clubId, widget.event.id);
+      } else {
+        await api.endClubEvent(widget.event.clubId, widget.event.id);
+      }
+      widget.onChanged();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(delete ? '일정 삭제에 실패했습니다.' : '일정 종료에 실패했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _addToGoogleCalendar() async {
+    final event = widget.event;
+    final opened = await launchUrl(
+      buildGoogleCalendarUrl(
+        title: event.title,
+        startsAt: event.startsAt,
+        description: event.description,
+        location: event.locationText,
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google 캘린더를 열지 못했습니다.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -2866,16 +3236,40 @@ class _EventCardState extends ConsumerState<_EventCard> {
                     ],
                   ),
                 ),
-                if (canModerateAuthor)
+                if (widget.canManage || canModerateAuthor)
                   PopupMenuButton<String>(
                     tooltip: '모임 더보기',
                     onSelected: (value) {
+                      if (value == 'end') {
+                        unawaited(_manageEvent(delete: false));
+                      }
+                      if (value == 'delete') {
+                        unawaited(_manageEvent(delete: true));
+                      }
                       if (value == 'report') unawaited(_reportEvent());
                       if (value == 'block') unawaited(_blockEventAuthor());
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'report', child: Text('모임 신고')),
-                      PopupMenuItem(value: 'block', child: Text('작성자 차단')),
+                    itemBuilder: (_) => [
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'end',
+                          child: Text('모임 조기 종료'),
+                        ),
+                      if (widget.canManage)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('모임 삭제'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('모임 신고'),
+                        ),
+                      if (canModerateAuthor)
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('작성자 차단'),
+                        ),
                     ],
                   ),
               ],
@@ -2912,6 +3306,15 @@ class _EventCardState extends ConsumerState<_EventCard> {
               const SizedBox(height: AppSpacing.sm),
               Text(e.description!, style: tt.bodyMedium),
             ],
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _addToGoogleCalendar,
+                icon: const Icon(Icons.add_to_photos_outlined, size: 18),
+                label: const Text('Google 캘린더에 추가'),
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
@@ -3157,11 +3560,18 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       context: context,
       initialTime: const TimeOfDay(hour: 19, minute: 0),
     );
-    if (time == null) return;
-    setState(() {
-      _startsAt =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
+    if (time == null || !mounted) return;
+    final picked =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    // 서버는 현재 시각 이하를 거절한다. 여기서 걸러 주지 않으면 오늘 날짜에
+    // 이미 지난 시간을 골라도 통과한 뒤 일반 실패 메시지만 보게 된다.
+    if (!picked.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미 지난 시간이에요. 앞으로의 일시를 골라주세요.')),
+      );
+      return;
+    }
+    setState(() => _startsAt = picked);
   }
 
   Future<void> _submit() async {
@@ -3316,10 +3726,17 @@ class _PostsTab extends ConsumerStatefulWidget {
 
 class _PostsTabState extends ConsumerState<_PostsTab> {
   List<ClubPost>? _posts;
+  final _authorSearch = TextEditingController();
   bool _loading = true;
   String? _activeTag;
   bool get _canPinPosts => widget.club.isOwner || widget.club.isManager;
   bool get _canPostNotice => widget.club.canPostNotice;
+
+  @override
+  void dispose() {
+    _authorSearch.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -3333,6 +3750,8 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
       final posts = await ref.read(apiProvider).clubPosts(
             widget.club.id,
             tag: _activeTag,
+            authorQuery:
+                _activeTag == 'intro' ? _authorSearch.text.trim() : null,
           );
       if (mounted) {
         setState(() {
@@ -3398,9 +3817,40 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
                   _load();
                 },
               ),
+              _TagChip(
+                label: '가입인사',
+                selected: _activeTag == 'intro',
+                onTap: () {
+                  _activeTag = 'intro';
+                  _load();
+                },
+              ),
             ],
           ),
         ),
+        if (_activeTag == 'intro')
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: TextField(
+              controller: _authorSearch,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _load(),
+              decoration: InputDecoration(
+                hintText: '회원 이름으로 가입인사 찾기',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: IconButton(
+                  tooltip: '검색',
+                  onPressed: _load,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                ),
+              ),
+            ),
+          ),
         if (_loading) const LinearProgressIndicator(),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -4206,6 +4656,15 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                       _isPinned = false;
                     }),
                   ),
+                  _PostTagChoice(
+                    label: '가입인사',
+                    selected: _tag == 'intro',
+                    onTap: () => setState(() {
+                      _tag = 'intro';
+                      _isPinned = false;
+                      _images.clear();
+                    }),
+                  ),
                   if (widget.canPostNotice)
                     _PostTagChoice(
                       label: '중요 공지',
@@ -4700,10 +5159,4 @@ class _PostMetaChip extends StatelessWidget {
   }
 }
 
-String _fmtDateTime(DateTime dt) {
-  const wd = ['월', '화', '수', '목', '금', '토', '일'];
-  final w = wd[(dt.weekday - 1) % 7];
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  return '${dt.month}월 ${dt.day}일 ($w) $h:$m';
-}
+String _fmtDateTime(DateTime dt) => clubEventDateTimeLabel(dt);

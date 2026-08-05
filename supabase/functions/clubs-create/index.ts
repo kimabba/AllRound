@@ -1,7 +1,7 @@
 // clubs-create: 클럽 생성 요청 (status='pending' → 어드민 승인 대기)
 // POST { sport, name, region?, address?, logo_url?, intro_image_urls?, contact?, website?, description? }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireEligibleMember } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
@@ -43,7 +43,7 @@ function optionalUrlArray(value: unknown, maxItems: number): string[] {
   return urls;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -85,6 +85,15 @@ Deno.serve(async (req) => {
   if (!parsedWebsite.ok) {
     return errorResponse(parsedWebsite.message, 400);
   }
+  const latitude = typeof body.latitude === 'number' ? body.latitude : null;
+  const longitude = typeof body.longitude === 'number' ? body.longitude : null;
+  if (
+    (latitude === null) !== (longitude === null) ||
+    (latitude !== null && (latitude < -90 || latitude > 90)) ||
+    (longitude !== null && (longitude < -180 || longitude > 180))
+  ) {
+    return errorResponse('invalid club coordinates', 400);
+  }
 
   const supa = serviceClient();
   const accessError = await ugcAccessError(
@@ -108,6 +117,8 @@ Deno.serve(async (req) => {
     meeting_days: parsedMeetingDays.value,
     monthly_fee: parsedMonthlyFee.value,
     gender_preference: parsedGenderPreference.value,
+    latitude,
+    longitude,
     status: 'pending',
     created_by: auth.user.id,
   };
@@ -170,4 +181,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ club }, { status: 201 });
-});
+}));

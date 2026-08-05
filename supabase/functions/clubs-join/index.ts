@@ -1,14 +1,14 @@
 // clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
-//   action: 'request'|'cancel'|'leave'|'kick'|'set_manager'|'update_monthly_fee'|'update_intro'|'resubmit_review'|'delete_club'|'list_members',
+//   action: 'request'|'cancel'|'leave'|'kick'|'ban'|'set_manager'|'update_monthly_fee'|'update_inquiry_links'|'update_intro'|'resubmit_review'|'delete_club'|'list_members'|'list_former_members',
 //   message?,
 //   target_user_id?,
 //   role?,
 //   monthly_fee?,
 // }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -60,7 +60,7 @@ function optionalUrlArray(value: unknown): string[] {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -160,6 +160,57 @@ Deno.serve(async (req) => {
     return jsonResponse({ members });
   }
 
+  if (action === 'list_former_members') {
+    const ownerError = await requireOwner();
+    if (ownerError) return ownerError;
+
+    const { data, error } = await supa
+      .from('club_members')
+      .select('user_id, role, can_create_event, can_post_notice, joined_at')
+      .eq('club_id', clubId)
+      .neq('status', 'active')
+      .order('left_at', { ascending: false });
+    if (error) return errorResponse(error.message, 500);
+
+    const formerRows = data ?? [];
+    const userIds = formerRows.map((row) => row.user_id as string);
+    const bannedIds = new Set<string>();
+    if (userIds.length > 0) {
+      const { data: bans, error: bansError } = await supa
+        .from('club_bans')
+        .select('user_id')
+        .eq('club_id', clubId)
+        .in('user_id', userIds);
+      if (bansError) return errorResponse(bansError.message, 500);
+      for (const ban of bans ?? []) bannedIds.add(ban.user_id as string);
+    }
+
+    const visibleRows = formerRows.filter(
+      (row) => !bannedIds.has(row.user_id as string),
+    );
+    const nameById = new Map<string, string | null>();
+    if (visibleRows.length > 0) {
+      const { data: profiles, error: profileError } = await supa
+        .from('users')
+        .select('id, name')
+        .in('id', visibleRows.map((row) => row.user_id as string));
+      if (profileError) return errorResponse(profileError.message, 500);
+      for (const profile of profiles ?? []) {
+        nameById.set(
+          profile.id as string,
+          (profile.name as string | null) ?? null,
+        );
+      }
+    }
+
+    return jsonResponse({
+      members: visibleRows.map((row) => ({
+        ...row,
+        users: { name: nameById.get(row.user_id as string) ?? null },
+      })),
+    });
+  }
+
   if (action === 'request') {
     const accessError = await ugcAccessError(supa, userId, 'club_join');
     if (accessError) return errorResponse(accessError, 403);
@@ -173,6 +224,14 @@ Deno.serve(async (req) => {
     if (!club || club.status !== 'approved') {
       return errorResponse('Club not found or not approved', 404);
     }
+
+    const { data: ban } = await supa
+      .from('club_bans')
+      .select('club_id')
+      .eq('club_id', clubId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (ban) return errorResponse('CLUB_BANNED', 403);
 
     // 이미 멤버인지 확인
     const { data: existing } = await supa
@@ -298,9 +357,8 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('club_id', clubId)
       .eq('user_id', targetUserId)
-      .eq('status', 'active')
       .maybeSingle();
-    if (!target) return errorResponse('Target member not found', 404);
+    if (!target) return errorResponse('Target member history not found', 404);
     if (target.role === 'owner') {
       return errorResponse('Owner cannot be kicked', 400);
     }
@@ -313,6 +371,47 @@ Deno.serve(async (req) => {
       .eq('status', 'active');
     if (error) return errorResponse(error.message, 500);
     return jsonResponse({ ok: true, action: 'kicked' });
+  }
+
+  if (action === 'ban') {
+    const targetUserId = stringField(body.target_user_id);
+    if (!targetUserId) return errorResponse('target_user_id is required', 400);
+    if (targetUserId === userId) return errorResponse('Cannot ban yourself', 400);
+
+    const ownerError = await requireOwner();
+    if (ownerError) return ownerError;
+
+    // 이전 멤버(status != 'active')도 차단 대상이다 — list_former_members 가
+    // 그들을 반환하므로 여기서 active 로 좁히면 화면의 차단이 항상 404 로 실패한다.
+    const { data: target } = await supa
+      .from('club_members')
+      .select('role')
+      .eq('club_id', clubId)
+      .eq('user_id', targetUserId)
+      .maybeSingle();
+    if (!target) return errorResponse('Target member not found', 404);
+    if (target.role === 'owner') return errorResponse('Owner cannot be banned', 400);
+
+    const { error: banError } = await supa.from('club_bans').upsert({
+      club_id: clubId,
+      user_id: targetUserId,
+      banned_by: userId,
+    }, { onConflict: 'club_id,user_id' });
+    if (banError) return errorResponse(banError.message, 500);
+
+    const { error: memberError } = await supa
+      .from('club_members')
+      .delete()
+      .eq('club_id', clubId)
+      .eq('user_id', targetUserId);
+    if (memberError) return errorResponse(memberError.message, 500);
+
+    await supa
+      .from('club_join_requests')
+      .delete()
+      .eq('club_id', clubId)
+      .eq('user_id', targetUserId);
+    return jsonResponse({ ok: true, action: 'banned' });
   }
 
   if (action === 'set_manager') {
@@ -386,6 +485,26 @@ Deno.serve(async (req) => {
       return errorResponse('Club cannot be updated in its current status', 409);
     }
     return jsonResponse({ ok: true, action: 'monthly_fee_updated' });
+  }
+
+  if (action === 'update_inquiry_links') {
+    const member = await activeMember('role');
+    if (member?.role !== 'owner' && member?.role !== 'manager') {
+      return errorResponse('Only owner or manager can update inquiry links', 403);
+    }
+    if (typeof body.enabled !== 'boolean') {
+      return errorResponse('enabled must be a boolean', 400);
+    }
+    const { error } = await supa
+      .from('clubs')
+      .update({ inquiry_links_enabled: body.enabled })
+      .eq('id', clubId);
+    if (error) return errorResponse(error.message, 500);
+    return jsonResponse({
+      ok: true,
+      action: 'inquiry_links_updated',
+      enabled: body.enabled,
+    });
   }
 
   if (action === 'update_intro') {
@@ -486,7 +605,7 @@ Deno.serve(async (req) => {
   }
 
   return errorResponse(
-    'action must be request|cancel|leave|kick|set_manager|update_monthly_fee|update_intro|resubmit_review|delete_club|list_members',
+    'action must be request|cancel|leave|kick|ban|set_manager|update_monthly_fee|update_inquiry_links|update_intro|resubmit_review|delete_club|list_members|list_former_members',
     400,
   );
-});
+}));

@@ -32,6 +32,11 @@ Load this when writing or reviewing code, migrations, tests, scripts, or CI.
 - Korean commit messages are fine.
 - Keep the header around 50 characters when practical.
 - Explain “why” and “what” in the body for non-trivial changes.
+- **PR and issue text is mirrored to Discord and read by non-developers.** Write it in plain Korean:
+  lead with 무엇이 달라지나 / 왜 했나 / 확인하는 법, gloss any jargon once, and push file names,
+  function names, and SQL down to a “기술 메모” section at the bottom.
+  Full rule (정본): `docs/team/START-HERE.md` → “5-2. PR·이슈는 쉬운 한글로 쓴다”.
+  This applies to PRs and issues only — commit messages are unaffected.
 
 ## Baseline checks
 

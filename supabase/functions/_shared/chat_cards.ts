@@ -2,13 +2,14 @@
 // 권한 판정은 호출자(Edge Function)가 담당. 여기서는 표시-안전 변환과 형식 검증만 한다.
 
 import { normalizeRegulationFields, type RegulationField } from './regulation.ts';
+import { isValidSport, type Sport, SPORT_LABELS } from './enums.ts';
 
 // 카드에 노출할 요강 라벨:값 최대 개수 (카드가 과도하게 길어지지 않도록).
 const MAX_CARD_REGULATION_FIELDS = 3;
 
 export interface TournamentCardRow {
   id: string;
-  sport: 'tennis' | 'futsal';
+  sport: Sport;
   title: string;
   start_date: string;
   end_date: string | null;
@@ -25,7 +26,7 @@ export interface TournamentCardRow {
 export interface TournamentCardItem {
   id: string;
   title: string;
-  sport: 'tennis' | 'futsal';
+  sport: Sport;
   region: string | null;
   location: string | null;
   start_date: string;
@@ -51,7 +52,7 @@ export function isTournamentCardRow(value: unknown): value is TournamentCardRow 
   if (!isRecord(value)) return false;
 
   return typeof value.id === 'string' &&
-    (value.sport === 'tennis' || value.sport === 'futsal') &&
+    isValidSport(value.sport) &&
     typeof value.title === 'string' &&
     typeof value.start_date === 'string' &&
     (typeof value.end_date === 'string' || value.end_date === null) &&
@@ -69,7 +70,7 @@ export interface DateRange {
 }
 
 export interface TournamentSearchTextContext {
-  sport?: 'tennis' | 'futsal' | null;
+  sport?: Sport | null;
   region: string | null;
   dateRange?: DateRange;
 }
@@ -104,16 +105,35 @@ export function buildTournamentCards(
   }));
 }
 
+// 종목 이모지는 이 파일(채팅 텍스트 렌더)에서만 쓴다. Record<Sport, …> 라 종목이
+// 늘면 타입 에러로 빠뜨릴 수 없다.
+const SPORT_EMOJI: Record<Sport, string> = {
+  tennis: '🎾',
+  futsal: '⚽',
+};
+
+/** '테니스 대회' — 종목 미지정이면 명사만. */
+function sportNoun(sport: Sport | null | undefined, noun: string): string {
+  return sport ? `${SPORT_LABELS[sport]} ${noun}` : noun;
+}
+
+/** '🎾 테니스 클럽' — 종목 미지정이면 fallback. */
+function sportHeadingWith(
+  sport: Sport | null | undefined,
+  noun: string,
+  fallback: string,
+): string {
+  if (!sport) return fallback;
+  const base = `${SPORT_EMOJI[sport]} ${SPORT_LABELS[sport]}`;
+  return noun ? `${base} ${noun}` : base;
+}
+
 function tournamentSportLabel(sport: TournamentSearchTextContext['sport']): string {
-  if (sport === 'tennis') return '테니스 대회';
-  if (sport === 'futsal') return '풋살 대회';
-  return '대회';
+  return sportNoun(sport, '대회');
 }
 
 function tournamentSportHeading(sport: TournamentSearchTextContext['sport']): string {
-  if (sport === 'tennis') return '🎾 테니스';
-  if (sport === 'futsal') return '⚽ 풋살';
-  return '대회';
+  return sportHeadingWith(sport, '', '대회');
 }
 
 function filterText(ctx: TournamentSearchTextContext): string {
@@ -168,7 +188,7 @@ export function renderTournamentApplicationGuideText(
 
 export interface ClubCardRow {
   id: string;
-  sport: 'tennis' | 'futsal';
+  sport: Sport;
   name: string;
   region: string | null;
   description: string | null;
@@ -182,7 +202,7 @@ export interface ClubCardRow {
 export interface ClubCardItem {
   id: string;
   name: string;
-  sport: 'tennis' | 'futsal';
+  sport: Sport;
   region: string | null;
   description: string | null;
   member_count: number;
@@ -206,20 +226,16 @@ export function buildClubCards(rows: ClubCardRow[]): ClubCardItem[] {
 }
 
 export interface ClubSearchTextContext {
-  sport?: 'tennis' | 'futsal' | null;
+  sport?: Sport | null;
   region: string | null;
 }
 
 function clubSportLabel(sport: ClubSearchTextContext['sport']): string {
-  if (sport === 'tennis') return '테니스 클럽';
-  if (sport === 'futsal') return '풋살 클럽';
-  return '클럽';
+  return sportNoun(sport, '클럽');
 }
 
 function clubSportHeading(sport: ClubSearchTextContext['sport']): string {
-  if (sport === 'tennis') return '🎾 테니스 클럽';
-  if (sport === 'futsal') return '⚽ 풋살 클럽';
-  return '클럽';
+  return sportHeadingWith(sport, '클럽', '클럽');
 }
 
 function clubFilterText(ctx: ClubSearchTextContext): string {
@@ -255,7 +271,7 @@ const CLUB_GENDER_LABELS: Record<string, string> = {
 /// selected_entity(club) 카드 선택의 결정적(LLM 미사용) 마크다운 응답.
 export function renderClubDetailText(club: ClubDetailRow): string {
   const lines: string[] = [`## ${club.name}`, ''];
-  lines.push(`- 종목: ${club.sport === 'tennis' ? '테니스' : '풋살'}`);
+  lines.push(`- 종목: ${SPORT_LABELS[club.sport]}`);
   if (club.region) lines.push(`- 지역: ${club.region}`);
   if (club.address) lines.push(`- 주소: ${club.address}`);
   const days = club.meeting_days ?? [];
@@ -305,7 +321,7 @@ export function parseSelectedEntity(input: unknown): ParseResult<SelectedEntity>
 // 건너뛰고 같은 슬롯으로 only_my_grade 만 바꿔 재검색한다.
 
 export interface TournamentRefine {
-  sport: 'tennis' | 'futsal' | null;
+  sport: Sport | null;
   region_code: string | null;
   date_from: string | null;
   date_to: string | null;
@@ -341,7 +357,7 @@ export function parseTournamentRefine(input: unknown): ParseResult<TournamentRef
   return {
     ok: true,
     value: {
-      sport: (sport as 'tennis' | 'futsal' | null) ?? null,
+      sport: (sport as Sport | null) ?? null,
       region_code: strOrNull(input.region_code),
       date_from: dateFrom,
       date_to: dateTo,
@@ -366,7 +382,7 @@ export function buildRefineChip(
 /// 해당 종목에 등급/부서를 등록한 사용자인지. 미등록자에겐 정제 칩을 노출하지 않는다.
 /// 테니스는 division_codes 가 채워진 소속이 있어야, 풋살은 grade 가 있어야 필터가 의미 있다.
 export function isGradeRegisteredForSport(
-  sport: 'tennis' | 'futsal' | null,
+  sport: Sport | null,
   tennisOrgs: ReadonlyArray<{ division_codes: string[] }>,
   futsalGrades: ReadonlyArray<string | null | undefined>,
 ): boolean {

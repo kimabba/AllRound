@@ -2,7 +2,7 @@
 // GET ?club_id=<uuid>
 // POST { request_id, action: 'approve'|'reject', reason? }
 
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { canReviewClub, reviewJoin } from './review.ts';
@@ -18,7 +18,7 @@ function recordField(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -115,4 +115,4 @@ Deno.serve(async (req) => {
   const result = await reviewJoin(supa, { requestId, action, reviewerId });
   if (!result.ok) return errorResponse(result.message, result.status);
   return jsonResponse({ ok: true, action: result.action });
-});
+}));

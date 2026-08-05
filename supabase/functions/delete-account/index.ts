@@ -9,8 +9,15 @@
  *
  * 본인 JWT 로만 호출 가능(requireUser). uid 는 검증된 토큰에서만 취하므로
  * 타인 계정을 지울 수 없다.
+ *
+ * 협회 랭킹 연결(org_player_links)은 여기서 별도로 지우지 않는다 — delete_account_data
+ * RPC 의 `delete from public.users` 가 org_player_links.user_id 의 on delete cascade 로
+ * 자동 소멸시킨다. 단 org_rankings 의 실명 행(성명·소속·순위)은 이 계정 삭제로 지워지지
+ * 않고 그대로 남는다 — 협회가 여전히 그 선수를 공표 중이면, 탈퇴한 사용자는 앱 미가입
+ * 선수와 동일하게 취급된다(의도된 동작, 2026-08-03). 랭킹 명단 삭제는 별도 요청 창구
+ * (docs/team/RUNBOOK-org-ranking-deletion-request.md)를 통해서만 처리한다.
  */
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { parseOwnedPublicObjects, publicMediaBucketIds } from '../_shared/account_deletion.ts';
 import { serviceClient } from '../_shared/supabase.ts';
@@ -39,7 +46,7 @@ async function deletePublicMedia(
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -78,4 +85,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ deleted: true });
-});
+}));

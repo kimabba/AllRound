@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 
 /**
@@ -7,7 +7,7 @@ import { requireUser } from '../_shared/auth.ts';
  *
  * DELETE /chat-history?conversation_id=...   본인 대화만 삭제 가능
  */
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
@@ -67,4 +67,4 @@ Deno.serve(async (req) => {
   }
 
   return jsonResponse({ conversations });
-});
+}));

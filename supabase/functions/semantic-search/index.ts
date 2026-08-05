@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireEligibleMember } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
@@ -26,7 +26,7 @@ interface Body {
   match_count?: number;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -101,4 +101,4 @@ Deno.serve(async (req) => {
     tournaments: tournamentsResult?.data ?? [],
     rules: rulesResult?.data ?? [],
   });
-});
+}));

@@ -100,7 +100,10 @@ begin
 end;
 $$;
 -- 트리거 함수는 Postgres 가 호출 → Data API 직접 실행 차단.
+-- service_role 은 PUBLIC 기본 실행권한에 기대고 있어 revoke 하면 함께 사라진다 —
+-- 명시로 다시 부여한다(011_api_role_grants 가 이 회귀를 잡는다).
 revoke execute on function public.log_phone_withdraw() from public, anon, authenticated;
+grant execute on function public.log_phone_withdraw() to service_role;
 
 drop trigger if exists trg_log_phone_withdraw on public.users;
 create trigger trg_log_phone_withdraw

@@ -70,6 +70,14 @@ owner/manager → clubs-review-join → 'approved' → club_members에 member �
 ## 멤버 수 자동 갱신
 club_members의 INSERT/UPDATE/DELETE 시 `update_club_member_count` 트리거가 clubs.member_count를 자동 갱신
 
+## 월별 회비 장부
+
+- `club_dues_periods`는 클럽·월별 회비 금액, 납부 기한, 입금 안내를 저장한다.
+- `club_dues_payments`는 활성 멤버별 `paid`·`unpaid`·`exempt` 상태를 저장한다.
+- 클럽장과 운영진만 RPC를 통해 장부 및 납부 상태를 변경할 수 있다. 회원은 RLS에 따라 본인 납부 상태만 조회한다.
+- 상태 변경은 `club_dues_audit`에 기록되며, 미납 알림은 `club_dues_reminder` 타입의 앱 알림으로 발송한다.
+- Flutter 관리 탭의 **월별 회비 장부**에서 개별·일괄 상태 변경과 미납 알림을 수행한다.
+
 ## 팀원 모집
 
 - `club_recruiting_posts`에 승인된 클럽의 공개 모집 조건·인원·일정·마감 상태를 저장

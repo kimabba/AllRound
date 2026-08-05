@@ -32,7 +32,7 @@ void main() {
       expect(
         tester.getSemantics(find.byKey(AllRoundE2EKeys.globalChatDock)),
         matchesSemantics(
-          label: 'BB',
+          label: '볼보이',
           isButton: true,
           hasTapAction: true,
         ),
@@ -40,7 +40,7 @@ void main() {
       expect(
         tester.getSemantics(find.byKey(AllRoundE2EKeys.navToday)),
         matchesSemantics(
-          label: '오늘 탭',
+          label: '일정 탭',
           isButton: true,
           hasSelectedState: true,
           isSelected: true,

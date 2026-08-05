@@ -1,7 +1,7 @@
 name: allround
 description: 올라운드 — 스포츠 동호인 통합 정보 앱
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: ^3.6.0
@@ -31,6 +31,7 @@ dependencies:
   # UI 보조
   intl: ^0.20.0
   url_launcher: ^6.3.0
+  webview_flutter: ^4.14.1
   flutter_markdown: ^0.7.0
   shared_preferences: ^2.3.0
   skeletonizer: ^2.1.3
@@ -38,6 +39,10 @@ dependencies:
   # Speed Gun
   image_picker: ^1.1.0
   image: ^4.3.0
+  geolocator: ^14.0.3
+  geocoding: ^5.0.0
+  cupertino_http: ^3.0.2
+  firebase_crashlytics: ^5.2.7
 
 dev_dependencies:
   flutter_test:

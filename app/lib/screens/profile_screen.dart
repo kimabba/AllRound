@@ -9,9 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/providers.dart';
 import '../services/local_user_preferences.dart';
+import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
+import '../widgets/profile/my_record_widgets.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
@@ -281,11 +283,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
 
     if (result == null) return;
+    // 로컬 설정(대회·클럽·코치·알림음)을 먼저 저장한다. 알림음 서버 동기화가
+    // 실패해도(웹·토큰 미발급·네트워크) 나머지 설정까지 함께 날아가면 안 된다.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
     await prefs.setBool(_notifyClubPrefsKey, result.club);
     await prefs.setBool(_notifyCoachPrefsKey, result.coach);
     await prefs.setBool(_notifySoundPrefsKey, result.sound);
+    var soundSynced = true;
+    try {
+      await syncNotificationSoundPreference(
+        ref.read(apiProvider),
+        enabled: result.sound,
+      );
+    } catch (_) {
+      soundSynced = false;
+    }
     if (!mounted) return;
     setState(() {
       _notifyTournament = result.tournament;
@@ -293,6 +306,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _notifyCoach = result.coach;
       _notifySound = result.sound;
     });
+    if (!soundSynced) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
+      );
+    }
   }
 
   @override
@@ -380,7 +398,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
                 const MyClubsSection(),
                 const SizedBox(height: AppSpacing.xl),
-                const MyTournamentRecordsSection(),
+                const MyRecordSection(),
                 const SizedBox(height: AppSpacing.xl),
                 Align(
                   alignment: Alignment.centerRight,

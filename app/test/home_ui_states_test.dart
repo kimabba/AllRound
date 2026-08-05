@@ -9,6 +9,7 @@ import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
@@ -66,7 +67,54 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
+    expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
+    expect(find.text('나의 일정'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('나의 일정 빈 카드는 대회와 모임 목록으로 이동한다', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+        GoRoute(
+          path: '/tournaments',
+          builder: (_, __) => const Scaffold(body: Text('대회 목록')),
+        ),
+        GoRoute(
+          path: '/clubs',
+          builder: (_, __) => const Scaffold(body: Text('모임 목록')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        retry: (_, __) => null,
+        overrides: [
+          homeTournamentsProvider.overrideWith((ref) async => const []),
+          myTournamentRecordsProvider.overrideWith((ref) async => const []),
+          myClubsProvider.overrideWith((ref) async => const []),
+          unreadNotificationCountProvider.overrideWith((ref) async => 0),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('대회를 둘러보세요'));
+    await tester.pumpAndSettle();
+    expect(find.text('대회 목록'), findsOneWidget);
+
+    router.go('/');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('클럽을 찾아보세요'));
+    await tester.pumpAndSettle();
+    expect(find.text('모임 목록'), findsOneWidget);
   });
 
   testWidgets('home empty state remains usable at 200% text in dark mode',

@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, preflight } from '../_shared/cors.ts';
+import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireAdmin } from '../_shared/auth.ts';
 
 /**
@@ -12,7 +12,7 @@ import { requireAdmin } from '../_shared/auth.ts';
  * 'rejected' 는 022 마이그레이션에서 추가된 신규 enum 값.
  * 'closed' (=마감된 대회) 와 의미적으로 분리해 사용한다.
  */
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
@@ -71,4 +71,4 @@ Deno.serve(async (req) => {
     return errorResponse(error.message, 500);
   }
   return jsonResponse({ tournament: data });
-});
+}));

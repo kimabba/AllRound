@@ -18,6 +18,12 @@ export interface UserSport {
   sport: string;
   grade: string;
   is_primary: boolean;
+  /**
+   * user_sports 조회 시 `grades(label_ko)` 로 임베드한 등급 라벨(#319 — 라벨 정본은 DB).
+   * user_sports.grade 는 grades 로 복합 FK 가 걸려 있어 항상 한 행이 대응하지만,
+   * PostgREST 가 to-one 으로 못 좁히면 배열로 올 수 있어 두 형태를 모두 받는다(gradeLabelOf).
+   */
+  grades?: { label_ko: string } | { label_ko: string }[] | null;
 }
 
 export interface UserTennisOrgRow {
@@ -96,6 +102,18 @@ export interface IntentClassifyRow {
 // Semantic cache settings
 export const QA_CACHE_THRESHOLD = 0.92;
 export const QA_CACHE_TTL_HOURS = 24;
+
+/**
+ * 프롬프트·컨텍스트 조립이 바뀌면 이 값을 올린다.
+ *
+ * 의미 캐시 키(`computeUserContextHash`)에 들어가므로, 올리는 순간 기존 캐시가
+ * 전부 미스가 되고 새 프롬프트로 답이 다시 만들어진다. 안 올리면 배포해도 TTL
+ * (24시간) 동안 옛 프롬프트로 만든 답이 계속 나간다 — 내부 UUID 노출을 고치고도
+ * 하루 동안 그대로 보였을 상황이 실제로 있었다(#363, codex 리뷰가 잡음).
+ *
+ * v2: 컨텍스트 행에서 내부 id 제거 + "출처는 제목으로" 지시로 교체.
+ */
+export const CHAT_PROMPT_VERSION = 2;
 
 // Intent classifier settings.
 // 임베딩 KNN 관측용 하한 — intent_classify RPC 가 이 값 이상 유사한 예시만 다수결에 포함.

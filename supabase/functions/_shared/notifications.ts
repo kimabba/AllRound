@@ -5,6 +5,7 @@ import type { FcmNotificationInput } from './fcm.ts';
 export interface DeviceTokenRow {
   token: string;
   platform: 'ios' | 'android' | 'web';
+  sound_enabled: boolean;
 }
 
 export interface CreateNotificationInput {
@@ -23,11 +24,14 @@ export async function createNotification(
 ): Promise<void> {
   const { data: tokenRows } = await supabase
     .from('device_tokens')
-    .select('token, platform')
+    .select('token, platform, sound_enabled')
     .eq('user_id', input.userId)
     .eq('enabled', true);
 
-  const tokens = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => row.token);
+  const targets = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => ({
+    token: row.token,
+    soundEnabled: row.sound_enabled,
+  }));
   const body = input.body?.trim() ?? '';
 
   const pushInput: FcmNotificationInput = {
@@ -38,7 +42,7 @@ export async function createNotification(
     referenceId: input.referenceId,
     clubId: input.clubId,
   };
-  const result = await sendFcm(tokens, pushInput);
+  const result = await sendFcm(targets, pushInput);
   const status = result.status === 'skipped' ? 'pending' : result.status;
   const sentAt = result.status === 'sent' ? new Date().toISOString() : null;
 
@@ -56,4 +60,110 @@ export async function createNotification(
   });
 
   if (error) throw error;
+}
+
+export interface ReminderAttemptInput {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  referenceType: string;
+  referenceId: string;
+  clubId?: string | null;
+}
+
+export type ReminderOutcome = 'sent' | 'failed' | 'skipped_raced';
+
+/**
+ * 주기적으로 재확인되는 리마인더(대회 D-3/마감일, 클럽 모임 D-1)를 원자적으로
+ * 선점한 뒤에만 발송한다.
+ *
+ * notify-cron 은 매시간 같은 후보를 다시 훑고, 'pending'(그때 기기 토큰이
+ * 없었음) 행은 재시도 대상이다. "있으면 스킵" 만으로는 확인·발송·기록 사이에
+ * 레이스가 생겨 두 실행이 겹치면 같은 사용자에게 중복 발송될 수 있다(코드
+ * 리뷰 지적). 그래서 sendFcm 은 아래 순서로 원자적으로 선점한 실행만 부른다:
+ *
+ *   1. 기존 'pending' 행이 있으면 `status='pending'` 조건까지 건 DELETE 로
+ *      지운다 — 두 실행이 동시에 시도하면 한쪽만 지우고, 진 쪽은 0행 삭제로
+ *      감지해 스킵한다.
+ *   2. 빈 자리에 'sending' placeholder 를 INSERT 로 새로 꽂는다 — 이것도
+ *      두 실행이 겹치면 unique index(user_id, type, reference_id) 가 한쪽만
+ *      통과시키고, 진 쪽은 insert 에러로 감지해 스킵한다. 'pending'이 아니라
+ *      'sending'을 쓰는 이유: 'pending'으로 꽂으면 그 사이 다른 실행이 이
+ *      행을 "재시도 대상"으로 오인해 훔쳐갈 수 있다(needsReminderAttempt 는
+ *      'sending'을 재시도 대상으로 보지 않는다) — codex 리뷰가 이 잔여
+ *      레이스를 다시 잡아냈다.
+ *   3. 이 두 단계를 통과한 실행만 sendFcm 을 호출하고, 끝나면 그 행을 결과로
+ *      UPDATE 한다(성공 sent / 실패 failed / 기기 토큰 없음 pending — 이때만
+ *      'pending'으로 돌아가 다음 시간에 다시 재시도 대상이 된다).
+ *
+ * 선점에서 진 실행은 'skipped_raced' 를 돌려준다 — 실제로 이미 다른 실행이
+ * 처리 중이거나 방금 처리했으므로 다시 셀 필요가 없다(dedup_skipped 로 집계).
+ *
+ * ponytail: 프로세스가 sendFcm 도중 죽으면 행이 'sending'에 영원히 멈출 수
+ * 있음 — notify-cron 은 매시간 1~2초 안에 끝나는 단일 스케줄 호출이라 실제로
+ * 거의 안 생기고, 생겨도 데이터 유실이 아니라 그 사용자 알림 하나가 안 오는
+ * 정도라 운영으로 복구 가능. 자주 보이면 그때 오래된 'sending' 자동 회수를
+ * 추가.
+ */
+export async function sendReminderIfClaimed(
+  supabase: SupabaseClient,
+  existing: { id: string; status: string } | null,
+  input: ReminderAttemptInput,
+): Promise<ReminderOutcome> {
+  if (existing) {
+    const { data: deleted, error: deleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', existing.id)
+      .eq('status', 'pending')
+      .select('id');
+    if (deleteError || !deleted || deleted.length === 0) return 'skipped_raced';
+  }
+
+  const { data: claimed, error: claimError } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: input.userId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      reference_type: input.referenceType,
+      reference_id: input.referenceId,
+      club_id: input.clubId ?? null,
+      status: 'sending',
+    })
+    .select('id')
+    .single();
+  if (claimError || !claimed) return 'skipped_raced';
+
+  const { data: tokenRows } = await supabase
+    .from('device_tokens')
+    .select('token, platform, sound_enabled')
+    .eq('user_id', input.userId)
+    .eq('enabled', true);
+  const targets = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => ({
+    token: row.token,
+    soundEnabled: row.sound_enabled,
+  }));
+
+  const result = await sendFcm(targets, {
+    title: input.title,
+    body: input.body,
+    type: input.type,
+    referenceType: input.referenceType,
+    referenceId: input.referenceId,
+    clubId: input.clubId,
+  });
+
+  await supabase
+    .from('notifications')
+    .update({
+      status: result.status === 'skipped' ? 'pending' : result.status,
+      error: result.error,
+      sent_at: result.status === 'sent' ? new Date().toISOString() : null,
+    })
+    .eq('id', (claimed as { id: string }).id);
+
+  return result.status === 'sent' ? 'sent' : 'failed';
 }

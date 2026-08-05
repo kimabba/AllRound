@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config.dart';
@@ -9,8 +12,8 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/club_sections.dart';
 import '../utils/club_sort.dart';
-import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
@@ -28,9 +31,11 @@ class ClubsScreen extends ConsumerStatefulWidget {
 }
 
 class _ClubsScreenState extends ConsumerState<ClubsScreen> {
-  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김. GPS 기반 재구현 예정 (#97).
-  // false → 섹션 미노출. 코드·헬퍼는 보존하므로 true 로 되돌리면 복구됨.
-  final bool _nearbyNewClubsEnabled = false;
+  List<Club>? _nearbyClubs;
+  bool _loadingNearby = false;
+  double _nearbyRadiusKm = 5;
+  String? _nearbyError;
+  String? _nearbyNotice;
 
   // 내 클럽 탭
   List<Club>? _myClubs;
@@ -42,17 +47,23 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   bool _loading = false;
   String? _searchError;
   String _clubNameQuery = '';
+  late final TextEditingController _clubNameQueryController;
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
-  bool _showOpenRecruitingOnly = false;
   bool _showAllClubs = false;
   ClubSortOrder _clubSortOrder = ClubSortOrder.recommended;
   List<RecruitingPostPreview> _recruitingPosts = const [];
   bool _loadingRecruiting = false;
 
+  /// 모집글 조회 상한. 상한에 닿으면 "전체 보기"가 전부가 아니므로
+  /// 화면 하단에 그 사실을 표시한다(_recruitingCapped).
+  static const int _recruitingFetchLimit = 200;
+  bool _recruitingCapped = false;
+
   @override
   void initState() {
     super.initState();
+    _clubNameQueryController = TextEditingController();
     _clubInterests = {ref.read(activeSportProvider) ?? 'futsal'};
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMyClubs();
@@ -60,6 +71,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _loadRecruitingPosts();
       _restoreClubSortOrder();
     });
+  }
+
+  @override
+  void dispose() {
+    _clubNameQueryController.dispose();
+    super.dispose();
   }
 
   Future<void> _restoreClubSortOrder() async {
@@ -149,8 +166,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       return;
     }
     try {
-      final posts = await ref.read(apiProvider).teamRecruitingPosts();
-      if (mounted) setState(() => _recruitingPosts = posts);
+      final posts = await ref
+          .read(apiProvider)
+          .teamRecruitingPosts(limit: _recruitingFetchLimit);
+      if (mounted) {
+        setState(() {
+          _recruitingPosts = posts;
+          _recruitingCapped = posts.length >= _recruitingFetchLimit;
+        });
+      }
     } catch (error) {
       debugPrint('teamRecruitingPosts error: $error');
       if (mounted) setState(() => _recruitingPosts = const []);
@@ -202,58 +226,258 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         _clubFilters = result.filters;
         _clubInterests = result.interests;
         _clubNameQuery = result.nameQuery;
+        _clubNameQueryController.text = result.nameQuery;
       });
       _load();
     }
   }
 
-  /// 대회 탭과 동일한 패턴: 상단엔 '기준 · 상세검색' 바 하나만 두고,
-  /// 검색창은 상세검색 bottom sheet 안에서 노출한다.
-  Widget _buildClubFilterControls(ColorScheme cs, bool hasClubNameQuery) {
-    final tt = Theme.of(context).textTheme;
-    final active = hasClubNameQuery || _clubFilters.hasActive;
-    final parts = <String>[
-      _selectedSportLabel(_clubInterests),
-      if (hasClubNameQuery) '검색어',
+  Future<void> _findNearbyClubs() async {
+    setState(() {
+      _loadingNearby = true;
+      _nearbyError = null;
+      _nearbyNotice = null;
+    });
+
+    if (AppConfig.userDesignPreview) {
+      setState(() {
+        _nearbyClubs = _previewClubs.take(4).toList();
+        _nearbyNotice = '디자인 미리보기용 주변 클럽입니다.';
+        _loadingNearby = false;
+      });
+      return;
+    }
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw _NearbyLocationException(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? '아이폰 설정에서 위치 서비스를 켜주세요.'
+              : '기기 설정에서 위치 서비스를 켜주세요.',
+        );
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw const _NearbyLocationException(
+          '위치 권한을 허용하면 가까운 클럽을 찾을 수 있어요.',
+        );
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw _NearbyLocationException(
+          defaultTargetPlatform == TargetPlatform.iOS
+              ? '설정 > 개인정보 보호 및 보안 > 위치 서비스에서 올라운드 권한을 허용해주세요.'
+              : '기기 설정 > 앱 권한에서 올라운드의 위치 권한을 허용해주세요.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final api = ref.read(apiProvider);
+      final sports = _clubInterests.isEmpty
+          ? const <String>['tennis', 'futsal']
+          : _clubInterests.toList();
+      final preciseResults = await Future.wait(
+        sports.map(
+          (sport) => api.searchClubs(
+            sport: sport,
+            latitude: position.latitude,
+            longitude: position.longitude,
+            radiusKm: _nearbyRadiusKm,
+          ),
+        ),
+      );
+      final precise = _dedupeClubs(preciseResults.expand((items) => items))
+        ..sort(
+          (a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity),
+        );
+
+      var nearby = precise;
+      String? notice;
+      // 좌표가 없는 기존 클럽은 거리 계산에서 통째로 빠진다. 정확 결과가 하나라도
+      // 있으면 지역 보완을 건너뛰던 예전 로직은 같은 반경의 기존 클럽을 모두
+      // 누락시켰다 → 항상 지역 결과를 뒤에 덧붙인다(중복은 제거).
+      // geocoding 패키지는 웹을 지원하지 않으므로 웹에서는 건너뛴다.
+      if (!kIsWeb) {
+        try {
+          final placemarks = await Geocoding().placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+            locale: const Locale('ko', 'KR'),
+          );
+          final region = placemarks.isEmpty
+              ? null
+              : _preferredRegionName(placemarks.first);
+          if (region != null) {
+            final regionResults = await Future.wait(
+              sports.map(
+                (sport) => api.searchClubs(sport: sport, region: region),
+              ),
+            );
+            final merged = _dedupeClubs(
+              [...precise, ...regionResults.expand((items) => items)],
+            );
+            final added = merged.length - precise.length;
+            if (added > 0) {
+              notice = precise.isEmpty
+                  ? '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.'
+                  : '거리 정보가 없는 $region 지역 클럽 $added곳도 함께 보여드려요.';
+              nearby = merged;
+            }
+          }
+        } catch (error) {
+          // 지역 보완 실패가 이미 찾은 정확 결과까지 날리면 안 된다.
+          debugPrint('nearby region fallback error: $error');
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _nearbyClubs = nearby;
+        _nearbyNotice = notice;
+      });
+    } on _NearbyLocationException catch (error) {
+      if (mounted) setState(() => _nearbyError = error.message);
+    } catch (error) {
+      debugPrint('nearby clubs error: $error');
+      if (mounted) {
+        setState(() => _nearbyError = '현재 위치를 확인하지 못했습니다. 지역으로 찾아보세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingNearby = false);
+    }
+  }
+
+  List<Club> _dedupeClubs(Iterable<Club> source) {
+    final seen = <String>{};
+    return [
+      for (final club in source)
+        if (seen.add(club.id)) club
+    ];
+  }
+
+  String? _preferredRegionName(Placemark placemark) {
+    for (final value in [
+      placemark.administrativeArea,
+      placemark.locality,
+      placemark.subAdministrativeArea,
+    ]) {
+      final region = value?.trim();
+      if (region != null && region.isNotEmpty) {
+        const regionAliases = {
+          '서울특별시': '서울',
+          '부산광역시': '부산',
+          '대구광역시': '대구',
+          '인천광역시': '인천',
+          '광주광역시': '광주',
+          '대전광역시': '대전',
+          '울산광역시': '울산',
+          '세종특별자치시': '세종',
+          '경기도': '경기',
+          '충청북도': '충북',
+          '충청남도': '충남',
+          '전라북도': '전북',
+          '전라남도': '전남',
+          '경상북도': '경북',
+          '경상남도': '경남',
+          '강원도': '강원',
+          '제주특별자치도': '제주',
+          '강원특별자치도': '강원',
+          '전북특별자치도': '전북',
+          'Seoul': '서울',
+        };
+        return regionAliases[region] ?? region;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildClubFilterControls(bool hasClubNameQuery) {
+    final cs = Theme.of(context).colorScheme;
+    final labels = <String>[
+      if (hasClubNameQuery) _clubNameQuery.trim(),
       ..._clubFilters.labels,
     ];
-    final filterLabel =
-        active ? '${parts.join(' · ')} 적용됨' : '${parts.join(' · ')} 전체 클럽 기준';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: cs.outlineVariant),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.tune_rounded,
-            size: 19,
-            color: active ? cs.primary : cs.onSurfaceVariant,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _clubNameQueryController,
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            hintText: '지역이나 클럽 이름 검색',
+            prefixIcon: Icon(Icons.search_rounded),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              filterLabel,
-              style: tt.labelLarge?.copyWith(
-                color: active ? cs.primary : cs.onSurfaceVariant,
-                fontWeight: FontWeight.w900,
+          onSubmitted: (value) {
+            setState(() => _clubNameQuery = value.trim());
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<ClubSortOrder>(
+                initialValue: _clubSortOrder,
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                ),
+                onChanged: _selectClubSortOrder,
+                items: [
+                  for (final order in ClubSortOrder.values)
+                    DropdownMenuItem(
+                      value: order,
+                      child: Text(order.label),
+                    ),
+                ],
               ),
             ),
-          ),
-          TextButton.icon(
-            onPressed: _openClubFilterSheet,
-            icon: const Icon(Icons.tune_rounded, size: 18),
-            label: const Text('상세검색'),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _openClubFilterSheet,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('지역·요일·조건'),
+              ),
+            ),
+          ],
+        ),
+        if (labels.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final label in labels)
+                Chip(
+                  backgroundColor: cs.primaryContainer,
+                  label: Text(label),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('초기화'),
+                onPressed: () {
+                  setState(() {
+                    _clubNameQuery = '';
+                    _clubNameQueryController.clear();
+                    _clubFilters = const ClubSearchFilters();
+                  });
+                },
+              ),
+            ],
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -333,7 +557,29 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     );
   }
 
-  Future<void> _closeRecruitingPost(RecruitingPostPreview post) async {
+  Future<void> _openAllRecruitingPosts(
+    List<RecruitingPostPreview> posts,
+    Set<String> managedClubIds,
+  ) {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamRecruitingListScreen(
+          posts: posts,
+          managedClubIds: managedClubIds,
+          capped: _recruitingCapped,
+          onClosePost: _closeRecruitingPost,
+          onOpenPost: _openRecruitingDetail,
+        ),
+      ),
+    );
+  }
+
+  /// 마감 후 갱신된 목록을 돌려준다. 전체보기 화면은 스냅샷을 들고 있어서
+  /// 이 반환값으로 자기 목록을 갱신해야 마감 상태가 화면에 반영된다.
+  Future<List<RecruitingPostPreview>> _closeRecruitingPost(
+    RecruitingPostPreview post,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -351,21 +597,22 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return _visibleRecruitingPosts();
 
     try {
       await ref.read(apiProvider).closeTeamRecruitingPost(post.id);
       await _loadRecruitingPosts();
-      if (!mounted) return;
+      if (!mounted) return _visibleRecruitingPosts();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('팀원 모집을 마감했습니다.')),
       );
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return _visibleRecruitingPosts();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('모집을 마감하지 못했습니다.')),
       );
     }
+    return _visibleRecruitingPosts();
   }
 
   @override
@@ -386,10 +633,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         .where((club) => _clubInterests.contains(club.sport))
         .where((club) => clubNameMatchesQuery(club.name, _clubNameQuery))
         .where((club) => _matchesClubFilters(club, _clubFilters))
+        .where(
+          (club) =>
+              !_clubFilters.recruitingOnly ||
+              _openRecruitingClubIds.contains(club.id),
+        )
         .toList();
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
-    final nearbyNewClubs = _nearbyRecentClubs(visibleClubs);
-    final newClubs = nearbyNewClubs.take(4).toList();
     final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
         ? _recommendedClubs(visibleClubs)
         : sortClubs(visibleClubs, _clubSortOrder);
@@ -400,10 +650,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
-    // 승인 대기중 가입신청 — 이미 멤버인 클럽은 제외.
-    final pendingClubs = _pendingClubs
-        .where((p) => !joinedClubs.any((j) => j.id == p.id))
-        .toList();
+    // 승인 대기 카드 = 내가 만든 승인 대기 클럽(JY-150) + 내가 낸 가입신청.
+    final pendingClubs = pendingClubCards(
+      myClubs: myMembershipClubs,
+      joinRequestClubs: _pendingClubs,
+    );
     final managedClubs = joinedClubs.where((club) => club.isManager).toList();
 
     return Scaffold(
@@ -415,8 +666,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         title: const Text('클럽'),
         actions: [
           const NotificationInboxAction(),
+          const ProfileAction(),
           TextButton.icon(
             onPressed: _openCreate,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.primary,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            ),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('만들기'),
           ),
@@ -437,33 +693,102 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
               ),
               sliver: SliverList.list(
                 children: [
-                  _buildClubFilterControls(cs, hasClubNameQuery),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer.withValues(alpha: 0.42),
+                      borderRadius: AppRadius.card,
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SimpleSectionHeader(
+                          title: '나의 클럽',
+                          subtitle: '내가 참여하고 있는 클럽',
+                          icon: Icons.verified_rounded,
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              borderRadius: AppRadius.pill,
+                            ),
+                            child: Text(
+                              '참여 중 ${joinedClubs.length}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: cs.onPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (_loadingMy)
+                          const LinearProgressIndicator()
+                        else if (joinedClubs.isEmpty && pendingClubs.isEmpty)
+                          FirstClubEmptyState(onCreate: _openCreate)
+                        else ...[
+                          for (final club in pendingClubs)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
+                              child: SimpleClubTile(
+                                club: club,
+                                pending: true,
+                                isMyClub: true,
+                                backgroundColor: cs.surface,
+                                isFavorite: favoriteClubIds.contains(club.id),
+                                onFavoriteToggle: _toggleClubFavorite,
+                                onOpen: () => _openClub(club),
+                              ),
+                            ),
+                          for (final club in joinedClubs)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
+                              child: SimpleClubTile(
+                                club: club,
+                                isMyClub: true,
+                                backgroundColor: cs.surface,
+                                isFavorite: favoriteClubIds.contains(club.id),
+                                onFavoriteToggle: _toggleClubFavorite,
+                                onOpen: () => _openClub(club),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _buildNearbyClubsSection(
+                    favoriteClubIds: favoriteClubIds,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildClubFilterControls(hasClubNameQuery),
                   const SizedBox(height: AppSpacing.lg),
                   SimpleSectionHeader(
-                    title: hasClubNameQuery ? '검색결과' : '맞춤추천',
+                    title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
+                    icon: hasClubNameQuery
+                        ? Icons.search_rounded
+                        : Icons.explore_outlined,
                     subtitle: hasClubNameQuery
                         ? '"${_clubNameQuery.trim()}"'
                         : (_clubFilters.hasActive
-                            ? [
-                                _selectedSportLabel(_clubInterests),
-                                ..._clubFilters.labels,
-                              ].join(' · ')
-                            : '${_selectedSportLabel(_clubInterests)} 기준'),
-                    trailing: DropdownButtonHideUnderline(
-                      child: DropdownButton<ClubSortOrder>(
-                        value: _clubSortOrder,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        icon: const Icon(Icons.sort_rounded),
-                        onChanged: _selectClubSortOrder,
-                        items: [
-                          for (final order in ClubSortOrder.values)
-                            DropdownMenuItem(
-                              value: order,
-                              child: Text(order.label),
-                            ),
-                        ],
-                      ),
-                    ),
+                            ? _clubFilters.labels.join(' · ')
+                            // 이 분기는 필터가 없는 상태 = region null 이라 지역을
+                            // 반영하지 않는다. 지역까지 쓰려면 필터를 걸어야 한다.
+                            : '관심 종목을 기준으로 추천해요'),
+                    trailing: Text('${recommendedClubs.length}개'),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   if (_loading || _loadingMy) const LinearProgressIndicator(),
@@ -478,12 +803,26 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     ),
                   ],
                   if (displayedRecommendationClubs.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.lg,
+                      ),
                       child: AppEmptyState(
-                        icon: Icons.search_off_rounded,
-                        title: '조건에 맞는 클럽이 없습니다',
-                        description: '검색어를 줄이거나 맞춤 조건을 바꿔보세요.',
+                        icon: hasClubNameQuery || _clubFilters.hasActive
+                            ? Icons.search_off_rounded
+                            : Icons.sports_rounded,
+                        title: hasClubNameQuery || _clubFilters.hasActive
+                            ? '조건에 맞는 모임이 없어요'
+                            : '아직 등록된 모임이 없어요',
+                        description: hasClubNameQuery || _clubFilters.hasActive
+                            ? '검색어를 줄이거나 맞춤 조건을 바꿔보세요.'
+                            : '새 모임을 만들면 이곳에서 다른 사용자에게 소개돼요.',
+                        actionLabel: hasClubNameQuery || _clubFilters.hasActive
+                            ? null
+                            : '첫 모임 만들기',
+                        onAction: hasClubNameQuery || _clubFilters.hasActive
+                            ? null
+                            : _openCreate,
                       ),
                     )
                   else
@@ -492,6 +831,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: SimpleClubTile(
                           club: club,
+                          backgroundColor: cs.surfaceContainerLowest,
                           isFavorite: favoriteClubIds.contains(club.id),
                           onFavoriteToggle: _toggleClubFavorite,
                           onOpen: () => _openClub(club),
@@ -520,48 +860,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       ),
                     ),
                   ],
-                  // 내 주변 새 클럽(GPS 반경): 시현 이슈로 임시 숨김 (#97).
-                  if (_nearbyNewClubsEnabled) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    SimplePanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SimpleSectionHeader(
-                            title: '내 주변에 새로 생겼어요',
-                            subtitle: '반경 5km · 최근 7일',
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          if (_loading || _loadingMy)
-                            const LinearProgressIndicator(),
-                          if (_searchError != null) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              _searchError!,
-                              style: TextStyle(color: cs.error),
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.sm),
-                          SimpleClubGrid(
-                            clubs: newClubs,
-                            favoriteIds: favoriteClubIds,
-                            onFavoriteToggle: _toggleClubFavorite,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _openNearbyNewClubsSheet(nearbyNewClubs),
-                              icon: const Icon(Icons.near_me_rounded),
-                              label: const Text('내 주변 새 클럽 더보기'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
                   const SizedBox(height: AppSpacing.xl),
                   if (managedClubs.isNotEmpty) ...[
                     SimpleActionCard(
@@ -576,51 +874,136 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   ],
                   TeamRecruitingBoard(
                     posts: _visibleRecruitingPosts(),
-                    showOpenOnly: _showOpenRecruitingOnly,
                     isLoading: _loadingRecruiting,
                     managedClubIds: managedClubs.map((club) => club.id).toSet(),
-                    onShowOpenOnlyChanged: (value) {
-                      setState(() => _showOpenRecruitingOnly = value);
-                    },
                     onClosePost: _closeRecruitingPost,
                     onOpenPost: _openRecruitingDetail,
+                    onViewAll: () => _openAllRecruitingPosts(
+                      _visibleRecruitingPosts(),
+                      managedClubs.map((club) => club.id).toSet(),
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
-                  const SimpleSectionHeader(title: '가입한 클럽'),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (joinedClubs.isEmpty && pendingClubs.isEmpty)
-                    SimpleClubTile(
-                      club: null,
-                      onFavoriteToggle: _toggleClubFavorite,
-                    )
-                  else ...[
-                    for (final club in pendingClubs)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: SimpleClubTile(
-                          club: club,
-                          pending: true,
-                          isFavorite: favoriteClubIds.contains(club.id),
-                          onFavoriteToggle: _toggleClubFavorite,
-                          onOpen: () => _openClub(club),
-                        ),
-                      ),
-                    for (final club in joinedClubs)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: SimpleClubTile(
-                          club: club,
-                          isFavorite: favoriteClubIds.contains(club.id),
-                          onFavoriteToggle: _toggleClubFavorite,
-                          onOpen: () => _openClub(club),
-                        ),
-                      ),
-                  ],
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNearbyClubsSection({
+    required Set<String> favoriteClubIds,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SimplePanel(
+      child: ExpansionTile(
+        key: const ValueKey('nearby-clubs-section'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Icon(Icons.near_me_rounded, color: cs.primary),
+        title: Text(
+          '내 주변 클럽',
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        subtitle: const Text('선택하면 현재 위치와 가까운 클럽을 보여드려요'),
+        onExpansionChanged: (expanded) {
+          if (expanded && _nearbyClubs == null && !_loadingNearby) {
+            _findNearbyClubs();
+          }
+        },
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<double>(
+            segments: const [
+              ButtonSegment(value: 3, label: Text('3km')),
+              ButtonSegment(value: 5, label: Text('5km')),
+              ButtonSegment(value: 10, label: Text('10km')),
+            ],
+            selected: {_nearbyRadiusKm},
+            onSelectionChanged: _loadingNearby
+                ? null
+                : (values) {
+                    setState(() {
+                      _nearbyRadiusKm = values.first;
+                      _nearbyClubs = null;
+                      _nearbyNotice = null;
+                    });
+                    _findNearbyClubs();
+                  },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _loadingNearby ? null : _findNearbyClubs,
+                  icon: const Icon(Icons.my_location_rounded),
+                  label: Text(_loadingNearby ? '찾는 중...' : '내 위치로 다시 찾기'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openClubFilterSheet,
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('지역 직접 선택'),
+                ),
+              ),
+            ],
+          ),
+          if (_loadingNearby) ...[
+            const SizedBox(height: AppSpacing.md),
+            const LinearProgressIndicator(),
+          ],
+          if (_nearbyError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(_nearbyError!, style: TextStyle(color: cs.error)),
+          ],
+          if (_nearbyNotice != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _nearbyNotice!,
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          ],
+          if (_nearbyClubs != null && !_loadingNearby) ...[
+            const SizedBox(height: AppSpacing.md),
+            if (_nearbyClubs!.isEmpty)
+              const AppEmptyState(
+                icon: Icons.location_off_outlined,
+                title: '주변 클럽을 찾지 못했어요',
+                description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+              )
+            else ...[
+              for (final club in _nearbyClubs!.take(4))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: SimpleClubTile(
+                    club: club,
+                    backgroundColor: cs.surfaceContainerLowest,
+                    isFavorite: favoriteClubIds.contains(club.id),
+                    onFavoriteToggle: _toggleClubFavorite,
+                    onOpen: () => _openClub(club),
+                  ),
+                ),
+              if (_nearbyClubs!.length > 4)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => _openNearbyNewClubsSheet(_nearbyClubs!),
+                    child: const Text('주변 클럽 전체 보기'),
+                  ),
+                ),
+            ],
+          ],
+        ],
       ),
     );
   }
@@ -672,27 +1055,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     await _refreshClubLists();
   }
 
-  String _selectedSportLabel(Set<String> interests) {
-    if (interests.length == 1 && interests.isNotEmpty) {
-      return sportLabelFromString(interests.first);
-    }
-    return '테니스 · 풋살';
-  }
-
-  List<Club> _nearbyRecentClubs(List<Club> source) {
-    final now = DateTime.now();
-    return source.where((club) {
-      final createdAt = club.createdAt;
-      if (createdAt == null) return false;
-      return now.difference(createdAt).inDays <= 7;
-    }).toList()
-      ..sort((a, b) {
-        final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bDate.compareTo(aDate);
-      });
-  }
-
   List<Club> _recommendedClubs(List<Club> source) {
     final scored = [
       for (final club in source)
@@ -715,9 +1077,20 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   List<RecruitingPostPreview> _visibleRecruitingPosts() {
     return _recruitingPosts
         .where((post) => _clubInterests.contains(post.sport))
-        .where((post) => !_showOpenRecruitingOnly || !post.isClosed)
+        .where((post) => !_clubFilters.recruitingOnly || !post.isClosed)
         .toList(growable: false);
   }
+
+  Set<String> get _openRecruitingClubIds => _recruitingPosts
+      .where((post) => !post.isClosed)
+      .map((post) => post.clubId)
+      .toSet();
+}
+
+class _NearbyLocationException implements Exception {
+  final String message;
+
+  const _NearbyLocationException(this.message);
 }
 
 final _previewClubs = [

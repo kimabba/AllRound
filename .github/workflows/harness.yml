@@ -16,6 +16,7 @@ jobs:
           python-version: '3.12'
       - run: python3 scripts/harness/check_enums.py
       - run: python3 scripts/harness/check_static_rules.py
+      - run: python3 scripts/harness/check_dependencies.py
       - run: python3 scripts/qa/verify_ranking_rules.py
       - run: bash scripts/harness/check_secrets.sh
 
@@ -27,13 +28,40 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.108.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       # DB 테스트에 불필요한 서비스는 제외해 기동 시간을 줄인다.
       - run: supabase start -x edge-runtime,imgproxy,vector,logflare,studio
       - run: bash scripts/qa/run_db_tests.sh
+      # 두 세션 경합은 pgTAP(단일 세션)이 잡을 수 없다. save_user_sports 의 연령 게이트가
+      # advisory lock 뒤에 있는지 실제 동시 호출로 확인한다(#320, codex 리뷰 2회 통과 후 재발).
+      # 페르소나 시드가 필요해 run_db_tests.sh 뒤에 둔다.
+      - run: bash scripts/qa/user_sports_age_gate_race.sh
+      # 등급 정본↔폴백 대조는 **적용된 DB** 를 직접 읽는다(JY-321). 마이그레이션 정규식
+      # 파싱은 유효 SQL 문법으로 우회됐다(codex 5~11차). psql 은 supabase CLI 가 제공한다.
+      - run: psql "$DATABASE_URL" -c 'select 1' >/dev/null
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - run: python3 scripts/harness/check_grades_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 협회 정본↔폴백 대조도 같은 이유로 DB 를 직접 읽는다(#330 3번, JY-135 후 공백).
+      - run: python3 scripts/harness/check_org_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 부서 정본↔폴백 대조. 랭킹 등급/대회 종목 분류(is_ranking_grade)가 마이그레이션과
+      # 앱 폴백 사이에서 갈라지면 여기서 잡는다.
+      - run: python3 scripts/harness/check_division_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   flutter:
     name: Flutter analyze/test
     runs-on: ubuntu-latest
+    # ci.yml 과 동일 이유로 KST 고정 (시각 표시 테스트가 로컬 타임존 의존, JY-149)
+    env:
+      TZ: Asia/Seoul
     defaults:
       run:
         working-directory: app

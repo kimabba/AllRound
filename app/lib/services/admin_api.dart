@@ -3,14 +3,43 @@ import 'dart:convert';
 import '../models/admin.dart';
 import '../models/crawl_source.dart';
 import '../models/format_review.dart';
+import '../models/org_ranking.dart';
 import '../models/tournament.dart';
 import 'api_base.dart';
+
+/// 검수 큐에 남길 최소 시작일 — KST 기준 오늘, 'YYYY-MM-DD'.
+///
+/// 오늘 시작하는 대회는 남긴다(당일 접수가 열려 있을 수 있다). `start_date` 는
+/// date 컬럼이라 시각 없이 날짜만 비교한다.
+///
+/// **기기 로컬이 아니라 KST 로 고정한다** — 서버의 자동 마감
+/// (`_shared/tournament_status.ts` `syncTournamentStatus`)이 KST 로 판정하므로,
+/// 기기 시간대를 쓰면 KST 보다 앞선 곳(예: 시드니)에서 한국 자정 전에 오늘자
+/// 대회가 큐에서 먼저 사라진다.
+String reviewQueueCutoff(DateTime now) {
+  final kst = now.toUtc().add(const Duration(hours: 9));
+  return '${kst.year.toString().padLeft(4, '0')}-'
+      '${kst.month.toString().padLeft(2, '0')}-'
+      '${kst.day.toString().padLeft(2, '0')}';
+}
 
 /// 어드민 전용: 심사 큐·크롤 소스·클럽 승인 API.
 mixin AdminApi on ApiBase {
   // ── 대회 심사 큐 ──────────────────────────────────────────────
 
+  /// 검수 대기(draft) 대회 목록. **시작일이 지난 크롤 대회는 제외한다.**
+  ///
+  /// 승인해봐야 소용이 없기 때문이다 — published 로 올려도 다음 크롤에서
+  /// syncTournamentStatus 가 start_date 과거를 보고 곧바로 closed 로 되돌린다.
+  /// 그런데 그 sync 는 published 만 다루므로 draft 는 영영 정리되지 않아,
+  /// 거를 방법이 없으면 검수 큐에 지난 대회가 계속 쌓인다(2026-08-04: 14건 중 8건).
+  ///
+  /// **사람이 낸 대회(`user_submission`·제보자 있음)는 날짜와 무관하게 남긴다.**
+  /// 크롤 대회는 날짜를 잘못 뽑아도 재크롤이 고쳐 주지만, 제보 대회는 다시
+  /// 긁을 원본이 없다. 날짜 오타 하나로 큐에서 사라지면 그 사람은 자기 제보가
+  /// 왜 처리되지 않는지 알 방법이 없다 — 반려도 승인도 못 받는다.
   Future<List<Map<String, dynamic>>> tournamentReviewQueue() async {
+    final cutoff = reviewQueueCutoff(DateTime.now());
     final rows = await supabase
         .from('tournaments')
         .select(
@@ -19,6 +48,11 @@ mixin AdminApi on ApiBase {
           'format, source, source_url, poster_url, submitted_by, created_at',
         )
         .eq('status', 'draft')
+        .or(
+          'source.eq.user_submission,'
+          'submitted_by.not.is.null,'
+          'start_date.gte.$cutoff',
+        )
         .order('created_at', ascending: false);
     return (rows as List).map((r) {
       final m = Map<String, dynamic>.from(r as Map);
@@ -99,6 +133,111 @@ mixin AdminApi on ApiBase {
       processed++;
     }
     return processed;
+  }
+
+  // ── 협회 랭킹 클레임 ──────────────────────────────────────────
+
+  Future<List<RankingClaim>> pendingRankingClaims() =>
+      _rankingClaimsByStatus('pending');
+
+  Future<List<RankingClaim>> rejectedRankingClaims() =>
+      _rankingClaimsByStatus('rejected');
+
+  /// org_player_links 는 org_rankings 와 FK 로 묶여있지 않다(랭킹표는 크롤마다
+  /// 갈아엎히므로 링크는 텍스트 org_player_id 로만 느슨하게 참조한다). 그래서
+  /// 두 번 조회해 클라이언트에서 org_code/org_player_id 키로 합친다.
+  Future<List<RankingClaim>> _rankingClaimsByStatus(String status) async {
+    final links = await supabase
+        .from('org_player_links')
+        // org_player_links → users FK 가 두 개(user_id, decided_by) 라 힌트 없이
+        // 임베드하면 PGRST201(관계 모호)로 죽는다. 이 레포의 기존 관례(club_api.dart
+        // 의 users!author_id 등)를 따라 컬럼명으로 명시한다.
+        .select(
+          'org_code, org_player_id, user_id, claimed_at, users!user_id(name)',
+        )
+        .eq('status', status)
+        .order('claimed_at');
+    final linkRows = List<Map<String, dynamic>>.from(links as List);
+    if (linkRows.isEmpty) return [];
+
+    final orgCodes =
+        linkRows.map((r) => r['org_code'] as String).toSet().toList();
+    final playerIds =
+        linkRows.map((r) => r['org_player_id'] as String).toSet().toList();
+    final rankingRows = await supabase
+        .from('org_rankings')
+        .select(
+          'org_code, org_player_id, division_code, rank, player_name, club_raw',
+        )
+        .inFilter('org_code', orgCodes)
+        .inFilter('org_player_id', playerIds);
+
+    final rankingByKey = <String, Map<String, dynamic>>{};
+    for (final r in List<Map<String, dynamic>>.from(rankingRows as List)) {
+      rankingByKey.putIfAbsent(
+        '${r['org_code']}/${r['org_player_id']}',
+        () => r,
+      );
+    }
+
+    return linkRows.map((link) {
+      final key = '${link['org_code']}/${link['org_player_id']}';
+      final ranking = rankingByKey[key];
+      final userRow = link['users'] as Map<String, dynamic>?;
+      // 경합 판정의 대조 축은 실명이다(협회 데이터도 실명) — 닉네임이면 관리자가
+      // "같은 김평화인지" 비교할 수 없다. users.name 은 NOT NULL, 폴백 불필요.
+      final claimantName = userRow?['name'] as String;
+      return RankingClaim(
+        orgCode: link['org_code'] as String,
+        orgPlayerId: link['org_player_id'] as String,
+        playerName: ranking?['player_name'] as String? ?? '(정보 없음)',
+        divisionCode: ranking?['division_code'] as String? ?? '',
+        rank: (ranking?['rank'] as num?)?.toInt() ?? 0,
+        clubRaw: ranking?['club_raw'] as String?,
+        claimantName: claimantName,
+        claimantId: link['user_id'] as String,
+        claimedAt: DateTime.parse(link['claimed_at'] as String),
+      );
+    }).toList();
+  }
+
+  /// 승인: status='confirmed' + decided_at/decided_by. 유니크 인덱스 위반(23505)은
+  /// 정상 동작(경합에서 진 쪽)이라 여기서 삼키지 않고 그대로 던진다 — 호출자가
+  /// PostgrestException.code 로 구분해 안내 문구를 고른다.
+  Future<void> approveRankingClaim(RankingClaim claim) async {
+    await _decideRankingClaim(claim, status: 'confirmed');
+  }
+
+  Future<void> rejectRankingClaim(RankingClaim claim) async {
+    await _decideRankingClaim(claim, status: 'rejected');
+  }
+
+  Future<void> _decideRankingClaim(
+    RankingClaim claim, {
+    required String status,
+  }) async {
+    final adminId = supabase.auth.currentUser?.id;
+    if (adminId == null) throw StateError('Not authenticated');
+    await supabase
+        .from('org_player_links')
+        .update({
+          'status': status,
+          'decided_at': DateTime.now().toUtc().toIso8601String(),
+          'decided_by': adminId,
+        })
+        .eq('org_code', claim.orgCode)
+        .eq('org_player_id', claim.orgPlayerId)
+        .eq('user_id', claim.claimantId);
+  }
+
+  /// 반려 취소 = 행 삭제. rejected 행이 남으면 유니크 제약이 재신청을 영구히 막는다.
+  Future<void> undoRejectedRankingClaim(RankingClaim claim) async {
+    await supabase
+        .from('org_player_links')
+        .delete()
+        .eq('org_code', claim.orgCode)
+        .eq('org_player_id', claim.orgPlayerId)
+        .eq('user_id', claim.claimantId);
   }
 
   // ── 크롤 소스 ─────────────────────────────────────────────────

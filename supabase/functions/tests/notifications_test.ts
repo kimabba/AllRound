@@ -1,7 +1,7 @@
 import { buildFcmPayload, parseFirebaseCredentials, sendFcm } from '../_shared/fcm.ts';
 
 Deno.test('FCM payload carries notification deep-link metadata', () => {
-  const payload = buildFcmPayload('token-1', {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_join_request',
     title: '새 클럽 가입 신청',
     body: ' 신청이 도착했습니다. ',
@@ -23,7 +23,7 @@ Deno.test('FCM payload carries notification deep-link metadata', () => {
 });
 
 Deno.test('FCM payload fills optional fields with empty strings', () => {
-  const payload = buildFcmPayload('token-1', {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_notice',
     title: '공지',
     body: null,
@@ -45,7 +45,7 @@ Deno.test('FCM payload fills optional fields with empty strings', () => {
 });
 
 Deno.test('FCM payload trims whitespace-only body to empty string', () => {
-  const payload = buildFcmPayload('token-1', {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_notice',
     title: '공지',
     body: '   ',
@@ -57,7 +57,7 @@ Deno.test('FCM payload trims whitespace-only body to empty string', () => {
 });
 
 Deno.test('FCM payload passes title through without trimming', () => {
-  const payload = buildFcmPayload('token-1', {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_notice',
     title: ' 공지 ',
   });
@@ -68,7 +68,7 @@ Deno.test('FCM payload passes title through without trimming', () => {
 });
 
 Deno.test('FCM HTTP v1 payload targets one device token', () => {
-  const payload = buildFcmPayload('token-1', {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_notice',
     title: '공지',
   });
@@ -77,6 +77,28 @@ Deno.test('FCM HTTP v1 payload targets one device token', () => {
     payload.message.token !== 'token-1'
   ) {
     throw new Error('message token must target exactly one device');
+  }
+});
+
+Deno.test('FCM payload omits APNs sound when the device disabled notification sound', () => {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: false }, {
+    type: 'club_notice',
+    title: '공지',
+  });
+
+  if ('sound' in payload.message.apns.payload.aps) {
+    throw new Error('silent devices must not receive an APNs sound value');
+  }
+});
+
+Deno.test('FCM payload uses the default APNs sound when enabled', () => {
+  const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
+    type: 'club_notice',
+    title: '공지',
+  });
+
+  if (payload.message.apns.payload.aps.sound !== 'default') {
+    throw new Error('audible devices must receive the default APNs sound');
   }
 });
 
@@ -97,7 +119,7 @@ Deno.test('FCM send skips accurately when a user has no device token', async () 
 });
 
 Deno.test('FCM send fails accurately when credentials are missing', async () => {
-  const result = await sendFcm(['token-1'], {
+  const result = await sendFcm([{ token: 'token-1', soundEnabled: true }], {
     type: 'club_notice',
     title: '공지',
   }, { serviceAccountJson: '{}' });
@@ -140,7 +162,7 @@ Deno.test('FCM send exchanges OAuth token and calls the HTTP v1 endpoint', async
     return Promise.resolve(Response.json({ name: 'projects/allround-test/messages/1' }));
   };
 
-  const result = await sendFcm(['token-1'], {
+  const result = await sendFcm([{ token: 'token-1', soundEnabled: true }], {
     type: 'club_notice',
     title: '공지',
   }, { serviceAccountJson, fetcher: fakeFetch });

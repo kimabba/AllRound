@@ -123,6 +123,32 @@ void main() {
     });
   });
 
+  group('사용자용 요강 필터', () {
+    test('출처·풋살허브 ID 는 숨기고 안내는 남긴다', () {
+      final lines = publicRegulationBodyLines(
+        '장소: 서울월드컵경기장\n'
+        '출처: 풋살허브\n'
+        '풋살허브 ID: 12345\n'
+        '안내: 입금계좌 확인 후 입금해주세요\n'
+        '※ 일정은 변경될 수 있습니다',
+      );
+
+      // 안내문에는 입금계좌·신청 변경 규칙이 들어 있어 숨기면 안 된다.
+      expect(lines, hasLength(2));
+      expect(lines[0].label, '장소');
+      expect(lines[0].value, '서울월드컵경기장');
+      expect(lines[1].label, '안내');
+      expect(lines[1].value, '입금계좌 확인 후 입금해주세요');
+    });
+
+    test('수집 메타데이터 라벨의 공백·밑줄·영문 표기도 숨긴다', () {
+      expect(isHiddenPublicRegulationLabel('풋살허브ID'), isTrue);
+      expect(isHiddenPublicRegulationLabel('futsal_hub_id'), isTrue);
+      expect(isHiddenPublicRegulationLabel('source_url'), isTrue);
+      expect(isHiddenPublicRegulationLabel('참가비'), isFalse);
+    });
+  });
+
   group('cleanPlainRegulationLines (단순 공고 평문 폴백)', () {
     test('중복 메타라인 제거 + 부서 접수 항목 줄바꿈', () {
       const desc =
@@ -140,6 +166,13 @@ void main() {
 
     test('메타라인 없는 평문은 그대로 한 줄', () {
       expect(cleanPlainRegulationLines('준비 중인 대회입니다.'), ['준비 중인 대회입니다.']);
+    });
+
+    test('평문 폴백은 안내 라인을 남긴다', () {
+      expect(
+        cleanPlainRegulationLines('장소: 서울\n안내: 입금계좌 확인 후 입금해주세요'),
+        ['장소: 서울', '안내: 입금계좌 확인 후 입금해주세요'],
+      );
     });
 
     test('빈/공백 → 빈 리스트', () {

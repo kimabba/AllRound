@@ -4,11 +4,13 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
+import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
+import '../utils/grade_labels.dart';
 import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
@@ -30,12 +32,20 @@ mixin ClubApi on ApiBase {
   // ── 검색 / 생성 ──────────────────────────────────────────────
 
   Future<List<Club>> searchClubs(
-      {String? sport, String? region, String? q}) async {
+      {String? sport,
+      String? region,
+      String? q,
+      double? latitude,
+      double? longitude,
+      double? radiusKm}) async {
     final res = await httpGet(
       uri('clubs-search', {
         if (sport != null) 'sport': sport,
         if (region != null) 'region': region,
         if (q != null && q.isNotEmpty) 'q': q,
+        if (latitude != null) 'latitude': latitude.toString(),
+        if (longitude != null) 'longitude': longitude.toString(),
+        if (radiusKm != null) 'radius_km': radiusKm.toString(),
       }),
       headers: await authHeaders(),
     );
@@ -110,6 +120,8 @@ mixin ClubApi on ApiBase {
     List<String>? meetingDays,
     int? monthlyFee,
     String? genderPreference,
+    double? latitude,
+    double? longitude,
   }) async {
     final res = await httpPost(
       uri('clubs-create'),
@@ -130,6 +142,8 @@ mixin ClubApi on ApiBase {
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       }),
     );
     check(res);
@@ -199,7 +213,7 @@ mixin ClubApi on ApiBase {
   // ── 팀원 모집 ──────────────────────────────────────────────
 
   Future<List<RecruitingPostPreview>> teamRecruitingPosts(
-      {List<String>? regions, String? sport}) async {
+      {List<String>? regions, String? sport, int limit = 50}) async {
     var query = supabase
         .from('club_recruiting_posts')
         .select(
@@ -213,7 +227,7 @@ mixin ClubApi on ApiBase {
       query = query.inFilter('clubs.region', regions);
     }
     final Object raw =
-        await query.order('created_at', ascending: false).limit(50);
+        await query.order('created_at', ascending: false).limit(limit);
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
@@ -227,6 +241,7 @@ mixin ClubApi on ApiBase {
 
   Future<RecruitingPostPreview> createTeamRecruitingPost({
     required String clubId,
+    required Sport sport,
     required String title,
     required String place,
     required String schedule,
@@ -242,6 +257,18 @@ mixin ClubApi on ApiBase {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
+    // skill_level 은 free-text 라 DB 가 길이만 검사한다. 등급 정본에서 파생된
+    // 선택지 밖의 값(폐기된 부수체계 등)이 새로 유입되면 여기서 막는다(JY-146).
+    // assert 가 아니라 예외인 이유: assert 는 릴리스 빌드에서 제거돼 정작 운영에서
+    // 무력해지고, 디버그와 릴리스의 동작이 갈린다. 이 앱을 거치지 않는 경로(PostgREST
+    // 직접 호출)는 여전히 열려 있다 — 근본 차단은 P3 의 데이터 정규화 후 DB 제약.
+    if (!isAllowedSkillLevelLabel(sport, skillLevel)) {
+      throw ArgumentError.value(
+        skillLevel,
+        'skillLevel',
+        '${sportLabel(sport)} 등급 정본에 없는 값',
+      );
+    }
 
     final Object raw = await supabase
         .from('club_recruiting_posts')
@@ -408,6 +435,35 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
+  Future<void> banClubMember(String clubId, String targetUserId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'ban',
+        'target_user_id': targetUserId,
+      }),
+    );
+    check(res);
+  }
+
+  Future<void> updateClubInquiryLinks(
+    String clubId, {
+    required bool enabled,
+  }) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'update_inquiry_links',
+        'enabled': enabled,
+      }),
+    );
+    check(res);
+  }
+
   Future<void> setClubMemberRole({
     required String clubId,
     required String targetUserId,
@@ -534,18 +590,163 @@ mixin ClubApi on ApiBase {
     return members;
   }
 
+  Future<List<ClubDuesPeriod>> clubDuesPeriods(String clubId) async {
+    final rows = await supabase
+        .from('club_dues_periods')
+        .select()
+        .eq('club_id', clubId)
+        .order('period_month', ascending: false);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubDuesPeriod.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<ClubDuesPayment>> clubDuesPayments(String periodId) async {
+    final rows = await supabase
+        .from('club_dues_payments')
+        .select()
+        .eq('period_id', periodId)
+        .order('updated_at', ascending: false);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubDuesPayment.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<ClubDuesAuditEntry>> clubDuesAudit(
+    Iterable<String> paymentIds,
+  ) async {
+    final ids = paymentIds.toList(growable: false);
+    if (ids.isEmpty) return const [];
+    final rows = await supabase
+        .from('club_dues_audit')
+        .select()
+        .inFilter('payment_id', ids)
+        .order('created_at', ascending: false)
+        .limit(100);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) =>
+            ClubDuesAuditEntry.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<String> upsertClubDuesPeriod({
+    required String clubId,
+    required DateTime periodMonth,
+    required int amount,
+    DateTime? dueDate,
+    String? accountInfo,
+  }) async {
+    final result = await supabase.rpc(
+      'upsert_club_dues_period',
+      params: {
+        'p_club_id': clubId,
+        'p_period_month':
+            DateTime(periodMonth.year, periodMonth.month).toIso8601String(),
+        'p_amount': amount,
+        'p_due_date': dueDate == null
+            ? null
+            : DateTime(dueDate.year, dueDate.month, dueDate.day)
+                .toIso8601String(),
+        'p_account_info': accountInfo,
+      },
+    );
+    if (result is! String) {
+      throw const FormatException('회비 장부 저장 결과가 올바르지 않습니다.');
+    }
+    return result;
+  }
+
+  Future<int> setClubDueStatus({
+    required String periodId,
+    required Iterable<String> userIds,
+    required ClubDueStatus status,
+    String? note,
+  }) async {
+    final result = await supabase.rpc(
+      'set_club_due_status',
+      params: {
+        'p_period_id': periodId,
+        'p_user_ids': userIds.toList(growable: false),
+        'p_status': status.value,
+        'p_note': note,
+      },
+    );
+    return (result as num).toInt();
+  }
+
+  Future<int> sendClubDuesReminders({
+    required String periodId,
+    required Iterable<String> userIds,
+  }) async {
+    final result = await supabase.rpc(
+      'send_club_dues_reminders',
+      params: {
+        'p_period_id': periodId,
+        'p_user_ids': userIds.toList(growable: false),
+      },
+    );
+    return (result as num).toInt();
+  }
+
+  Future<List<ClubMember>> formerClubMembers(String clubId) async {
+    final res = await httpPost(
+      uri('clubs-join'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'action': 'list_former_members',
+      }),
+    );
+    check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final rows = body['members'] as List? ?? const [];
+    return rows
+        .whereType<Map>()
+        .map((row) => ClubMember.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
   Future<List<ClubEvent>> clubEvents(String clubId) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
     final rows = await supabase
         .from('club_events')
         .select('*, club_event_attendees(user_id, status)')
         .eq('club_id', clubId)
+        .isFilter('ended_early_at', null)
         .gte('starts_at', nowIso)
         .order('starts_at');
     final uid = supabase.auth.currentUser?.id;
     return List<Map<String, dynamic>>.from(rows)
         .map((j) => ClubEvent.fromJson(j, currentUserId: uid))
         .toList();
+  }
+
+  Future<void> endClubEvent(String clubId, String eventId) async {
+    await _manageClubEvent(clubId, eventId, 'end');
+  }
+
+  Future<void> deleteClubEvent(String clubId, String eventId) async {
+    await _manageClubEvent(clubId, eventId, 'delete');
+  }
+
+  Future<void> _manageClubEvent(
+    String clubId,
+    String eventId,
+    String action,
+  ) async {
+    final response = await httpPost(
+      uri('clubs-events'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'action': action,
+        'club_id': clubId,
+        'event_id': eventId,
+      }),
+    );
+    check(response);
   }
 
   Future<void> createClubEvent({
@@ -557,20 +758,25 @@ mixin ClubApi on ApiBase {
     int? fee,
     int? capacity,
   }) async {
-    final uid = supabase.auth.currentUser?.id;
-    if (uid == null) throw StateError('Not authenticated');
-    await supabase.from('club_events').insert({
-      'club_id': clubId,
-      'created_by': uid,
-      'title': title,
-      if (description != null && description.isNotEmpty)
-        'description': description,
-      if (locationText != null && locationText.isNotEmpty)
-        'location_text': locationText,
-      'starts_at': startsAt.toUtc().toIso8601String(),
-      if (fee != null) 'fee': fee,
-      if (capacity != null) 'capacity': capacity,
-    });
+    if (supabase.auth.currentUser == null) {
+      throw StateError('Not authenticated');
+    }
+    final response = await httpPost(
+      uri('clubs-events'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_id': clubId,
+        'title': title,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        if (locationText != null && locationText.isNotEmpty)
+          'location_text': locationText,
+        'starts_at': startsAt.toUtc().toIso8601String(),
+        if (fee != null) 'fee': fee,
+        if (capacity != null) 'capacity': capacity,
+      }),
+    );
+    check(response);
   }
 
   Future<void> respondEvent(String eventId, {required bool going}) async {
@@ -645,12 +851,26 @@ mixin ClubApi on ApiBase {
 
   // ── 게시판 ────────────────────────────────────────────────────
 
-  Future<List<ClubPost>> clubPosts(String clubId, {String? tag}) async {
+  Future<List<ClubPost>> clubPosts(
+    String clubId, {
+    String? tag,
+    String? authorQuery,
+  }) async {
+    final normalizedAuthor = authorQuery?.trim();
+    final searchingAuthor =
+        normalizedAuthor != null && normalizedAuthor.isNotEmpty;
     var query = supabase
         .from('club_posts')
-        .select('*, users!author_id(name), club_post_comments(id)')
+        .select(
+          searchingAuthor
+              ? '*, users!inner(name), club_post_comments(id)'
+              : '*, users!author_id(name), club_post_comments(id)',
+        )
         .eq('club_id', clubId);
     if (tag != null) query = query.eq('tag', tag);
+    if (searchingAuthor) {
+      query = query.ilike('users.name', '%$normalizedAuthor%');
+    }
     final rows = await query.order('created_at', ascending: false).limit(50);
     final posts = rows.map((r) => ClubPost.fromJson(r)).toList();
     posts.sort((a, b) {

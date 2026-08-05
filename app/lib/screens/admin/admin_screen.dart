@@ -8,11 +8,13 @@ import '../../models/crawl_source.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
+import '../../utils/grade_labels.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
 import 'gemini_usage_tab.dart';
 import 'knowledge_base_tab.dart';
+import 'ranking_claims_tab.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key, this.initialTab = 0});
@@ -55,7 +57,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   void initState() {
     super.initState();
     _tab = TabController(
-      length: 6,
+      length: 7,
       vsync: this,
       initialIndex: widget.initialTab,
     );
@@ -691,6 +693,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             Tab(text: '클럽 승인'),
             Tab(text: '지식베이스'),
             Tab(text: 'Gemini 사용량'),
+            Tab(text: '랭킹 클레임'),
           ],
         ),
       ),
@@ -703,6 +706,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           _buildPendingClubsTab(),
           const KnowledgeBaseTab(),
           const GeminiUsageTab(),
+          const RankingClaimsTab(),
         ],
       ),
       floatingActionButton: _tab.index == 2
@@ -1087,7 +1091,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   Widget _buildPendingClubReviewContent(Club club) {
     final meta = [
-      club.sport == 'tennis' ? '테니스' : '풋살',
+      sportLabelFromString(club.sport),
       if (club.region != null) club.region!,
       if (club.address != null) club.address!,
     ].join(' · ');

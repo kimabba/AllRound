@@ -14,6 +14,7 @@ This repository uses a **small loader** rule system.
 3. Type safety is mandatory: no TypeScript `any`, avoid Dart `dynamic`, and require RLS/policies for new SQL tables.
 4. Run relevant checks before final response, or explain why they were not run.
 5. If a change needs more project context, read `AGENTS.md` and the matching rule file under `docs/rules/` first.
+6. **PR·이슈 본문은 쉬운 한글로.** 그대로 Discord 알림으로 가고 개발자가 아닌 팀원(kimabba·백과장)이 읽는다. 「무엇이 달라지나 / 왜 했나 / 확인하는 법」을 맨 위에, 파일명·함수명 등 기술 상세는 맨 아래 "기술 메모"로 민다. 정본: `docs/team/START-HERE.md` §5-2. 커밋 메시지는 해당 없음.
 
 ## Git/PR workflow
 
