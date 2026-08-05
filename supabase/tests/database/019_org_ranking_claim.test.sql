@@ -144,8 +144,13 @@ insert into public.users (id, email, name) values
   ('66666666-6666-6666-6666-666666666666', 'f@test.local', '이기영')
 on conflict (id) do update set name = excluded.name;
 
+-- division_codes 에 다른 협회 코드(jn_m_gold)를 일부러 섞는다. 이렇게 해야
+-- 아래 '등록하지 않은 협회' 단언에서 부서 조건은 통과하고 협회 조건만 남는다 —
+-- 안 그러면 그 단언은 부서 조건에 걸려 협회 조건 회귀를 못 잡는다.
+-- (온보딩에서 실제로 이런 오염이 있었다: #336/#338)
 insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary) values
-  ('66666666-6666-6666-6666-666666666666', 'gj', 'default', array['gj_m_gold'], true)
+  ('66666666-6666-6666-6666-666666666666', 'gj', 'default',
+   array['gj_m_gold', 'jn_m_gold'], true)
 on conflict (user_id, org, division) do update set
   division_codes = excluded.division_codes;
 
