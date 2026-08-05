@@ -804,7 +804,6 @@ class _TeamRecruitingDraftSheetState
     extends ConsumerState<TeamRecruitingDraftSheet> {
   static const _genders = ['무관', '여성', '남성', '혼성'];
   static const _ages = ['무관', '20대', '30대', '40대', '50대 이상'];
-  static const _futsalPositions = ['필드·키퍼', '필드', '키퍼'];
   // 등급 선택지는 종목별 등급 정본(grade_labels.dart)에서 파생한다.
   // 직접 나열하면 등급 개편 때 여기만 남아 조용히 갈라진다(JY-146).
   //
@@ -821,9 +820,8 @@ class _TeamRecruitingDraftSheetState
 
   late String _selectedClubId = widget.managedClubs.first.id;
   String _gender = _genders.first;
-  String _age = _ages.first;
-  String _position = _futsalPositions.first;
-  late String _grade = _futsalGrades.first;
+  Set<String> _selectedAges = {_ages.first};
+  late Set<String> _selectedGrades = {_gradeOptions.first};
   int _fieldCount = 4;
   int _keeperCount = 1;
   int _tennisCount = 2;
@@ -879,7 +877,7 @@ class _TeamRecruitingDraftSheetState
     final previousAddress = _selectedClub.address?.trim() ?? '';
     setState(() {
       _selectedClubId = selected.id;
-      _grade = _gradeOptions.first;
+      _selectedGrades = {_gradeOptions.first};
       if (_placeController.text.trim().isEmpty ||
           _placeController.text.trim() == previousAddress) {
         _placeController.text = selected.address ?? '';
@@ -900,8 +898,8 @@ class _TeamRecruitingDraftSheetState
       return;
     }
 
-    final fieldCount = _isFutsal && _position != '키퍼' ? _fieldCount : 0;
-    final keeperCount = _isFutsal && _position != '필드' ? _keeperCount : 0;
+    final fieldCount = _isFutsal ? _fieldCount : 0;
+    final keeperCount = _isFutsal ? _keeperCount : 0;
     final totalCount = _isFutsal ? fieldCount + keeperCount : _tennisCount;
     if (totalCount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -918,10 +916,12 @@ class _TeamRecruitingDraftSheetState
             title: title,
             place: place,
             schedule: '$date $time',
-            skillLevel: _grade,
+            skillLevels: _gradeOptions
+                .where(_selectedGrades.contains)
+                .toList(growable: false),
             gender: _gender,
-            age: _age,
-            position: _isFutsal ? _position : null,
+            ages: _ages.where(_selectedAges.contains).toList(growable: false),
+            position: null,
             fieldCount: fieldCount,
             keeperCount: keeperCount,
             totalCount: totalCount,
@@ -1052,11 +1052,14 @@ class _TeamRecruitingDraftSheetState
                       runSpacing: 8,
                       children: [
                         for (final age in _ages)
-                          ChoiceChip(
+                          FilterChip(
                             label: Text(age),
-                            selected: _age == age,
+                            selected: _selectedAges.contains(age),
                             onSelected: (_) => setState(() {
-                              _age = age;
+                              _selectedAges = toggleRecruitingCondition(
+                                _selectedAges,
+                                age,
+                              );
                             }),
                           ),
                       ],
@@ -1071,34 +1074,16 @@ class _TeamRecruitingDraftSheetState
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '포지션',
-                            style: tt.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final position in _futsalPositions)
-                                ChoiceChip(
-                                  label: Text(position),
-                                  selected: _position == position,
-                                  onSelected: (_) => setState(() {
-                                    _position = position;
-                                  }),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
                           GradeSelector(
                             title: '등급',
                             options: _gradeOptions,
-                            selected: _grade,
+                            selected: _selectedGrades,
                             onSelected: (grade) => setState(() {
-                              _grade = grade;
+                              _selectedGrades = toggleRecruitingCondition(
+                                _selectedGrades,
+                                grade,
+                                anyLabel: anyGradeLabel,
+                              );
                             }),
                           ),
                           const SizedBox(height: AppSpacing.md),
@@ -1133,9 +1118,13 @@ class _TeamRecruitingDraftSheetState
                           GradeSelector(
                             title: '등급',
                             options: _gradeOptions,
-                            selected: _grade,
+                            selected: _selectedGrades,
                             onSelected: (grade) => setState(() {
-                              _grade = grade;
+                              _selectedGrades = toggleRecruitingCondition(
+                                _selectedGrades,
+                                grade,
+                                anyLabel: anyGradeLabel,
+                              );
                             }),
                           ),
                           const SizedBox(height: AppSpacing.md),
@@ -1209,7 +1198,7 @@ class _TeamRecruitingDraftSheetState
                   maxLines: 6,
                   maxLength: 1000,
                   decoration: const InputDecoration(
-                    hintText: '필요 포지션, 준비물, 경기 수준, 연락 방식 등을 적어주세요.',
+                    hintText: '준비물, 경기 방식, 연락 방법 등을 적어주세요.',
                     alignLabelWithHint: true,
                     labelText: '기타 내용',
                   ),
@@ -1452,7 +1441,7 @@ class _ManagedClubOptionTile extends StatelessWidget {
 class GradeSelector extends StatelessWidget {
   final String title;
   final List<String> options;
-  final String selected;
+  final Set<String> selected;
   final ValueChanged<String> onSelected;
 
   const GradeSelector({
@@ -1479,9 +1468,9 @@ class GradeSelector extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final option in options)
-              ChoiceChip(
+              FilterChip(
                 label: Text(option),
-                selected: selected == option,
+                selected: selected.contains(option),
                 onSelected: (_) => onSelected(option),
               ),
           ],
