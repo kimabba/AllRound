@@ -1,4 +1,5 @@
 import {
+  needsReminderAttempt,
   parseClubEventReminders,
   parseUserIds,
   tomorrowKstBounds,
@@ -35,6 +36,21 @@ Deno.test('club event reminder parser accepts object and array club joins', () =
     reminders[1].clubName !== '풋살 클럽'
   ) {
     throw new Error('valid event reminder rows must be parsed');
+  }
+});
+
+Deno.test('needsReminderAttempt retries pending or missing records, not sent/failed', () => {
+  if (!needsReminderAttempt(null)) throw new Error('no prior record must retry');
+  if (!needsReminderAttempt(undefined)) throw new Error('no prior record must retry');
+  if (!needsReminderAttempt('pending')) {
+    throw new Error('pending (no device token yet) must retry');
+  }
+  if (needsReminderAttempt('sent')) throw new Error('sent must not retry');
+  if (needsReminderAttempt('failed')) throw new Error('failed must not retry');
+  // 'sending' = 다른 실행이 지금 막 선점해 발송 중인 placeholder. 재시도
+  // 대상으로 보면 진행 중인 실행의 몫을 훔쳐가 중복 발송이 난다(codex 리뷰).
+  if (needsReminderAttempt('sending')) {
+    throw new Error('in-flight sending placeholder must not be stolen as a retry');
   }
 });
 
