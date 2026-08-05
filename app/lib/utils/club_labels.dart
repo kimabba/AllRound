@@ -121,7 +121,7 @@ String clubRegionMemberLabel(String? region, int count) {
   return '$regionLabel ${count < 0 ? 0 : count}명';
 }
 
-/// 모임 모임 일시 표시용 라벨. 서버는 starts_at 을 UTC 로 내려주므로
+/// 모임 일정 일시 표시용 라벨. 서버는 starts_at 을 UTC 로 내려주므로
 /// (ClubEvent.fromJson 의 DateTime.parse 결과도 UTC) 반드시 로컬로 변환한 뒤
 /// 포맷한다. 변환을 빠뜨리면 KST 기준 9시간 밀려 보인다 (JY-149).
 String clubEventDateTimeLabel(DateTime dt) {
