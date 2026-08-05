@@ -35,6 +35,7 @@ class _FakeRankingApi extends ApiService {
     required this.rows,
     required this.links,
     this.candidates = const [],
+    this.myName = '김평화',
   })  : super(
           SupabaseClient(
             'http://127.0.0.1:54321',
@@ -46,6 +47,7 @@ class _FakeRankingApi extends ApiService {
   final List<OrgRankingRow> rows;
   final List<Map<String, dynamic>> links;
   final List<OrgRankingRow> candidates;
+  final String myName;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -71,6 +73,9 @@ class _FakeRankingApi extends ApiService {
       ];
 
   @override
+  Future<UserProfile?> myProfile() async => UserProfile(name: myName);
+
+  @override
   Future<List<PlayerResult>> myPlayerResults() async => const [];
 }
 
@@ -81,12 +86,18 @@ Future<void> _pumpScreen(
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
   List<OrgRankingRow> candidates = const [],
+  String myName = '김평화',
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         apiProvider.overrideWithValue(
-          _FakeRankingApi(rows: rows, links: links, candidates: candidates),
+          _FakeRankingApi(
+            rows: rows,
+            links: links,
+            candidates: candidates,
+            myName: myName,
+          ),
         ),
         currentUserProvider.overrideWithValue(
           User(
@@ -199,11 +210,17 @@ void main() {
     ];
     const me = 'me-uuid';
 
-    Set<String> compute(List<Map<String, dynamic>> links, {bool here = true}) =>
+    // 이름이 같은 행만 신청할 수 있다 — 아래 대부분의 케이스는 '김평화'(id a) 기준.
+    Set<String> compute(
+      List<Map<String, dynamic>> links, {
+      bool here = true,
+      String myName = '김평화',
+    }) =>
         computeClaimableIds(
           rows: rows,
           links: links,
           myUserId: me,
+          myName: myName,
           registeredHere: here,
         );
 
@@ -212,7 +229,28 @@ void main() {
     });
 
     test('협회 아이디가 없는 행은 신청 대상이 아니다', () {
-      expect(compute(const []), {'a', 'b'});
+      // '박무명'(id 없음)은 이름이 같아도 대상이 될 수 없다.
+      expect(compute(const [], myName: '박무명'), isEmpty);
+    });
+
+    test('이름이 같은 행만 신청할 수 있다', () {
+      expect(compute(const []), {'a'});
+      expect(compute(const [], myName: '이기영'), {'b'});
+      expect(compute(const [], myName: '없는사람'), isEmpty);
+    });
+
+    test('가입 이름이 비어 있으면 아무것도 신청할 수 없다', () {
+      expect(compute(const [], myName: ''), isEmpty);
+      expect(
+        computeClaimableIds(
+          rows: rows,
+          links: const [],
+          myUserId: me,
+          myName: null,
+          registeredHere: true,
+        ),
+        isEmpty,
+      );
     });
 
     test('이 협회에 내 확정 연결이 있으면 다른 선수도 신청할 수 없다', () {
@@ -228,7 +266,7 @@ void main() {
       final links = [
         {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
       ];
-      expect(compute(links), {'b'});
+      expect(compute(links), isEmpty);
     });
 
     test('남이 신청 중(pending)인 선수는 아직 내가 신청할 수 있다', () {
@@ -236,14 +274,14 @@ void main() {
       final links = [
         {'org_player_id': 'a', 'status': 'pending', 'user_id': 'other-uuid'},
       ];
-      expect(compute(links), {'a', 'b'});
+      expect(compute(links), {'a'});
     });
 
     test('내가 이미 신청한(pending) 선수는 빠진다', () {
       final links = [
         {'org_player_id': 'a', 'status': 'pending', 'user_id': me},
       ];
-      expect(compute(links), {'b'});
+      expect(compute(links), isEmpty);
     });
 
     test('반려(rejected)된 내 신청도 다시 뜨지 않는다', () {
@@ -252,7 +290,7 @@ void main() {
       final links = [
         {'org_player_id': 'a', 'status': 'rejected', 'user_id': me},
       ];
-      expect(compute(links), {'b'});
+      expect(compute(links), isEmpty);
     });
 
     // 실제로는 RLS(org_player_links_read)가 남의 rejected 를 주지 않아 이 링크는
@@ -262,7 +300,7 @@ void main() {
       final links = [
         {'org_player_id': 'a', 'status': 'rejected', 'user_id': 'other-uuid'},
       ];
-      expect(compute(links), {'a', 'b'});
+      expect(compute(links), {'a'});
     });
   });
 
@@ -339,6 +377,19 @@ void main() {
       expect(find.text('신청'), findsNothing);
     });
 
+    testWidgets('내 이름과 같은 행에만 본인 버튼이 붙는다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+      // '김평화' 행에만 붙는다 — '이기영' 행에는 안 붙는다.
+      expect(find.text('본인'), findsOneWidget);
+    });
+
+    testWidgets('이름이 명단에 없으면 버튼 대신 이유를 알려준다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const [], myName: '없는사람');
+
+      expect(find.text('본인'), findsNothing);
+      expect(find.textContaining('이름이 협회 명단과 같아야'), findsOneWidget);
+    });
+
     testWidgets('반려된 내 신청의 선수에는 본인 버튼이 안 붙는다', (tester) async {
       await _pumpScreen(
         tester,
@@ -352,10 +403,7 @@ void main() {
         ],
       );
 
-      // 등록 부서(gj_m_gold)라 b 에는 버튼이 있고, 반려된 a 에는 없어야 한다.
-      expect(find.text('본인'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), '평화');
-      await tester.pumpAndSettle();
+      // 내 이름과 같은 유일한 행(a)이 반려 상태라 신청할 행이 하나도 없다.
       expect(find.text('본인'), findsNothing);
     });
   });

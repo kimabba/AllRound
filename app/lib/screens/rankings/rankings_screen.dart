@@ -47,13 +47,19 @@ const _kRankingDivisions = <String, List<String>>{
 /// 이 협회에 내 확정 연결이 이미 있으면 아무 행도 신청할 수 없다. 협회당
 /// 유저 1명 1선수(org_player_links_confirmed_user_key)라 승인 시점에 막히므로,
 /// 신청을 받아두면 관리자가 승인할 수 없는 대기 건만 쌓인다.
+///
+/// [myName] 과 이름이 같은 행만 신청할 수 있다. 한 협회 안에서 동명이인이
+/// 0건이라(2026-08-05 실측, 3,540명 전원 유일) 이름 하나로 사람이 특정된다.
 Set<String> computeClaimableIds({
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
   required String? myUserId,
+  required String? myName,
   required bool registeredHere,
 }) {
   if (!registeredHere) return const {};
+  final name = myName?.trim();
+  if (name == null || name.isEmpty) return const {};
   final blocked = <String>{};
   for (final link in links) {
     final orgPlayerId = link['org_player_id'] as String;
@@ -65,7 +71,9 @@ Set<String> computeClaimableIds({
   }
   return {
     for (final r in rows)
-      if (r.orgPlayerId != null && !blocked.contains(r.orgPlayerId))
+      if (r.orgPlayerId != null &&
+          r.playerName == name &&
+          !blocked.contains(r.orgPlayerId))
         r.orgPlayerId!,
   };
 }
@@ -319,6 +327,7 @@ class _RankingScreenData {
     required this.candidate,
     required this.hasPendingClaim,
     required this.claimableOrgPlayerIds,
+    required this.registeredHere,
   });
 
   final List<OrgRankingRow> rows;
@@ -327,8 +336,12 @@ class _RankingScreenData {
   final bool hasPendingClaim;
 
   /// 지금 보고 있는 부서에서 "본인" 신청을 걸 수 있는 선수들.
-  /// 비어 있으면(= 내가 등록한 부서가 아니면) 어느 행에도 버튼이 안 붙는다.
+  /// 비어 있으면 어느 행에도 버튼이 안 붙는다.
   final Set<String> claimableOrgPlayerIds;
+
+  /// 이 협회·부서를 내 프로필에 등록해 뒀는지. 등록했는데도 신청할 행이
+  /// 하나도 없으면 이유(이름 불일치)를 화면이 말해 줘야 한다.
+  final bool registeredHere;
 }
 
 /// 협회 랭킹 화면. 협회(광주/전남)와 부서를 고르면 그 부서의 공표 순위표를 보여준다.
@@ -362,6 +375,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     final links = await api.orgPlayerLinks(_orgCode);
     final candidates = await api.myRankingCandidates();
     final myOrgs = await api.myTennisOrgs();
+    final myProfile = await api.myProfile();
     final myUserId = ref.read(currentUserProvider)?.id;
 
     String? linkedOrgPlayerId;
@@ -374,15 +388,17 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       if (isMine && status == 'pending') pendingIds.add(orgPlayerId);
     }
 
-    // 신청 자격: 지금 보는 협회·부서를 내가 등록해 뒀는가. 정본은 RLS
-    // (org_player_links_claim) 이고 여기서는 같은 조건을 화면에 반영만 한다.
+    // 신청 자격: 지금 보는 협회·부서를 내가 등록했고, 이름이 같은 행인가.
+    // 정본은 RLS(org_player_links_claim) 이고 여기서는 같은 조건을 화면에 반영만 한다.
+    final registeredHere = myOrgs.any(
+      (o) => o.org == _orgCode && o.divisionCodes.contains(_divisionCode),
+    );
     final claimable = computeClaimableIds(
       rows: rows,
       links: links,
       myUserId: myUserId,
-      registeredHere: myOrgs.any(
-        (o) => o.org == _orgCode && o.divisionCodes.contains(_divisionCode),
-      ),
+      myName: myProfile?.name,
+      registeredHere: registeredHere,
     );
 
     // 후보 카드는 행별 버튼과 별개 경로다. 이 협회에 이미 확정 연결이 있으면
@@ -406,6 +422,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       candidate: candidate,
       hasPendingClaim: pendingIds.isNotEmpty,
       claimableOrgPlayerIds: claimable,
+      registeredHere: registeredHere,
     );
   }
 
@@ -553,6 +570,25 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         child: Text(
                           '확인 중입니다',
                           style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
+                    // 등록한 부서인데 신청할 행이 하나도 없는 경우. 이유를 안 알려
+                    // 주면 "버튼이 왜 없지"로 끝난다 — 대개 가입할 때 넣은 이름이
+                    // 협회 명단 표기와 달라서다.
+                    else if (data.registeredHere &&
+                        data.claimableOrgPlayerIds.isEmpty &&
+                        data.linkedOrgPlayerId == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Text(
+                          '내 이름과 같은 선수가 이 표에 없습니다. '
+                          '가입할 때 넣은 이름이 협회 명단과 같아야 신청할 수 있습니다.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ),
                     if (visibleRows.isEmpty)

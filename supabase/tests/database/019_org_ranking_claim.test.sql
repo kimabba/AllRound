@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(14);
+select plan(15);
 
 select has_function('public', 'my_ranking_candidates', '후보 조회 함수 존재');
 
@@ -109,7 +109,25 @@ insert into public.org_rankings
    rank_points, total_points, source_url)
 values
   ('jn', 'jn_m_gold', 1, '남의협회', 'jn_player', '전남/', 900, 900, 'https://x'),
-  ('gj', 'gj_m_gold', 3, '홍길동',   'gildong',   '어등산/', 100, 100, 'https://x');
+  ('gj', 'gj_m_gold', 3, '홍길동',   'gildong',   '어등산/', 100, 100, 'https://x'),
+  -- 실제 데이터에는 한 협회 안 동명이인이 없다(2026-08-05 실측 0건). 여기서는
+  -- '확정 보유자의 추가 신청' 조건만 따로 떼어 보려고 일부러 같은 이름을 하나 더 둔다 —
+  -- 이름이 다르면 이름 조건에 먼저 걸려 무엇 때문에 막혔는지 알 수 없다.
+  ('gj', 'gj_m_gold', 4, '김평화',   'kimph2',    '어등산/',  90,  90, 'https://x');
+
+-- status 조건만 격리해 보기 위한 유저(이름이 gildong 과 같다).
+insert into auth.users (id, email) values
+  ('77777777-7777-7777-7777-777777777777', 'g@test.local')
+on conflict do nothing;
+
+insert into public.users (id, email, name) values
+  ('77777777-7777-7777-7777-777777777777', 'g@test.local', '홍길동')
+on conflict (id) do update set name = excluded.name;
+
+insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary) values
+  ('77777777-7777-7777-7777-777777777777', 'gj', 'default', array['gj_m_gold'], true)
+on conflict (user_id, org, division) do update set
+  division_codes = excluded.division_codes;
 
 -- 신청자는 아직 확정 연결이 없는 별도 유저를 쓴다. 유저 3333 은 위에서 이미
 -- vudghk2116 에 confirmed 가 붙어 있어, 그 상태로는 어느 선수든 신청이 막힌다
@@ -119,7 +137,7 @@ insert into auth.users (id, email) values
 on conflict do nothing;
 
 insert into public.users (id, email, name) values
-  ('66666666-6666-6666-6666-666666666666', 'f@test.local', '신청자')
+  ('66666666-6666-6666-6666-666666666666', 'f@test.local', '이기영')
 on conflict (id) do update set name = excluded.name;
 
 insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary) values
@@ -130,8 +148,7 @@ on conflict (user_id, org, division) do update set
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
 
--- 유저 6666 의 등록: gj / gj_m_gold. 같은 부서의 다른 선수는 신청할 수 있다
--- (이름이 달라도 된다 — 자동 매칭이 못 잡는 표기 차이를 사람이 직접 고르는 게 이 동선의 목적).
+-- 유저 6666(이기영) 의 등록: gj / gj_m_gold. 이름이 같은 선수는 신청할 수 있다.
 select lives_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
     values ('gj', 'lkybks', '66666666-6666-6666-6666-666666666666', 'pending')$$,
@@ -161,12 +178,27 @@ select throws_ok(
   null,
   '랭킹표에 없는 협회 아이디는 신청할 수 없다');
 
--- 승인 단계를 건너뛰고 confirmed 로 직접 넣는 건 여전히 막힌다(기존 조건 회귀 방어).
--- 앞의 lives_ok 가 lkybks 를 이미 썼으므로 UNIQUE 충돌을 피해 다른 선수로 검증한다
--- (23505 가 먼저 나면 42501 을 검증하지 못한다).
+-- 이름이 다른 선수는 등록 부서 안이어도 신청할 수 없다(Commander 결정 2026-08-05).
+-- 한 협회 안 동명이인이 0건이라 이름 하나로 사람이 특정된다.
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'gildong', '66666666-6666-6666-6666-666666666666', 'confirmed')$$,
+    values ('gj', 'gildong', '66666666-6666-6666-6666-666666666666', 'pending')$$,
+  '42501',
+  null,
+  '이름이 다른 선수는 신청할 수 없다');
+
+reset role;
+reset request.jwt.claims;
+
+-- 승인 단계를 건너뛰고 confirmed 로 직접 넣는 건 여전히 막힌다(기존 조건 회귀 방어).
+-- 이름·부서·확정 조건을 모두 만족하는 유저(7777 홍길동 → gildong)로 검증해
+-- status 조건만 남긴다. 다른 조건에 먼저 걸리면 이 단언은 아무것도 증명하지 못한다.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"77777777-7777-7777-7777-777777777777","role":"authenticated"}';
+
+select throws_ok(
+  $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
+    values ('gj', 'gildong', '77777777-7777-7777-7777-777777777777', 'confirmed')$$,
   '42501',
   null,
   'confirmed 로 직접 넣을 수 없다 — 승인은 관리자만');
@@ -182,7 +214,7 @@ set local request.jwt.claims to '{"sub":"33333333-3333-3333-3333-333333333333","
 
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'gildong', '33333333-3333-3333-3333-333333333333', 'pending')$$,
+    values ('gj', 'kimph2', '33333333-3333-3333-3333-333333333333', 'pending')$$,
   '42501',
   null,
   '이미 확정 연결된 사람은 같은 협회의 다른 선수를 신청할 수 없다');

@@ -66,9 +66,15 @@ create policy org_player_links_claim
        and r.division_code = any(uto.division_codes)
       where r.org_code = org_player_links.org_code
         and r.org_player_id = org_player_links.org_player_id
+        -- 이름이 같아야 한다(Commander 결정 2026-08-05). 실측상 한 협회 안에서
+        -- 동명이인이 0건이라(3,540명 전원 유일) 이름 하나로 사람이 특정된다.
+        -- 협회 표의 이름에는 공백·앞뒤 여백이 없어 그대로 비교한다.
+        and r.player_name = (
+          select u.name from public.users u where u.id = (select auth.uid())
+        )
     )
     and not public.has_confirmed_org_link(org_code)
   );
 
 comment on policy org_player_links_claim on public.org_player_links is
-  '본인 연결 신청: 내 계정으로, pending 으로만, 내가 등록한 협회·부서 랭킹에 있는 선수에 한해, 그 협회에 아직 확정 연결이 없을 때.';
+  '본인 연결 신청: 내 계정으로, pending 으로만, 내가 등록한 협회·부서 랭킹에 있고 내 이름과 같은 선수에 한해, 그 협회에 아직 확정 연결이 없을 때.';
