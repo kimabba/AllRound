@@ -25,8 +25,8 @@
 
 ## 새 부품(의존성)
 
-> `app/pubspec.yaml` 의 **`dependencies`** 를 추가/삭제했으면 `docs/team/dependencies.md` 대장에도 적어야 CI 가 통과합니다.
-> (`dev_dependencies` 는 앱에 안 들어가므로 대상 아님)
+> `app/pubspec.yaml` 의 **`dependencies` · `dev_dependencies` 둘 다** 대상입니다. 추가/삭제했으면 `docs/team/dependencies.md` 대장에도 적어야 CI 가 통과합니다.
+> (dev 도 봅니다 — `integration_test` 처럼 dev 부품이 iOS 네이티브 등록에 실제로 들어갑니다)
 
 - [ ] 이 PR은 부품을 **추가/삭제하지 않음** (했으면 아래 작성)
 - [ ] 추가한 부품: `___` · 네이티브인가: 예 / 아니오

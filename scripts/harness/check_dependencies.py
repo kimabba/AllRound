@@ -38,7 +38,8 @@ LOCK = ROOT / "app" / "pubspec.lock"
 LEDGER = ROOT / "docs" / "team" / "dependencies.md"
 CACHE = Path(os.path.expanduser(os.environ.get("PUB_CACHE", "~/.pub-cache"))) / "hosted" / "pub.dev"
 
-# Flutter SDK 가 `sdk: flutter` 로 넣어주는 것들 — pub 에서 받는 부품이 아니라 대장 대상이 아니다.
+# Flutter SDK 가 `sdk: flutter` 로 넣어주는 것들 — 대장 대상이 아니다.
+# 주의: **출처가 아니라 이름으로** 거른다. 이 이름을 git/path 의존성으로 바꾸면 검사를 빠져나간다.
 SDK_PACKAGES = {"flutter", "flutter_localizations", "flutter_test", "integration_test"}
 
 # 검사할 블록. dev_dependencies 도 본다 —
@@ -76,7 +77,8 @@ def declared_dependencies() -> list[str]:
     """
     text = read(PUBSPEC)
     # 따옴표(큰/작은)를 씌워도 유효한 YAML 이라 둘 다 허용한다.
-    if re.search(r"""^['"]?dependency_overrides['"]?:""", text, flags=re.MULTILINE):
+    # YAML 은 `key :` 처럼 콜론 앞 공백도 허용한다 — 따옴표와 함께 전부 막는다.
+    if re.search(r"""^['"]?dependency_overrides['"]?\s*:""", text, flags=re.MULTILINE):
         fail(
             "app/pubspec.yaml 에 dependency_overrides 가 있다. 같은 이름으로 다른 구현(git/path)을 "
             "끼워 넣을 수 있어 이름 대조가 무의미해진다 — 왜 필요한지 대장에 적고 이 검사를 손볼 것."
@@ -87,7 +89,7 @@ def declared_dependencies() -> list[str]:
     names: list[str] = []
     for block_name in DEPENDENCY_BLOCKS:
         match = re.search(
-            rf"""^['"]?{block_name}['"]?:[^\n]*\n(.*?)^(?:['"]?[a-zA-Z_][a-zA-Z0-9_]*['"]?:|\Z)""",
+            rf"""^['"]?{block_name}['"]?\s*:[^\n]*\n(.*?)^(?:['"]?[a-zA-Z_][a-zA-Z0-9_]*['"]?\s*:|\Z)""",
             text,
             flags=re.MULTILINE | re.DOTALL,
         )

@@ -77,7 +77,7 @@
 
 ## 검사 범위
 
-`app/pubspec.yaml` 의 **`dependencies` 와 `dev_dependencies` 둘 다** 본다. `sdk: flutter` 로 딸려오는 것(`flutter` `flutter_test` `integration_test` 등)만 제외한다.
+`app/pubspec.yaml` 의 **`dependencies` 와 `dev_dependencies` 둘 다** 본다. `flutter`·`flutter_localizations`·`flutter_test`·`integration_test` **네 이름만** 제외한다(SDK 가 넣어주는 것들). 출처가 아니라 **이름으로** 거르므로, 이 이름을 git/path 의존성으로 바꾸면 검사를 빠져나간다.
 
 > **"dev 는 앱에 안 들어간다"는 전제는 사실이 아니다.** 실제로 `integration_test`(dev)가 `app/ios/Runner/GeneratedPluginRegistrant.m` 에 **iOS 네이티브 플러그인으로 등록**돼 있다(2026-08-04 실측). dev 쪽에 플러그인을 넣어 대장을 우회할 수 있어 같이 본다.
 
@@ -98,8 +98,9 @@
 | 부품 뺐는데 대장에 남김 | ❌ 실패 |
 | 따옴표 키 `"camera": ^0.1` | ❌ 실패 (못 읽는 형식) |
 | 명시적 키 `? camera` / `: ^0.1` | ❌ 실패 |
-| `dependency_overrides` (따옴표 포함) | ❌ 실패 |
+| `dependency_overrides` (따옴표·콜론 앞 공백 포함) | ❌ 실패 |
 | `pubspec_overrides.yaml` 추가 | ❌ 실패 |
+| `dev_dependencies` 에 몰래 추가 | ❌ 실패 |
 | 문서 아무 데나 표 한 줄 넣기 | ❌ 실패 (구분자 밖은 안 읽음) |
 | 콜론 있는 주석 `# source: pub.dev` | ✅ 통과 (오탐 아님) |
 | git·path 의존성 선언 | ✅ 통과 |
