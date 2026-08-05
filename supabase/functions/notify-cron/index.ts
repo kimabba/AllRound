@@ -1,5 +1,6 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import {
+  needsReminderAttempt,
   parseClubEventReminders,
   parseUserIds,
   tomorrowKstBounds,
@@ -107,20 +108,25 @@ Deno.serve(withCors(async (req) => {
   let sent = 0, dedupSkipped = 0, failed = 0;
 
   for (const task of tasks) {
-    // dedup: 이미 같은 (user, reference, type) 발송 기록이 있으면 skip
+    // dedup: 이미 같은 (user, reference, type) 발송 기록이 있으면 skip.
+    // 단 'pending'(그때 기기 토큰이 없었음)은 재시도 대상 — 이전 행을 지우고
+    // 새로 기록한다(user_id, type, reference_id unique 제약 때문에 upsert 대신 delete-then-insert).
     const notifType = task.type === 'd_minus_3' ? 'tournament_d3' : 'tournament_deadline';
     const { data: existing } = await supabase
       .from('notifications')
-      .select('id')
+      .select('id, status')
       .eq('user_id', task.user_id)
       .eq('reference_type', 'tournament')
       .eq('reference_id', task.tournament_id)
       .eq('type', notifType)
       .maybeSingle();
 
-    if (existing) {
+    if (!needsReminderAttempt(existing?.status)) {
       dedupSkipped++;
       continue;
+    }
+    if (existing) {
+      await supabase.from('notifications').delete().eq('id', existing.id);
     }
 
     // 디바이스 토큰
@@ -225,14 +231,17 @@ Deno.serve(withCors(async (req) => {
       if (blockedForEvent.has(userId)) continue;
       const { data: existing } = await supabase
         .from('notifications')
-        .select('id')
+        .select('id, status')
         .eq('user_id', userId)
         .eq('type', 'club_event_reminder')
         .eq('reference_id', event.id)
         .maybeSingle();
-      if (existing) {
+      if (!needsReminderAttempt(existing?.status)) {
         dedupSkipped++;
         continue;
+      }
+      if (existing) {
+        await supabase.from('notifications').delete().eq('id', existing.id);
       }
       try {
         await createNotification(supabase, {

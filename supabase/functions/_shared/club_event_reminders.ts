@@ -50,6 +50,15 @@ export function parseClubEventReminders(
   return reminders;
 }
 
+/**
+ * 이미 남은 알림 기록이 재시도 대상인지 판단한다. 'pending'(발송 시점에 기기
+ * 토큰이 없어서 못 보낸 것)은 그 뒤 토큰이 생겨도 예전엔 영원히 재시도가 안
+ * 됐다 — 이 기록이 없거나 'pending'이면 다시 시도해야 한다.
+ */
+export function needsReminderAttempt(existingStatus: string | null | undefined): boolean {
+  return existingStatus == null || existingStatus === 'pending';
+}
+
 export function parseUserIds(rows: unknown): string[] {
   if (!Array.isArray(rows)) return [];
   return rows

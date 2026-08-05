@@ -1,4 +1,5 @@
 import {
+  needsReminderAttempt,
   parseClubEventReminders,
   parseUserIds,
   tomorrowKstBounds,
@@ -36,6 +37,16 @@ Deno.test('club event reminder parser accepts object and array club joins', () =
   ) {
     throw new Error('valid event reminder rows must be parsed');
   }
+});
+
+Deno.test('needsReminderAttempt retries pending or missing records, not sent/failed', () => {
+  if (!needsReminderAttempt(null)) throw new Error('no prior record must retry');
+  if (!needsReminderAttempt(undefined)) throw new Error('no prior record must retry');
+  if (!needsReminderAttempt('pending')) {
+    throw new Error('pending (no device token yet) must retry');
+  }
+  if (needsReminderAttempt('sent')) throw new Error('sent must not retry');
+  if (needsReminderAttempt('failed')) throw new Error('failed must not retry');
 });
 
 Deno.test('club event reminder parser drops malformed rows and user ids', () => {
