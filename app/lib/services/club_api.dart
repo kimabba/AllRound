@@ -27,7 +27,7 @@ String _verifiedImageExtension(String extension, String contentType) {
   return normalized;
 }
 
-/// 클럽 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
+/// 모임 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
 mixin ClubApi on ApiBase {
   // ── 검색 / 생성 ──────────────────────────────────────────────
 
@@ -68,7 +68,7 @@ mixin ClubApi on ApiBase {
         .toList();
   }
 
-  /// 내 pending 가입 신청 클럽(승인 대기중). 활성 멤버십과 별개 목록.
+  /// 내 pending 가입 신청 모임(승인 대기중). 활성 멤버십과 별개 목록.
   Future<List<Club>> myPendingJoinRequests() async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return const [];
@@ -197,7 +197,7 @@ mixin ClubApi on ApiBase {
     return supabase.storage.from('club-intro-images').getPublicUrl(path);
   }
 
-  /// 단일 클럽 상세 조회 (딥링크 등 ID만 있을 때 사용).
+  /// 단일 모임 상세 조회 (딥링크 등 ID만 있을 때 사용).
   Future<Club> getClub(String clubId) async {
     final uid = supabase.auth.currentUser?.id;
     var query = supabase.from('clubs').select(

@@ -217,7 +217,8 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
     final api = ref.read(apiProvider);
     final pending = await api.pendingRankingClaims();
     final rejected = await api.rejectedRankingClaims();
-    return _ClaimsData(groups: groupClaimsByPlayer(pending), rejected: rejected);
+    return _ClaimsData(
+        groups: groupClaimsByPlayer(pending), rejected: rejected);
   }
 
   Future<void> _refresh() async {
@@ -237,7 +238,8 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
       final message = e is PostgrestException && e.code == '23505'
           ? '이미 다른 사람에게 연결된 선수입니다'
           : '승인 실패: $e';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -300,13 +302,15 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
             padding: const EdgeInsets.all(12),
             children: [
               for (final g in data.groups) ...[
-                ClaimGroupCard(group: g, onApprove: _approve, onReject: _reject),
+                ClaimGroupCard(
+                    group: g, onApprove: _approve, onReject: _reject),
                 const SizedBox(height: 8),
               ],
               if (data.rejected.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('반려됨', style: Theme.of(context).textTheme.titleMedium),
+                  child: Text('반려됨',
+                      style: Theme.of(context).textTheme.titleMedium),
                 ),
                 for (final c in data.rejected) ...[
                   RejectedClaimTile(claim: c, onUndo: () => _undo(c)),

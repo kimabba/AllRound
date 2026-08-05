@@ -477,7 +477,7 @@ class UserSport {
       };
 }
 
-/// 본인 프로필. name=실명(대회·클럽), nickname=앱 활동명, birthDate=비공개 매칭용,
+/// 본인 프로필. name=실명(대회·모임), nickname=앱 활동명, birthDate=비공개 매칭용,
 /// primaryRegion=활동 지역 코드(users.primary_region, 유저 지역의 단일 진실원천).
 class UserProfile {
   final String? name;

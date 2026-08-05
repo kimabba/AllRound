@@ -20,10 +20,8 @@ void main() {
         File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
     // 설명 주석이 심볼명을 언급해 오탐이 나므로 '줄 전체가 주석' 인 줄만 걷어낸다.
     // 문자열 안의 '//'(예: 'https://...')를 자르지 않도록 줄 끝 주석은 남긴다.
-    final codeOnly = src
-        .split('\n')
-        .where((l) => !l.trimLeft().startsWith('//'))
-        .join('\n');
+    final codeOnly =
+        src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
     // 금지 대상은 '맨' tennisOrgs 다. tennisOrgsWithDivisions 처럼 이름이
     // 이어지는 다른 심볼은 별개이므로, 뒤에 식별자 문자가 오면 제외한다
     // (WithDivisions 만 예외로 두면 새 심볼이 생길 때마다 오탐이 난다).
@@ -76,8 +74,8 @@ void main() {
     test('재진입 시 기존 협회를 불러온다', () {
       final src =
           File('lib/screens/auth/onboarding_screen.dart').readAsStringSync();
-      expect(
-          src, contains('_prepareExistingOrgs(ref.watch(userTennisOrgsProvider'),
+      expect(src,
+          contains('_prepareExistingOrgs(ref.watch(userTennisOrgsProvider'),
           reason: 'build 가 등록된 협회를 프리로드해야 한다 —'
               ' 안 하면 재진입 저장이 기존 협회를 통째로 지운다(#337)');
     });

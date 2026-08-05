@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/tokens.dart';
 
-/// 클럽 소개 사진을 가로 목록으로 표시한다.
+/// 모임 소개 사진을 가로 목록으로 표시한다.
 ///
 /// 빈 URL은 제외하고, 로드에 실패한 사진은 오류 아이콘으로 대체한다.
 class ClubIntroPhotoStrip extends StatelessWidget {

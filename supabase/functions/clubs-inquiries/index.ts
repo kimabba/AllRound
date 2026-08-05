@@ -179,7 +179,7 @@ async function notifyMessage(
       createNotification(supabase, {
         userId: recipientId,
         type: senderIsRequester ? 'club_inquiry_received' : 'club_inquiry_reply',
-        title: senderIsRequester ? '새 클럽 문의' : `${input.club.name} 문의 답변`,
+        title: senderIsRequester ? '새 모임 문의' : `${input.club.name} 문의 답변`,
         body: senderIsRequester
           ? `${label}님이 ${input.club.name}에 문의했습니다.`
           : '운영진의 새 답변이 도착했습니다.',

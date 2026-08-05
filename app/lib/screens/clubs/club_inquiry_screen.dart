@@ -116,9 +116,9 @@ class _ClubInquiryConversationScreenState
           SnackBar(
               content: Text(
             linksDisabled
-                ? '이 클럽은 문의에서 링크 전송을 허용하지 않습니다.'
+                ? '이 모임은 문의에서 링크 전송을 허용하지 않습니다.'
                 : clubBanned
-                    ? '이 클럽에서는 영구 차단되어 문의를 보낼 수 없습니다.'
+                    ? '이 모임에서는 영구 차단되어 문의를 보낼 수 없습니다.'
                     : ugcActionErrorMessage(
                         error,
                         fallback: '문의를 보내지 못했습니다.',
@@ -169,7 +169,7 @@ class _ClubInquiryConversationScreenState
                         ? const _InquiryEmpty(
                             icon: Icons.forum_outlined,
                             title: '가입 전에 궁금한 점을 물어보세요',
-                            message: '클럽장·매니저가 함께 확인하고 답변합니다.',
+                            message: '모임장·매니저가 함께 확인하고 답변합니다.',
                           )
                         : ListView.builder(
                             controller: _scrollController,
@@ -423,7 +423,7 @@ Future<void> _showRequesterProfile(
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              '가입 전 문의를 받은 클럽장과 매니저에게만 공개되는 프로필입니다.',
+              '가입 전 문의를 받은 모임장과 매니저에게만 공개되는 프로필입니다.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,

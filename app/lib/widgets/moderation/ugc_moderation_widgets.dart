@@ -108,7 +108,7 @@ Future<bool> _showUgcTermsDialog(BuildContext context) async {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '글·댓글·모임 등 커뮤니티 콘텐츠를 작성하려면 운영정책에 동의해야 합니다. '
+              '글·댓글·일정 등 커뮤니티 콘텐츠를 작성하려면 운영정책에 동의해야 합니다. '
               '욕설, 괴롭힘, 혐오, 성적 콘텐츠, 개인정보 노출, 광고·도배는 제한됩니다.',
             ),
             const SizedBox(height: AppSpacing.md),
@@ -177,7 +177,7 @@ Future<bool> confirmBlockUser({
       title: const Text('사용자 차단'),
       content: Text(
         '$displayName 님을 차단할까요?\n'
-        '서로의 게시글·댓글·모임이 보이지 않으며 언제든 차단 관리에서 해제할 수 있습니다.',
+        '서로의 게시글·댓글·일정이 보이지 않으며 언제든 차단 관리에서 해제할 수 있습니다.',
       ),
       actions: [
         TextButton(

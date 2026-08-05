@@ -431,7 +431,7 @@ class _TeamRecruitingDetailScreenState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('클럽 정보를 불러오지 못했습니다.')),
+        const SnackBar(content: Text('모임 정보를 불러오지 못했습니다.')),
       );
     }
   }
@@ -478,16 +478,16 @@ class _TeamRecruitingDetailScreenState
   String _participationErrorMessage(Object e) {
     final s = e.toString();
     if (s.contains('NO_CLUB_OPERATOR')) {
-      return '이 클럽은 아직 운영진이 없어 참여 신청을 받을 수 없어요.';
+      return '이 모임은 아직 운영진이 없어 참여 신청을 받을 수 없어요.';
     }
     if (s.contains('USER_BLOCKED')) {
-      return '차단 상태라 이 클럽에 참여 신청을 보낼 수 없어요.';
+      return '차단 상태라 이 모임에 참여 신청을 보낼 수 없어요.';
     }
     if (s.contains('ALREADY_MEMBER')) {
-      return '이미 이 클럽의 멤버예요.';
+      return '이미 이 모임의 멤버예요.';
     }
     if (s.contains('CLUB_NOT_AVAILABLE')) {
-      return '지금은 참여 신청을 받지 않는 클럽이에요.';
+      return '지금은 참여 신청을 받지 않는 모임이에요.';
     }
     return '참여 신청을 보내지 못했어요. 잠시 후 다시 시도해주세요.';
   }
@@ -644,7 +644,7 @@ class _TeamRecruitingDetailScreenState
                 _RecruitingDetailRow(
                   icon: Icons.info_outline_rounded,
                   label: '안내',
-                  value: club?.description ?? '클럽 운영자가 작성한 팀원모집 글입니다.',
+                  value: club?.description ?? '모임 운영자가 작성한 팀원모집 글입니다.',
                 ),
               ],
             ),
@@ -656,7 +656,7 @@ class _TeamRecruitingDetailScreenState
                       context.push('/clubs/${club!.id}', extra: club);
                     },
               icon: const Icon(Icons.groups_rounded),
-              label: const Text('클럽 상세 보기'),
+              label: const Text('모임 상세 보기'),
             ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
@@ -673,7 +673,7 @@ class _TeamRecruitingDetailScreenState
                 post.isClosed
                     ? '모집이 마감되었습니다'
                     : club?.isMember == true
-                        ? '클럽에서 문의하기'
+                        ? '모임에서 문의하기'
                         : _applied
                             ? '참여 문의 계속하기'
                             : '참여 신청하기',
@@ -987,7 +987,7 @@ class _TeamRecruitingDraftSheetState
                           ),
                         ),
                         Text(
-                          '운영 중인 클럽 기준으로 모집글을 작성해요.',
+                          '운영 중인 모임 기준으로 모집글을 작성해요.',
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),
@@ -1268,7 +1268,7 @@ class _ManagedClubSelectorField extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: AppSpacing.sm),
           child: Text(
-            '모집할 클럽',
+            '모집할 모임',
             style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
@@ -1363,12 +1363,12 @@ class _ManagedClubPickerSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              '모집할 클럽 선택',
+              '모집할 모임 선택',
               style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '운영 중인 클럽 중 모집글을 올릴 클럽을 선택하세요.',
+              '운영 중인 모임 중 모집글을 올릴 모임을 선택하세요.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.lg),

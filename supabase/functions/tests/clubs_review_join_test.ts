@@ -201,7 +201,7 @@ Deno.test('reviewJoin: manager 승인 시 멤버 추가·상태 approved·알림
   assertEquals(db.tables.notifications.length, 1);
   const notification = db.tables.notifications[0];
   assertEquals(notification.type, 'club_join_approved');
-  assertEquals(notification.title, '클럽 가입이 승인되었습니다');
+  assertEquals(notification.title, '모임 가입이 승인되었습니다');
   assertEquals(notification.reference_type, 'club_join_request');
   assertEquals(notification.reference_id, 'req-1');
   assertEquals(notification.club_id, 'club-1');
@@ -323,7 +323,7 @@ Deno.test('reviewJoin: 이미 처리된 신청은 409', async () => {
   assertEquals(db.tables.notifications.length, 0);
 });
 
-Deno.test('reviewJoin: 클럽 정보가 없으면 알림 본문은 기본 "클럽" 표기', async () => {
+Deno.test('reviewJoin: 모임 정보가 없으면 알림 본문은 기본 "모임" 표기', async () => {
   const tables = baseTables();
   tables.clubs = []; // clubs(name) 조인이 비면 fallback
   const db = new FakeDb(tables);
@@ -334,5 +334,5 @@ Deno.test('reviewJoin: 클럽 정보가 없으면 알림 본문은 기본 "클�
   });
 
   assertEquals(result.ok, true);
-  assertEquals(String(db.tables.notifications[0].body).startsWith('클럽 가입이 승인'), true);
+  assertEquals(String(db.tables.notifications[0].body).startsWith('모임 가입이 승인'), true);
 });

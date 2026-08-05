@@ -39,8 +39,7 @@ class DeadlineInfo {
       return const DeadlineInfo(status: DeadlineStatus.none, daysLeft: null);
     }
     final todayDate = DateTime(today.year, today.month, today.day);
-    final deadlineDate =
-        DateTime(deadline.year, deadline.month, deadline.day);
+    final deadlineDate = DateTime(deadline.year, deadline.month, deadline.day);
     final daysLeft = deadlineDate.difference(todayDate).inDays;
     final DeadlineStatus status;
     if (daysLeft < 0) {

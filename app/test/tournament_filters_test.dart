@@ -88,7 +88,8 @@ void main() {
     });
 
     test('한쪽만 있는 범위 → custom', () {
-      expect(presetForRange(DateTime(2026, 6, 1), null, now), DatePreset.custom);
+      expect(
+          presetForRange(DateTime(2026, 6, 1), null, now), DatePreset.custom);
     });
   });
 

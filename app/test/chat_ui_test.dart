@@ -43,7 +43,11 @@ void main() {
     test('returns empty list on malformed payload', () {
       expect(ChatUiBlock.listFromEvent({'blocks': 'oops'}), isEmpty);
       expect(ChatUiBlock.listFromEvent(const {}), isEmpty);
-      expect(ChatUiBlock.listFromEvent({'blocks': [42]}), isEmpty);
+      expect(
+          ChatUiBlock.listFromEvent({
+            'blocks': [42]
+          }),
+          isEmpty);
     });
 
     test('skips items with missing required fields', () {
@@ -62,7 +66,8 @@ void main() {
       expect(blocks.single.tournamentItems, isEmpty);
     });
 
-    test('club entity block yields no tournament items but is still emitted', () {
+    test('club entity block yields no tournament items but is still emitted',
+        () {
       final data = {
         'blocks': [
           {'type': 'cards', 'entity': 'club', 'items': []}
@@ -95,7 +100,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields.length, 2);
       expect(item.regulationFields.first.label, '장소');
       expect(item.regulationFields.first.value, '영암종합스포츠타운');
@@ -120,7 +126,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields, isEmpty);
     });
 
@@ -151,7 +158,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields.length, 3);
       expect(
         item.regulationFields.map((f) => f.label).toList(),
@@ -177,7 +185,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields, isEmpty);
     });
 
@@ -199,13 +208,15 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.eligibleGrades, ['ok']);
     });
   });
 
   group('ChatTournamentCard', () {
-    testWidgets('renders title, region and an action; hides id', (tester) async {
+    testWidgets('renders title, region and an action; hides id',
+        (tester) async {
       const item = TournamentChatCardItem(
         id: '11111111-1111-1111-1111-111111111111',
         title: '광주 테니스 오픈',

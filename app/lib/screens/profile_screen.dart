@@ -233,8 +233,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
                   NotificationSwitchTile(
                     icon: Icons.groups_2_outlined,
-                    title: '클럽 알림',
-                    subtitle: '내 클럽 공지·업데이트',
+                    title: '모임 알림',
+                    subtitle: '내 모임 공지·업데이트',
                     value: club,
                     onChanged: (value) => setDialogState(() => club = value),
                   ),
@@ -283,7 +283,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
 
     if (result == null) return;
-    // 로컬 설정(대회·클럽·코치·알림음)을 먼저 저장한다. 알림음 서버 동기화가
+    // 로컬 설정(대회·모임·코치·알림음)을 먼저 저장한다. 알림음 서버 동기화가
     // 실패해도(웹·토큰 미발급·네트워크) 나머지 설정까지 함께 날아가면 안 된다.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_notifyTournamentPrefsKey, result.tournament);
@@ -308,7 +308,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
     if (!soundSynced) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
+        const SnackBar(
+            content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
       );
     }
   }
@@ -374,7 +375,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       leading: const Icon(Icons.edit_calendar_rounded),
                       title: const Text('생년월일을 등록해 주세요'),
                       subtitle: const Text(
-                        '클럽 사진·게시글 작성과 대회 자격 확인에 필요합니다.',
+                        '모임 사진·게시글 작성과 대회 자격 확인에 필요합니다.',
                       ),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => context.push('/onboarding'),
@@ -388,8 +389,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.admin_panel_settings_rounded),
-                      title: const Text('승인 대기 클럽 확인'),
-                      subtitle: const Text('새로 등록된 클럽을 승인하거나 반려합니다.'),
+                      title: const Text('승인 대기 모임 확인'),
+                      subtitle: const Text('새로 등록된 모임을 승인하거나 반려합니다.'),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => context.push('/admin/clubs'),
                     ),

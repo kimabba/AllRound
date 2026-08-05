@@ -18,10 +18,10 @@ void main() {
     expect(context.attachEntityByDefault, isFalse);
   });
 
-  test('클럽 상세는 명시적 연결이 필요한 엔티티 문맥을 만든다', () {
+  test('모임 상세는 명시적 연결이 필요한 엔티티 문맥을 만든다', () {
     final context = chatEntryContextForPath('/clubs/club-9');
 
-    expect(context.screenLabel, '현재 클럽');
+    expect(context.screenLabel, '현재 모임');
     expect(context.entityType, 'club');
     expect(context.entityId, 'club-9');
     expect(context.attachEntityByDefault, isFalse);

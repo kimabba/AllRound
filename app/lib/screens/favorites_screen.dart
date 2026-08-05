@@ -47,7 +47,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
           controller: _tab,
           tabs: const [
             Tab(text: '대회'),
-            Tab(text: '클럽'),
+            Tab(text: '모임'),
           ],
         ),
       ),
@@ -182,8 +182,8 @@ class _FavoriteClubsTab extends ConsumerWidget {
         if (items.isEmpty) {
           return const AppEmptyState(
             icon: Icons.groups_outlined,
-            title: '스크랩한 클럽이 없습니다',
-            description: '클럽 찾기에서 북마크를 누르면 이곳에 모입니다.',
+            title: '스크랩한 모임이 없습니다',
+            description: '모임 찾기에서 북마크를 누르면 이곳에 모입니다.',
           );
         }
         return _ClubList(
@@ -198,7 +198,7 @@ class _FavoriteClubsTab extends ConsumerWidget {
       loading: () => const _FavoriteLoadingList(),
       error: (_, __) => AppEmptyState(
         icon: Icons.error_outline_rounded,
-        title: '관심 클럽을 불러오지 못했습니다',
+        title: '관심 모임을 불러오지 못했습니다',
         description: '잠시 후 다시 시도해 주세요.',
         actionLabel: '다시 불러오기',
         onAction: () => ref.invalidate(myFavoriteClubsProvider),
@@ -415,7 +415,7 @@ final _previewFavoriteClubs = [
     name: '서울 풋살 러너스',
     region: '서울',
     address: '서울 송파구',
-    description: '주말 저녁 풋살 멤버를 모집하는 클럽',
+    description: '주말 저녁 풋살 멤버를 모집하는 모임',
     memberCount: 24,
   ),
   Club(
@@ -424,7 +424,7 @@ final _previewFavoriteClubs = [
     name: '광주 테니스 크루',
     region: '광주',
     address: '광주 서구',
-    description: '초중급 복식 위주로 함께 치는 클럽',
+    description: '초중급 복식 위주로 함께 치는 모임',
     memberCount: 38,
   ),
 ];

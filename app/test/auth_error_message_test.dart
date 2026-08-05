@@ -15,8 +15,8 @@ void main() {
         '다른 비밀번호로 바꿔 주세요.';
 
     test('error_code 로 잡는다', () {
-      final e = AuthException(pwnedMessage,
-          statusCode: '422', code: 'weak_password');
+      final e =
+          AuthException(pwnedMessage, statusCode: '422', code: 'weak_password');
       expect(authErrorMessage(e, signUp: true), expected);
     });
 
@@ -27,10 +27,8 @@ void main() {
     });
 
     test('정책 위반 문구(password should)도 같은 안내로 간다', () {
-      final e = AuthException(
-          'Password should be at least 6 characters.',
-          statusCode: '422',
-          code: 'weak_password');
+      final e = AuthException('Password should be at least 6 characters.',
+          statusCode: '422', code: 'weak_password');
       expect(authErrorMessage(e, signUp: true), expected);
     });
   });
@@ -65,18 +63,14 @@ void main() {
     });
 
     test('생년월일 누락', () {
-      final e = AuthException(
-          'BIRTH_DATE_REQUIRED: 계정 생성 전에 생년월일을 확인해 주세요.',
-          statusCode: '400',
-          code: 'unknown');
+      final e = AuthException('BIRTH_DATE_REQUIRED: 계정 생성 전에 생년월일을 확인해 주세요.',
+          statusCode: '400', code: 'unknown');
       expect(authErrorMessage(e, signUp: true), '계정 생성 전에 생년월일을 확인해 주세요.');
     });
 
     test('구글 신규가입 차단', () {
-      final e = AuthException(
-          'GOOGLE_SIGNUP_DISABLED: 신규 가입은 이메일로 진행해 주세요.',
-          statusCode: '403',
-          code: 'unknown');
+      final e = AuthException('GOOGLE_SIGNUP_DISABLED: 신규 가입은 이메일로 진행해 주세요.',
+          statusCode: '403', code: 'unknown');
       expect(authErrorMessage(e, signUp: true), '신규 가입은 이메일로 진행해 주세요.');
     });
   });
