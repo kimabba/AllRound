@@ -25,6 +25,14 @@ insert into public.org_rankings
    rank_points, total_points, source_url)
 values
   ('gj', 'gj_m_gold', 1, '김평화', 'vudghk2116', '어등산/', 2649, 2649,
+   'https://gjtennis.kr/sub4_5.php?member_kind=골드부'),
+  -- 아래 거부 단언들이 "랭킹표에 없는 아이디라서" 막히는 것과 헷갈리지 않도록,
+  -- 실재하는 선수를 대상으로 status·user_id 조건만 남겨 검증한다.
+  -- rank 는 아래 admin 수동 교정 단언(rank=2)과 겹치지 않게 뒤쪽 번호를 쓴다
+  -- (org_code, division_code, rank) 가 유니크다.
+  ('gj', 'gj_m_gold', 92, '박실재', 'real-2', '어등산/', 2000, 2000,
+   'https://gjtennis.kr/sub4_5.php?member_kind=골드부'),
+  ('gj', 'gj_m_gold', 93, '최실재', 'real-3', '어등산/', 1900, 1900,
    'https://gjtennis.kr/sub4_5.php?member_kind=골드부');
 
 -- 확정 연결 1건을 미리 넣어 anon 노출 검사의 대조군으로 쓴다
@@ -69,6 +77,14 @@ insert into public.users (id, email, name) values
   ('22222222-2222-2222-2222-222222222222', 'b@test.local', '남의계정')
 on conflict (id) do update set name = excluded.name;
 
+-- 신청 자격은 "내가 등록한 협회·부서"다(org_player_links_claim). 아래 pending
+-- 클레임이 통과하려면 이 유저에게 gj/gj_m_gold 등록이 있어야 한다.
+insert into public.user_tennis_orgs (user_id, org, division, division_codes, is_primary)
+values ('11111111-1111-1111-1111-111111111111', 'gj', 'default',
+        array['gj_m_gold'], true)
+on conflict (user_id, org, division) do update set
+  division_codes = excluded.division_codes;
+
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
 
@@ -81,13 +97,13 @@ select lives_ok(
 -- 스스로 confirmed 로 넣는 것은 막혀야 한다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'zzz', '11111111-1111-1111-1111-111111111111', 'confirmed')$$,
+    values ('gj', 'real-2', '11111111-1111-1111-1111-111111111111', 'confirmed')$$,
   '42501', null, '유저가 스스로 confirmed 로 넣을 수 없다');
 
 -- 남의 이름으로 클레임하는 것도 막혀야 한다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'yyy', '22222222-2222-2222-2222-222222222222', 'pending')$$,
+    values ('gj', 'real-3', '22222222-2222-2222-2222-222222222222', 'pending')$$,
   '42501', null, '남의 user_id 로 클레임할 수 없다');
 
 reset role;

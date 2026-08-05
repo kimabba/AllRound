@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(12);
+select plan(13);
 
 select has_function('public', 'my_ranking_candidates', '후보 조회 함수 존재');
 
@@ -155,8 +155,21 @@ select throws_ok(
   null,
   'confirmed 로 직접 넣을 수 없다 — 승인은 관리자만');
 
+-- 내가 만든 pending 을 스스로 confirmed 로 UPDATE 하는 경로도 없어야 한다.
+-- UPDATE 를 허용하는 정책은 org_player_links_admin 뿐이라 에러 없이 0행 갱신으로
+-- 끝난다 — 조용히 통과하는 종류라 결과 상태로 확인한다.
+update public.org_player_links set status = 'confirmed'
+where org_code = 'gj' and org_player_id = 'lkybks'
+  and user_id = '33333333-3333-3333-3333-333333333333';
+
 reset role;
 reset request.jwt.claims;
+
+select is(
+  (select status from public.org_player_links
+   where org_code = 'gj' and org_player_id = 'lkybks'
+     and user_id = '33333333-3333-3333-3333-333333333333'),
+  'pending', '본인 신청을 스스로 승인으로 바꿀 수 없다');
 
 select * from finish();
 rollback;
