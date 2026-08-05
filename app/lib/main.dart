@@ -87,7 +87,12 @@ Future<void> main() async {
       ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
     );
   }, (error, stack) {
-    if (!kIsWeb) FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    // Firebase 초기화 자체가 실패했으면(구성 파일 없는 개발환경 등) Firebase.apps 가
+    // 비어있다 — 이때 FirebaseCrashlytics.instance 를 부르면 "기본 앱 없음" 예외가
+    // 새로 나면서 원래 에러 처리를 덮어버린다.
+    if (!kIsWeb && Firebase.apps.isNotEmpty) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
   });
 }
 
