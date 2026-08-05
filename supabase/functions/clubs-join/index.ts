@@ -151,15 +151,71 @@ Deno.serve(withCors(async (req) => {
     // users:{name} 형태로 합쳐 반환한다.
     const memberRows = data ?? [];
     const userIds = memberRows.map((r) => r.user_id as string);
-    const nameById = new Map<string, string | null>();
+    const profileById = new Map<string, Record<string, unknown>>();
     if (userIds.length > 0) {
       const { data: profiles, error: profileError } = await supa
         .from('users')
-        .select('id, name')
+        .select('id, name, nickname, avatar_url')
         .in('id', userIds);
       if (profileError) return errorResponse(profileError.message, 500);
       for (const p of profiles ?? []) {
-        nameById.set(p.id as string, (p.name as string | null) ?? null);
+        profileById.set(p.id as string, {
+          name: (p.name as string | null) ?? null,
+          nickname: (p.nickname as string | null) ?? null,
+          avatar_url: (p.avatar_url as string | null) ?? null,
+        });
+      }
+    }
+    // 상세 프로필은 같은 모임의 활성 멤버에게만 제공한다. 관리자 권한만 있고
+    // 해당 모임 멤버가 아닌 계정도 목록 운영 정보만 볼 수 있다.
+    if (member !== null && userIds.length > 0) {
+      const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
+        supa.from('user_sports').select('user_id, sport, grade').in('user_id', userIds),
+        supa.from('user_tennis_orgs').select('user_id, org, division_local, score')
+          .in('user_id', userIds),
+        supa.from('club_members').select('user_id, club_id').in('user_id', userIds)
+          .eq('status', 'active'),
+        supa.from('match_entries').select('user_id, tournament_id, division')
+          .in('user_id', userIds).order('created_at', { ascending: false }),
+      ]);
+      const aggregateError = sportsResult.error ?? orgsResult.error ??
+        membershipsResult.error ?? entriesResult.error;
+      if (aggregateError) return errorResponse(aggregateError.message, 500);
+
+      const clubIds = [
+        ...new Set((membershipsResult.data ?? []).map((row) => row.club_id as string)),
+      ];
+      const tournamentIds = [
+        ...new Set((entriesResult.data ?? []).map((row) => row.tournament_id as string)),
+      ];
+      const [{ data: clubs }, { data: tournaments }] = await Promise.all([
+        clubIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; name: string }> })
+          : supa.from('clubs').select('id, name').in('id', clubIds),
+        tournamentIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; title: string }> })
+          : supa.from('tournaments').select('id, title').in('id', tournamentIds),
+      ]);
+      const clubNames = new Map((clubs ?? []).map((row) => [row.id as string, row.name as string]));
+      const tournamentNames = new Map(
+        (tournaments ?? []).map((row) => [row.id as string, row.title as string]),
+      );
+      for (const userId of userIds) {
+        const profile = profileById.get(userId) ?? {};
+        profileById.set(userId, {
+          ...profile,
+          sports: (sportsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => ({ sport: row.sport, grade: row.grade })),
+          tennis_orgs: (orgsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => ({ org: row.org, division: row.division_local, score: row.score })),
+          clubs: (membershipsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => clubNames.get(row.club_id as string)).filter(Boolean),
+          tournaments: (entriesResult.data ?? []).filter((row) => row.user_id === userId)
+            .slice(0, 10).map((row) => ({
+              title: tournamentNames.get(row.tournament_id as string) ?? '대회',
+              division: row.division,
+            })),
+        });
       }
     }
     const members = memberRows.map((r) => ({
@@ -173,7 +229,7 @@ Deno.serve(withCors(async (req) => {
           can_post_notice: r.can_post_notice,
         }
         : {}),
-      users: { name: nameById.get(r.user_id as string) ?? null },
+      users: profileById.get(r.user_id as string) ?? { name: null },
     }));
 
     return jsonResponse({ members });
