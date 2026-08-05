@@ -23,6 +23,15 @@
 - [ ] Speed Gun/video — `docs/rules/SPEED_GUN_RULES.md`
 - [ ] CI/harness/rules — `docs/rules/HARNESS.md`
 
+## 새 부품(의존성)
+
+> `app/pubspec.yaml` 의 **`dependencies` · `dev_dependencies` 둘 다** 대상입니다. 추가/삭제했으면 `docs/team/dependencies.md` 대장에도 적어야 CI 가 통과합니다.
+> (dev 도 봅니다 — `integration_test` 처럼 dev 부품이 iOS 네이티브 등록에 실제로 들어갑니다)
+
+- [ ] 이 PR은 부품을 **추가/삭제하지 않음** (했으면 아래 작성)
+- [ ] 추가한 부품: `___` · 네이티브인가: 예 / 아니오
+- [ ] **네이티브라면** — 아이폰 실기기에서 확인했는가: 예 / 아니오(→ 확인 전 스토어 빌드 금지)
+
 ## 운영 배포 / 버전 관리
 
 - [ ] 이 PR은 운영 배포 정책에 영향을 주지 않음

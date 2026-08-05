@@ -47,6 +47,7 @@ fi
 
 printf '\n'; echo "[6/10] static repository rules"
 python3 scripts/harness/check_static_rules.py
+python3 scripts/harness/check_dependencies.py
 
 printf '\n'; echo "[7/10] ranking-rules data (배점표 드리프트)"
 python3 scripts/qa/verify_ranking_rules.py
