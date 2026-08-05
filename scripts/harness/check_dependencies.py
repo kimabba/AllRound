@@ -38,8 +38,14 @@ LOCK = ROOT / "app" / "pubspec.lock"
 LEDGER = ROOT / "docs" / "team" / "dependencies.md"
 CACHE = Path(os.path.expanduser(os.environ.get("PUB_CACHE", "~/.pub-cache"))) / "hosted" / "pub.dev"
 
-# Flutter SDK 가 넣어주는 것들 — 대장에 적을 대상이 아니다.
-SDK_PACKAGES = {"flutter", "flutter_localizations", "flutter_test", "flutter_lints"}
+# Flutter SDK 가 `sdk: flutter` 로 넣어주는 것들 — pub 에서 받는 부품이 아니라 대장 대상이 아니다.
+SDK_PACKAGES = {"flutter", "flutter_localizations", "flutter_test", "integration_test"}
+
+# 검사할 블록. dev_dependencies 도 본다 —
+# "dev 는 앱에 안 들어간다"는 전제는 사실이 아니다. 실제로 `integration_test`(dev)가
+# app/ios/Runner/GeneratedPluginRegistrant.m 에 네이티브 플러그인으로 등록돼 있다
+# (2026-08-04 실측). dev 쪽에 플러그인을 넣어 대장을 우회할 수 있으므로 같이 본다.
+DEPENDENCY_BLOCKS = ("dependencies", "dev_dependencies")
 
 # 대장에서 부품 표만 읽기 위한 구분자. 이 사이의 표만 본다 —
 # 없으면 문서 아무 데나(코드 블록·주석 포함) 표 한 줄을 넣어 우회할 수 있다.
@@ -61,10 +67,7 @@ def read(path: Path) -> str:
 
 
 def declared_dependencies() -> list[str]:
-    """pubspec.yaml 의 dependencies 블록에서 직접 의존성 이름만 뽑는다.
-
-    **검사 대상은 `dependencies` 뿐이다.** `dev_dependencies` 는 빌드·테스트 도구라
-    앱 빌드에 들어가지 않으므로 대장에 적지 않는다(문서에도 명시).
+    """pubspec.yaml 의 dependencies · dev_dependencies 에서 부품 이름을 뽑는다.
 
     dart pub 이 쓰는 2칸 들여쓰기를 전제한다. 그 밖의 유효한 YAML 문법
     (따옴표 키 `"pkg":`, 명시적 키 `? pkg` / `: ^1.0`)은 이름 대조를 우회하므로,
@@ -72,8 +75,8 @@ def declared_dependencies() -> list[str]:
     주석과 빈 줄, 하위 속성(4칸 이상)은 정상적으로 건너뛴다.
     """
     text = read(PUBSPEC)
-    # 따옴표를 씌워도 유효한 YAML 이라 정규식에 따옴표를 허용한다.
-    if re.search(r'^"?dependency_overrides"?:', text, flags=re.MULTILINE):
+    # 따옴표(큰/작은)를 씌워도 유효한 YAML 이라 둘 다 허용한다.
+    if re.search(r"""^['"]?dependency_overrides['"]?:""", text, flags=re.MULTILINE):
         fail(
             "app/pubspec.yaml 에 dependency_overrides 가 있다. 같은 이름으로 다른 구현(git/path)을 "
             "끼워 넣을 수 있어 이름 대조가 무의미해진다 — 왜 필요한지 대장에 적고 이 검사를 손볼 것."
@@ -81,33 +84,34 @@ def declared_dependencies() -> list[str]:
     if (ROOT / "app" / "pubspec_overrides.yaml").is_file():
         fail("app/pubspec_overrides.yaml 이 있다 — dependency_overrides 와 같은 이유로 확인이 필요하다.")
 
-    match = re.search(
-        r'^"?dependencies"?:[^\n]*\n(.*?)^(?:"?[a-zA-Z_][a-zA-Z0-9_]*"?:|\Z)',
-        text,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    if not match:
-        fail("app/pubspec.yaml 에서 dependencies 블록을 찾지 못했다 — 형식이 바뀌었는지 확인할 것")
+    names: list[str] = []
+    for block_name in DEPENDENCY_BLOCKS:
+        match = re.search(
+            rf"""^['"]?{block_name}['"]?:[^\n]*\n(.*?)^(?:['"]?[a-zA-Z_][a-zA-Z0-9_]*['"]?:|\Z)""",
+            text,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+        if not match:
+            fail(f"app/pubspec.yaml 에서 {block_name} 블록을 찾지 못했다 — 형식이 바뀌었는지 확인할 것")
 
-    names = []
-    for lineno, raw_line in enumerate(match.group(1).splitlines(), start=1):
-        line = raw_line.split("#", 1)[0].rstrip()  # 주석은 정상 — 떼고 본다
-        if not line.strip():
-            continue
-        if line.startswith("    "):  # 하위 속성(sdk:, git:, path: …)
-            continue
-        entry = re.match(r"^  ([a-z0-9_]+):", line)
-        if not entry:
-            fail(
-                "app/pubspec.yaml dependencies 에 이 검사가 못 읽는 줄이 있다:\n"
-                f"  {raw_line!r}\n\n"
-                "따옴표 키나 명시적 키(? …) 같은 형식은 이름 대조를 조용히 우회한다. "
-                "dart pub 이 쓰는 `  패키지명: ^버전` 형태로 맞추거나, 정말 필요하면 이 검사를 함께 고칠 것."
-            )
-        name = entry.group(1)
-        if name not in SDK_PACKAGES:
-            names.append(name)
-    return sorted(names)
+        for raw_line in match.group(1).splitlines():
+            line = raw_line.split("#", 1)[0].rstrip()  # 주석은 정상 — 떼고 본다
+            if not line.strip():
+                continue
+            if line.startswith("    "):  # 하위 속성(sdk:, git:, path: …)
+                continue
+            entry = re.match(r"^  ([a-z0-9_]+):", line)
+            if not entry:
+                fail(
+                    f"app/pubspec.yaml {block_name} 에 이 검사가 못 읽는 줄이 있다:\n"
+                    f"  {raw_line!r}\n\n"
+                    "따옴표 키나 명시적 키(? …) 같은 형식은 이름 대조를 조용히 우회한다. "
+                    "dart pub 이 쓰는 `  패키지명: ^버전` 형태로 맞추거나, 정말 필요하면 이 검사를 함께 고칠 것."
+                )
+            name = entry.group(1)
+            if name not in SDK_PACKAGES:
+                names.append(name)
+    return sorted(set(names))
 
 
 def ledger_entries() -> set[str]:
