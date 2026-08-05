@@ -107,6 +107,64 @@ void main() {
     expect(filterRankingRows(rows, '없는이름'), isEmpty);
   });
 
+  group('신청 가능한 행 계산', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+      _row(rank: 3, name: '박무명', points: 100), // 협회 아이디 없는 행
+    ];
+    const me = 'me-uuid';
+
+    Set<String> compute(List<Map<String, dynamic>> links, {bool here = true}) =>
+        computeClaimableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          registeredHere: here,
+        );
+
+    test('등록한 부서가 아니면 아무 행도 신청할 수 없다', () {
+      expect(compute(const [], here: false), isEmpty);
+    });
+
+    test('협회 아이디가 없는 행은 신청 대상이 아니다', () {
+      expect(compute(const []), {'a', 'b'});
+    });
+
+    test('남이 이미 확정한 선수는 빠진다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(compute(links), {'b'});
+    });
+
+    test('내가 이미 신청한(pending) 선수는 빠진다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'pending', 'user_id': me},
+      ];
+      expect(compute(links), {'b'});
+    });
+
+    test('반려(rejected)된 내 신청도 다시 뜨지 않는다', () {
+      // unique(org_code, org_player_id, user_id) 가 상태를 안 가려서 재신청 INSERT 가
+      // 반드시 실패한다 — 버튼이 다시 뜨면 사용자는 이유 모를 에러만 보게 된다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'rejected', 'user_id': me},
+      ];
+      expect(compute(links), {'b'});
+    });
+
+    // 실제로는 RLS(org_player_links_read)가 남의 rejected 를 주지 않아 이 링크는
+    // 화면에 오지 않는다. 정책이 바뀌어 들어오더라도 남의 반려가 내 신청을
+    // 막지는 않아야 하므로 함수 차원에서 고정해 둔다.
+    test('남이 반려당한 선수는 여전히 내가 신청할 수 있다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'rejected', 'user_id': 'other-uuid'},
+      ];
+      expect(compute(links), {'a', 'b'});
+    });
+  });
+
   testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {
     OrgRankingRow? claimed;
     await _pump(

@@ -34,6 +34,36 @@ const _kRankingDivisions = <String, List<String>>{
 
 // ── 순위표 ────────────────────────────────────────────────────────────────
 
+/// 지금 보는 부서에서 "본인" 신청을 걸 수 있는 선수들.
+///
+/// [links] 는 `orgPlayerLinks()` 결과(내 것 전부 + 남의 confirmed).
+/// [registeredHere] 는 이 협회·부서를 내가 등록했는지 — 아니면 아무 행도 못 건다
+/// (자격 강제의 정본은 RLS `org_player_links_claim`, 여기는 표시 규칙).
+///
+/// 내 링크는 status 를 가리지 않고 전부 뺀다. rejected 도 마찬가지다 —
+/// unique(org_code, org_player_id, user_id) 가 상태와 무관해서 재신청 INSERT 가
+/// 반드시 실패하는데, 버튼만 다시 떠 있으면 사용자는 이유 모를 에러만 본다.
+Set<String> computeClaimableIds({
+  required List<OrgRankingRow> rows,
+  required List<Map<String, dynamic>> links,
+  required String? myUserId,
+  required bool registeredHere,
+}) {
+  if (!registeredHere) return const {};
+  final blocked = <String>{};
+  for (final link in links) {
+    final orgPlayerId = link['org_player_id'] as String;
+    if (link['user_id'] == myUserId || link['status'] == 'confirmed') {
+      blocked.add(orgPlayerId);
+    }
+  }
+  return {
+    for (final r in rows)
+      if (r.orgPlayerId != null && !blocked.contains(r.orgPlayerId))
+        r.orgPlayerId!,
+  };
+}
+
 /// 이름·소속 부분일치 필터. 표가 부서 하나에 수백 행(광주 남자일반부 871행)이라
 /// 스크롤만으로는 자기 이름을 찾을 수 없다. 서버 재조회 없이 받아둔 행에서 거른다.
 List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
@@ -327,32 +357,24 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
 
     String? linkedOrgPlayerId;
     final pendingIds = <String>{};
-    final takenIds = <String>{}; // 나든 남이든 이미 확정된 선수
     for (final link in links) {
       final status = link['status'] as String;
       final orgPlayerId = link['org_player_id'] as String;
       final isMine = link['user_id'] == myUserId;
-      if (status == 'confirmed') {
-        takenIds.add(orgPlayerId);
-        if (isMine) linkedOrgPlayerId = orgPlayerId;
-      }
+      if (isMine && status == 'confirmed') linkedOrgPlayerId = orgPlayerId;
       if (isMine && status == 'pending') pendingIds.add(orgPlayerId);
     }
 
     // 신청 자격: 지금 보는 협회·부서를 내가 등록해 뒀는가. 정본은 RLS
     // (org_player_links_claim) 이고 여기서는 같은 조건을 화면에 반영만 한다.
-    final registeredHere = myOrgs.any(
-      (o) => o.org == _orgCode && o.divisionCodes.contains(_divisionCode),
+    final claimable = computeClaimableIds(
+      rows: rows,
+      links: links,
+      myUserId: myUserId,
+      registeredHere: myOrgs.any(
+        (o) => o.org == _orgCode && o.divisionCodes.contains(_divisionCode),
+      ),
     );
-    final claimable = <String>{};
-    if (registeredHere) {
-      for (final r in rows) {
-        final id = r.orgPlayerId;
-        if (id != null && !takenIds.contains(id) && !pendingIds.contains(id)) {
-          claimable.add(id);
-        }
-      }
-    }
 
     OrgRankingRow? candidate;
     for (final c in candidates) {
