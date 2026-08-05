@@ -34,20 +34,87 @@ const _kRankingDivisions = <String, List<String>>{
 
 // ── 순위표 ────────────────────────────────────────────────────────────────
 
+/// 지금 보는 부서에서 "본인" 신청을 걸 수 있는 선수들.
+///
+/// [links] 는 `orgPlayerLinks()` 결과(내 것 전부 + 남의 confirmed).
+/// [registeredHere] 는 이 협회·부서를 내가 등록했는지 — 아니면 아무 행도 못 건다
+/// (자격 강제의 정본은 RLS `org_player_links_claim`, 여기는 표시 규칙).
+///
+/// 내 링크는 status 를 가리지 않고 전부 뺀다. rejected 도 마찬가지다 —
+/// unique(org_code, org_player_id, user_id) 가 상태와 무관해서 재신청 INSERT 가
+/// 반드시 실패하는데, 버튼만 다시 떠 있으면 사용자는 이유 모를 에러만 본다.
+///
+/// 이 협회에 내 확정 연결이 이미 있으면 아무 행도 신청할 수 없다. 협회당
+/// 유저 1명 1선수(org_player_links_confirmed_user_key)라 승인 시점에 막히므로,
+/// 신청을 받아두면 관리자가 승인할 수 없는 대기 건만 쌓인다.
+///
+/// [myName] 과 이름이 같은 행만 신청할 수 있다. 한 협회 안에서 동명이인이
+/// 0건이라(2026-08-05 실측, 3,540명 전원 유일) 이름 하나로 사람이 특정된다.
+Set<String> computeClaimableIds({
+  required List<OrgRankingRow> rows,
+  required List<Map<String, dynamic>> links,
+  required String? myUserId,
+  required String? myName,
+  required bool registeredHere,
+}) {
+  if (!registeredHere) return const {};
+  // 정책이 users.name 을 글자 그대로 비교하므로 여기서도 trim 하지 않는다 —
+  // 앞뒤 여백을 앱만 관대하게 다루면 버튼은 보이는데 서버가 거부한다.
+  final name = myName;
+  if (name == null || name.isEmpty) return const {};
+  final blocked = <String>{};
+  for (final link in links) {
+    final orgPlayerId = link['org_player_id'] as String;
+    final isMine = link['user_id'] == myUserId;
+    if (isMine && link['status'] == 'confirmed') return const {};
+    if (isMine || link['status'] == 'confirmed') {
+      blocked.add(orgPlayerId);
+    }
+  }
+  return {
+    for (final r in rows)
+      if (r.orgPlayerId != null &&
+          r.playerName == name &&
+          !blocked.contains(r.orgPlayerId))
+        r.orgPlayerId!,
+  };
+}
+
+/// 이름·소속 부분일치 필터. 표가 부서 하나에 수백 행(광주 남자일반부 871행)이라
+/// 스크롤만으로는 자기 이름을 찾을 수 없다. 서버 재조회 없이 받아둔 행에서 거른다.
+List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
+  final q = query.trim();
+  if (q.isEmpty) return rows;
+  return rows
+      .where(
+        (r) =>
+            r.playerName.contains(q) || (r.clubRaw?.contains(q) ?? false),
+      )
+      .toList();
+}
+
 /// 순위·성명·소속·포인트 한 줄. 데이터 주입형(네트워크 호출 없음) — 조회는
 /// [RankingsScreen] 이 담당한다.
 ///
 /// 저장은 rank_points/total_points 둘이지만(협회 규정상 다른 집계여야 함),
 /// 현재 협회 화면이 전 행에서 같은 값을 내보내 화면엔 totalPoints 하나만 보여준다.
+///
+/// [onClaim] 이 있으면 신청 가능한 행에 "본인" 버튼이 붙는다. 어떤 행이 신청
+/// 가능한지는 화면이 판단해 [claimableOrgPlayerIds] 로 준다(자격 강제의 정본은
+/// RLS `org_player_links_claim` 이고, 이건 표시 규칙일 뿐이다).
 class RankingList extends StatelessWidget {
   const RankingList({
     super.key,
     required this.rows,
     required this.linkedOrgPlayerId,
+    this.claimableOrgPlayerIds = const {},
+    this.onClaim,
   });
 
   final List<OrgRankingRow> rows;
   final String? linkedOrgPlayerId;
+  final Set<String> claimableOrgPlayerIds;
+  final void Function(OrgRankingRow row)? onClaim;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +126,11 @@ class RankingList extends StatelessWidget {
             row: rows[i],
             isMine: rows[i].orgPlayerId != null &&
                 rows[i].orgPlayerId == linkedOrgPlayerId,
+            onClaim: onClaim != null &&
+                    rows[i].orgPlayerId != null &&
+                    claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
+                ? () => onClaim!(rows[i])
+                : null,
           ),
           if (i < rows.length - 1)
             Divider(height: 1, color: cs.outlineVariant),
@@ -69,10 +141,15 @@ class RankingList extends StatelessWidget {
 }
 
 class _RankingRow extends StatelessWidget {
-  const _RankingRow({required this.row, required this.isMine});
+  const _RankingRow({
+    required this.row,
+    required this.isMine,
+    this.onClaim,
+  });
 
   final OrgRankingRow row;
   final bool isMine;
+  final VoidCallback? onClaim;
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +183,23 @@ class _RankingRow extends StatelessWidget {
             ),
           ),
           Text('${row.totalPoints}', style: tt.bodyLarge),
+          if (onClaim != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton(
+              // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
+              // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
+              style: OutlinedButton.styleFrom(
+                // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
+                // 폭만 내용에 맞게 줄인다.
+                minimumSize: const Size(0, AppSizes.control),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                ),
+              ),
+              onPressed: onClaim,
+              child: const Text('본인'),
+            ),
+          ],
         ],
       ),
     );
@@ -234,12 +328,22 @@ class _RankingScreenData {
     required this.linkedOrgPlayerId,
     required this.candidate,
     required this.hasPendingClaim,
+    required this.claimableOrgPlayerIds,
+    required this.registeredHere,
   });
 
   final List<OrgRankingRow> rows;
   final String? linkedOrgPlayerId;
   final OrgRankingRow? candidate;
   final bool hasPendingClaim;
+
+  /// 지금 보고 있는 부서에서 "본인" 신청을 걸 수 있는 선수들.
+  /// 비어 있으면 어느 행에도 버튼이 안 붙는다.
+  final Set<String> claimableOrgPlayerIds;
+
+  /// 이 협회·부서를 내 프로필에 등록해 뒀는지. 등록했는데도 신청할 행이
+  /// 하나도 없으면 이유(이름 불일치)를 화면이 말해 줘야 한다.
+  final bool registeredHere;
 }
 
 /// 협회 랭킹 화면. 협회(광주/전남)와 부서를 고르면 그 부서의 공표 순위표를 보여준다.
@@ -254,6 +358,8 @@ class RankingsScreen extends ConsumerStatefulWidget {
 class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   String _orgCode = 'gj';
   String _divisionCode = _kRankingDivisions['gj']!.first;
+  String _query = '';
+  bool _claiming = false;
   late Future<_RankingScreenData> _future;
 
   @override
@@ -268,25 +374,47 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       orgCode: _orgCode,
       divisionCode: _divisionCode,
     );
-    final links = await api.myOrgPlayerLinks(_orgCode);
+    final links = await api.orgPlayerLinks(_orgCode);
     final candidates = await api.myRankingCandidates();
+    final myOrgs = await api.myTennisOrgs();
+    final myProfile = await api.myProfile();
+    final myUserId = ref.read(currentUserProvider)?.id;
 
     String? linkedOrgPlayerId;
     final pendingIds = <String>{};
     for (final link in links) {
       final status = link['status'] as String;
       final orgPlayerId = link['org_player_id'] as String;
-      if (status == 'confirmed') linkedOrgPlayerId = orgPlayerId;
-      if (status == 'pending') pendingIds.add(orgPlayerId);
+      final isMine = link['user_id'] == myUserId;
+      if (isMine && status == 'confirmed') linkedOrgPlayerId = orgPlayerId;
+      if (isMine && status == 'pending') pendingIds.add(orgPlayerId);
     }
 
+    // 신청 자격: 지금 보는 협회·부서를 내가 등록했고, 이름이 같은 행인가.
+    // 정본은 RLS(org_player_links_claim) 이고 여기서는 같은 조건을 화면에 반영만 한다.
+    final registeredHere = myOrgs.any(
+      (o) => o.org == _orgCode && o.divisionCodes.contains(_divisionCode),
+    );
+    final claimable = computeClaimableIds(
+      rows: rows,
+      links: links,
+      myUserId: myUserId,
+      myName: myProfile?.name,
+      registeredHere: registeredHere,
+    );
+
+    // 후보 카드는 행별 버튼과 별개 경로다. 이 협회에 이미 확정 연결이 있으면
+    // my_ranking_candidates() 가 (같은 이름의 다른 선수를) 후보로 낼 수 있는데,
+    // 그 신청은 정책이 거부한다 — 카드 자체를 띄우지 않는다.
     OrgRankingRow? candidate;
-    for (final c in candidates) {
-      if (c.orgCode == _orgCode &&
-          c.orgPlayerId != null &&
-          !pendingIds.contains(c.orgPlayerId)) {
-        candidate = c;
-        break;
+    if (linkedOrgPlayerId == null) {
+      for (final c in candidates) {
+        if (c.orgCode == _orgCode &&
+            c.orgPlayerId != null &&
+            !pendingIds.contains(c.orgPlayerId)) {
+          candidate = c;
+          break;
+        }
       }
     }
 
@@ -295,6 +423,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       linkedOrgPlayerId: linkedOrgPlayerId,
       candidate: candidate,
       hasPendingClaim: pendingIds.isNotEmpty,
+      claimableOrgPlayerIds: claimable,
+      registeredHere: registeredHere,
     );
   }
 
@@ -333,14 +463,26 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   }
 
   Future<void> _claim(OrgRankingRow candidate) async {
+    // 연타 방어. 같은 선수로 INSERT 가 둘 나가면 하나는
+    // unique(org_code, org_player_id, user_id) 로 23505 를 받는다.
+    if (_claiming) return;
+    _claiming = true;
     try {
       await ref.read(apiProvider).claimRanking(candidate);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('신청했습니다. 관리자 확인 후 연결됩니다')),
+        );
+      }
+      if (!mounted) return;
       _reload();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('신청 실패: $e')));
+    } finally {
+      _claiming = false;
     }
   }
 
@@ -378,6 +520,22 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               },
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              0,
+            ),
+            child: TextField(
+              decoration: const InputDecoration(
+                labelText: '이름·소속 검색',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
           const SizedBox(height: AppSpacing.sm),
           FutureBuilder<_RankingScreenData>(
             future: _future,
@@ -397,6 +555,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                   return Center(child: Text('로드 실패: ${snap.error}'));
                 }
                 final data = snap.data!;
+                final visibleRows = filterRankingRows(data.rows, _query);
                 return ListView(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
@@ -414,16 +573,44 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                           '확인 중입니다',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
+                      )
+                    // 등록한 부서인데 신청할 행이 하나도 없는 경우. 이유를 안 알려
+                    // 주면 "버튼이 왜 없지"로 끝난다. 원인은 여러 가지(이름 불일치가
+                    // 가장 흔하고, 이미 신청·연결된 선수도 제외된다)라 단정하지 않는다.
+                    else if (data.registeredHere &&
+                        data.claimableOrgPlayerIds.isEmpty &&
+                        data.linkedOrgPlayerId == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Text(
+                          '이 표에서 신청할 수 있는 줄이 없습니다. '
+                          '가입할 때 넣은 이름이 협회 명단과 같아야 하고, '
+                          '이미 신청했거나 연결된 선수는 제외됩니다.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
                       ),
-                    if (data.rows.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(AppSpacing.xxl),
-                        child: Center(child: Text('공표된 랭킹이 없습니다')),
+                    if (visibleRows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xxl),
+                        child: Center(
+                          child: Text(
+                            data.rows.isEmpty
+                                ? '공표된 랭킹이 없습니다'
+                                : '검색 결과가 없습니다',
+                          ),
+                        ),
                       )
                     else
                       RankingList(
-                        rows: data.rows,
+                        rows: visibleRows,
                         linkedOrgPlayerId: data.linkedOrgPlayerId,
+                        claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                        onClaim: _claim,
                       ),
                   ],
                 );

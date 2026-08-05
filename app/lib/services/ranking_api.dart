@@ -28,16 +28,16 @@ mixin RankingApi on ApiBase {
     ).map(OrgRankingRow.fromJson).toList();
   }
 
-  /// 특정 협회에서 내 연결 상태(org_player_id, status) 전부.
-  /// confirmed 는 랭킹 행 강조에, pending 은 "확인 중입니다" 표시에 쓴다.
-  Future<List<Map<String, dynamic>>> myOrgPlayerLinks(String orgCode) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return const [];
+  /// 특정 협회에서 내가 볼 수 있는 연결 전부 — 내 것(모든 status) + 남의 confirmed.
+  /// RLS(`org_player_links_read`)가 딱 그만큼만 주므로 필터 없이 그대로 받는다.
+  ///
+  /// 내 confirmed 는 랭킹 행 강조에, 내 pending 은 "확인 중" 표시에,
+  /// 남의 confirmed 는 이미 주인이 있는 행의 신청 버튼을 숨기는 데 쓴다.
+  Future<List<Map<String, dynamic>>> orgPlayerLinks(String orgCode) async {
     final rows = await supabase
         .from('org_player_links')
-        .select('org_player_id, status')
-        .eq('org_code', orgCode)
-        .eq('user_id', userId);
+        .select('org_player_id, status, user_id')
+        .eq('org_code', orgCode);
     return List<Map<String, dynamic>>.from(rows);
   }
 
