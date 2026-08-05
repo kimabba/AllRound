@@ -64,7 +64,7 @@ class RecruitingPostPreview {
       id: json['id'] as String,
       clubId: json['club_id'] as String,
       sport: (club['sport'] as String?) ?? 'tennis',
-      clubName: (club['name'] as String?) ?? '클럽',
+      clubName: (club['name'] as String?) ?? '모임',
       title: json['title'] as String,
       region: (club['region'] as String?) ?? '지역 미정',
       place: json['place'] as String,

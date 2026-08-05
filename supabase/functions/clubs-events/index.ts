@@ -164,7 +164,7 @@ Deno.serve(withCors(async (req) => {
     .eq('club_id', clubId)
     .eq('status', 'active')
     .neq('user_id', auth.user.id);
-  const clubName = typeof club?.name === 'string' ? club.name : '클럽';
+  const clubName = typeof club?.name === 'string' ? club.name : '모임';
   // club_events SELECT RLS 는 차단 관계(is_user_blocked_pair)를 숨긴다.
   // 알림으로 제목을 보내면 그 차단이 무의미해지므로 수신자에서 제외한다.
   const { data: blockRows } = await supabase

@@ -582,7 +582,7 @@ class _EmptyHint extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             '여러분의 도우미 볼보이(BB)예요. 어느 메뉴에 있는지 몰라도 괜찮아요.\n'
-            '대회, 클럽, 구장, 규칙 — 궁금한 걸 말하면 BB가 찾아다 드려요.',
+            '대회, 모임, 구장, 규칙 — 궁금한 걸 말하면 BB가 찾아다 드려요.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.5,
@@ -807,7 +807,7 @@ class _MessageBubble extends StatelessWidget {
                             ),
                     ),
                   ),
-                  // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
+                  // 카드(대회·모임)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
                   // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
                   if (msg.citations.isNotEmpty &&
                       !msg.uiBlocks.any((b) =>

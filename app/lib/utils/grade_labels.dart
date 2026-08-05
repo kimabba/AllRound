@@ -211,10 +211,7 @@ const _kFallbackDivisions = <TennisDivision>[
   TennisDivision(code: 'kta_senior_60', org: 'kta', label: '시니어 60+'),
   TennisDivision(code: 'kta_senior_65', org: 'kta', label: '시니어 65+'),
   TennisDivision(
-      code: 'kta_w_open',
-      org: 'kta',
-      label: '여자오픈',
-      gender: 'female'),
+      code: 'kta_w_open', org: 'kta', label: '여자오픈', gender: 'female'),
 
   // KATO 한국테니스발전협의회
   TennisDivision(code: 'kato_challenger', org: 'kato', label: '챌린저부'),
@@ -225,25 +222,13 @@ const _kFallbackDivisions = <TennisDivision>[
       isRankingGrade: false,
       gender: 'mixed'),
   TennisDivision(
-      code: 'kato_futures_m',
-      org: 'kato',
-      label: '남자퓨처스부',
-      gender: 'male'),
+      code: 'kato_futures_m', org: 'kato', label: '남자퓨처스부', gender: 'male'),
   TennisDivision(
-      code: 'kato_futures_w',
-      org: 'kato',
-      label: '여자퓨처스부',
-      gender: 'female'),
+      code: 'kato_futures_w', org: 'kato', label: '여자퓨처스부', gender: 'female'),
   TennisDivision(
-      code: 'kato_gaenari',
-      org: 'kato',
-      label: '개나리부',
-      gender: 'female'),
+      code: 'kato_gaenari', org: 'kato', label: '개나리부', gender: 'female'),
   TennisDivision(
-      code: 'kato_gukhwa',
-      org: 'kato',
-      label: '국화부',
-      gender: 'mixed'),
+      code: 'kato_gukhwa', org: 'kato', label: '국화부', gender: 'mixed'),
   TennisDivision(code: 'kato_instructor', org: 'kato', label: '지도자부'),
   TennisDivision(code: 'kato_masters', org: 'kato', label: '마스터스부'),
   TennisDivision(
@@ -264,15 +249,9 @@ const _kFallbackDivisions = <TennisDivision>[
 
   // KTFS 전국테니스연합회 — 2016년 KTA 에 흡수·소멸(비활성)
   TennisDivision(
-      code: 'ktfs_beginner',
-      org: 'ktfs',
-      label: '초급',
-      isActive: false),
+      code: 'ktfs_beginner', org: 'ktfs', label: '초급', isActive: false),
   TennisDivision(
-      code: 'ktfs_general',
-      org: 'ktfs',
-      label: '일반',
-      isActive: false),
+      code: 'ktfs_general', org: 'ktfs', label: '일반', isActive: false),
   TennisDivision(code: 'ktfs_open', org: 'ktfs', label: '오픈', isActive: false),
   TennisDivision(
       code: 'ktfs_w',
@@ -296,10 +275,7 @@ const _kFallbackDivisions = <TennisDivision>[
   TennisDivision(code: 'gj_m_general', org: 'gj', label: '일반부', gender: 'male'),
   TennisDivision(code: 'gj_m_gold', org: 'gj', label: '골드부', gender: 'male'),
   TennisDivision(
-      code: 'gj_m_instructor',
-      org: 'gj',
-      label: '지도자부',
-      gender: 'male'),
+      code: 'gj_m_instructor', org: 'gj', label: '지도자부', gender: 'male'),
   TennisDivision(
       code: 'gj_m_jidong',
       org: 'gj',
@@ -321,10 +297,7 @@ const _kFallbackDivisions = <TennisDivision>[
       gender: 'male',
       isActive: false),
   TennisDivision(
-      code: 'gj_m_veteran',
-      org: 'gj',
-      label: '베테랑부',
-      gender: 'male'),
+      code: 'gj_m_veteran', org: 'gj', label: '베테랑부', gender: 'male'),
   TennisDivision(
       code: 'gj_w_beginner',
       org: 'gj',
@@ -332,30 +305,15 @@ const _kFallbackDivisions = <TennisDivision>[
       isRankingGrade: false,
       gender: 'female'),
   TennisDivision(
-      code: 'gj_w_geumbae',
-      org: 'gj',
-      label: '여자금배부',
-      gender: 'female'),
+      code: 'gj_w_geumbae', org: 'gj', label: '여자금배부', gender: 'female'),
   TennisDivision(
-      code: 'gj_w_gukhwa',
-      org: 'gj',
-      label: '국화부',
-      gender: 'female'),
+      code: 'gj_w_gukhwa', org: 'gj', label: '국화부', gender: 'female'),
   TennisDivision(
-      code: 'gj_w_open',
-      org: 'gj',
-      label: '여자오픈부',
-      gender: 'female'),
+      code: 'gj_w_open', org: 'gj', label: '여자오픈부', gender: 'female'),
   TennisDivision(
-      code: 'gj_w_rookie',
-      org: 'gj',
-      label: '여자신인부',
-      gender: 'female'),
+      code: 'gj_w_rookie', org: 'gj', label: '여자신인부', gender: 'female'),
   TennisDivision(
-      code: 'gj_w_winner',
-      org: 'gj',
-      label: '여자우승자부',
-      gender: 'female'),
+      code: 'gj_w_winner', org: 'gj', label: '여자우승자부', gender: 'female'),
 
   // 전라남도테니스협회
   TennisDivision(
@@ -367,10 +325,7 @@ const _kFallbackDivisions = <TennisDivision>[
   TennisDivision(code: 'jn_m_general', org: 'jn', label: '일반부', gender: 'male'),
   TennisDivision(code: 'jn_m_gold', org: 'jn', label: '골드부', gender: 'male'),
   TennisDivision(
-      code: 'jn_m_instructor',
-      org: 'jn',
-      label: '지도자부',
-      gender: 'male'),
+      code: 'jn_m_instructor', org: 'jn', label: '지도자부', gender: 'male'),
   TennisDivision(
       code: 'jn_m_masters',
       org: 'jn',
@@ -386,52 +341,25 @@ const _kFallbackDivisions = <TennisDivision>[
       gender: 'male',
       isActive: false),
   TennisDivision(
-      code: 'jn_m_veteran',
-      org: 'jn',
-      label: '베테랑부',
-      gender: 'male'),
+      code: 'jn_m_veteran', org: 'jn', label: '베테랑부', gender: 'male'),
   TennisDivision(
-      code: 'jn_w_geumbae',
-      org: 'jn',
-      label: '여자금배부',
-      gender: 'female'),
+      code: 'jn_w_geumbae', org: 'jn', label: '여자금배부', gender: 'female'),
   TennisDivision(
-      code: 'jn_w_gukhwa',
-      org: 'jn',
-      label: '국화부',
-      gender: 'female'),
+      code: 'jn_w_gukhwa', org: 'jn', label: '국화부', gender: 'female'),
   TennisDivision(
-      code: 'jn_w_open',
-      org: 'jn',
-      label: '여자오픈부',
-      gender: 'female'),
+      code: 'jn_w_open', org: 'jn', label: '여자오픈부', gender: 'female'),
   TennisDivision(
-      code: 'jn_w_rookie',
-      org: 'jn',
-      label: '여자신인부',
-      gender: 'female'),
+      code: 'jn_w_rookie', org: 'jn', label: '여자신인부', gender: 'female'),
   TennisDivision(
-      code: 'jn_w_winner',
-      org: 'jn',
-      label: '여자우승자부',
-      gender: 'female'),
+      code: 'jn_w_winner', org: 'jn', label: '여자우승자부', gender: 'female'),
 
   // 시·군/클럽 자체 — 임시 등급(비활성)
   TennisDivision(
-      code: 'local_general',
-      org: 'local',
-      label: '자체 일반',
-      isActive: false),
+      code: 'local_general', org: 'local', label: '자체 일반', isActive: false),
   TennisDivision(
-      code: 'local_open',
-      org: 'local',
-      label: '자체 오픈',
-      isActive: false),
+      code: 'local_open', org: 'local', label: '자체 오픈', isActive: false),
   TennisDivision(
-      code: 'local_rookie',
-      org: 'local',
-      label: '자체 신인',
-      isActive: false),
+      code: 'local_rookie', org: 'local', label: '자체 신인', isActive: false),
   TennisDivision(
       code: 'local_w',
       org: 'local',
@@ -678,16 +606,53 @@ class TennisOrgEntry {
 // 협회 정본은 DB public.tennis_orgs 다(JY-135). 아래 const 는 미로드 시 쓰는
 // 오프라인 폴백이며, 값은 마이그레이션 백필과 같아야 한다.
 const _kFallbackOrgEntries = <TennisOrgEntry>[
-  TennisOrgEntry(code: 'kta', label: '대한테니스협회 (KTA)', shortLabel: 'KTA', isActive: true),
-  TennisOrgEntry(code: 'kato', label: '한국테니스발전협의회 (KATO)', shortLabel: 'KATO', isActive: true),
-  TennisOrgEntry(code: 'kata', label: '한국동호인테니스협회 (KATA)', shortLabel: 'KATA', isActive: true),
-  TennisOrgEntry(code: 'ktfs', label: '국민생활체육 전국테니스연합회 (KTFS)', shortLabel: 'KTFS', isActive: false),
-  TennisOrgEntry(code: 'kstf', label: '한국시니어테니스연맹 (KSTF, 60+)', shortLabel: 'KSTF', isActive: true),
-  TennisOrgEntry(code: 'kssta', label: '한국슈퍼시니어테니스협회 (KSSTA)', shortLabel: 'KSSTA', isActive: true),
-  TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
-  TennisOrgEntry(code: 'gj', label: '광주광역시테니스협회 (GJTA)', shortLabel: '광주협회', isActive: true),
-  TennisOrgEntry(code: 'jn', label: '전라남도테니스협회 (JNTA)', shortLabel: '전남협회', isActive: true),
-  TennisOrgEntry(code: 'local', label: '시·군 또는 클럽 자체', shortLabel: '시·군/클럽', isActive: true),
+  TennisOrgEntry(
+      code: 'kta', label: '대한테니스협회 (KTA)', shortLabel: 'KTA', isActive: true),
+  TennisOrgEntry(
+      code: 'kato',
+      label: '한국테니스발전협의회 (KATO)',
+      shortLabel: 'KATO',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'kata',
+      label: '한국동호인테니스협회 (KATA)',
+      shortLabel: 'KATA',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'ktfs',
+      label: '국민생활체육 전국테니스연합회 (KTFS)',
+      shortLabel: 'KTFS',
+      isActive: false),
+  TennisOrgEntry(
+      code: 'kstf',
+      label: '한국시니어테니스연맹 (KSTF, 60+)',
+      shortLabel: 'KSTF',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'kssta',
+      label: '한국슈퍼시니어테니스협회 (KSSTA)',
+      shortLabel: 'KSSTA',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'kasta',
+      label: '단식 테니스 (KASTA / 단테매)',
+      shortLabel: 'KASTA',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'gj',
+      label: '광주광역시테니스협회 (GJTA)',
+      shortLabel: '광주협회',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'jn',
+      label: '전라남도테니스협회 (JNTA)',
+      shortLabel: '전남협회',
+      isActive: true),
+  TennisOrgEntry(
+      code: 'local',
+      label: '시·군 또는 클럽 자체',
+      shortLabel: '시·군/클럽',
+      isActive: true),
 ];
 
 final _kFallbackOrgByCode = {for (final e in _kFallbackOrgEntries) e.code: e};
@@ -720,11 +685,13 @@ class OrgCatalog {
 
   /// 라벨 조회는 활성 여부와 무관하다 — 비활성 협회를 이미 가진 사용자의
   /// 화면에 코드가 그대로 노출되면 안 된다.
-  String labelFor(String code) =>
-      (_byCode ?? _kFallbackOrgByCode)[code]?.label ?? code;
+  String labelFor(String code) => code == 'local'
+      ? '시·군 또는 자체 모임'
+      : ((_byCode ?? _kFallbackOrgByCode)[code]?.label ?? code);
 
-  String shortLabelFor(String code) =>
-      (_byCode ?? _kFallbackOrgByCode)[code]?.shortLabel ?? code;
+  String shortLabelFor(String code) => code == 'local'
+      ? '시·군/모임'
+      : ((_byCode ?? _kFallbackOrgByCode)[code]?.shortLabel ?? code);
 
   /// tennis_orgs 를 읽어 카탈로그를 교체한다(멱등).
   /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다.
@@ -764,7 +731,8 @@ class OrgCatalog {
       });
     final entries = sorted.map((r) {
       final code = r['code'] as String;
-      final label = (r['label_ko'] as String?) ?? (r['name_ko'] as String?) ?? code;
+      final label =
+          (r['label_ko'] as String?) ?? (r['name_ko'] as String?) ?? code;
       return TennisOrgEntry(
         code: code,
         label: label,
@@ -801,7 +769,8 @@ List<String> get tennisOrgsWithDivisions =>
 String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
 
 /// 협회 코드 → 짧은 라벨(칩·요약용).
-String tennisOrgShortLabel(String org) => OrgCatalog.instance.shortLabelFor(org);
+String tennisOrgShortLabel(String org) =>
+    OrgCatalog.instance.shortLabelFor(org);
 
 // =========================
 // Region (표준 17개 광역시도)

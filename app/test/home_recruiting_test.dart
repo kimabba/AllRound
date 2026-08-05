@@ -37,8 +37,12 @@ void main() {
       post('tennis-old', createdAt: t0),
       post('tennis-new', createdAt: t0.add(const Duration(days: 5))),
       post('futsal-old', sport: 'futsal', createdAt: t0),
-      post('futsal-new', sport: 'futsal', createdAt: t0.add(const Duration(days: 2))),
-      post('closed-futsal', sport: 'futsal', closed: true, createdAt: t0.add(const Duration(days: 9))),
+      post('futsal-new',
+          sport: 'futsal', createdAt: t0.add(const Duration(days: 2))),
+      post('closed-futsal',
+          sport: 'futsal',
+          closed: true,
+          createdAt: t0.add(const Duration(days: 9))),
     ]);
     // 풋살 먼저(최신순), 그다음 테니스(최신순). 마감글은 빠짐.
     expect(result.map((p) => p.id).toList(),
@@ -46,8 +50,8 @@ void main() {
   });
 
   test('pickHomeRecruiting: limit 적용', () {
-    final posts =
-        List.generate(6, (i) => post('p$i', createdAt: t0.add(Duration(days: i))));
+    final posts = List.generate(
+        6, (i) => post('p$i', createdAt: t0.add(Duration(days: i))));
     expect(pickHomeRecruiting(posts, limit: 4).length, 4);
   });
 }

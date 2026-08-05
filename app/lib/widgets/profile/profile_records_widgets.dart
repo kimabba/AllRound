@@ -12,7 +12,7 @@ import 'profile_settings_widgets.dart';
 import 'profile_sports_widgets.dart';
 
 // ────────────────────────────────────────────────────────────
-// 관리 중인 클럽 섹션
+// 관리 중인 모임 섹션
 // ────────────────────────────────────────────────────────────
 
 class MyClubsSection extends ConsumerWidget {
@@ -26,8 +26,8 @@ class MyClubsSection extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('클럽 삭제'),
-        content: Text('${club.name} 클럽 생성 요청을 삭제할까요?'),
+        title: const Text('모임 삭제'),
+        content: Text('${club.name} 모임 생성 요청을 삭제할까요?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -50,13 +50,13 @@ class MyClubsSection extends ConsumerWidget {
       ref.invalidate(myClubsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('클럽 생성 요청을 삭제했습니다.')),
+          const SnackBar(content: Text('모임 생성 요청을 삭제했습니다.')),
         );
       }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('클럽 삭제 실패: $error')),
+          SnackBar(content: Text('모임 삭제 실패: $error')),
         );
       }
     }
@@ -78,7 +78,7 @@ class MyClubsSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SectionHeader(title: '관리 중인 클럽'),
+            const SectionHeader(title: '관리 중인 모임'),
             const SizedBox(height: AppSpacing.md),
             Column(
               children: [
@@ -251,12 +251,12 @@ class MyClubEmptyContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '아직 등록한 클럽이 없습니다',
+                '아직 등록한 모임이 없습니다',
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 2),
               Text(
-                '마음에 드는 클럽을 찾아 등록하면 이곳에 표시됩니다.',
+                '마음에 드는 모임을 찾아 등록하면 이곳에 표시됩니다.',
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],

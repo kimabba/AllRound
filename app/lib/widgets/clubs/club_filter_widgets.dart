@@ -292,7 +292,7 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                         controller: _nameQueryCtrl,
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: '클럽 이름·설명 검색',
+                          hintText: '모임 이름·설명 검색',
                           prefixIcon: const Icon(Icons.search_rounded),
                           filled: true,
                           fillColor: cs.surface,
@@ -363,7 +363,7 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                         ],
                       ),
                       FilterSection(
-                        title: '모임요일',
+                        title: '활동 요일',
                         children: [
                           FilterChipWrap(
                             values: _days,

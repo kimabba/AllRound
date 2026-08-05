@@ -1,4 +1,4 @@
-// clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
+// clubs-join: 모임 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
 //   action: 'request'|'cancel'|'leave'|'kick'|'ban'|'set_manager'|'update_monthly_fee'|'update_inquiry_links'|'update_intro'|'resubmit_review'|'delete_club'|'list_members'|'list_former_members',
@@ -13,6 +13,7 @@ import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
+import { canListClubMembers } from './member_visibility.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -116,8 +117,25 @@ Deno.serve(withCors(async (req) => {
   if (action === 'list_members') {
     const member = await activeMember('role');
     const admin = member ? false : await isAdmin();
+    let isPublicClub = false;
     if (!member && !admin) {
-      return errorResponse('Only active club members can view members', 403);
+      const { data: targetClub, error: clubError } = await supa
+        .from('clubs')
+        .select('status')
+        .eq('id', clubId)
+        .maybeSingle();
+      if (clubError) return errorResponse(clubError.message, 500);
+      if (!targetClub) return errorResponse('Club not found', 404);
+      isPublicClub = targetClub.status === 'approved';
+      if (
+        !canListClubMembers({
+          isActiveMember: false,
+          isAdmin: false,
+          clubStatus: targetClub.status,
+        })
+      ) {
+        return errorResponse('Only approved club members are public', 403);
+      }
     }
 
     const { data, error } = await supa
@@ -145,7 +163,16 @@ Deno.serve(withCors(async (req) => {
       }
     }
     const members = memberRows.map((r) => ({
-      ...r,
+      user_id: r.user_id,
+      role: r.role,
+      joined_at: r.joined_at,
+      // 운영 권한은 비회원에게 공개하지 않는다. 앱 모델의 기본값은 false다.
+      ...(!isPublicClub
+        ? {
+          can_create_event: r.can_create_event,
+          can_post_notice: r.can_post_notice,
+        }
+        : {}),
       users: { name: nameById.get(r.user_id as string) ?? null },
     }));
 
@@ -210,7 +237,7 @@ Deno.serve(withCors(async (req) => {
     const accessError = await ugcAccessError(supa, userId, 'club_join');
     if (accessError) return errorResponse(accessError, 403);
 
-    // 클럽이 승인된 상태인지 확인
+    // 모임이 승인된 상태인지 확인
     const { data: club } = await supa
       .from('clubs')
       .select('id, name, status')
@@ -293,7 +320,7 @@ Deno.serve(withCors(async (req) => {
       await createNotification(supa, {
         userId: reviewerId,
         type: 'club_join_request',
-        title: '새 클럽 가입 신청',
+        title: '새 모임 가입 신청',
         body: `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
         referenceType: 'club_join_request',
         referenceId: typeof joinRequest?.id === 'string' ? joinRequest.id : null,
@@ -588,7 +615,7 @@ Deno.serve(withCors(async (req) => {
       .in('status', ['pending', 'approved', 'rejected']);
     if (error) return errorResponse(error.message, 500);
 
-    // 삭제된 클럽의 active 멤버십을 정리(left)해 내 클럽/멤버 목록에서 사라지게 한다.
+    // 삭제된 모임의 active 멤버십을 정리(left)해 내 모임/멤버 목록에서 사라지게 한다.
     const { error: memberError } = await supa
       .from('club_members')
       .update({ status: 'left', left_at: new Date().toISOString() })

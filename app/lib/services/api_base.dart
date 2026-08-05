@@ -50,8 +50,7 @@ class ApiBase {
   }
 
   /// HTTP GET with timeout + 네트워크 에러 처리.
-  Future<http.Response> httpGet(Uri url,
-      {Map<String, String>? headers}) async {
+  Future<http.Response> httpGet(Uri url, {Map<String, String>? headers}) async {
     try {
       return await http.get(url, headers: headers).timeout(_timeout);
     } on TimeoutException {

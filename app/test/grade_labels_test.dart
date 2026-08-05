@@ -11,13 +11,19 @@ void main() {
   group('GradeCatalog DB 로드', () {
     test('로드 전에는 폴백 등급을 쓴다', () {
       expect(GradeCatalog.instance.isLoaded, isFalse);
-      expect(futsalGrades, ['intro', 'beginner', 'intermediate', 'advanced', 'elite']);
+      expect(futsalGrades,
+          ['intro', 'beginner', 'intermediate', 'advanced', 'elite']);
       expect(gradeLabel('elite'), '선출');
     });
 
     test('DB 결과가 폴백을 대체한다 — 등급 추가·개명이 INSERT 만으로 반영된다', () {
       GradeCatalog.instance.ingestRows([
-        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {
+          'sport': 'futsal',
+          'code': 'intro',
+          'label_ko': '입문',
+          'is_active': true
+        },
         {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': true},
         {
           'sport': 'tennis',
@@ -35,8 +41,18 @@ void main() {
 
     test('폐기 등급은 선택지에서 빠지되 라벨은 남는다', () {
       GradeCatalog.instance.ingestRows([
-        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
-        {'sport': 'futsal', 'code': 'pro', 'label_ko': '프로', 'is_active': false},
+        {
+          'sport': 'futsal',
+          'code': 'intro',
+          'label_ko': '입문',
+          'is_active': true
+        },
+        {
+          'sport': 'futsal',
+          'code': 'pro',
+          'label_ko': '프로',
+          'is_active': false
+        },
       ]);
       expect(futsalGrades, ['intro'], reason: '폐기 등급이 선택지에 남았다');
       // 그 등급을 쓰던 사용자의 프로필에 코드가 그대로 노출되면 안 된다.
@@ -47,7 +63,12 @@ void main() {
     test('한 종목의 활성 등급이 0개면 폴백을 되살리지 않는다', () {
       // 폴백으로 되돌리면 앱이 DB 의 폐기 결정을 뒤집는 꼴이 된다.
       GradeCatalog.instance.ingestRows([
-        {'sport': 'tennis', 'code': 'under1y', 'label_ko': '1년 미만', 'is_active': true},
+        {
+          'sport': 'tennis',
+          'code': 'under1y',
+          'label_ko': '1년 미만',
+          'is_active': true
+        },
       ]);
       expect(futsalGrades, isEmpty);
       expect(tennisGrades, ['under1y']);
@@ -66,7 +87,12 @@ void main() {
       expect(ready, isFalse, reason: '로드 전에 스플래시가 열리면 폴백 라벨이 보인다');
 
       GradeCatalog.instance.ingestRows([
-        {'sport': 'futsal', 'code': 'intro', 'label_ko': '입문', 'is_active': true},
+        {
+          'sport': 'futsal',
+          'code': 'intro',
+          'label_ko': '입문',
+          'is_active': true
+        },
       ]);
       await pumpEventQueue();
       expect(ready, isTrue);
@@ -215,7 +241,8 @@ void main() {
     test('divisionsForOrg(gj) 는 종목 전용까지 전부 준다 — 대회 제보용', () {
       // 온보딩 필터를 여기까지 번지게 하면 초급자부·마스터즈부 대회를 제보할 수 없게 된다.
       final codes = divisionsForOrg('gj').map((d) => d.code).toList();
-      expect(codes, containsAll(['gj_m_beginner', 'gj_m_masters', 'gj_m_open']));
+      expect(
+          codes, containsAll(['gj_m_beginner', 'gj_m_masters', 'gj_m_open']));
     });
 
     test('tennisDivisionLabelsForOrg(kata) → 부수제 1~5부/여자부', () {
@@ -348,7 +375,12 @@ void main() {
           'is_ranking_grade': false,
         },
         // 컬럼이 없는 구버전 응답 → 기존 동작대로 등급으로 본다.
-        {'code': 'gj_m_gold', 'org_code': 'gj', 'label_ko': '골드부', 'gender': 'male'},
+        {
+          'code': 'gj_m_gold',
+          'org_code': 'gj',
+          'label_ko': '골드부',
+          'gender': 'male'
+        },
       ]);
       expect(rankingGradesForOrg('gj').map((d) => d.code),
           ['gj_m_open', 'gj_m_gold']);
@@ -382,8 +414,18 @@ void main() {
       // 입력을 뒤섞어 넣어도 kta < gj < kato 순서(tennisOrgs)로 그룹핑돼야 함
       DivisionCatalog.instance.ingestRows([
         {'code': 'gj_b', 'org_code': 'gj', 'label_ko': 'GJ-B', 'gender': 'all'},
-        {'code': 'kato_a', 'org_code': 'kato', 'label_ko': 'KATO-A', 'gender': 'all'},
-        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {
+          'code': 'kato_a',
+          'org_code': 'kato',
+          'label_ko': 'KATO-A',
+          'gender': 'all'
+        },
+        {
+          'code': 'kta_a',
+          'org_code': 'kta',
+          'label_ko': 'KTA-A',
+          'gender': 'all'
+        },
         {'code': 'gj_a', 'org_code': 'gj', 'label_ko': 'GJ-A', 'gender': 'all'},
       ]);
       final orgs = DivisionCatalog.instance.all.map((d) => d.org).toList();
@@ -400,13 +442,30 @@ void main() {
     test('부서 그룹 순서는 OrgCatalog 순서를 따른다(DB sort_order 반영)', () {
       // 협회 순서를 뒤집어 로드하면 부서 그룹 순서도 따라 뒤집혀야 한다.
       OrgCatalog.instance.ingestRows([
-        {'code': 'gj', 'label_ko': '광주', 'short_label': '광주협회',
-         'name_ko': '광주', 'is_active': true, 'sort_order': 10},
-        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
-         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+        {
+          'code': 'gj',
+          'label_ko': '광주',
+          'short_label': '광주협회',
+          'name_ko': '광주',
+          'is_active': true,
+          'sort_order': 10
+        },
+        {
+          'code': 'kta',
+          'label_ko': 'KTA',
+          'short_label': 'KTA',
+          'name_ko': 'KTA',
+          'is_active': true,
+          'sort_order': 20
+        },
       ]);
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {
+          'code': 'kta_a',
+          'org_code': 'kta',
+          'label_ko': 'KTA-A',
+          'gender': 'all'
+        },
         {'code': 'gj_a', 'org_code': 'gj', 'label_ko': 'GJ-A', 'gender': 'all'},
       ]);
       final orgs = DivisionCatalog.instance.all.map((d) => d.org).toList();
@@ -415,14 +474,36 @@ void main() {
 
     test('비활성 협회의 부서도 카탈로그 순서를 지킨다(뒤로 밀리지 않음)', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'ktfs', 'label_ko': 'KTFS', 'short_label': 'KTFS',
-         'name_ko': 'KTFS', 'is_active': false, 'sort_order': 10},
-        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
-         'name_ko': 'KTA', 'is_active': true, 'sort_order': 20},
+        {
+          'code': 'ktfs',
+          'label_ko': 'KTFS',
+          'short_label': 'KTFS',
+          'name_ko': 'KTFS',
+          'is_active': false,
+          'sort_order': 10
+        },
+        {
+          'code': 'kta',
+          'label_ko': 'KTA',
+          'short_label': 'KTA',
+          'name_ko': 'KTA',
+          'is_active': true,
+          'sort_order': 20
+        },
       ]);
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
-        {'code': 'ktfs_a', 'org_code': 'ktfs', 'label_ko': 'KTFS-A', 'gender': 'all'},
+        {
+          'code': 'kta_a',
+          'org_code': 'kta',
+          'label_ko': 'KTA-A',
+          'gender': 'all'
+        },
+        {
+          'code': 'ktfs_a',
+          'org_code': 'ktfs',
+          'label_ko': 'KTFS-A',
+          'gender': 'all'
+        },
       ]);
       // ktfs 는 비활성이지만 sort_order 10 이라 kta(20)보다 앞이어야 한다.
       // 활성 목록(tennisOrgs)만 보면 ktfs 가 unknown 으로 빠져 뒤로 밀린다.
@@ -432,7 +513,12 @@ void main() {
 
     test('reset 후 다시 fallback 으로 복귀', () {
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+        {
+          'code': 'kato_gaenari',
+          'org_code': 'kato',
+          'label_ko': '개나리부',
+          'gender': 'female'
+        },
       ]);
       expect(DivisionCatalog.instance.isLoaded, isTrue);
       DivisionCatalog.instance.reset();
@@ -448,7 +534,12 @@ void main() {
       await pumpEventQueue();
       expect(ready, isFalse);
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+        {
+          'code': 'kato_gaenari',
+          'org_code': 'kato',
+          'label_ko': '개나리부',
+          'gender': 'female'
+        },
       ]);
       await pumpEventQueue();
       expect(ready, isTrue);
@@ -456,7 +547,12 @@ void main() {
 
     test('reset 후 whenReady 는 미완료로 재무장된다', () async {
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kato_gaenari', 'org_code': 'kato', 'label_ko': '개나리부', 'gender': 'female'},
+        {
+          'code': 'kato_gaenari',
+          'org_code': 'kato',
+          'label_ko': '개나리부',
+          'gender': 'female'
+        },
       ]);
       await pumpEventQueue();
       DivisionCatalog.instance.reset();
@@ -495,16 +591,52 @@ void main() {
       expect(tennisOrgs.first, 'kta');
       expect(tennisOrgLabel('kta'), '대한테니스협회 (KTA)');
       expect(tennisOrgShortLabel('gj'), '광주협회');
+      expect(tennisOrgLabel('local'), '시·군 또는 자체 모임');
+      expect(tennisOrgShortLabel('local'), '시·군/모임');
+    });
+
+    test('DB의 예전 local 라벨도 사용자에게는 모임으로 표시한다', () {
+      OrgCatalog.instance.ingestRows([
+        {
+          'code': 'local',
+          'label_ko': '시·군 또는 클럽 자체',
+          'short_label': '시·군/클럽',
+          'name_ko': '지역 자체 운영',
+          'is_active': true,
+          'sort_order': 100,
+        },
+      ]);
+
+      expect(tennisOrgLabel('local'), '시·군 또는 자체 모임');
+      expect(tennisOrgShortLabel('local'), '시·군/모임');
     });
 
     test('ingestRows 는 sort_order 순으로 정렬하고 비활성은 목록에서 뺀다', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'jn', 'label_ko': '전남', 'short_label': '전남협회',
-         'name_ko': '전라남도테니스협회', 'is_active': true, 'sort_order': 90},
-        {'code': 'kta', 'label_ko': 'KTA 라벨', 'short_label': 'KTA',
-         'name_ko': '대한테니스협회', 'is_active': true, 'sort_order': 10},
-        {'code': 'ktfs', 'label_ko': '폐지협회', 'short_label': 'KTFS',
-         'name_ko': '국민생활체육', 'is_active': false, 'sort_order': 40},
+        {
+          'code': 'jn',
+          'label_ko': '전남',
+          'short_label': '전남협회',
+          'name_ko': '전라남도테니스협회',
+          'is_active': true,
+          'sort_order': 90
+        },
+        {
+          'code': 'kta',
+          'label_ko': 'KTA 라벨',
+          'short_label': 'KTA',
+          'name_ko': '대한테니스협회',
+          'is_active': true,
+          'sort_order': 10
+        },
+        {
+          'code': 'ktfs',
+          'label_ko': '폐지협회',
+          'short_label': 'KTFS',
+          'name_ko': '국민생활체육',
+          'is_active': false,
+          'sort_order': 40
+        },
       ]);
       expect(tennisOrgs, ['kta', 'jn']); // 비활성 ktfs 제외, sort_order 순
       expect(tennisOrgLabel('kta'), 'KTA 라벨');
@@ -512,9 +644,14 @@ void main() {
 
     test('비활성 협회도 라벨 조회는 된다(보유자 화면에 코드가 노출되면 안 됨)', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'ktfs', 'label_ko': '국민생활체육 전국테니스연합회 (KTFS)',
-         'short_label': 'KTFS', 'name_ko': '국민생활체육', 'is_active': false,
-         'sort_order': 40},
+        {
+          'code': 'ktfs',
+          'label_ko': '국민생활체육 전국테니스연합회 (KTFS)',
+          'short_label': 'KTFS',
+          'name_ko': '국민생활체육',
+          'is_active': false,
+          'sort_order': 40
+        },
       ]);
       expect(tennisOrgs, isNot(contains('ktfs')));
       expect(tennisOrgLabel('ktfs'), '국민생활체육 전국테니스연합회 (KTFS)');
@@ -522,8 +659,14 @@ void main() {
 
     test('label_ko 가 비면 name_ko 로 폴백한다', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'new1', 'label_ko': null, 'short_label': null,
-         'name_ko': '새협회', 'is_active': true, 'sort_order': 1000},
+        {
+          'code': 'new1',
+          'label_ko': null,
+          'short_label': null,
+          'name_ko': '새협회',
+          'is_active': true,
+          'sort_order': 1000
+        },
       ]);
       expect(tennisOrgLabel('new1'), '새협회');
       expect(tennisOrgShortLabel('new1'), '새협회');
@@ -531,8 +674,14 @@ void main() {
 
     test('reset 후 폴백으로 복귀한다', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'kta', 'label_ko': 'X', 'short_label': 'X',
-         'name_ko': 'X', 'is_active': true, 'sort_order': 10},
+        {
+          'code': 'kta',
+          'label_ko': 'X',
+          'short_label': 'X',
+          'name_ko': 'X',
+          'is_active': true,
+          'sort_order': 10
+        },
       ]);
       expect(OrgCatalog.instance.isLoaded, isTrue);
       OrgCatalog.instance.reset();
@@ -559,13 +708,30 @@ void main() {
 
     test('부서가 0개인 협회는 빠지고 부서가 있는 협회만 남는다', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'kta', 'label_ko': 'KTA', 'short_label': 'KTA',
-         'name_ko': 'KTA', 'is_active': true, 'sort_order': 10},
-        {'code': 'kssta', 'label_ko': 'KSSTA', 'short_label': 'KSSTA',
-         'name_ko': 'KSSTA', 'is_active': true, 'sort_order': 20},
+        {
+          'code': 'kta',
+          'label_ko': 'KTA',
+          'short_label': 'KTA',
+          'name_ko': 'KTA',
+          'is_active': true,
+          'sort_order': 10
+        },
+        {
+          'code': 'kssta',
+          'label_ko': 'KSSTA',
+          'short_label': 'KSSTA',
+          'name_ko': 'KSSTA',
+          'is_active': true,
+          'sort_order': 20
+        },
       ]);
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kta_a', 'org_code': 'kta', 'label_ko': 'KTA-A', 'gender': 'all'},
+        {
+          'code': 'kta_a',
+          'org_code': 'kta',
+          'label_ko': 'KTA-A',
+          'gender': 'all'
+        },
       ]);
       // kssta 는 부서가 없어 골랐을 때 부서 칩이 하나도 없어 제보를 끝낼 수 없다.
       expect(tennisOrgsWithDivisions, ['kta']);
@@ -574,14 +740,25 @@ void main() {
 
     test('부서가 생기면(INSERT) 자동으로 선택지에 나타난다', () {
       OrgCatalog.instance.ingestRows([
-        {'code': 'kssta', 'label_ko': 'KSSTA', 'short_label': 'KSSTA',
-         'name_ko': 'KSSTA', 'is_active': true, 'sort_order': 20},
+        {
+          'code': 'kssta',
+          'label_ko': 'KSSTA',
+          'short_label': 'KSSTA',
+          'name_ko': 'KSSTA',
+          'is_active': true,
+          'sort_order': 20
+        },
       ]);
       DivisionCatalog.instance.ingestRows([]);
       expect(tennisOrgsWithDivisions, isEmpty);
 
       DivisionCatalog.instance.ingestRows([
-        {'code': 'kssta_a', 'org_code': 'kssta', 'label_ko': 'KSSTA-A', 'gender': 'all'},
+        {
+          'code': 'kssta_a',
+          'org_code': 'kssta',
+          'label_ko': 'KSSTA-A',
+          'gender': 'all'
+        },
       ]);
       expect(tennisOrgsWithDivisions, ['kssta']);
     });

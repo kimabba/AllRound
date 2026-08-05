@@ -27,7 +27,7 @@ Map<String, dynamic> recruitingJson({
     'closed_at': closedAt,
     'clubs': {
       'id': 'club-1',
-      'name': '올라운드 클럽',
+      'name': '올라운드 모임',
       'sport': sport,
       'region': '광주 북구',
       'status': 'approved',
@@ -40,7 +40,7 @@ void main() {
     final post = RecruitingPostPreview.fromJson(recruitingJson());
 
     expect(post.clubId, 'club-1');
-    expect(post.clubName, '올라운드 클럽');
+    expect(post.clubName, '올라운드 모임');
     expect(post.countLabel, '필드 4명 · 키퍼 1명');
     expect(post.isClosed, isFalse);
     expect(post.createdAt.toUtc(), DateTime.utc(2026, 7, 14, 10));

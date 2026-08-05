@@ -48,7 +48,7 @@ export async function reviewJoin(
     return { ok: false, status: 409, message: 'Already reviewed' };
   }
 
-  // 검토자가 해당 클럽의 owner/manager 또는 admin인지 확인
+  // 검토자가 해당 모임의 owner/manager 또는 admin인지 확인
   const { data: member } = await supa
     .from('club_members')
     .select('role')
@@ -105,14 +105,14 @@ export async function reviewJoin(
   const clubName = jr.clubs && typeof jr.clubs === 'object' && 'name' in jr.clubs &&
       typeof jr.clubs.name === 'string'
     ? jr.clubs.name
-    : '클럽';
+    : '모임';
   const approved = action === 'approve';
   await createNotification(supa, {
     userId: jr.user_id,
     type: approved ? 'club_join_approved' : 'club_join_rejected',
-    title: approved ? '클럽 가입이 승인되었습니다' : '클럽 가입 신청이 거절되었습니다',
+    title: approved ? '모임 가입이 승인되었습니다' : '모임 가입 신청이 거절되었습니다',
     body: approved
-      ? `${clubName} 가입이 승인되었습니다. 이제 클럽 멤버 화면을 확인할 수 있습니다.`
+      ? `${clubName} 가입이 승인되었습니다. 이제 모임 멤버 화면을 확인할 수 있습니다.`
       : `${clubName} 가입 신청이 거절되었습니다. 운영진에게 문의해 주세요.`,
     referenceType: 'club_join_request',
     referenceId: jr.id,

@@ -22,9 +22,9 @@ void main() {
   test('회원 많은 순은 동률일 때 이름순으로 정렬한다', () {
     final result = sortClubs(
       [
-        club('1', '나클럽', memberCount: 10),
-        club('2', '다클럽', memberCount: 3),
-        club('3', '가클럽', memberCount: 10),
+        club('1', '나모임', memberCount: 10),
+        club('2', '다모임', memberCount: 3),
+        club('3', '가모임', memberCount: 10),
       ],
       ClubSortOrder.memberCount,
     );
@@ -32,7 +32,7 @@ void main() {
     expect(result.map((item) => item.id), ['3', '1', '2']);
   });
 
-  test('최근 등록순은 날짜 없는 클럽을 마지막에 둔다', () {
+  test('최근 등록순은 날짜 없는 모임을 마지막에 둔다', () {
     final result = sortClubs(
       [
         club('1', '날짜없음'),

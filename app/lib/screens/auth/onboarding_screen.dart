@@ -696,7 +696,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '기본 정보만 입력하면 대회와 클럽을 내 조건에 맞춰 볼 수 있어요.',
+          '기본 정보만 입력하면 대회와 모임을 내 조건에 맞춰 볼 수 있어요.',
           style: tt.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
             height: 1.45,
@@ -712,7 +712,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '실명은 대회·클럽 신청에, 닉네임은 앱 활동에 사용돼요.',
+              '실명은 대회·모임 신청에, 닉네임은 앱 활동에 사용돼요.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -781,7 +781,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: '이름 (실명)',
-                hintText: '대회·클럽 신청에 사용돼요',
+                hintText: '대회·모임 신청에 사용돼요',
                 prefixIcon: Icon(Icons.person_outline_rounded),
                 counterText: '',
               ),
@@ -893,7 +893,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '근처 대회와 클럽을 추천해드릴게요.',
+          '근처 대회와 모임을 추천해드릴게요.',
           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: AppSpacing.xxl),

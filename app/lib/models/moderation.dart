@@ -32,7 +32,7 @@ enum UgcReportReason {
 
 enum UgcPenaltyType {
   commentRestriction('comment_restriction', '댓글 제한'),
-  clubJoinRestriction('club_join_restriction', '클럽 가입 제한'),
+  clubJoinRestriction('club_join_restriction', '모임 가입 제한'),
   communityRestriction('community_restriction', '커뮤니티 작성 제한');
 
   const UgcPenaltyType(this.value, this.label);
