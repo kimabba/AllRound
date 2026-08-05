@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -73,14 +76,35 @@ Future<void> initializeAllRoundServices({
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeAllRoundServices();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeAllRoundServices();
+    await _initCrashlytics();
 
-  // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
-  // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
-  runApp(
-    ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
-  );
+    // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
+    // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
+    runApp(
+      ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
+    );
+  }, (error, stack) {
+    if (!kIsWeb) FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+  });
+}
+
+/// firebase_crashlytics 는 web 을 지원하지 않는다. 구성 파일(GoogleService-Info.plist /
+/// google-services.json) 이 없는 개발 환경에서는 조용히 skip한다(notifications.dart 와 동일 정책).
+Future<void> _initCrashlytics() async {
+  if (kIsWeb) return;
+  try {
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+  } catch (_) {
+    return;
+  }
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 }
 
 class MatchUpApp extends ConsumerWidget {

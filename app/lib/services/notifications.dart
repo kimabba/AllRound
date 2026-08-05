@@ -31,7 +31,8 @@ NotificationEvent _eventFromMessage(
 /// 없는 환경에서는 조용히 skip — 개발 단계에서 앱이 부팅 자체를 막지 않도록.
 Future<void> initNotifications(ApiService api) async {
   try {
-    await Firebase.initializeApp();
+    // main() 이 이미 초기화했을 수 있다(Crashlytics 용) — 중복 호출은 예외를 던진다.
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp();
   } catch (_) {
     // 구성 파일 없으면 skip
     return;
