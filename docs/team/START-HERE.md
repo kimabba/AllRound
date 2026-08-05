@@ -75,7 +75,7 @@
 | 🔴 | JY-113 구글 로그아웃 세션 잔존 버그 | **[드론]** | signOut 스코프/OAuth 쿠키 |
 | 🔴 | JY-114 정책·법무·컴플라이언스 체크리스트 | **[kimabba/백과장]** | 개인정보·약관·데이터고지·리스팅, due 7/14 |
 | 🔴 | JY-115 클럽 UGC 신고·차단(애플 1.2) | **[시리]** | UGC 앱 제출 블로커, due 7/15 |
-| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 7/14, 불변. redirect `kr.allround.app` 표기 확인 |
+| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 딥링크 스킴 `kr.allround.app` 유지, iOS Bundle ID는 `kr.jyoung.allround` |
 | ✅결정 | 애플 로그인 생략 · 카카오 출시후로 연기(JY-7) | **[kimabba]** | **구글 + 이메일**로 진행. 이메일 로그인이 애플 4.8 면제 |
 | High | JY-1 스토어 에셋 | **[백과장]** | 아이콘/스플래시/스크린샷 |
 | High | JY-6 메타데이터·릴리스 빌드 준비 | **[드론]** | dev-auth 프로덕션 차단 포함 |
@@ -203,7 +203,7 @@ fix(ranking): 남자신인부 폐지 — 협회가 일반부로 합쳤습니다
 
 ### 7/09 머지됨 (참고, 이미 main)
 - **JY-103** chat 삭제 컬럼(#179) · **JY-104/105** 검색 taxonomy·오버로드(#180)
-- **JY-68** 식별자 `kr.allround.app` 통일 + 서명키 gitignore(#182)
+- **JY-68** 딥링크 스킴 `kr.allround.app` 통일 + 서명키 gitignore(#182); iOS App Store Bundle ID는 서명 설정에 따라 `kr.jyoung.allround`
 - **JY-112** 회원 탈퇴 — 백엔드(#189) + UI(#190) **코드 완료** (배포 대기)
 - 공유문서·PR규율(#181) · 스토어 리스팅(#184) · 개인정보·데이터안전(#188)
 
@@ -252,6 +252,7 @@ fix(ranking): 남자신인부 폐지 — 협회가 일반부로 합쳤습니다
 
 ## 관련 문서
 - 프로세스·하네스·PR 기준: [`docs/team-collaboration.md`](../team-collaboration.md)
+- Apple 출시·업데이트 기준: [`docs/team/apple-release-runbook.md`](./apple-release-runbook.md)
 - 규칙 라우터: [`AGENTS.md`](../../AGENTS.md) · 로드온디맨드 `docs/rules/`
 - 현재 상태 KB: `docs/kb/`
 - 로드맵 요약: [`docs/plans/MVP-roadmap.md`](../plans/MVP-roadmap.md)

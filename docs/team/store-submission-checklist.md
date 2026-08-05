@@ -7,6 +7,9 @@
 > 담당: 🤖 Play=kimabba · 🍎 Apple=백과장 · 에셋(아이콘/스크린샷)=백과장
 > 리서치 출처는 문서 하단 참고.
 
+Apple 업데이트의 버전·빌드번호·Bundle ID·권한·릴리스 이력은
+[`apple-release-runbook.md`](apple-release-runbook.md)를 정본으로 사용한다.
+
 ## 우리 앱 프로필 (요건 판단 근거)
 - 로그인: **iOS는 자체 이메일만**, Android/Web은 이메일 + Google 기존회원 로그인 — 계정 생성 있음
 - **UGC 있음**: 클럽 게시판·댓글·모임 + AI 코치 채팅
@@ -21,6 +24,8 @@
 - 상태: **정식 출시 완료** (한국 App Store 제품 페이지 노출 확인)
 - 출시 빌드: **1.0.0 (5)**
 - Apple App ID: **6792671473**
+- iOS Bundle ID: **`kr.jyoung.allround`**
+- 딥링크 스킴: **`kr.allround.app`** (Bundle ID와 다름)
 - 제품 페이지: <https://apps.apple.com/kr/app/id6792671473>
 - 심사 이력: 2026-07-30 미통과 1회 후 재제출, 2026-08-04 승인·배포
 - 심사용 계정·비밀번호: App Store Connect에 등록됨 (비밀번호는 문서에 기록하지 않음)
