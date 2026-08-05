@@ -63,11 +63,17 @@ def read(path: Path) -> str:
 def declared_dependencies() -> list[str]:
     """pubspec.yaml 의 dependencies 블록에서 직접 의존성 이름만 뽑는다.
 
-    dart pub 이 쓰는 2칸 들여쓰기를 전제한다. 다른 들여쓰기나 따옴표 키는
-    이 검사가 못 보므로, 형식이 어긋나면 통과시키지 않고 실패시킨다.
+    **검사 대상은 `dependencies` 뿐이다.** `dev_dependencies` 는 빌드·테스트 도구라
+    앱 빌드에 들어가지 않으므로 대장에 적지 않는다(문서에도 명시).
+
+    dart pub 이 쓰는 2칸 들여쓰기를 전제한다. 그 밖의 유효한 YAML 문법
+    (따옴표 키 `"pkg":`, 명시적 키 `? pkg` / `: ^1.0`)은 이름 대조를 우회하므로,
+    **못 읽는 줄이 하나라도 있으면 통과시키지 않고 실패**시켜 사람이 보게 한다.
+    주석과 빈 줄, 하위 속성(4칸 이상)은 정상적으로 건너뛴다.
     """
     text = read(PUBSPEC)
-    if re.search(r"^dependency_overrides:", text, flags=re.MULTILINE):
+    # 따옴표를 씌워도 유효한 YAML 이라 정규식에 따옴표를 허용한다.
+    if re.search(r'^"?dependency_overrides"?:', text, flags=re.MULTILINE):
         fail(
             "app/pubspec.yaml 에 dependency_overrides 가 있다. 같은 이름으로 다른 구현(git/path)을 "
             "끼워 넣을 수 있어 이름 대조가 무의미해진다 — 왜 필요한지 대장에 적고 이 검사를 손볼 것."
@@ -76,26 +82,31 @@ def declared_dependencies() -> list[str]:
         fail("app/pubspec_overrides.yaml 이 있다 — dependency_overrides 와 같은 이유로 확인이 필요하다.")
 
     match = re.search(
-        r"^dependencies:[^\n]*\n(.*?)^(?:[a-z_]+:|\Z)",
+        r'^"?dependencies"?:[^\n]*\n(.*?)^(?:"?[a-zA-Z_][a-zA-Z0-9_]*"?:|\Z)',
         text,
         flags=re.MULTILINE | re.DOTALL,
     )
     if not match:
         fail("app/pubspec.yaml 에서 dependencies 블록을 찾지 못했다 — 형식이 바뀌었는지 확인할 것")
-    block = match.group(1)
 
-    # 2칸 들여쓰기 + 따옴표 없는 키만 인식한다. 그 밖의 항목이 있으면 조용히
-    # 넘기지 않고 사람에게 보인다.
-    entries = re.findall(r"^  (\S[^:\n]*):", block, flags=re.MULTILINE)
     names = []
-    for raw in entries:
-        if not re.fullmatch(r"[a-z0-9_]+", raw):
+    for lineno, raw_line in enumerate(match.group(1).splitlines(), start=1):
+        line = raw_line.split("#", 1)[0].rstrip()  # 주석은 정상 — 떼고 본다
+        if not line.strip():
+            continue
+        if line.startswith("    "):  # 하위 속성(sdk:, git:, path: …)
+            continue
+        entry = re.match(r"^  ([a-z0-9_]+):", line)
+        if not entry:
             fail(
-                f"app/pubspec.yaml dependencies 에 이 검사가 못 읽는 항목이 있다: {raw!r}\n"
-                "따옴표 키나 특이한 형식은 이름 대조를 우회한다 — 형식을 맞추거나 검사를 고칠 것."
+                "app/pubspec.yaml dependencies 에 이 검사가 못 읽는 줄이 있다:\n"
+                f"  {raw_line!r}\n\n"
+                "따옴표 키나 명시적 키(? …) 같은 형식은 이름 대조를 조용히 우회한다. "
+                "dart pub 이 쓰는 `  패키지명: ^버전` 형태로 맞추거나, 정말 필요하면 이 검사를 함께 고칠 것."
             )
-        if raw not in SDK_PACKAGES:
-            names.append(raw)
+        name = entry.group(1)
+        if name not in SDK_PACKAGES:
+            names.append(name)
     return sorted(names)
 
 
