@@ -113,7 +113,11 @@ values
   -- 실제 데이터에는 한 협회 안 동명이인이 없다(2026-08-05 실측 0건). 여기서는
   -- '확정 보유자의 추가 신청' 조건만 따로 떼어 보려고 일부러 같은 이름을 하나 더 둔다 —
   -- 이름이 다르면 이름 조건에 먼저 걸려 무엇 때문에 막혔는지 알 수 없다.
-  ('gj', 'gj_m_gold', 4, '김평화',   'kimph2',    '어등산/',  90,  90, 'https://x');
+  ('gj', 'gj_m_gold', 4, '김평화',   'kimph2',    '어등산/',  90,  90, 'https://x'),
+  -- 아래 부서·협회 거부 단언의 신청자는 6666(이기영)이다. 대상 선수 이름이 다르면
+  -- 이름 조건에 먼저 걸려 "부서라서 막혔다"를 증명하지 못한다 — 같은 이름으로 둔다.
+  ('gj', 'gj_w_rookie', 2, '이기영', 'other2', '다른부서/', 80, 80, 'https://x'),
+  ('jn', 'jn_m_gold',   2, '이기영', 'jn_lky', '전남/',     70, 70, 'https://x');
 
 -- status 조건만 격리해 보기 위한 유저(이름이 gildong 과 같다).
 insert into auth.users (id, email) values
@@ -157,7 +161,7 @@ select lives_ok(
 -- 같은 협회라도 등록하지 않은 부서(gj_w_rookie)의 선수는 막힌다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('gj', 'other', '66666666-6666-6666-6666-666666666666', 'pending')$$,
+    values ('gj', 'other2', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '42501',
   null,
   '등록하지 않은 부서의 선수는 신청할 수 없다');
@@ -165,7 +169,7 @@ select throws_ok(
 -- 등록하지 않은 협회(jn)의 선수도 막힌다
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status)
-    values ('jn', 'jn_player', '66666666-6666-6666-6666-666666666666', 'pending')$$,
+    values ('jn', 'jn_lky', '66666666-6666-6666-6666-666666666666', 'pending')$$,
   '42501',
   null,
   '등록하지 않은 협회의 선수는 신청할 수 없다');

@@ -241,6 +241,9 @@ void main() {
 
     test('가입 이름이 비어 있으면 아무것도 신청할 수 없다', () {
       expect(compute(const [], myName: ''), isEmpty);
+      // 정책이 글자 그대로 비교하므로 앞뒤 여백은 앱에서도 불일치로 본다 —
+      // 앱만 관대하면 버튼은 보이는데 서버가 거부한다.
+      expect(compute(const [], myName: ' 김평화 '), isEmpty);
       expect(
         computeClaimableIds(
           rows: rows,
@@ -387,7 +390,7 @@ void main() {
       await _pumpScreen(tester, rows: rows, links: const [], myName: '없는사람');
 
       expect(find.text('본인'), findsNothing);
-      expect(find.textContaining('이름이 협회 명단과 같아야'), findsOneWidget);
+      expect(find.textContaining('신청할 수 있는 줄이 없습니다'), findsOneWidget);
     });
 
     testWidgets('반려된 내 신청의 선수에는 본인 버튼이 안 붙는다', (tester) async {

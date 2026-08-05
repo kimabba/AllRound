@@ -58,7 +58,9 @@ Set<String> computeClaimableIds({
   required bool registeredHere,
 }) {
   if (!registeredHere) return const {};
-  final name = myName?.trim();
+  // 정책이 users.name 을 글자 그대로 비교하므로 여기서도 trim 하지 않는다 —
+  // 앞뒤 여백을 앱만 관대하게 다루면 버튼은 보이는데 서버가 거부한다.
+  final name = myName;
   if (name == null || name.isEmpty) return const {};
   final blocked = <String>{};
   for (final link in links) {
@@ -573,8 +575,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         ),
                       )
                     // 등록한 부서인데 신청할 행이 하나도 없는 경우. 이유를 안 알려
-                    // 주면 "버튼이 왜 없지"로 끝난다 — 대개 가입할 때 넣은 이름이
-                    // 협회 명단 표기와 달라서다.
+                    // 주면 "버튼이 왜 없지"로 끝난다. 원인은 여러 가지(이름 불일치가
+                    // 가장 흔하고, 이미 신청·연결된 선수도 제외된다)라 단정하지 않는다.
                     else if (data.registeredHere &&
                         data.claimableOrgPlayerIds.isEmpty &&
                         data.linkedOrgPlayerId == null)
@@ -583,8 +585,9 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                           vertical: AppSpacing.sm,
                         ),
                         child: Text(
-                          '내 이름과 같은 선수가 이 표에 없습니다. '
-                          '가입할 때 넣은 이름이 협회 명단과 같아야 신청할 수 있습니다.',
+                          '이 표에서 신청할 수 있는 줄이 없습니다. '
+                          '가입할 때 넣은 이름이 협회 명단과 같아야 하고, '
+                          '이미 신청했거나 연결된 선수는 제외됩니다.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color:
                                     Theme.of(context).colorScheme.onSurfaceVariant,

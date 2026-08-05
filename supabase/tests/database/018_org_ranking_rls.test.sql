@@ -26,13 +26,14 @@ insert into public.org_rankings
 values
   ('gj', 'gj_m_gold', 1, '김평화', 'vudghk2116', '어등산/', 2649, 2649,
    'https://gjtennis.kr/sub4_5.php?member_kind=골드부'),
-  -- 아래 거부 단언들이 "랭킹표에 없는 아이디라서" 막히는 것과 헷갈리지 않도록,
-  -- 실재하는 선수를 대상으로 status·user_id 조건만 남겨 검증한다.
+  -- 아래 거부 단언들이 "랭킹표에 없는 아이디" 나 "이름 불일치" 로 막히는 것과
+  -- 헷갈리지 않도록, 요청자(1111 김평화)와 같은 이름의 실재 선수를 대상으로 둔다.
+  -- 그래야 status·user_id 조건만 남아 그 단언이 실제로 무엇을 증명하는지 분명해진다.
   -- rank 는 아래 admin 수동 교정 단언(rank=2)과 겹치지 않게 뒤쪽 번호를 쓴다
   -- (org_code, division_code, rank) 가 유니크다.
-  ('gj', 'gj_m_gold', 92, '박실재', 'real-2', '어등산/', 2000, 2000,
+  ('gj', 'gj_m_gold', 92, '김평화', 'real-2', '어등산/', 2000, 2000,
    'https://gjtennis.kr/sub4_5.php?member_kind=골드부'),
-  ('gj', 'gj_m_gold', 93, '최실재', 'real-3', '어등산/', 1900, 1900,
+  ('gj', 'gj_m_gold', 93, '김평화', 'real-3', '어등산/', 1900, 1900,
    'https://gjtennis.kr/sub4_5.php?member_kind=골드부');
 
 -- 확정 연결 1건을 미리 넣어 anon 노출 검사의 대조군으로 쓴다
