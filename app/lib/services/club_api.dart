@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
+import '../models/club_chat.dart';
 import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
@@ -789,6 +790,50 @@ mixin ClubApi on ApiBase {
     await supabase.rpc('respond_club_event', params: {
       'p_event_id': eventId,
       'p_status': going ? 'going' : 'not_going',
+    });
+  }
+
+  Future<String> openClubChat({
+    required String clubId,
+    String? otherUserId,
+  }) async {
+    final result = await supabase.rpc('open_club_chat', params: {
+      'p_club_id': clubId,
+      'p_other_user_id': otherUserId,
+    });
+    if (result is! String) {
+      throw const FormatException('대화방 정보를 확인하지 못했습니다.');
+    }
+    return result;
+  }
+
+  Future<List<ClubChatMessage>> clubChatMessages(String threadId) async {
+    final rows = await supabase
+        .from('club_chat_messages')
+        .select('id, thread_id, sender_id, body, created_at')
+        .eq('thread_id', threadId)
+        .order('created_at')
+        .limit(300);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubChatMessage.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<void> sendClubChatMessage({
+    required String threadId,
+    required String body,
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+    final text = body.trim();
+    if (text.isEmpty || text.length > 1000) {
+      throw const FormatException('메시지는 1자 이상 1,000자 이하로 입력해주세요.');
+    }
+    await supabase.from('club_chat_messages').insert({
+      'thread_id': threadId,
+      'sender_id': userId,
+      'body': text,
     });
   }
 

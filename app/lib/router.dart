@@ -19,6 +19,7 @@ import 'models/chat_entry_context.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs/club_inquiry_screen.dart';
+import 'screens/clubs/club_member_chat_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/home_screen.dart';
@@ -248,6 +249,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/clubs/:id/chat/:threadId',
+        builder: (_, state) => catalogAware(
+          () => ClubMemberChatScreen(
+            clubId: state.pathParameters['id']!,
+            threadId: state.pathParameters['threadId']!,
+            title: '모임 채팅',
+          ),
+        ),
       ),
       GoRoute(
         path: '/clubs/:id/inquiries/manage',

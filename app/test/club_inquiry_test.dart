@@ -15,6 +15,16 @@ void main() {
         'avatar_url': 'https://example.com/avatar.jpg',
         'primary_region': '서울',
         'age_group': '30대',
+        'sports': [
+          {'sport': 'tennis', 'grade': 'y3to5'},
+        ],
+        'clubs': ['주말 운동'],
+        'tournaments': [
+          {'title': '여름 대회', 'division': '개나리부'},
+        ],
+        'tennis_orgs': [
+          {'org': 'kato', 'division': '챌린저부', 'score': 4},
+        ],
       },
     });
 
@@ -22,6 +32,10 @@ void main() {
     expect(thread.requesterAvatarUrl, 'https://example.com/avatar.jpg');
     expect(thread.requesterRegion, '서울');
     expect(thread.requesterAgeGroup, '30대');
+    expect(thread.requesterSports, ['tennis:y3to5']);
+    expect(thread.requesterTeams, ['주말 운동']);
+    expect(thread.requesterTournaments, ['여름 대회 · 개나리부']);
+    expect(thread.requesterTennisOrganizations, ['kato · 챌린저부 · 4']);
     expect(thread.lastMessageAt.toUtc(), DateTime.utc(2026, 7, 16, 12));
   });
 

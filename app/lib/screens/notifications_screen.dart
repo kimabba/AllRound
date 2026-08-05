@@ -64,6 +64,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return;
       }
     }
+    if (referenceType != null &&
+        referenceType.startsWith('club_chat:') &&
+        clubId != null &&
+        clubId.isNotEmpty) {
+      final threadId = referenceType.substring('club_chat:'.length);
+      if (threadId.isNotEmpty) {
+        context.push('/clubs/$clubId/chat/$threadId');
+        return;
+      }
+    }
     if (notification.referenceType == 'club_approval_request') {
       context.push('/admin/clubs');
       return;
@@ -356,6 +366,8 @@ IconData _iconFor(String type) {
     case 'club_inquiry_received':
     case 'club_inquiry_reply':
       return Icons.forum_rounded;
+    case 'club_chat_message':
+      return Icons.chat_bubble_rounded;
     case 'club_approval_request':
       return Icons.admin_panel_settings_rounded;
     case 'club_join_request':

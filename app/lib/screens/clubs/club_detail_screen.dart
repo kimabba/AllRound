@@ -24,6 +24,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 import 'club_dues_screen.dart';
 import 'club_inquiry_screen.dart';
+import 'club_member_chat_screen.dart';
 import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
@@ -1277,9 +1278,32 @@ class _MembersTab extends ConsumerWidget {
         }
         return ListView.builder(
           padding: const EdgeInsets.all(AppSpacing.lg),
-          itemCount: members.length,
+          itemCount: members.length + (club.isMember ? 1 : 0),
           itemBuilder: (context, i) {
-            final m = members[i];
+            if (club.isMember && i == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.forum_rounded),
+                  title: const Text('멤버 단체 채팅'),
+                  subtitle: const Text('현재 가입한 멤버만 참여할 수 있습니다.'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ClubMemberChatScreen(
+                        clubId: club.id,
+                        title: '${club.name} 단체 채팅',
+                        members: members,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            final memberIndex = club.isMember ? i - 1 : i;
+            final m = members[memberIndex];
             final cs = Theme.of(context).colorScheme;
             final tt = Theme.of(context).textTheme;
             final displayName = _clubMemberDisplayName(m);
@@ -1294,7 +1318,7 @@ class _MembersTab extends ConsumerWidget {
                 ),
                 child: InkWell(
                   onTap: club.isMember
-                      ? () => _showMemberProfile(context, m)
+                      ? () => _showMemberProfile(context, club.id, m)
                       : null,
                   child: Row(
                     children: [
@@ -1420,23 +1444,28 @@ String _formatMemberJoinDate(DateTime date) {
 
 Future<void> _showMemberProfile(
   BuildContext context,
+  String clubId,
   ClubMember member,
 ) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-    builder: (context) => _MemberProfileSheet(member: member),
+    builder: (context) => _MemberProfileSheet(
+      clubId: clubId,
+      member: member,
+    ),
   );
 }
 
-class _MemberProfileSheet extends StatelessWidget {
-  const _MemberProfileSheet({required this.member});
+class _MemberProfileSheet extends ConsumerWidget {
+  const _MemberProfileSheet({required this.clubId, required this.member});
 
+  final String clubId;
   final ClubMember member;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return SafeArea(
@@ -1463,6 +1492,25 @@ class _MemberProfileSheet extends StatelessWidget {
             title: '테니스 협회·레벨',
             values: member.tennisOrganizations,
           ),
+          if (member.userId != ref.watch(currentUserProvider)?.id)
+            FilledButton.icon(
+              onPressed: () {
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => ClubMemberChatScreen(
+                      clubId: clubId,
+                      title: '${_clubMemberDisplayName(member)}님과의 채팅',
+                      otherMember: member,
+                      members: [member],
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+              label: const Text('1:1 채팅'),
+            ),
         ],
       ),
     );

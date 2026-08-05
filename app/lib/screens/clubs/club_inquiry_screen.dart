@@ -378,62 +378,104 @@ Future<void> _showRequesterProfile(
     context: context,
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
-      child: Padding(
+      child: ListView(
+        shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.xl,
           AppSpacing.sm,
           AppSpacing.xl,
           AppSpacing.xl,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 38,
-              backgroundColor: cs.primaryContainer,
-              foregroundImage: _validNetworkImage(thread.requesterAvatarUrl),
-              child: Icon(Icons.person_outline_rounded,
-                  size: 36, color: cs.onPrimaryContainer),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              thread.requesterLabel,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                if ((thread.requesterRegion ?? '').trim().isNotEmpty)
-                  Chip(
-                    avatar: const Icon(Icons.location_on_outlined, size: 18),
-                    label: Text(thread.requesterRegion!.trim()),
-                  ),
-                if ((thread.requesterAgeGroup ?? '').trim().isNotEmpty)
-                  Chip(
-                    avatar: const Icon(Icons.badge_outlined, size: 18),
-                    label: Text(thread.requesterAgeGroup!.trim()),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              '가입 전 문의를 받은 모임장과 매니저에게만 공개되는 프로필입니다.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-            ),
-          ],
-        ),
+        children: [
+          CircleAvatar(
+            radius: 38,
+            backgroundColor: cs.primaryContainer,
+            foregroundImage: _validNetworkImage(thread.requesterAvatarUrl),
+            child: Icon(Icons.person_outline_rounded,
+                size: 36, color: cs.onPrimaryContainer),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            thread.requesterLabel,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              if ((thread.requesterRegion ?? '').trim().isNotEmpty)
+                Chip(
+                  avatar: const Icon(Icons.location_on_outlined, size: 18),
+                  label: Text(thread.requesterRegion!.trim()),
+                ),
+              if ((thread.requesterAgeGroup ?? '').trim().isNotEmpty)
+                Chip(
+                  avatar: const Icon(Icons.badge_outlined, size: 18),
+                  label: Text(thread.requesterAgeGroup!.trim()),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _InquiryProfileGroup(
+            title: '관심 종목·레벨',
+            values: thread.requesterSports,
+          ),
+          _InquiryProfileGroup(
+            title: '가입한 모임',
+            values: thread.requesterTeams,
+          ),
+          _InquiryProfileGroup(
+            title: '참가 대회',
+            values: thread.requesterTournaments,
+          ),
+          _InquiryProfileGroup(
+            title: '테니스 협회·레벨',
+            values: thread.requesterTennisOrganizations,
+          ),
+          Text(
+            '문의자가 먼저 메시지를 보낸 이 모임의 운영진에게만 공개되는 프로필입니다.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ],
       ),
     ),
   );
+}
+
+class _InquiryProfileGroup extends StatelessWidget {
+  const _InquiryProfileGroup({required this.title, required this.values});
+
+  final String title;
+  final List<String> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            values.isEmpty ? '등록된 정보가 없습니다.' : values.join('\n'),
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
