@@ -585,8 +585,11 @@ mixin ClubApi on ApiBase {
         .whereType<Map>()
         .map((row) => ClubMember.fromJson(Map<String, dynamic>.from(row)))
         .toList();
-    const rank = {'owner': 0, 'manager': 1, 'member': 2};
-    members.sort((a, b) => (rank[a.role] ?? 3).compareTo(rank[b.role] ?? 3));
+    members.sort((a, b) {
+      if (a.joinedAt == null) return b.joinedAt == null ? 0 : 1;
+      if (b.joinedAt == null) return -1;
+      return a.joinedAt!.compareTo(b.joinedAt!);
+    });
     return members;
   }
 
@@ -715,7 +718,6 @@ mixin ClubApi on ApiBase {
         .from('club_events')
         .select('*, club_event_attendees(user_id, status)')
         .eq('club_id', clubId)
-        .isFilter('ended_early_at', null)
         .gte('starts_at', nowIso)
         .order('starts_at');
     final uid = supabase.auth.currentUser?.id;
@@ -757,6 +759,7 @@ mixin ClubApi on ApiBase {
     required DateTime startsAt,
     int? fee,
     int? capacity,
+    String? repeatInterval,
   }) async {
     if (supabase.auth.currentUser == null) {
       throw StateError('Not authenticated');
@@ -774,6 +777,7 @@ mixin ClubApi on ApiBase {
         'starts_at': startsAt.toUtc().toIso8601String(),
         if (fee != null) 'fee': fee,
         if (capacity != null) 'capacity': capacity,
+        if (repeatInterval != null) 'repeat_interval': repeatInterval,
       }),
     );
     check(response);
@@ -782,20 +786,10 @@ mixin ClubApi on ApiBase {
   Future<void> respondEvent(String eventId, {required bool going}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
-    try {
-      await supabase.rpc('respond_club_event', params: {
-        'p_event_id': eventId,
-        'p_status': going ? 'going' : 'not_going',
-      });
-    } catch (error) {
-      if (!error.toString().contains('respond_club_event')) rethrow;
-      await supabase.from('club_event_attendees').upsert({
-        'event_id': eventId,
-        'user_id': uid,
-        'status': going ? 'going' : 'not_going',
-        'responded_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'event_id,user_id');
-    }
+    await supabase.rpc('respond_club_event', params: {
+      'p_event_id': eventId,
+      'p_status': going ? 'going' : 'not_going',
+    });
   }
 
   // ── 즐겨찾기 ─────────────────────────────────────────────────
@@ -867,7 +861,13 @@ mixin ClubApi on ApiBase {
               : '*, users!author_id(name), club_post_comments(id)',
         )
         .eq('club_id', clubId);
-    if (tag != null) query = query.eq('tag', tag);
+    if (tag != null && tag != 'notice') {
+      query = query.or(
+        'tag.eq.$tag,and(tag.eq.notice,notice_visible_tags.cs.{$tag})',
+      );
+    } else if (tag == 'notice') {
+      query = query.eq('tag', tag!);
+    }
     if (searchingAuthor) {
       query = query.ilike('users.name', '%$normalizedAuthor%');
     }
@@ -887,6 +887,7 @@ mixin ClubApi on ApiBase {
     required String body,
     bool isPinned = false,
     List<String> imageUrls = const [],
+    List<String> noticeVisibleTags = const [],
   }) async {
     final userId = supabase.auth.currentUser!.id;
     final payload = <String, Object>{
@@ -896,6 +897,7 @@ mixin ClubApi on ApiBase {
       'title': title,
       'body': body,
       'image_urls': imageUrls,
+      'notice_visible_tags': noticeVisibleTags,
     };
     if (isPinned) payload['is_pinned'] = true;
     final row = await supabase

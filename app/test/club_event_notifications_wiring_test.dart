@@ -11,9 +11,10 @@ void main() {
     expect(source, isNot(contains(".from('club_events').insert")));
   });
 
-  test('모임 일정 목록은 조기 종료된 일정을 제외한다', () {
+  test('조기 종료된 일정도 목록에 남겨 상태를 표시한다', () {
     final source = File('lib/services/club_api.dart').readAsStringSync();
 
-    expect(source, contains(".isFilter('ended_early_at', null)"));
+    expect(source, isNot(contains(".isFilter('ended_early_at', null)")));
+    expect(source, contains(".select('*, club_event_attendees(user_id, status)')"));
   });
 }
