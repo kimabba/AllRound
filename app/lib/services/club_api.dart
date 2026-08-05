@@ -246,9 +246,9 @@ mixin ClubApi on ApiBase {
     required String title,
     required String place,
     required String schedule,
-    required String skillLevel,
+    required List<String> skillLevels,
     required String gender,
-    required String age,
+    required List<String> ages,
     required int fieldCount,
     required int keeperCount,
     required int totalCount,
@@ -263,12 +263,17 @@ mixin ClubApi on ApiBase {
     // assert 가 아니라 예외인 이유: assert 는 릴리스 빌드에서 제거돼 정작 운영에서
     // 무력해지고, 디버그와 릴리스의 동작이 갈린다. 이 앱을 거치지 않는 경로(PostgREST
     // 직접 호출)는 여전히 열려 있다 — 근본 차단은 P3 의 데이터 정규화 후 DB 제약.
-    if (!isAllowedSkillLevelLabel(sport, skillLevel)) {
+    if (skillLevels.isEmpty ||
+        skillLevels.any((level) => !isAllowedSkillLevelLabel(sport, level)) ||
+        (skillLevels.length > 1 && skillLevels.contains(anyGradeLabel))) {
       throw ArgumentError.value(
-        skillLevel,
-        'skillLevel',
+        skillLevels,
+        'skillLevels',
         '${sportLabel(sport)} 등급 정본에 없는 값',
       );
+    }
+    if (ages.isEmpty || (ages.length > 1 && ages.contains('무관'))) {
+      throw ArgumentError.value(ages, 'ages', '연령 선택이 올바르지 않음');
     }
 
     final Object raw = await supabase
@@ -279,9 +284,9 @@ mixin ClubApi on ApiBase {
           'title': title.trim(),
           'place': place.trim(),
           'schedule_text': schedule.trim(),
-          'skill_level': skillLevel,
+          'skill_level': skillLevels.join(' · '),
           'gender_text': gender,
-          'age_text': age,
+          'age_text': ages.join(' · '),
           'position_text': position,
           'field_count': fieldCount,
           'keeper_count': keeperCount,

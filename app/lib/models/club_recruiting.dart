@@ -88,6 +88,25 @@ class RecruitingPostPreview {
   }
 }
 
+/// 모집 조건에서 `무관`과 구체 조건이 동시에 저장되지 않게 선택을 정리한다.
+Set<String> toggleRecruitingCondition(
+  Set<String> current,
+  String option, {
+  String anyLabel = '무관',
+}) {
+  if (option == anyLabel) return {anyLabel};
+  final next = {...current}..remove(anyLabel);
+  if (!next.add(option)) next.remove(option);
+  return next.isEmpty ? {anyLabel} : next;
+}
+
+String recruitingConditionLabel(
+  Iterable<String> options,
+  Set<String> selected,
+) {
+  return options.where(selected.contains).join(' · ');
+}
+
 /// 홈 노출용 선별: 모집중(열린)만, 풋살 우선, 그다음 최신순, 상위 [limit]개.
 /// 풋살은 대회보다 팀원 모집이 메인이라 위로 올린다.
 List<RecruitingPostPreview> pickHomeRecruiting(

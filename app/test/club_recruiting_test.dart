@@ -68,4 +68,26 @@ void main() {
     expect(post.createdAt, DateTime.fromMillisecondsSinceEpoch(0));
     expect(post.closedAt, isNull);
   });
+
+  test('연령·등급은 중복 선택하고 무관은 단독 선택한다', () {
+    var selected = <String>{'무관'};
+    selected = toggleRecruitingCondition(selected, '20대');
+    selected = toggleRecruitingCondition(selected, '30대');
+    expect(selected, {'20대', '30대'});
+    expect(
+      recruitingConditionLabel(
+        const ['무관', '20대', '30대', '40대'],
+        selected,
+      ),
+      '20대 · 30대',
+    );
+
+    selected = toggleRecruitingCondition(selected, '무관');
+    expect(selected, {'무관'});
+  });
+
+  test('마지막 구체 조건을 해제하면 무관으로 돌아간다', () {
+    final selected = toggleRecruitingCondition({'초급'}, '초급');
+    expect(selected, {'무관'});
+  });
 }
