@@ -617,7 +617,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 children: [
                                   _FeaturePill(
                                     emoji: '👥',
-                                    label: '내 주변 모임',
+                                    label: '내 주변 클럽',
                                   ),
                                   _FeaturePill(
                                     emoji: '🏆',

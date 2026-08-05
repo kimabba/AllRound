@@ -1,4 +1,4 @@
-// 클럽 활동 MVP 모델: 가입 신청 + 모임 일정 + 멤버
+// 클럽 활동 MVP 모델: 가입 신청 + 모임(정기·번개) + 멤버
 
 class MyClubJoinRequest {
   const MyClubJoinRequest({

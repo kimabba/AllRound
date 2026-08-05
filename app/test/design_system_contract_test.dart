@@ -96,7 +96,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
-    expect(find.text('일정'), findsOneWidget);
+    expect(find.text('대회'), findsOneWidget);
     expect(find.text('룰북'), findsOneWidget);
     expect(find.text('볼보이'), findsOneWidget);
   });

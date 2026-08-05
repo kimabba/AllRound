@@ -28,7 +28,7 @@ import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
-/// 클럽 상세 전체화면: 소개 / 멤버 / 일정 탭.
+/// 클럽 상세 전체화면: 소개 / 멤버 / 모임 탭.
 ///
 /// [club]이 전달되면 즉시 표시, 없으면 [clubId]로 서버에서 로드.
 class ClubDetailScreen extends ConsumerStatefulWidget {
@@ -507,7 +507,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
               tabs: [
                 const Tab(key: AllRoundE2EKeys.clubIntroTab, text: '소개'),
                 const Tab(key: AllRoundE2EKeys.clubMembersTab, text: '멤버'),
-                const Tab(key: AllRoundE2EKeys.clubEventsTab, text: '일정'),
+                const Tab(key: AllRoundE2EKeys.clubEventsTab, text: '모임'),
                 const Tab(key: AllRoundE2EKeys.clubPostsTab, text: '게시판'),
                 if (_canManageClub)
                   const Tab(
@@ -587,7 +587,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _EmptyState(
             icon: Icons.lock_outline_rounded,
             title: '가입 후 이용할 수 있어요',
-            message: '멤버, 일정, 게시판은 클럽 멤버에게만 공개됩니다.',
+            message: '멤버, 모임, 게시판은 클럽 멤버에게만 공개됩니다.',
           ),
         ],
       );
@@ -1495,7 +1495,7 @@ class _ClubManagementTab extends ConsumerWidget {
               Text(
                 club.isOwner
                     ? '클럽장은 소개글, 소개 사진, 회비, 멤버 권한, 클럽 삭제를 관리할 수 있습니다.'
-                    : '부운영자는 소개글, 소개 사진, 일정, 회비를 관리할 수 있습니다.',
+                    : '부운영자는 소개글, 소개 사진, 모임, 회비를 관리할 수 있습니다.',
                 style: tt.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                   height: 1.45,
@@ -2800,7 +2800,7 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
     final displayName = _clubMemberDisplayName(member);
     final initial = displayName.characters.first;
     final permissionLabels = [
-      if (member.canCreateEvent) '일정 등록',
+      if (member.canCreateEvent) '모임 등록',
       if (member.canPostNotice) '공지 등록',
     ];
     return Padding(
@@ -2960,7 +2960,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
   }
 }
 
-// ─── 일정 탭 ──────────────────────────────────────────────────────
+// ─── 모임 탭 ──────────────────────────────────────────────────────
 class _EventsTab extends ConsumerWidget {
   final Club club;
   final Future<List<ClubEvent>> future;
@@ -2988,7 +2988,7 @@ class _EventsTab extends ConsumerWidget {
             if (snap.hasError) {
               return const _EmptyState(
                 icon: Icons.error_outline_rounded,
-                title: '일정을 불러오지 못했습니다',
+                title: '모임을 불러오지 못했습니다',
                 message: '잠시 후 다시 시도해주세요.',
               );
             }
@@ -3006,7 +3006,7 @@ class _EventsTab extends ConsumerWidget {
                   title: '다가오는 모임이 없어요',
                   message: canCreateEvent
                       ? '아래 버튼으로 정기 모임이나 번개 모임을 만들어보세요.'
-                      : '운영진이 새 일정을 등록하면 여기에 표시됩니다.',
+                      : '운영진이 새 모임을 등록하면 여기에 표시됩니다.',
                 ),
               );
             }
@@ -3129,11 +3129,11 @@ class _EventCardState extends ConsumerState<_EventCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(delete ? '일정을 삭제할까요?' : '일정을 조기 종료할까요?'),
+        title: Text(delete ? '모임을 삭제할까요?' : '모임을 조기 종료할까요?'),
         content: Text(
           delete
-              ? '삭제한 일정은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
-              : '종료한 일정은 목록에서 내려가고 예정 알림도 발송되지 않습니다.',
+              ? '삭제한 모임은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
+              : '종료한 모임은 목록에서 내려가고 예정 알림도 발송되지 않습니다.',
         ),
         actions: [
           TextButton(
@@ -3161,7 +3161,7 @@ class _EventCardState extends ConsumerState<_EventCard> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(delete ? '일정 삭제에 실패했습니다.' : '일정 종료에 실패했습니다.')),
+          SnackBar(content: Text(delete ? '모임 삭제에 실패했습니다.' : '모임 종료에 실패했습니다.')),
         );
       }
     } finally {
@@ -3397,7 +3397,7 @@ class _EventResponsesSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              '일정 응답자',
+              '모임 응답자',
               style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: AppSpacing.xs),
