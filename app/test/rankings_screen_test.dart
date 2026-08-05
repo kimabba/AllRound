@@ -31,8 +31,11 @@ OrgRankingRow _row({
 /// 화면 통합용 — _load() 가 실제로 쓰는 네 조회만 갈아끼운다.
 /// (단위 테스트가 판정 함수를 고정해도, 화면이 그 판정을 안 쓰면 소용없다.)
 class _FakeRankingApi extends ApiService {
-  _FakeRankingApi({required this.rows, required this.links})
-      : super(
+  _FakeRankingApi({
+    required this.rows,
+    required this.links,
+    this.candidates = const [],
+  })  : super(
           SupabaseClient(
             'http://127.0.0.1:54321',
             'qa-anon-key',
@@ -42,6 +45,7 @@ class _FakeRankingApi extends ApiService {
 
   final List<OrgRankingRow> rows;
   final List<Map<String, dynamic>> links;
+  final List<OrgRankingRow> candidates;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -55,7 +59,7 @@ class _FakeRankingApi extends ApiService {
       links;
 
   @override
-  Future<List<OrgRankingRow>> myRankingCandidates() async => const [];
+  Future<List<OrgRankingRow>> myRankingCandidates() async => candidates;
 
   @override
   Future<List<UserTennisOrg>> myTennisOrgs() async => [
@@ -76,12 +80,13 @@ Future<void> _pumpScreen(
   WidgetTester tester, {
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
+  List<OrgRankingRow> candidates = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         apiProvider.overrideWithValue(
-          _FakeRankingApi(rows: rows, links: links),
+          _FakeRankingApi(rows: rows, links: links, candidates: candidates),
         ),
         currentUserProvider.overrideWithValue(
           User(
@@ -309,6 +314,29 @@ void main() {
 
       expect(find.text('김평화'), findsOneWidget);
       expect(find.text('이기영'), findsNothing);
+    });
+
+    testWidgets('확정 연결이 있으면 행 버튼도 후보 카드도 안 뜬다', (tester) async {
+      // 후보 카드는 행별 버튼과 다른 경로다. my_ranking_candidates() 는 "그 선수가
+      // 확정됐는지"만 보므로, 같은 이름의 다른 선수를 후보로 낼 수 있다 —
+      // 협회당 1명 1선수라 그 신청은 정책이 거부한다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {
+            'org_player_id': 'a',
+            'status': 'confirmed',
+            'user_id': _kTestUserId,
+          },
+        ],
+        candidates: [
+          _row(rank: 2, name: '김평화', points: 2562, orgPlayerId: 'b'),
+        ],
+      );
+
+      expect(find.text('본인'), findsNothing);
+      expect(find.text('신청'), findsNothing);
     });
 
     testWidgets('반려된 내 신청의 선수에는 본인 버튼이 안 붙는다', (tester) async {

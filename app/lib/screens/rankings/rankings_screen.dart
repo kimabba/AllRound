@@ -179,7 +179,9 @@ class _RankingRow extends StatelessWidget {
               // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
               // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
               style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
+                // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
+                // 폭만 내용에 맞게 줄인다.
+                minimumSize: const Size(0, AppSizes.control),
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.sm,
                 ),
@@ -383,13 +385,18 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       ),
     );
 
+    // 후보 카드는 행별 버튼과 별개 경로다. 이 협회에 이미 확정 연결이 있으면
+    // my_ranking_candidates() 가 (같은 이름의 다른 선수를) 후보로 낼 수 있는데,
+    // 그 신청은 정책이 거부한다 — 카드 자체를 띄우지 않는다.
     OrgRankingRow? candidate;
-    for (final c in candidates) {
-      if (c.orgCode == _orgCode &&
-          c.orgPlayerId != null &&
-          !pendingIds.contains(c.orgPlayerId)) {
-        candidate = c;
-        break;
+    if (linkedOrgPlayerId == null) {
+      for (final c in candidates) {
+        if (c.orgCode == _orgCode &&
+            c.orgPlayerId != null &&
+            !pendingIds.contains(c.orgPlayerId)) {
+          candidate = c;
+          break;
+        }
       }
     }
 
@@ -448,6 +455,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
           const SnackBar(content: Text('신청했습니다. 관리자 확인 후 연결됩니다')),
         );
       }
+      if (!mounted) return;
       _reload();
     } catch (e) {
       if (!mounted) return;
