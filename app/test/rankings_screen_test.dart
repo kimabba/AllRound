@@ -93,6 +93,53 @@ void main() {
     expect(find.byKey(const ValueKey('ranking-row-mine')), findsOneWidget);
   });
 
+  test('검색어는 이름과 소속 둘 다에서 부분일치로 거른다', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+
+    expect(filterRankingRows(rows, '').length, 2);
+    expect(filterRankingRows(rows, '  ').length, 2);
+    expect(filterRankingRows(rows, '평화').single.playerName, '김평화');
+    // 소속(clubRaw) 도 검색 대상 — 같은 클럽 사람을 한 번에 본다.
+    expect(filterRankingRows(rows, '어등산').length, 2);
+    expect(filterRankingRows(rows, '없는이름'), isEmpty);
+  });
+
+  testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {
+    OrgRankingRow? claimed;
+    await _pump(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+        ],
+        linkedOrgPlayerId: null,
+        claimableOrgPlayerIds: const {'a'},
+        onClaim: (row) => claimed = row,
+      ),
+    );
+
+    expect(find.text('본인'), findsOneWidget);
+    await tester.tap(find.text('본인'));
+    expect(claimed?.orgPlayerId, 'a');
+  });
+
+  testWidgets('신청 자격이 없으면(등록 부서 밖) 버튼이 하나도 안 뜬다', (tester) async {
+    await _pump(
+      tester,
+      RankingList(
+        rows: [_row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a')],
+        linkedOrgPlayerId: null,
+        onClaim: (_) {},
+      ),
+    );
+
+    expect(find.text('본인'), findsNothing);
+  });
+
   testWidgets('후보가 있으면 클레임 카드가 뜬다', (tester) async {
     await _pump(
       tester,
