@@ -5,7 +5,7 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
-import { ageGroupFromBirthDate, containsInquiryLink, parseInquiryRequest } from './validation.ts';
+import { ageGroupFromBirthDate, parseInquiryRequest } from './validation.ts';
 
 interface InquiryThreadRow {
   id: string;
@@ -18,7 +18,6 @@ interface ClubRow {
   name: string;
   status: string;
   created_by: string | null;
-  inquiry_links_enabled: boolean;
 }
 
 interface InquiryListRow extends InquiryThreadRow {
@@ -60,7 +59,6 @@ function clubFrom(value: unknown): ClubRow | null {
     name,
     status,
     created_by: stringField(row.created_by),
-    inquiry_links_enabled: row.inquiry_links_enabled !== false,
   };
 }
 
@@ -329,7 +327,7 @@ Deno.serve(withCors(async (req) => {
   if (parsed.value.clubId !== null) {
     const { data: clubData, error: clubError } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by, inquiry_links_enabled')
+      .select('id, name, status, created_by')
       .eq('id', parsed.value.clubId)
       .maybeSingle();
     club = clubFrom(clubData);
@@ -386,7 +384,7 @@ Deno.serve(withCors(async (req) => {
 
     const { data: clubData } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by, inquiry_links_enabled')
+      .select('id, name, status, created_by')
       .eq('id', thread.club_id)
       .maybeSingle();
     club = clubFrom(clubData);
@@ -400,10 +398,6 @@ Deno.serve(withCors(async (req) => {
     .eq('user_id', auth.user.id)
     .maybeSingle();
   if (clubBan) return errorResponse('CLUB_BANNED', 403);
-
-  if (!club.inquiry_links_enabled && containsInquiryLink(parsed.value.body)) {
-    return errorResponse('INQUIRY_LINKS_DISABLED', 400);
-  }
 
   let operatorIds = await activeOperatorIds(supabase, thread.club_id);
   if (auth.user.id === thread.requester_id) {

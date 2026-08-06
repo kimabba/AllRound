@@ -1753,11 +1753,6 @@ class _ClubManagementTab extends ConsumerWidget {
                 icon: const Icon(Icons.forum_outlined),
                 label: const Text('운영진 문의함 열기'),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              _InquiryLinkPolicyTile(
-                club: club,
-                onChanged: onChanged,
-              ),
             ],
           ),
         ),
@@ -2656,71 +2651,6 @@ class _MemberRoleManageCard extends ConsumerWidget {
             },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InquiryLinkPolicyTile extends ConsumerStatefulWidget {
-  const _InquiryLinkPolicyTile({
-    required this.club,
-    required this.onChanged,
-  });
-
-  final Club club;
-  final VoidCallback onChanged;
-
-  @override
-  ConsumerState<_InquiryLinkPolicyTile> createState() =>
-      _InquiryLinkPolicyTileState();
-}
-
-class _InquiryLinkPolicyTileState
-    extends ConsumerState<_InquiryLinkPolicyTile> {
-  bool _busy = false;
-
-  Future<void> _update(bool enabled) async {
-    setState(() => _busy = true);
-    try {
-      await ref.read(apiProvider).updateClubInquiryLinks(
-            widget.club.id,
-            enabled: enabled,
-          );
-      widget.onChanged();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled ? '문의에서 링크 전송을 허용했습니다.' : '문의의 링크 전송을 차단했습니다.',
-            ),
-          ),
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('링크 설정을 변경하지 못했습니다: $error')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return SwitchListTile.adaptive(
-      contentPadding: EdgeInsets.zero,
-      value: widget.club.inquiryLinksEnabled,
-      onChanged: _busy ? null : _update,
-      secondary: const Icon(Icons.link_rounded),
-      title: const Text('가입 전 문의에서 웹주소 허용'),
-      subtitle: Text(
-        widget.club.inquiryLinksEnabled
-            ? '문의자와 운영진이 메시지에 웹주소를 보낼 수 있어요.'
-            : '문의는 계속 가능하지만, 웹주소가 포함된 메시지는 보낼 수 없어요.',
-        style: tt.bodySmall,
       ),
     );
   }
