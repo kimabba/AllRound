@@ -37,7 +37,7 @@ class AppNotification {
         'tournament_d3' => '대회 D-3',
         'tournament_deadline' => '신청 마감',
         'club_notice' => '클럽 공지',
-        'club_event' => '클럽 일정',
+        'club_event' => '클럽 모임',
         'club_join_request' => '가입 신청',
         'club_join_approved' => '가입 승인',
         'club_join_rejected' => '가입 거절',
@@ -47,7 +47,7 @@ class AppNotification {
         'club_dues_reminder' => '회비 안내',
         'club_mention' => '멘션',
         'club_comment' => '댓글',
-        'club_event_reminder' => '일정 리마인더',
+        'club_event_reminder' => '모임 알림',
         'club_attendance_change' => '참석 변경',
         _ => type,
       };

@@ -40,7 +40,7 @@ void main() {
       expect(
         tester.getSemantics(find.byKey(AllRoundE2EKeys.navToday)),
         matchesSemantics(
-          label: '일정 탭',
+          label: '대회 탭',
           isButton: true,
           hasSelectedState: true,
           isSelected: true,

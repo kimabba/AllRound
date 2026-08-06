@@ -68,11 +68,11 @@ void main() {
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
-    expect(find.text('나의 일정'), findsOneWidget);
+    expect(find.text('내 활동'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('나의 일정 빈 카드는 대회와 모임 목록으로 이동한다', (tester) async {
+  testWidgets('내 활동 빈 카드는 대회와 클럽 목록으로 이동한다', (tester) async {
     final router = GoRouter(
       initialLocation: '/',
       routes: [

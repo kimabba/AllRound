@@ -4,7 +4,7 @@ import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
 /// 하단 냅. 채팅 가능 화면에서는 볼보이를 맨 앞 평면 탭으로 두고, 그 뒤에
-/// 일정·클럽·룰북 탭을 나란히 놓는다. 볼보이는 탭 인덱스를 점유하지 않고
+/// 대회·클럽·룰북 탭을 나란히 놓는다. 볼보이는 탭 인덱스를 점유하지 않고
 /// 별도 콜백(onChatTap)으로 현재 화면 맥락의 채팅 시트를 연다.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -28,7 +28,7 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['일정', '클럽', '룰북'];
+    const labels = ['대회', '클럽', '룰북'];
     const keys = [
       AllRoundE2EKeys.navToday,
       AllRoundE2EKeys.navClubs,

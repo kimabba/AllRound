@@ -228,7 +228,7 @@ class _HomeIntro extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              '신청 가능한 대회와 클럽 일정을 빠르게 확인하세요.',
+              '신청 가능한 대회와 클럽 모임을 빠르게 확인하세요.',
               style: tt.bodyMedium?.copyWith(
                 color: cs.onPrimary.withValues(alpha: 0.82),
               ),
@@ -272,7 +272,7 @@ class _HomePersonalSchedule extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _HomeSectionHeader(title: '나의 일정'),
+        const _HomeSectionHeader(title: '내 활동'),
         const SizedBox(height: AppSpacing.md),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,

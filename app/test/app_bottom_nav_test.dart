@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('일정·클럽·룰북 탭을 표시한다', (tester) async {
+  testWidgets('대회·클럽·룰북 탭을 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,11 +15,12 @@ void main() {
       ),
     );
 
-    for (final label in ['일정', '클럽', '룰북']) {
+    for (final label in ['대회', '클럽', '룰북']) {
       expect(find.text(label), findsOneWidget);
     }
-    // 탭에서 빠진 것들 — 대회는 일정 화면의 "전체 보기", 마이는 앱바 우상단.
-    expect(find.text('대회'), findsNothing);
+    // 탭에서 빠진 것들 — 마이는 앱바 우상단. '일정'·'모임'은 탭 라벨이 아니다
+    // (클럽 안의 정기·번개는 '모임', 대회 날짜는 '일정'으로 각각 다른 층에서만 쓴다).
+    expect(find.text('일정'), findsNothing);
     expect(find.text('모임'), findsNothing);
     expect(find.text('MY'), findsNothing);
     expect(find.text('코치'), findsNothing);
