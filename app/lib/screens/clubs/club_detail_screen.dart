@@ -999,15 +999,25 @@ class _IntroTab extends StatelessWidget {
                 if (club.address != null && club.address!.isNotEmpty)
                   _infoRow(context, Icons.place_outlined, club.address!),
                 if (club.contact != null && club.contact!.isNotEmpty)
-                  _infoRow(context, Icons.call_outlined, club.contact!),
+                  _infoRow(
+                    context,
+                    Icons.sms_outlined,
+                    club.contact!,
+                    onTap: () => _openExternal(
+                      context,
+                      Uri(scheme: 'sms', path: club.contact!.trim()),
+                      failureMessage: '문자 앱을 열 수 없습니다.',
+                    ),
+                  ),
                 if (club.website != null && club.website!.isNotEmpty)
                   _infoRow(
                     context,
                     Icons.link_rounded,
                     club.website!,
-                    onTap: () => launchUrl(
-                      Uri.parse(club.website!),
-                      mode: LaunchMode.externalApplication,
+                    onTap: () => _openExternal(
+                      context,
+                      Uri.parse(normalizeClubWebsiteInput(club.website)),
+                      failureMessage: '사이트를 열 수 없습니다.',
                     ),
                   ),
               ],
@@ -1136,6 +1146,19 @@ class _IntroTab extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openExternal(
+    BuildContext context,
+    Uri uri, {
+    required String failureMessage,
+  }) async {
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(failureMessage)),
+      );
+    }
   }
 }
 
@@ -2650,11 +2673,11 @@ class _InquiryLinkPolicyTileState
       value: widget.club.inquiryLinksEnabled,
       onChanged: _busy ? null : _update,
       secondary: const Icon(Icons.link_rounded),
-      title: const Text('문의 링크 허용'),
+      title: const Text('가입 전 문의에서 웹주소 허용'),
       subtitle: Text(
         widget.club.inquiryLinksEnabled
-            ? '가입 전 1:1 문의에서 웹 링크를 보낼 수 있습니다.'
-            : '가입 전 1:1 문의에서 텍스트 웹 링크를 차단합니다.',
+            ? '문의자와 운영진이 메시지에 웹주소를 보낼 수 있어요.'
+            : '문의는 계속 가능하지만, 웹주소가 포함된 메시지는 보낼 수 없어요.',
         style: tt.bodySmall,
       ),
     );

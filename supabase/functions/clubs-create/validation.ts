@@ -69,8 +69,9 @@ export function parseWebsite(
 
   const website = value.trim();
   if (website === '') return { ok: true, value: null };
+  const normalized = website.includes('://') ? website : `https://${website}`;
   try {
-    const url = new URL(website);
+    const url = new URL(normalized);
     if (
       (url.protocol !== 'http:' && url.protocol !== 'https:') ||
       url.hostname === ''
@@ -80,5 +81,5 @@ export function parseWebsite(
   } catch {
     return { ok: false, message: 'website must be a valid HTTP(S) URL' };
   }
-  return { ok: true, value: website };
+  return { ok: true, value: normalized };
 }

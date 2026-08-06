@@ -311,7 +311,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             address: address,
             logoUrl: logoUrl,
             contact: _contact.text.trim(),
-            website: _website.text.trim(),
+            website: normalizeClubWebsiteInput(_website.text),
             description: _description.text.trim(),
             introImageUrls: introImageUrls,
             meetingDays: _meetingDays.toList(),
@@ -921,7 +921,7 @@ class _OperationClubStep extends StatelessWidget {
           validator: clubWebsiteInputError,
           decoration: const InputDecoration(
             labelText: '웹사이트 / SNS',
-            hintText: 'https://',
+            hintText: '예: instagram.com/계정명',
           ),
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.next,
