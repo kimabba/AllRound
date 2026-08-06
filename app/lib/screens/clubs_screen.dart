@@ -908,13 +908,17 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         collapsedShape: const Border(),
         leading: Icon(Icons.near_me_rounded, color: cs.primary),
         title: Text(
-          '내 주변 클럽',
+          '내 주변 모임',
           style: Theme.of(context)
               .textTheme
               .titleLarge
               ?.copyWith(fontWeight: FontWeight.w900),
         ),
-        subtitle: const Text('선택하면 현재 위치와 가까운 클럽을 보여드려요'),
+        subtitle: const Text(
+          '현재 위치와 가까운 모임을 보여드려요',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         onExpansionChanged: (expanded) {
           if (expanded && _nearbyClubs == null && !_loadingNearby) {
             _findNearbyClubs();
