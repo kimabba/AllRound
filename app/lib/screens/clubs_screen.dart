@@ -947,7 +947,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 child: FilledButton.icon(
                   onPressed: _loadingNearby ? null : _findNearbyClubs,
                   icon: const Icon(Icons.my_location_rounded),
-                  label: Text(_loadingNearby ? '찾는 중...' : '내 위치로 다시 찾기'),
+                  label: Text(_loadingNearby ? '찾는 중...' : '내위치로 찾기'),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
