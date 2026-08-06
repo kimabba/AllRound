@@ -50,18 +50,6 @@ final _realNamePattern = RegExp(r'^[가-힣]{2,6}$');
 
 bool isValidRealName(String value) => _realNamePattern.hasMatch(value.trim());
 
-/// 새 규칙 이전에 가입한 사람이 온보딩에 다시 들어와도 갇히지 않게 한다.
-///
-/// 재진입(종목 추가·맞춤 설정)에서는 서버에 저장된 이름이 칸에 복원된다. 그 값이
-/// 규칙 위반이면 `다음`이 잠겨, 생년월일만 고치러 온 기존 사용자가 이름을 바꾸기
-/// 전에는 빠져나갈 수 없다. 실측 20명 중 13명이 여기 걸린다. 저장돼 있던 값
-/// 그대로면 통과시킨다 — 새로 입력하는 값에만 규칙을 적용한다.
-bool realNameAccepted(String value, String? restoredName) =>
-    isValidRealName(value) ||
-    (restoredName != null &&
-        restoredName.trim().isNotEmpty &&
-        value.trim() == restoredName.trim());
-
 /// 서버에 등록돼 있는데 화면 초안에는 없는 협회를 고른다(#337).
 ///
 /// 복원이 늦게 도착하는 사이 사용자가 협회를 먼저 추가할 수 있다. 그때 복원을
@@ -82,9 +70,6 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final TextEditingController _realName = TextEditingController();
-
-  /// 재진입 때 서버에서 복원한 이름. realNameAccepted 의 예외 판정에만 쓴다.
-  String? _restoredName;
   final TextEditingController _nickname = TextEditingController();
   DateTime? _birthDate;
   Uint8List? _avatarBytes;
@@ -141,7 +126,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
   bool get _canAdvance => switch (_step) {
-        0 => realNameAccepted(_realName.text, _restoredName) &&
+        0 => isValidRealName(_realName.text) &&
             _birthDate != null &&
             !isUnderMinSignupAge(_birthDate!, DateTime.now()),
         1 => _regionCode != null,
@@ -375,10 +360,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (!mounted || _existingProfileReady) return;
       setState(() {
         // 사용자가 이미 직접 입력한 값은 덮어쓰지 않는다.
+        // 실명은 규칙에 맞는 값만 되돌린다. 가입 트리거가 users.name 을
+        // 이메일 앞부분(split_part(email,'@',1))으로 채워두기 때문에, 그대로
+        // 복원하면 `tennis1` 같은 값이 칸에 들어앉고 사용자는 그게 자기 실명인
+        // 줄 안다 — 실측 20명 중 10명이 이 자동 생성값이다. 비워서 직접 쓰게
+        // 한다. 닉네임·생년월일은 사용자가 실제로 입력한 값이라 그대로 되돌린다.
         if (_realName.text.trim().isEmpty &&
-            (profile.name?.isNotEmpty ?? false)) {
+            isValidRealName(profile.name ?? '')) {
           _realName.text = profile.name!;
-          _restoredName = profile.name;
         }
         if (_nickname.text.trim().isEmpty &&
             (profile.nickname?.isNotEmpty ?? false)) {
@@ -819,7 +808,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 counterText: '',
                 // 빈 칸에는 에러를 띄우지 않는다 — 아직 입력을 시작도 안 했다.
                 errorText: _realName.text.trim().isEmpty ||
-                        realNameAccepted(_realName.text, _restoredName)
+                        isValidRealName(_realName.text)
                     ? null
                     : '한글 실명 2~6자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
               ),

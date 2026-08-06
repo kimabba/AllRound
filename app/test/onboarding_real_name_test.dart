@@ -27,14 +27,11 @@ void main() {
     expect(isValidRealName('테니스왕'), isTrue);
   });
 
-  test('저장돼 있던 이름 그대로면 규칙 위반이어도 통과시킨다', () {
-    // 재진입한 기존 사용자가 이름을 바꾸기 전에는 못 빠져나가는 걸 막는다.
-    expect(realNameAccepted('John Kim', 'John Kim'), isTrue);
-    expect(realNameAccepted(' John Kim ', 'John Kim'), isTrue);
-    // 손대는 순간 새 규칙을 적용한다.
-    expect(realNameAccepted('John Kim2', 'John Kim'), isFalse);
-    // 신규 가입자(복원값 없음)에게는 예외가 없다.
-    expect(realNameAccepted('John Kim', null), isFalse);
-    expect(realNameAccepted('John Kim', ''), isFalse);
+  test('가입 트리거가 만든 이메일 앞부분 이름은 복원 대상이 아니다', () {
+    // users.name 기본값은 split_part(email,'@',1) 이다. 재진입 때 이걸 칸에
+    // 되돌리면 사용자가 자기 실명으로 오인한 채 그대로 저장한다.
+    for (final generated in ['tennis1', 'ssfak', 'demian.772']) {
+      expect(isValidRealName(generated), isFalse, reason: generated);
+    }
   });
 }
