@@ -40,13 +40,13 @@ bool tennisOrgSelectionsAreComplete(Iterable<Set<String>> selectedPerOrg) =>
 /// 절반이 `이름1` 같은 값이라 매칭이 0건이었다. 랭킹표가 한글 실명이므로 한글만
 /// 받는다.
 ///
-/// 상한이 6자인 이유: 법정 이름 5자 제한은 성을 뺀 기준이라 `남궁`+3자, 단성+5자
-/// 이름이 실재한다. `테니스왕` 같은 한글 닉네임은 이 검사로 못 거른다 — 그건
+/// 상한이 7자인 이유: 법정 이름 5자 제한은 성을 뺀 기준이라, 복성 `남궁`+5자
+/// 이름이면 7자가 된다. `테니스왕` 같은 한글 닉네임은 이 검사로 못 거른다 — 그건
 /// 관리자 승인 단계에서 본다. 여기서 막는 건 숫자·영문·자모·특수문자다.
 // ponytail: NFD(자모 분해) 로 붙여넣으면 거부된다. Dart 에 유니코드 정규화가
 // 없어 패키지를 붙여야 하는데, 에러 문구를 보고 직접 타이핑하면 풀리는 문제라
 // 그대로 둔다.
-final _realNamePattern = RegExp(r'^[가-힣]{2,6}$');
+final _realNamePattern = RegExp(r'^[가-힣]{2,7}$');
 
 bool isValidRealName(String value) => _realNamePattern.hasMatch(value.trim());
 
@@ -516,7 +516,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (!isValidRealName(_realName.text)) {
       setState(() {
         _step = 0;
-        _error = '이름을 한글 실명 2~6자로 입력해 주세요.';
+        _error = '이름을 한글 실명 2~7자로 입력해 주세요.';
       });
       return;
     }
@@ -826,7 +826,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 errorText: _realName.text.trim().isEmpty ||
                         isValidRealName(_realName.text)
                     ? null
-                    : '한글 실명 2~6자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
+                    : '한글 실명 2~7자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
               ),
             ),
             const SizedBox(height: AppSpacing.md),

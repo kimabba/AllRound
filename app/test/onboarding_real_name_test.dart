@@ -5,14 +5,14 @@ import 'package:allround/screens/auth/onboarding_screen.dart';
 // 실명 칸(users.name)은 협회 랭킹표의 선수명과 글자까지 같아야 본인 연결
 // 후보가 붙는다. 길이 검사만 있던 동안 `이름1` 같은 값이 절반이었다.
 void main() {
-  test('한글 실명 2~6자만 통과한다', () {
-    for (final ok in ['김민수', '남궁도원', '이도', ' 김민수 ', '남궁하늘가', '남궁하늘가람']) {
+  test('한글 실명 2~7자만 통과한다', () {
+    for (final ok in ['김민수', '남궁도원', '이도', ' 김민수 ', '남궁하늘가', '남궁하늘가람별']) {
       expect(isValidRealName(ok), isTrue, reason: ok);
     }
     for (final bad in [
       '',
       '김',
-      '남궁하늘가람별',
+      '남궁하늘가람별빛',
       '테니스왕1',
       'John Kim',
       '김 민수',
