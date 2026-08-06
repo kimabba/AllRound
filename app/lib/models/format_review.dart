@@ -26,10 +26,10 @@ class FormatReviewItem {
       staged: stagedJson == null ? null : StagedRegulation.fromJson(stagedJson),
       flags: flagValues is List
           ? flagValues
-              .map(_jsonMap)
-              .whereType<Map<String, dynamic>>()
-              .map(FormatReviewFlag.fromJson)
-              .toList(growable: false)
+                .map(_jsonMap)
+                .whereType<Map<String, dynamic>>()
+                .map(FormatReviewFlag.fromJson)
+                .toList(growable: false)
           : const <FormatReviewFlag>[],
     );
   }
@@ -59,20 +59,20 @@ class StagedRegulation {
     return StagedRegulation(
       fields: fieldValues is List
           ? fieldValues
-              .map(_jsonMap)
-              .whereType<Map<String, dynamic>>()
-              .map(RegulationField.fromJson)
-              .where(
-                (field) => field.label.isNotEmpty && field.value.isNotEmpty,
-              )
-              .toList(growable: false)
+                .map(_jsonMap)
+                .whereType<Map<String, dynamic>>()
+                .map(RegulationField.fromJson)
+                .where(
+                  (field) => field.label.isNotEmpty && field.value.isNotEmpty,
+                )
+                .toList(growable: false)
           : const <RegulationField>[],
       description: _nonEmptyString(json['description']),
       notes: noteValues is List
           ? noteValues
-              .map(_nonEmptyString)
-              .whereType<String>()
-              .toList(growable: false)
+                .map(_nonEmptyString)
+                .whereType<String>()
+                .toList(growable: false)
           : const <String>[],
       body: _nonEmptyString(json['regulation_body']),
       prize: _nonEmptyString(json['prize']),

@@ -252,7 +252,7 @@ Deno.serve(withCors(async (req) => {
 
           const answerText = renderClubDetailText(clubRow as unknown as ClubDetailRow);
           send('delta', { text: answerText });
-          // 상세 텍스트 아래에 카드도 함께 — 앱의 '모임 방문하기' 네비 진입점.
+          // 상세 텍스트 아래에 카드도 함께 — 앱의 '클럽 방문하기' 네비 진입점.
           send('ui', {
             blocks: [
               {
@@ -442,7 +442,7 @@ Deno.serve(withCors(async (req) => {
         if (intentResult.intent === 'match_schedule') {
           const dr = intentResult.slots.date_range;
           const scheduleText = '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
-            '모임 일정은 모임 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
+            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
             (dr ? '\n이 기간의 대회가 궁금하면 "이 기간 대회 알려줘"라고 말씀해 주세요.' : '');
           send('context', { tournaments: [], rules: [] });
           send('delta', { text: scheduleText });
@@ -603,7 +603,7 @@ Deno.serve(withCors(async (req) => {
           // 활성 종목을 반영해 테니스/풋살이 섞이지 않게 한다.
           if (requestedSport) clubQuery = clubQuery.eq('sport', requestedSport);
           // clubs.region 은 자유 텍스트("광주" vs "광주광역시")라 부분일치.
-          // (정확일치 시 "광주" 검색으로 "광주광역시" 등록 모임이 누락됨)
+          // (정확일치 시 "광주" 검색으로 "광주광역시" 등록 클럽이 누락됨)
           if (regionLabel) clubQuery = clubQuery.ilike('region', `%${regionLabel}%`);
 
           const { data: clubRows, error: clubErr } = await clubQuery;

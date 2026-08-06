@@ -122,7 +122,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         );
       }
     } catch (_) {
-      // 로컬 저장소가 손상돼도 모임 작성 화면 자체는 계속 사용할 수 있어야 한다.
+      // 로컬 저장소가 손상돼도 클럽 작성 화면 자체는 계속 사용할 수 있어야 한다.
       if (mounted) setState(() => _draftReady = true);
     }
   }
@@ -288,7 +288,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         }
         return;
       }
-      _setSubmittingLabel('모임 생성 요청 중');
+      _setSubmittingLabel('클럽 생성 요청 중');
       final fee = int.tryParse(_monthlyFee.text.trim());
       double? latitude;
       double? longitude;
@@ -301,7 +301,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             longitude = locations.first.longitude;
           }
         } catch (_) {
-          // 주소 좌표 변환 실패가 모임 생성 자체를 막지 않도록 한다.
+          // 주소 좌표 변환 실패가 클럽 생성 자체를 막지 않도록 한다.
         }
       }
       await ref.read(apiProvider).createClub(
@@ -325,12 +325,12 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       try {
         await _clearSavedDraft();
       } catch (_) {
-        // 모임 생성 성공 이후 로컬 임시저장 삭제 실패는 제출 결과에 영향을 주지 않는다.
+        // 클럽 생성 성공 이후 로컬 임시저장 삭제 실패는 제출 결과에 영향을 주지 않는다.
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('모임 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'),
+            content: Text('클럽 생성 요청이 제출되었습니다. 관리자 승인 후 활성화됩니다.'),
           ),
         );
         Navigator.pop(context, true);
@@ -340,7 +340,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              ugcActionErrorMessage(e, fallback: '모임 생성 요청을 제출하지 못했습니다.'),
+              ugcActionErrorMessage(e, fallback: '클럽 생성 요청을 제출하지 못했습니다.'),
             ),
           ),
         );
@@ -359,7 +359,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (_name.text.trim().isEmpty) {
       _formKey.currentState?.validate();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('모임명을 입력해주세요.')),
+        const SnackBar(content: Text('클럽명을 입력해주세요.')),
       );
       return false;
     }
@@ -560,7 +560,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('모임 만들기'),
+        title: const Text('클럽 만들기'),
         actions: [
           IconButton(
             onPressed: !_draftReady || _submitting ? null : _confirmReset,
@@ -654,7 +654,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(
-                                      '모임 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
+                                      '클럽 생성 요청은 관리자 검토 후 승인됩니다.\n승인 전까지는 다른 사용자에게 노출되지 않습니다.',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
@@ -717,8 +717,8 @@ class _ClubCreateStepHeader extends StatelessWidget {
 
   static const _titles = ['기본 정보', '운영 정보', '소개 작성'];
   static const _messages = [
-    '모임을 찾고 구분하는 데 필요한 정보입니다.',
-    '연락처, 회비, 정기 활동 조건을 정리합니다.',
+    '클럽을 찾고 구분하는 데 필요한 정보입니다.',
+    '연락처, 회비, 정기 모임 조건을 정리합니다.',
     '가입 전 확인할 소개글과 사진을 추가합니다.',
   ];
 
@@ -845,11 +845,11 @@ class _BasicClubStep extends StatelessWidget {
         TextFormField(
           controller: name,
           decoration: const InputDecoration(
-            labelText: '모임명 *',
-            hintText: '예: 광주 테니스 모임',
+            labelText: '클럽명 *',
+            hintText: '예: 광주 테니스 클럽',
           ),
           validator: (value) =>
-              (value == null || value.trim().isEmpty) ? '모임명은 필수입니다' : null,
+              (value == null || value.trim().isEmpty) ? '클럽명은 필수입니다' : null,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -927,7 +927,7 @@ class _OperationClubStep extends StatelessWidget {
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text('정기 활동 요일', style: tt.labelLarge),
+        Text('정기 모임 요일', style: tt.labelLarge),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.xs,
@@ -990,8 +990,8 @@ class _IntroClubStep extends StatelessWidget {
         TextFormField(
           controller: description,
           decoration: const InputDecoration(
-            labelText: '모임 소개',
-            hintText: '모임 소개, 활동 내용, 가입 조건 등',
+            labelText: '클럽 소개',
+            hintText: '클럽 소개, 활동 내용, 가입 조건 등',
             alignLabelWithHint: true,
           ),
           keyboardType: TextInputType.multiline,
@@ -1118,7 +1118,7 @@ class _IntroPhotoPicker extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      '모임 분위기를 보여주는 사진을 최대 5장 추가하세요.',
+                      '클럽 분위기를 보여주는 사진을 최대 5장 추가하세요.',
                       style: tt.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -1253,7 +1253,7 @@ class _LogoPickerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    logoBytes == null ? '모임 로고 추가' : '모임 로고 선택됨',
+                    logoBytes == null ? '클럽 로고 추가' : '클럽 로고 선택됨',
                     style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: AppSpacing.xs),
@@ -1352,7 +1352,7 @@ class _RegionPickerSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '모임이 주로 활동하는 시·도를 선택하세요.',
+              '클럽이 주로 활동하는 시·도를 선택하세요.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.lg),

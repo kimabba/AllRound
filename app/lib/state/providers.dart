@@ -81,7 +81,7 @@ final userTennisOrgsProvider = FutureProvider<List<UserTennisOrg>>((ref) async {
   return api.myTennisOrgs();
 });
 
-/// 사용자가 가입했거나 생성한 모임 목록
+/// 사용자가 가입했거나 생성한 클럽 목록
 final myClubsProvider = FutureProvider<List<Club>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
@@ -102,7 +102,7 @@ final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   return api.myFavoriteIds();
 });
 
-/// 관심 모임 ID 집합
+/// 관심 클럽 ID 집합
 final clubFavoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
@@ -151,7 +151,7 @@ final myFavoriteTournamentsProvider =
   return api.myFavoriteTournaments(limit: null);
 });
 
-/// 관심 화면용 스크랩 모임
+/// 관심 화면용 스크랩 클럽
 final myFavoriteClubsProvider = FutureProvider<List<Club>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
@@ -194,8 +194,7 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   final hasUpcoming = matched.any((t) => !t.startDate.isBefore(today));
   if (hasGradeBasis && !hasUpcoming) {
     try {
-      return await api.searchTournaments(
-          sport: sport, onlyMyGrade: false, limit: 50);
+      return await api.searchTournaments(sport: sport, onlyMyGrade: false, limit: 50);
     } catch (_) {
       return matched; // fallback 조회 실패 시 1차 결과라도 보존 (codex P2)
     }

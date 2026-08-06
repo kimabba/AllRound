@@ -32,8 +32,8 @@ void main() {
   }
 
   Widget wrap(Tournament t) => MaterialApp(
-        home: Scaffold(body: TournamentCard(tournament: t)),
-      );
+    home: Scaffold(body: TournamentCard(tournament: t)),
+  );
 
   testWidgets('대회일 라벨과 날짜를 렌더한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament()));

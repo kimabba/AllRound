@@ -278,7 +278,7 @@ class _ClubMemberChatScreenState extends ConsumerState<ClubMemberChatScreen> {
   Future<void> _showMemberProfile(ClubMember member) {
     final values = <(String, List<String>)>[
       ('관심 종목·레벨', member.sports),
-      ('가입한 모임', member.teams),
+      ('가입한 클럽', member.teams),
       ('참가 대회', member.tournaments),
       ('테니스 협회·레벨', member.tennisOrganizations),
     ];

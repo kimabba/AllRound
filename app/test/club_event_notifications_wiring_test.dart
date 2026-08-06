@@ -15,6 +15,7 @@ void main() {
     final source = File('lib/services/club_api.dart').readAsStringSync();
 
     expect(source, isNot(contains(".isFilter('ended_early_at', null)")));
-    expect(source, contains(".select('*, club_event_attendees(user_id, status)')"));
+    expect(source,
+        contains(".select('*, club_event_attendees(user_id, status)')"));
   });
 }

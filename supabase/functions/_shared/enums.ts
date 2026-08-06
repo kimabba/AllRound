@@ -39,7 +39,7 @@ export const TENNIS_ORG_LABELS: Record<TennisOrg, string> = {
   kasta: '단식 테니스 (KASTA / 단테매)',
   gj: '광주광역시테니스협회 (GJTA)',
   jn: '전라남도테니스협회 (JNTA)',
-  local: '시·군 또는 자체 모임',
+  local: '시·군 또는 클럽 자체',
 };
 
 export function isValidTennisOrg(value: string): value is TennisOrg {

@@ -29,7 +29,7 @@ import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
-/// 모임 상세 전체화면: 소개 / 멤버 / 일정 탭.
+/// 클럽 상세 전체화면: 소개 / 멤버 / 모임 탭.
 ///
 /// [club]이 전달되면 즉시 표시, 없으면 [clubId]로 서버에서 로드.
 class ClubDetailScreen extends ConsumerStatefulWidget {
@@ -241,7 +241,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       context: context,
       ref: ref,
       userId: creatorId,
-      displayName: '모임 개설자',
+      displayName: '클럽 개설자',
     );
     if (blocked && mounted) Navigator.pop(context);
   }
@@ -269,8 +269,8 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('반려 모임 삭제'),
-        content: Text('${club.name} 모임을 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.'),
+        title: const Text('반려 클럽 삭제'),
+        content: Text('${club.name} 클럽을 삭제할까요? 삭제 후에는 되돌릴 수 없습니다.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -294,7 +294,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('모임 삭제 실패: $error')),
+          SnackBar(content: Text('클럽 삭제 실패: $error')),
         );
       }
     }
@@ -322,7 +322,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(banned
-                ? '이 모임에서는 영구 차단되어 가입을 신청할 수 없습니다.'
+                ? '이 클럽에서는 영구 차단되어 가입을 신청할 수 없습니다.'
                 : ugcActionErrorMessage(
                     e,
                     fallback: '가입 신청을 완료하지 못했습니다.',
@@ -383,7 +383,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('모임 탈퇴'),
+        title: const Text('클럽 탈퇴'),
         content: Text('${club.name}에서 탈퇴할까요?'),
         actions: [
           TextButton(
@@ -442,7 +442,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
                   size: 48, color: cs.onSurfaceVariant),
               const SizedBox(height: AppSpacing.md),
               Text(
-                '모임을 불러올 수 없습니다',
+                '클럽을 불러올 수 없습니다',
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -476,7 +476,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
             key: isFavorite
                 ? AllRoundE2EKeys.clubFavoriteSaved
                 : AllRoundE2EKeys.clubFavoriteUnsaved,
-            tooltip: isFavorite ? '관심 해제' : '관심 모임 저장',
+            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
             onPressed: () => _toggleFavorite(isFavorite),
             icon: Icon(
               isFavorite
@@ -486,13 +486,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           ),
           if (canModerateClub)
             PopupMenuButton<String>(
-              tooltip: '모임 더보기',
+              tooltip: '클럽 더보기',
               onSelected: (value) {
                 if (value == 'report') unawaited(_reportClub());
                 if (value == 'block') unawaited(_blockClubCreator());
               },
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'report', child: Text('모임 신고')),
+                PopupMenuItem(value: 'report', child: Text('클럽 신고')),
                 PopupMenuItem(value: 'block', child: Text('개설자 차단')),
               ],
             ),
@@ -523,7 +523,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
               tabs: [
                 const Tab(key: AllRoundE2EKeys.clubIntroTab, text: '소개'),
                 const Tab(key: AllRoundE2EKeys.clubMembersTab, text: '멤버'),
-                const Tab(key: AllRoundE2EKeys.clubEventsTab, text: '일정'),
+                const Tab(key: AllRoundE2EKeys.clubEventsTab, text: '모임'),
                 const Tab(key: AllRoundE2EKeys.clubPostsTab, text: '게시판'),
                 if (_canManageClub)
                   const Tab(
@@ -603,7 +603,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _EmptyState(
             icon: Icons.lock_outline_rounded,
             title: '가입 후 이용할 수 있어요',
-            message: '일정과 게시판은 모임 멤버에게만 공개됩니다.',
+            message: '멤버, 모임, 게시판은 클럽 멤버에게만 공개됩니다.',
           ),
         ],
       );
@@ -644,7 +644,7 @@ class _RejectedClubBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '모임 승인이 반려되었습니다',
+            '클럽 승인이 반려되었습니다',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: cs.onErrorContainer,
                   fontWeight: FontWeight.w900,
@@ -851,7 +851,7 @@ class _RolePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final label = club.isOwner ? '모임장' : (club.isManager ? '운영진' : '멤버');
+    final label = club.isOwner ? '클럽장' : (club.isManager ? '운영진' : '멤버');
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -926,7 +926,7 @@ class _IntroTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '모임 소개',
+                '클럽 소개',
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -1104,7 +1104,7 @@ class _IntroTab extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.sm),
             child: Text(
               club.isOwner
-                  ? '모임장으로 참여 중'
+                  ? '클럽장으로 참여 중'
                   : (club.isManager ? '운영진으로 참여 중' : '멤버로 참여 중'),
               textAlign: TextAlign.center,
               style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
@@ -1486,7 +1486,7 @@ class _MemberProfileSheet extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           _ProfileDetailGroup(title: '관심 종목·레벨', values: member.sports),
-          _ProfileDetailGroup(title: '가입한 모임', values: member.teams),
+          _ProfileDetailGroup(title: '가입한 클럽', values: member.teams),
           _ProfileDetailGroup(title: '참가 대회', values: member.tournaments),
           _ProfileDetailGroup(
             title: '테니스 협회·레벨',
@@ -1662,8 +1662,8 @@ class _ClubManagementTab extends ConsumerWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 club.isOwner
-                    ? '모임장은 소개글, 소개 사진, 회비, 멤버 권한, 모임 삭제를 관리할 수 있습니다.'
-                    : '부운영자는 소개글, 소개 사진, 일정, 회비를 관리할 수 있습니다.',
+                    ? '클럽장은 소개글, 소개 사진, 회비, 멤버 권한, 클럽 삭제를 관리할 수 있습니다.'
+                    : '부운영자는 소개글, 소개 사진, 모임, 회비를 관리할 수 있습니다.',
                 style: tt.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                   height: 1.45,
@@ -1695,7 +1695,7 @@ class _ClubManagementTab extends ConsumerWidget {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          '모임장과 매니저가 함께 확인하고 답변하는 운영진 문의함입니다.',
+                          '클럽장과 매니저가 함께 확인하고 답변하는 운영진 문의함입니다.',
                           softWrap: true,
                           style: tt.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
@@ -2180,7 +2180,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
       });
       widget.onChanged();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('모임 소개를 저장했습니다')),
+        const SnackBar(content: Text('클럽 소개를 저장했습니다')),
       );
     } catch (e) {
       if (mounted) {
@@ -2219,7 +2219,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '모임 소개와 소개 사진은 소개 탭에 바로 노출됩니다.',
+            '클럽 소개와 소개 사진은 소개 탭에 바로 노출됩니다.',
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -2230,8 +2230,8 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
             maxLength: 2000,
             enabled: !_busy,
             decoration: const InputDecoration(
-              labelText: '모임 소개',
-              hintText: '모임 분위기, 활동 방식, 모집 안내를 적어주세요',
+              labelText: '클럽 소개',
+              hintText: '클럽 분위기, 활동 방식, 모집 안내를 적어주세요',
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -2699,7 +2699,7 @@ class _FormerMemberBanCardState extends ConsumerState<_FormerMemberBanCard> {
         title: const Text('이전 멤버 영구 차단'),
         content: Text(
           '$name 님을 영구 차단할까요?\n'
-          '앞으로 이 계정은 모임 가입 신청과 가입 전 문의를 보낼 수 없습니다.',
+          '앞으로 이 계정은 클럽 가입 신청과 가입 전 문의를 보낼 수 없습니다.',
         ),
         actions: [
           TextButton(
@@ -2917,7 +2917,7 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
         title: const Text('영구 차단'),
         content: Text(
           '$name 님을 영구 차단할까요?\n'
-          '즉시 모임에서 내보내며, 모임을 나갔다 다시 신청해도 이 계정으로는 재가입할 수 없습니다.',
+          '즉시 클럽에서 내보내며, 클럽을 나갔다 다시 신청해도 이 계정으로는 재가입할 수 없습니다.',
         ),
         actions: [
           TextButton(
@@ -2968,7 +2968,7 @@ class _MemberManageRowState extends ConsumerState<_MemberManageRow> {
     final displayName = _clubMemberDisplayName(member);
     final initial = displayName.characters.first;
     final permissionLabels = [
-      if (member.canCreateEvent) '일정 등록',
+      if (member.canCreateEvent) '모임 등록',
       if (member.canPostNotice) '공지 등록',
     ];
     return Padding(
@@ -3056,9 +3056,9 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('모임 삭제'),
+        title: const Text('클럽 삭제'),
         content: Text(
-          '${widget.club.name} 모임을 정말 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.',
+          '${widget.club.name} 클럽을 정말 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.',
         ),
         actions: [
           TextButton(
@@ -3090,7 +3090,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('모임 삭제 실패: $e')));
+            .showSnackBar(SnackBar(content: Text('클럽 삭제 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -3105,11 +3105,11 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('모임 삭제',
+          Text('클럽 삭제',
               style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '삭제하면 일반 목록과 검색에서 내려갑니다. 이 작업은 모임장만 실행할 수 있습니다.',
+            '삭제하면 일반 목록과 검색에서 내려갑니다. 이 작업은 클럽장만 실행할 수 있습니다.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.45,
@@ -3120,7 +3120,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
             onPressed: _busy ? null : _deleteClub,
             style: OutlinedButton.styleFrom(foregroundColor: cs.error),
             icon: const Icon(Icons.delete_outline_rounded),
-            label: const Text('모임 삭제'),
+            label: const Text('클럽 삭제'),
           ),
         ],
       ),
@@ -3128,7 +3128,7 @@ class _DangerClubManageCardState extends ConsumerState<_DangerClubManageCard> {
   }
 }
 
-// ─── 일정 탭 ──────────────────────────────────────────────────────
+// ─── 모임 탭 ──────────────────────────────────────────────────────
 class _EventsTab extends ConsumerWidget {
   final Club club;
   final Future<List<ClubEvent>> future;
@@ -3156,7 +3156,7 @@ class _EventsTab extends ConsumerWidget {
             if (snap.hasError) {
               return const _EmptyState(
                 icon: Icons.error_outline_rounded,
-                title: '일정을 불러오지 못했습니다',
+                title: '모임을 불러오지 못했습니다',
                 message: '잠시 후 다시 시도해주세요.',
               );
             }
@@ -3171,10 +3171,10 @@ class _EventsTab extends ConsumerWidget {
                 ),
                 child: _EmptyState(
                   icon: Icons.event_available_outlined,
-                  title: '다가오는 일정이 없어요',
+                  title: '다가오는 모임이 없어요',
                   message: canCreateEvent
-                      ? '아래 버튼으로 정기 일정이나 번개 일정을 만들어보세요.'
-                      : '운영진이 새 일정을 등록하면 여기에 표시됩니다.',
+                      ? '아래 버튼으로 정기 모임이나 번개 모임을 만들어보세요.'
+                      : '운영진이 새 모임을 등록하면 여기에 표시됩니다.',
                 ),
               );
             }
@@ -3208,7 +3208,7 @@ class _EventsTab extends ConsumerWidget {
             child: FloatingActionButton.extended(
               onPressed: () => _openCreate(context, ref),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('일정 만들기'),
+              label: const Text('모임 만들기'),
             ),
           ),
       ],
@@ -3287,11 +3287,11 @@ class _EventCardState extends ConsumerState<_EventCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(delete ? '일정을 삭제할까요?' : '일정을 조기 종료할까요?'),
+        title: Text(delete ? '모임을 삭제할까요?' : '모임을 조기 종료할까요?'),
         content: Text(
           delete
-              ? '삭제한 일정은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
-              : '일정은 목록에 남고 참석 신청만 마감됩니다. 예정 알림은 발송되지 않습니다.',
+              ? '삭제한 모임은 복구할 수 없으며 예정 알림도 발송되지 않습니다.'
+              : '모임은 목록에 남고 참석 신청만 마감됩니다. 예정 알림은 발송되지 않습니다.',
         ),
         actions: [
           TextButton(
@@ -3319,7 +3319,7 @@ class _EventCardState extends ConsumerState<_EventCard> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(delete ? '일정 삭제에 실패했습니다.' : '일정 종료에 실패했습니다.')),
+          SnackBar(content: Text(delete ? '모임 삭제에 실패했습니다.' : '모임 종료에 실패했습니다.')),
         );
       }
     } finally {
@@ -3402,7 +3402,7 @@ class _EventCardState extends ConsumerState<_EventCard> {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  tooltip: '일정 더보기',
+                  tooltip: '모임 더보기',
                   onSelected: (value) {
                     if (value == 'end') {
                       unawaited(_manageEvent(delete: false));
@@ -3416,12 +3416,12 @@ class _EventCardState extends ConsumerState<_EventCard> {
                     if (widget.canManage && !e.isEndedEarly)
                       const PopupMenuItem(
                         value: 'end',
-                        child: Text('일정 조기 종료'),
+                        child: Text('모임 조기 종료'),
                       ),
                     if (widget.canManage)
                       const PopupMenuItem(
                         value: 'delete',
-                        child: Text('일정 삭제'),
+                        child: Text('모임 삭제'),
                       ),
                     const PopupMenuItem(
                       value: 'share',
@@ -3562,7 +3562,7 @@ class _EventResponsesSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              '일정 응답자',
+              '모임 응답자',
               style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -3782,7 +3782,7 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              ugcActionErrorMessage(e, fallback: '일정을 만들지 못했습니다.'),
+              ugcActionErrorMessage(e, fallback: '모임을 만들지 못했습니다.'),
             ),
           ),
         );
@@ -3806,13 +3806,13 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('일정 만들기', style: tt.titleLarge),
+          Text('모임 만들기', style: tt.titleLarge),
           const SizedBox(height: AppSpacing.lg),
           TextField(
             controller: _title,
             decoration: const InputDecoration(
               labelText: '제목 *',
-              hintText: '예: 주말 정기 일정',
+              hintText: '예: 주말 정기 모임',
             ),
             maxLength: 100,
           ),
@@ -3871,7 +3871,7 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
           ),
           if (_repeatInterval != null) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text('선택한 주기로 12회 일정이 만들어집니다.', style: tt.bodySmall),
+            Text('선택한 주기로 12회 모임이 만들어집니다.', style: tt.bodySmall),
           ],
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -4055,7 +4055,7 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
               ? const _EmptyState(
                   icon: Icons.forum_outlined,
                   title: '게시글이 없습니다',
-                  message: '모임 소식이 올라오면 여기에 표시됩니다.',
+                  message: '클럽 소식이 올라오면 여기에 표시됩니다.',
                 )
               : RefreshIndicator(
                   onRefresh: () async => _load(),
@@ -4586,7 +4586,7 @@ class _PostWriteEntry extends StatelessWidget {
                       ? '중요 공지와 상단 고정을 사용할 수 있어요.'
                       : canPostNotice
                           ? '공지 글을 작성할 수 있어요.'
-                          : '모임 멤버는 누구나 글을 쓸 수 있어요.',
+                          : '클럽 멤버는 누구나 글을 쓸 수 있어요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -4811,7 +4811,7 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                     ? '운영진은 중요 공지와 상단 고정을 사용할 수 있어요.'
                     : widget.canPostNotice
                         ? '공지 권한이 있어 중요 공지를 작성할 수 있어요.'
-                        : '모임 멤버는 자유롭게 게시글을 작성할 수 있어요.',
+                        : '클럽 멤버는 자유롭게 게시글을 작성할 수 있어요.',
                 style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.lg),

@@ -1,4 +1,4 @@
-// clubs-join: 모임 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
+// clubs-join: 클럽 가입 신청 / 취소 / 탈퇴 / 강퇴 / 운영 권한 관리
 // POST {
 //   club_id,
 //   action: 'request'|'cancel'|'leave'|'kick'|'ban'|'set_manager'|'update_monthly_fee'|'update_inquiry_links'|'update_intro'|'resubmit_review'|'delete_club'|'list_members'|'list_former_members',
@@ -119,12 +119,14 @@ Deno.serve(withCors(async (req) => {
     const admin = member ? false : await isAdmin();
     let isPublicClub = false;
     if (!member && !admin) {
-      const { data: targetClub, error: clubError } = await supa
-        .from('clubs')
-        .select('status')
-        .eq('id', clubId)
-        .maybeSingle();
+      const [clubResult, banResult] = await Promise.all([
+        supa.from('clubs').select('status').eq('id', clubId).maybeSingle(),
+        supa.from('club_bans').select('club_id').eq('club_id', clubId)
+          .eq('user_id', userId).maybeSingle(),
+      ]);
+      const { data: targetClub, error: clubError } = clubResult;
       if (clubError) return errorResponse(clubError.message, 500);
+      if (banResult.error) return errorResponse(banResult.error.message, 500);
       if (!targetClub) return errorResponse('Club not found', 404);
       isPublicClub = targetClub.status === 'approved';
       if (
@@ -132,9 +134,13 @@ Deno.serve(withCors(async (req) => {
           isActiveMember: false,
           isAdmin: false,
           clubStatus: targetClub.status,
+          isBanned: banResult.data !== null,
         })
       ) {
-        return errorResponse('Only approved club members are public', 403);
+        return errorResponse(
+          banResult.data ? 'CLUB_BANNED' : 'Only approved club members are public',
+          403,
+        );
       }
     }
 
@@ -166,8 +172,8 @@ Deno.serve(withCors(async (req) => {
         });
       }
     }
-    // 상세 프로필은 같은 모임의 활성 멤버에게만 제공한다. 관리자 권한만 있고
-    // 해당 모임 멤버가 아닌 계정도 목록 운영 정보만 볼 수 있다.
+    // 상세 프로필은 같은 클럽의 활성 멤버에게만 제공한다. 관리자 권한만 있고
+    // 해당 클럽 멤버가 아닌 계정도 목록 운영 정보만 볼 수 있다.
     if (member !== null && userIds.length > 0) {
       const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
         supa.from('user_sports').select('user_id, sport, grade').in('user_id', userIds),
@@ -218,19 +224,23 @@ Deno.serve(withCors(async (req) => {
         });
       }
     }
-    const members = memberRows.map((r) => ({
-      user_id: r.user_id,
-      role: r.role,
-      joined_at: r.joined_at,
-      // 운영 권한은 비회원에게 공개하지 않는다. 앱 모델의 기본값은 false다.
-      ...(!isPublicClub
-        ? {
-          can_create_event: r.can_create_event,
-          can_post_notice: r.can_post_notice,
-        }
-        : {}),
-      users: profileById.get(r.user_id as string) ?? { name: null },
-    }));
+    const members = memberRows.map((r) => {
+      const profile = profileById.get(r.user_id as string) ?? {};
+      if (isPublicClub) {
+        return {
+          role: r.role,
+          users: { name: profile.nickname ?? profile.name ?? null },
+        };
+      }
+      return {
+        user_id: r.user_id,
+        role: r.role,
+        joined_at: r.joined_at,
+        can_create_event: r.can_create_event,
+        can_post_notice: r.can_post_notice,
+        users: profile,
+      };
+    });
 
     return jsonResponse({ members });
   }
@@ -293,7 +303,7 @@ Deno.serve(withCors(async (req) => {
     const accessError = await ugcAccessError(supa, userId, 'club_join');
     if (accessError) return errorResponse(accessError, 403);
 
-    // 모임이 승인된 상태인지 확인
+    // 클럽이 승인된 상태인지 확인
     const { data: club } = await supa
       .from('clubs')
       .select('id, name, status')
@@ -376,7 +386,7 @@ Deno.serve(withCors(async (req) => {
       await createNotification(supa, {
         userId: reviewerId,
         type: 'club_join_request',
-        title: '새 모임 가입 신청',
+        title: '새 클럽 가입 신청',
         body: `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
         referenceType: 'club_join_request',
         referenceId: typeof joinRequest?.id === 'string' ? joinRequest.id : null,
@@ -671,7 +681,7 @@ Deno.serve(withCors(async (req) => {
       .in('status', ['pending', 'approved', 'rejected']);
     if (error) return errorResponse(error.message, 500);
 
-    // 삭제된 모임의 active 멤버십을 정리(left)해 내 모임/멤버 목록에서 사라지게 한다.
+    // 삭제된 클럽의 active 멤버십을 정리(left)해 내 클럽/멤버 목록에서 사라지게 한다.
     const { error: memberError } = await supa
       .from('club_members')
       .update({ status: 'left', left_at: new Date().toISOString() })

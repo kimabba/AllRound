@@ -68,7 +68,7 @@ class ClubMember {
             ? Map<String, dynamic>.from(rawUser.first as Map)
             : null;
     return ClubMember(
-      userId: j['user_id'] as String,
+      userId: (j['user_id'] as String?) ?? '',
       role: (j['role'] as String?) ?? 'member',
       canCreateEvent: (j['can_create_event'] as bool?) ?? false,
       canPostNotice: (j['can_post_notice'] as bool?) ?? false,

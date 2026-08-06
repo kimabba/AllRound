@@ -19,13 +19,13 @@ class MoreScreen extends ConsumerWidget {
       _MenuItem(
         icon: Icons.person_rounded,
         label: 'MY',
-        subtitle: '프로필, 종목 설정, 내 모임, 대회 기록',
+        subtitle: '프로필, 종목 설정, 내 클럽, 대회 기록',
         onTap: () => context.push('/profile'),
       ),
       _MenuItem(
         icon: Icons.bookmark_rounded,
         label: '관심',
-        subtitle: '관심 대회와 모임 모아보기',
+        subtitle: '관심 대회와 클럽 모아보기',
         onTap: () => context.push('/favorites'),
       ),
       _MenuItem(
@@ -52,8 +52,8 @@ class MoreScreen extends ConsumerWidget {
       if (isAdmin)
         _MenuItem(
           icon: Icons.admin_panel_settings_rounded,
-          label: kIsWeb ? '어드민' : '모임 승인',
-          subtitle: kIsWeb ? '관리자 메뉴' : '승인 대기 모임 확인·처리',
+          label: kIsWeb ? '어드민' : '클럽 승인',
+          subtitle: kIsWeb ? '관리자 메뉴' : '승인 대기 클럽 확인·처리',
           onTap: () => context.go(kIsWeb ? '/admin' : '/admin/clubs'),
         ),
     ];

@@ -562,10 +562,10 @@ IconData _reasonIcon(UgcReportReason reason) => switch (reason) {
     };
 
 String _targetLabel(String value) => switch (value) {
-      'club_post' => '모임 게시글',
-      'club_comment' => '모임 댓글',
-      'club_event' => '모임 일정',
-      'club' => '모임',
+      'club_post' => '클럽 게시글',
+      'club_comment' => '클럽 댓글',
+      'club_event' => '클럽 모임',
+      'club' => '클럽',
       'user' => '사용자',
       'ai_message' => 'AI 답변',
       _ => value,

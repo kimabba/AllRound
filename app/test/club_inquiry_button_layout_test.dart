@@ -21,7 +21,7 @@ Widget _inquiryCard(BuildContext context) {
             children: [
               Text('가입 전 문의',
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-              Text('모임장·매니저가 함께 답변하는 운영진 문의함',
+              Text('클럽장·매니저가 함께 답변하는 운영진 문의함',
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
             ],
           ),
@@ -39,7 +39,8 @@ Widget _inquiryCard(BuildContext context) {
 }
 
 void main() {
-  testWidgets('실제 앱 테마에서 가입 전 문의 카드가 레이아웃 예외 없이 렌더된다', (tester) async {
+  testWidgets('실제 앱 테마에서 가입 전 문의 카드가 레이아웃 예외 없이 렌더된다',
+      (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);

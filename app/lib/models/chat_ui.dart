@@ -134,8 +134,9 @@ class ClubChatCardItem {
       description: j['description'] as String?,
       memberCount: (j['member_count'] as int?) ?? 0,
       monthlyFee: j['monthly_fee'] as int?,
-      meetingDays: (j['meeting_days'] as List?)?.whereType<String>().toList() ??
-          const [],
+      meetingDays:
+          (j['meeting_days'] as List?)?.whereType<String>().toList() ??
+              const [],
       genderPreference: j['gender_preference'] as String?,
     );
   }

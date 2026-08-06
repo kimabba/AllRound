@@ -46,7 +46,8 @@ class MatchEntry {
       source: (j['source'] as String?) ?? 'manual',
       createdAt: DateTime.parse(j['created_at'] as String),
       rounds: roundsList
-              ?.map((r) => MatchRound.fromJson(r as Map<String, dynamic>))
+              ?.map((r) =>
+                  MatchRound.fromJson(r as Map<String, dynamic>))
               .toList() ??
           const [],
     );

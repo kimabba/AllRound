@@ -352,7 +352,8 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
               const SizedBox(width: AppSpacing.sm),
               IconButton.filledTonal(
                 tooltip: '다른 달 장부 만들기',
-                onPressed: _busy ? null : () => _editPeriod(createNew: true),
+                onPressed:
+                    _busy ? null : () => _editPeriod(createNew: true),
                 icon: const Icon(Icons.add_rounded),
               ),
             ],

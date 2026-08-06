@@ -357,7 +357,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('모임 목록 로드 실패: $e')));
+        ).showSnackBar(SnackBar(content: Text('클럽 목록 로드 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingPendingClubs = false);
@@ -375,7 +375,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(count == 1 ? '모임 거절 사유' : '$count개 모임 거절 사유'),
+          title: Text(count == 1 ? '클럽 거절 사유' : '$count개 클럽 거절 사유'),
           content: TextField(
             controller: controller,
             decoration: InputDecoration(
@@ -423,8 +423,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('선택 모임 일괄 승인'),
-          content: Text('${clubIds.length}개 모임을 승인하시겠어요?'),
+          title: const Text('선택 클럽 일괄 승인'),
+          content: Text('${clubIds.length}개 클럽을 승인하시겠어요?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -447,7 +447,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approve ? '$count개 모임 승인 완료' : '$count개 모임 거절 완료'),
+            content: Text(approve ? '$count개 클럽 승인 완료' : '$count개 클럽 거절 완료'),
           ),
         );
         setState(() => _selectedPendingClubIds.removeAll(clubIds));
@@ -690,7 +690,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             Tab(text: '크롤 현황'),
             Tab(text: 'Draft 승인'),
             Tab(text: '크롤 소스'),
-            Tab(text: '모임 승인'),
+            Tab(text: '클럽 승인'),
             Tab(text: '지식베이스'),
             Tab(text: 'Gemini 사용량'),
             Tab(text: '랭킹 클레임'),
@@ -989,7 +989,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           children: const [
             Padding(
               padding: EdgeInsets.all(48),
-              child: Center(child: Text('승인 대기 모임이 없습니다')),
+              child: Center(child: Text('승인 대기 클럽이 없습니다')),
             ),
           ],
         ),

@@ -23,7 +23,7 @@ String reviewQueueCutoff(DateTime now) {
       '${kst.day.toString().padLeft(2, '0')}';
 }
 
-/// 어드민 전용: 심사 큐·크롤 소스·모임 승인 API.
+/// 어드민 전용: 심사 큐·크롤 소스·클럽 승인 API.
 mixin AdminApi on ApiBase {
   // ── 대회 심사 큐 ──────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ mixin AdminApi on ApiBase {
     return (res as num).toInt();
   }
 
-  // ── 모임 승인 ─────────────────────────────────────────────────
+  // ── 클럽 승인 ─────────────────────────────────────────────────
 
   Future<List<Club>> pendingClubs() async {
     final rows = await supabase
@@ -330,8 +330,11 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row =
-          await supabase.from('crawl_sources').select().eq('id', id).single();
+      final row = await supabase
+          .from('crawl_sources')
+          .select()
+          .eq('id', id)
+          .single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase

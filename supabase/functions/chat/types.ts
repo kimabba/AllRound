@@ -113,7 +113,7 @@ export const QA_CACHE_TTL_HOURS = 24;
  *
  * v2: 컨텍스트 행에서 내부 id 제거 + "출처는 제목으로" 지시로 교체.
  */
-export const CHAT_PROMPT_VERSION = 2;
+export const CHAT_PROMPT_VERSION = 3;
 
 // Intent classifier settings.
 // 임베딩 KNN 관측용 하한 — intent_classify RPC 가 이 값 이상 유사한 예시만 다수결에 포함.
