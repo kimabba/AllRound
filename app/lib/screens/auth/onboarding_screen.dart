@@ -33,6 +33,17 @@ import '../../widgets/app_toast.dart';
 bool tennisOrgSelectionsAreComplete(Iterable<Set<String>> selectedPerOrg) =>
     selectedPerOrg.every((codes) => codes.isNotEmpty);
 
+/// 실명 칸에 닉네임이 들어오는 걸 막는다.
+///
+/// 이 칸의 값(users.name)은 협회 랭킹표의 선수명과 글자까지 같아야 후보 매칭
+/// (my_ranking_candidates)이 붙는다. 실측(2026-08-05 프로덕션) 가입자 20명 중
+/// 절반이 `이름1` 같은 값이라 매칭이 0건이었다. 랭킹표가 한글 실명이므로 한글만
+/// 받는다.
+// ponytail: 외국인·교포 실명 요구가 실제로 나오면 영문 분기를 여기 하나에 더한다.
+final _realNamePattern = RegExp(r'^[가-힣]{2,5}$');
+
+bool isValidRealName(String value) => _realNamePattern.hasMatch(value.trim());
+
 /// 서버에 등록돼 있는데 화면 초안에는 없는 협회를 고른다(#337).
 ///
 /// 복원이 늦게 도착하는 사이 사용자가 협회를 먼저 추가할 수 있다. 그때 복원을
@@ -109,7 +120,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
   bool get _canAdvance => switch (_step) {
-        0 => _realName.text.trim().length >= 2 &&
+        0 => isValidRealName(_realName.text) &&
             _birthDate != null &&
             !isUnderMinSignupAge(_birthDate!, DateTime.now()),
         1 => _regionCode != null,
@@ -779,11 +790,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               controller: _realName,
               maxLength: 20,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '이름 (실명)',
                 hintText: '대회·클럽 신청에 사용돼요',
-                prefixIcon: Icon(Icons.person_outline_rounded),
+                prefixIcon: const Icon(Icons.person_outline_rounded),
                 counterText: '',
+                // 빈 칸에는 에러를 띄우지 않는다 — 아직 입력을 시작도 안 했다.
+                errorText: _realName.text.trim().isEmpty ||
+                        isValidRealName(_realName.text)
+                    ? null
+                    : '한글 실명 2~5자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
               ),
             ),
             const SizedBox(height: AppSpacing.md),
