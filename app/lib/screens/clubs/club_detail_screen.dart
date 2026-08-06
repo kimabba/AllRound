@@ -20,6 +20,7 @@ import '../../utils/club_labels.dart';
 import '../../utils/google_calendar.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 import 'club_dues_screen.dart';
@@ -426,14 +427,18 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     if (_loading) {
       return Scaffold(
         backgroundColor: cs.surfaceContainerLowest,
-        appBar: AppBar(),
+        appBar: AppBar(
+          leading: const AppBackButton(fallbackLocation: '/clubs'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_error != null || _club == null) {
       return Scaffold(
         backgroundColor: cs.surfaceContainerLowest,
-        appBar: AppBar(),
+        appBar: AppBar(
+          leading: const AppBackButton(fallbackLocation: '/clubs'),
+        ),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -470,6 +475,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       key: AllRoundE2EKeys.clubDetailScreen,
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/clubs'),
         title: Text(club.name),
         actions: [
           IconButton(

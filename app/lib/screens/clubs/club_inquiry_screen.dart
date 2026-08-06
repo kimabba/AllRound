@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/club_inquiry.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
@@ -137,6 +138,7 @@ class _ClubInquiryConversationScreenState
     final currentUserId = ref.watch(currentUserProvider)?.id;
     return Scaffold(
       appBar: AppBar(
+        leading: AppBackButton(fallbackLocation: '/clubs/${widget.clubId}'),
         title: Text(_clubName == null ? '1:1 문의' : '${_clubName!} 문의'),
         actions: [
           if (_requesterThread != null)
@@ -277,7 +279,10 @@ class _ClubInquiryInboxScreenState
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('가입 전 문의')),
+      appBar: AppBar(
+        leading: AppBackButton(fallbackLocation: '/clubs/${widget.clubId}'),
+        title: const Text('가입 전 문의'),
+      ),
       body: FutureBuilder<List<ClubInquiryThread>>(
         future: _future,
         builder: (context, snapshot) {
