@@ -110,20 +110,16 @@ class _ClubInquiryConversationScreenState
       await _load();
     } catch (error) {
       if (mounted) {
-        final linksDisabled =
-            error.toString().contains('INQUIRY_LINKS_DISABLED');
         final clubBanned = error.toString().contains('CLUB_BANNED');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-            linksDisabled
-                ? '이 클럽은 문의에서 링크 전송을 허용하지 않습니다.'
-                : clubBanned
-                    ? '이 클럽에서는 영구 차단되어 문의를 보낼 수 없습니다.'
-                    : ugcActionErrorMessage(
-                        error,
-                        fallback: '문의를 보내지 못했습니다.',
-                      ),
+            clubBanned
+                ? '이 모임에서는 영구 차단되어 문의를 보낼 수 없습니다.'
+                : ugcActionErrorMessage(
+                    error,
+                    fallback: '문의를 보내지 못했습니다.',
+                  ),
           )),
         );
       }
