@@ -16,6 +16,14 @@ export interface CreateNotificationInput {
   referenceType?: string | null;
   referenceId?: string | null;
   clubId?: string | null;
+  delivery?: 'all_devices' | 'latest_device';
+}
+
+export function selectNotificationTargets(
+  rows: DeviceTokenRow[],
+  delivery: CreateNotificationInput['delivery'],
+): DeviceTokenRow[] {
+  return delivery === 'latest_device' ? rows.slice(0, 1) : rows;
 }
 
 export async function createNotification(
@@ -26,9 +34,14 @@ export async function createNotification(
     .from('device_tokens')
     .select('token, platform, sound_enabled')
     .eq('user_id', input.userId)
-    .eq('enabled', true);
+    .eq('enabled', true)
+    .order('updated_at', { ascending: false });
 
-  const targets = ((tokenRows ?? []) as DeviceTokenRow[]).map((row) => ({
+  const selectedRows = selectNotificationTargets(
+    (tokenRows ?? []) as DeviceTokenRow[],
+    input.delivery,
+  );
+  const targets = selectedRows.map((row) => ({
     token: row.token,
     soundEnabled: row.sound_enabled,
   }));

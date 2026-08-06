@@ -38,7 +38,10 @@ Deno.test('clubs-create website accepts only HTTP(S) URLs', () => {
     ok: true,
     value: 'https://example.com/club',
   });
-  assertFalse(parseWebsite('example.com').ok);
+  assertEquals(parseWebsite('example.com'), {
+    ok: true,
+    value: 'https://example.com',
+  });
   assertFalse(parseWebsite('ftp://example.com').ok);
   assertFalse(parseWebsite(123).ok);
 });
