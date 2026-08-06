@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(17);
+SELECT plan(20);
 
 SELECT is(
   (SELECT count(*) FROM storage.buckets
@@ -150,6 +150,67 @@ SELECT is(
   3::bigint,
   '로고·소개 사진·게시글 사진 세 컬럼 모두 URL 형식 제약을 가진다'
 );
+
+-- ── 고아 사진 정리(storage-gc) 대상 판정 ──────────────────────────────
+-- 되돌릴 수 없는 삭제라, 살아있는 사진이 목록에 들어가지 않는 것이 핵심이다.
+INSERT INTO storage.objects (bucket_id, name, owner_id, created_at)
+VALUES
+  ('club-posts', 'qa-gc-orphan-old.jpg',
+   '00000000-0000-4000-8000-000000000008', now() - interval '48 hours'),
+  ('club-posts', 'qa-gc-orphan-fresh.jpg',
+   '00000000-0000-4000-8000-000000000008', now()),
+  ('club-intro-images', 'qa-gc-referenced.jpg',
+   '00000000-0000-4000-8000-000000000008', now() - interval '48 hours'),
+  ('club-posts', 'qa-gc-reported.jpg',
+   '00000000-0000-4000-8000-000000000008', now() - interval '48 hours');
+
+UPDATE public.clubs
+SET intro_image_urls = ARRAY[
+  'http://127.0.0.1:54321/storage/v1/object/public/club-intro-images/qa-gc-referenced.jpg'
+]
+WHERE id = '00000000-0000-4000-8000-000000000201';
+
+INSERT INTO public.ugc_reports (target_type, target_id, reason, content_snapshot)
+VALUES (
+  'club_post',
+  '00000000-0000-4000-8000-000000000901',
+  'other',
+  jsonb_build_object(
+    'image_urls',
+    jsonb_build_array(
+      'http://127.0.0.1:54321/storage/v1/object/public/club-posts/qa-gc-reported.jpg'
+    )
+  )
+);
+
+SELECT is(
+  (SELECT count(*) FROM public.orphan_club_image_objects()
+    WHERE object_name = 'qa-gc-orphan-old.jpg'),
+  1::bigint,
+  '아무 글에도 안 걸린 오래된 사진은 정리 대상이다'
+);
+
+SELECT is(
+  (SELECT coalesce(string_agg(object_name, ', ' ORDER BY object_name), '(없음)')
+     FROM public.orphan_club_image_objects()
+    WHERE object_name IN (
+      'qa-gc-orphan-fresh.jpg', 'qa-gc-referenced.jpg', 'qa-gc-reported.jpg'
+    )),
+  '(없음)',
+  '방금 올린 사진·글에 걸린 사진·신고 스냅샷이 참조하는 사진은 정리 대상이 아니다'
+);
+
+SELECT is(
+  (SELECT count(*) FROM public.orphan_club_image_objects(interval '72 hours')
+    WHERE object_name = 'qa-gc-orphan-old.jpg'),
+  0::bigint,
+  '기준 나이를 늘리면 그보다 최근 사진은 목록에서 빠진다'
+);
+
+DELETE FROM public.ugc_reports
+WHERE target_id = '00000000-0000-4000-8000-000000000901';
+UPDATE public.clubs SET intro_image_urls = '{}'
+WHERE id = '00000000-0000-4000-8000-000000000201';
 
 -- clubs_logo_url_is_app_storage 제약이 생긴 뒤로 픽스처도 실제 앱이 저장하는
 -- 형식(로컬 스택 공개 URL)이어야 한다.
