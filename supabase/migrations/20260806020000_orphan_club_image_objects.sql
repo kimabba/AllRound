@@ -8,14 +8,18 @@
 --   (owner_id = auth.uid())에 막혀 파일이 남고, 앱이 도중에 꺼져도 남는다. 참조가
 --   끊긴 파일을 서버가 한 곳에서 걷어내는 편이 경로마다 삭제 코드를 심는 것보다 짧다.
 --
--- 안전장치: 방금 올라갔지만 아직 글에 저장되지 않은 파일을 지우지 않도록 기본 24시간이
---   지난 객체만 대상으로 한다. 신고 스냅샷(content_snapshot)이 참조하는 사진은 원본
---   글이 지워진 뒤에도 심사 근거이므로 참조로 친다.
+-- 안전장치: 방금 올라갔지만 아직 글에 저장되지 않은 파일을 지우지 않도록 기본 7일이
+--   지난 객체만 대상으로 한다. 목록 조회와 실제 삭제 사이에 그 객체를 새로 참조하는
+--   쓰기가 끼면 살아있는 사진을 지우게 되는데(codex MAJOR), 앱은 업로드 직후에만 URL 을
+--   쓰고 작성 임시저장도 URL 을 보관하지 않아(had_selected_images 플래그뿐) 실제 경로는
+--   없다. 그래도 되돌릴 수 없는 삭제라 유예를 하루가 아니라 일주일로 잡는다.
+--   신고 스냅샷(content_snapshot)이 참조하는 사진은 원본 글이 지워진 뒤에도 심사
+--   근거이므로 참조로 친다.
 
 begin;
 
 create or replace function public.orphan_club_image_objects(
-  p_min_age interval default interval '24 hours'
+  p_min_age interval default interval '7 days'
 )
 returns table (bucket_id text, object_name text)
 language sql

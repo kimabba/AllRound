@@ -8,9 +8,16 @@
 -- 강제 지점: 값 검증은 RLS(누가 쓰는가)로는 불가능하므로 CHECK 제약으로 내린다.
 --   CHECK 안에서는 서브쿼리를 쓸 수 없어 IMMUTABLE 헬퍼 함수 한 개로 배열을 검사한다.
 --
--- 호스트는 프로덕션 + 로컬 스택 두 개만 허용한다. 다른 Supabase 프로젝트를 열어두면
---   공격자가 자기 프로젝트로 우회할 수 있어 호스트를 고정한다. 프로젝트 ref 는 앱에
---   이미 들어 있는 공개 식별자이며 시크릿이 아니다.
+-- 호스트는 프로덕션 하나만 허용한다. 다른 Supabase 프로젝트를 열어두면 공격자가 자기
+--   프로젝트로 우회할 수 있다. 프로젝트 ref 는 앱에 이미 들어 있는 공개 식별자이며
+--   시크릿이 아니다. 로컬 스택(127.0.0.1:54321)용 완화는 seed.sql 에만 둔다 —
+--   프로덕션 제약이 개발자 기기의 loopback 주소를 허용할 이유가 없다.
+--
+-- 경로도 앱이 실제로 만드는 형태로 고정한다: (업로더 uuid/)?48자리 hex.jpg|png.
+--   느슨하게 두면 `.../사용중인객체.jpg#x` 처럼 fragment·query·퍼센트 인코딩을 붙인
+--   URL 이 저장되고, 정리 작업(orphan_club_image_objects)은 그 문자열을 객체 키와
+--   그대로 대조하므로 **사용 중인 사진을 고아로 오판해 지운다**. 프로덕션 기존 7건은
+--   모두 이 형식임을 확인했다.
 
 begin;
 
@@ -28,11 +35,10 @@ as $$
     bool_and(
       u is not null
       and u ~ (
-        '^(https://bsjdgwmveokanclqwtvx\.supabase\.co'
-        || '|http://(127\.0\.0\.1|localhost):54321)'
+        '^https://bsjdgwmveokanclqwtvx\.supabase\.co'
         || '/storage/v1/object/public/'
         || p_bucket
-        || '/[^[:space:]]+$'
+        || '/([0-9a-f-]{36}/)?[0-9a-f]{48}\.(jpg|png)$'
       )
     ),
     true
