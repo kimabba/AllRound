@@ -417,6 +417,9 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             hintText: '지역이나 클럽 이름 검색',
             prefixIcon: Icon(Icons.search_rounded),
           ),
+          onChanged: (value) {
+            setState(() => _clubNameQuery = value.trim());
+          },
           onSubmitted: (value) {
             setState(() => _clubNameQuery = value.trim());
           },
@@ -475,6 +478,100 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 },
               ),
             ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildClubDiscoveryResults({
+    required bool hasClubNameQuery,
+    required List<Club> recommendedClubs,
+    required List<Club> displayedClubs,
+    required Set<String> favoriteClubIds,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SimpleSectionHeader(
+          title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
+          icon:
+              hasClubNameQuery ? Icons.search_rounded : Icons.explore_outlined,
+          subtitle: hasClubNameQuery
+              ? '"${_clubNameQuery.trim()}"'
+              : (_clubFilters.hasActive
+                  ? _clubFilters.labels.join(' · ')
+                  : '관심 종목을 기준으로 추천해요'),
+          trailing: Text('${recommendedClubs.length}개'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (_loading || _loadingMy) const LinearProgressIndicator(),
+        if (_searchError != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _searchError!,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: cs.error),
+          ),
+        ],
+        if (displayedClubs.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: AppEmptyState(
+              icon: hasClubNameQuery || _clubFilters.hasActive
+                  ? Icons.search_off_rounded
+                  : Icons.sports_rounded,
+              title: hasClubNameQuery || _clubFilters.hasActive
+                  ? '조건에 맞는 클럽이 없어요'
+                  : '아직 등록된 클럽이 없어요',
+              description: hasClubNameQuery || _clubFilters.hasActive
+                  ? '검색어를 줄이거나 맞춤 조건을 바꿔보세요.'
+                  : '새 클럽을 만들면 이곳에서 다른 사용자에게 소개돼요.',
+              actionLabel: hasClubNameQuery || _clubFilters.hasActive
+                  ? null
+                  : '첫 클럽 만들기',
+              onAction: hasClubNameQuery || _clubFilters.hasActive
+                  ? null
+                  : _openCreate,
+            ),
+          )
+        else
+          for (final club in displayedClubs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: SimpleClubTile(
+                club: club,
+                backgroundColor: cs.surfaceContainerLowest,
+                isFavorite: favoriteClubIds.contains(club.id),
+                onFavoriteToggle: _toggleClubFavorite,
+                onOpen: () => _openClub(club),
+              ),
+            ),
+        if (!hasClubNameQuery) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _showAllClubs = !_showAllClubs;
+                  if (_showAllClubs) {
+                    _clubInterests = {'tennis', 'futsal'};
+                  }
+                });
+                if (_showAllClubs) _load();
+              },
+              icon: Icon(
+                _showAllClubs
+                    ? Icons.expand_less_rounded
+                    : Icons.groups_2_outlined,
+              ),
+              label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
+            ),
           ),
         ],
       ],
@@ -695,6 +792,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
               sliver: SliverList.list(
                 children: [
                   _buildClubFilterControls(hasClubNameQuery),
+                  if (hasClubNameQuery) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildClubDiscoveryResults(
+                      hasClubNameQuery: true,
+                      recommendedClubs: recommendedClubs,
+                      displayedClubs: displayedRecommendationClubs,
+                      favoriteClubIds: favoriteClubIds,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   if (joinedClubs.isNotEmpty || pendingClubs.isNotEmpty) ...[
                     Container(
@@ -801,90 +907,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xl),
                   ],
-                  SimpleSectionHeader(
-                    title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
-                    icon: hasClubNameQuery
-                        ? Icons.search_rounded
-                        : Icons.explore_outlined,
-                    subtitle: hasClubNameQuery
-                        ? '"${_clubNameQuery.trim()}"'
-                        : (_clubFilters.hasActive
-                            ? _clubFilters.labels.join(' · ')
-                            // 이 분기는 필터가 없는 상태 = region null 이라 지역을
-                            // 반영하지 않는다. 지역까지 쓰려면 필터를 걸어야 한다.
-                            : '관심 종목을 기준으로 추천해요'),
-                    trailing: Text('${recommendedClubs.length}개'),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (_loading || _loadingMy) const LinearProgressIndicator(),
-                  if (_searchError != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      _searchError!,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: cs.error),
+                  if (!hasClubNameQuery)
+                    _buildClubDiscoveryResults(
+                      hasClubNameQuery: false,
+                      recommendedClubs: recommendedClubs,
+                      displayedClubs: displayedRecommendationClubs,
+                      favoriteClubIds: favoriteClubIds,
                     ),
-                  ],
-                  if (displayedRecommendationClubs.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.lg,
-                      ),
-                      child: AppEmptyState(
-                        icon: hasClubNameQuery || _clubFilters.hasActive
-                            ? Icons.search_off_rounded
-                            : Icons.sports_rounded,
-                        title: hasClubNameQuery || _clubFilters.hasActive
-                            ? '조건에 맞는 클럽이 없어요'
-                            : '아직 등록된 클럽이 없어요',
-                        description: hasClubNameQuery || _clubFilters.hasActive
-                            ? '검색어를 줄이거나 맞춤 조건을 바꿔보세요.'
-                            : '새 클럽을 만들면 이곳에서 다른 사용자에게 소개돼요.',
-                        actionLabel: hasClubNameQuery || _clubFilters.hasActive
-                            ? null
-                            : '첫 클럽 만들기',
-                        onAction: hasClubNameQuery || _clubFilters.hasActive
-                            ? null
-                            : _openCreate,
-                      ),
-                    )
-                  else
-                    for (final club in displayedRecommendationClubs)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: SimpleClubTile(
-                          club: club,
-                          backgroundColor: cs.surfaceContainerLowest,
-                          isFavorite: favoriteClubIds.contains(club.id),
-                          onFavoriteToggle: _toggleClubFavorite,
-                          onOpen: () => _openClub(club),
-                        ),
-                      ),
-                  if (!hasClubNameQuery) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _showAllClubs = !_showAllClubs;
-                            if (_showAllClubs) {
-                              _clubInterests = {'tennis', 'futsal'};
-                            }
-                          });
-                          if (_showAllClubs) _load();
-                        },
-                        icon: Icon(
-                          _showAllClubs
-                              ? Icons.expand_less_rounded
-                              : Icons.groups_2_outlined,
-                        ),
-                        label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
