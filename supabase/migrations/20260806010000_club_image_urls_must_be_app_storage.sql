@@ -84,3 +84,7 @@ alter table public.club_posts
   );
 
 commit;
+
+-- 새 함수를 PostgREST 스키마 캐시에 즉시 알린다(AGENTS/START-HERE 규칙 9).
+-- 없으면 배포 직후 RPC 호출이 캐시 갱신 전까지 실패할 수 있다.
+notify pgrst, 'reload schema';

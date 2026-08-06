@@ -76,7 +76,10 @@ ClubImageFormat? detectClubImageFormat(Uint8List bytes) {
   return null;
 }
 
-Future<PreparedClubImage> prepareClubImage(XFile file) async {
+Future<PreparedClubImage> prepareClubImage(
+  XFile file, {
+  int maxBytes = clubImageMaxBytes,
+}) async {
   final originalBytes = await file.readAsBytes();
   final format = detectClubImageFormat(originalBytes);
   if (format == null) {
@@ -86,7 +89,7 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
   }
 
   if (format != ClubImageFormat.heif) {
-    return prepareClubImageBytes(originalBytes);
+    return prepareClubImageBytes(originalBytes, maxBytes: maxBytes);
   }
 
   if (defaultTargetPlatform != TargetPlatform.iOS) {
@@ -104,7 +107,7 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
     if (converted == null || converted.isEmpty) {
       throw const ClubImagePreparationException('iPhone 사진 변환에 실패했습니다.');
     }
-    return prepareClubImageBytes(converted);
+    return prepareClubImageBytes(converted, maxBytes: maxBytes);
   } on PlatformException {
     throw const ClubImagePreparationException(
       'iPhone 사진 변환에 실패했습니다. 다른 사진으로 다시 시도해주세요.',
@@ -118,6 +121,10 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
 
 /// 어느 클럽 사진 버킷에도 들어가는 상한. club-logos 가 5MB 로 가장 엄격하다.
 const clubImageMaxBytes = 5 * 1024 * 1024;
+
+/// 대회 포스터 버킷(tournament-posters) 상한. 이 처리기는 클럽 밖에서도 쓰이므로
+/// 가장 엄격한 값을 모두에게 강요하지 않는다.
+const tournamentPosterMaxBytes = 10 * 1024 * 1024;
 
 /// Decodes and re-encodes an upload image before it leaves the device.
 ///

@@ -48,36 +48,46 @@ Deno.serve(withCors(async (req) => {
   if (first.length === 0) return jsonResponse({ removed: 0, by_bucket: {} });
 
   // 목록을 만든 뒤 삭제까지의 사이에 그 객체를 참조하는 쓰기가 끼면 살아있는 사진을
-  // 지우게 된다. 삭제 직전에 한 번 더 조회해 두 시점 모두 고아인 것만 남긴다 —
-  // 창을 없애지는 못하지만(파일 삭제는 DB 트랜잭션 밖이다) 7일에서 한 왕복으로 줄인다.
-  const second = await inventory();
-  if (second === null) return errorResponse('orphan inventory failed', 500);
-  const stillOrphan = new Set(
-    second.map((object) => `${object.bucketId}/${object.objectName}`),
-  );
-  const orphans = first.filter((object) =>
-    stillOrphan.has(`${object.bucketId}/${object.objectName}`)
-  );
+  // 지우게 된다. 파일 삭제가 DB 트랜잭션 밖(Storage API)이라 이 창을 0 으로 만들려면
+  // 미디어 레지스트리 + 참조 FK + 삭제 선점 상태가 필요하다 — 이 PR 범위를 넘는다.
+  // 대신 청크를 지우기 직전마다 다시 조회해 창을 한 왕복으로 좁힌다.
 
   const removedByBucket: Record<string, number> = {};
+  let removedTotal = 0;
   for (const bucketId of publicMediaBucketIds()) {
-    const names = orphans
+    const planned = first
       .filter((object) => object.bucketId === bucketId)
       .map((object) => object.objectName);
-    for (let offset = 0; offset < names.length; offset += 100) {
-      const chunk = names.slice(offset, offset + 100);
+    for (let offset = 0; offset < planned.length; offset += 100) {
+      const latest = await inventory();
+      if (latest === null) return errorResponse('orphan inventory failed', 500);
+      const stillOrphan = new Set(
+        latest
+          .filter((object) => object.bucketId === bucketId)
+          .map((object) => object.objectName),
+      );
+      const chunk = planned
+        .slice(offset, offset + 100)
+        .filter((name) => stillOrphan.has(name));
+      if (chunk.length === 0) continue;
+
       // 되돌릴 수 없는 삭제라 지운 대상을 남긴다 — 사고가 나면 무엇이 사라졌는지
-      // 알아야 한다(파일명은 난수라 그 자체로 개인정보가 아니다).
-      console.log('storage-gc removing', { bucketId, names: chunk });
+      // 알아야 한다. 로고·소개 사진 경로는 `업로더 uuid/파일명` 이므로 업로더를
+      // 드러내지 않도록 파일명만 남긴다.
+      console.log('storage-gc removing', {
+        bucketId,
+        names: chunk.map((name) => name.split('/').pop()),
+      });
       const { error: removeError } = await svc.storage.from(bucketId).remove(chunk);
       if (removeError) {
         console.error('orphan removal failed', { bucketId, count: chunk.length });
         return errorResponse('orphan removal failed', 500);
       }
       removedByBucket[bucketId] = (removedByBucket[bucketId] ?? 0) + chunk.length;
+      removedTotal += chunk.length;
     }
   }
 
   console.log('storage-gc removed', removedByBucket);
-  return jsonResponse({ removed: orphans.length, by_bucket: removedByBucket });
+  return jsonResponse({ removed: removedTotal, by_bucket: removedByBucket });
 }));
