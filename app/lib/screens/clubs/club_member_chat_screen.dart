@@ -8,6 +8,7 @@ import '../../models/club_event.dart';
 import '../../models/moderation.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubMemberChatScreen extends ConsumerStatefulWidget {
@@ -184,6 +185,7 @@ class _ClubMemberChatScreenState extends ConsumerState<ClubMemberChatScreen> {
     final currentUserId = ref.watch(currentUserProvider)?.id;
     return Scaffold(
       appBar: AppBar(
+        leading: AppBackButton(fallbackLocation: '/clubs/${widget.clubId}'),
         title: Text(widget.title),
         actions: [
           if (widget.otherMember != null)

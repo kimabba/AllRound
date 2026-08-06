@@ -8,6 +8,7 @@ import '../../screens/clubs/club_inquiry_screen.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../app_back_button.dart';
 import '../app_card.dart';
 import 'club_tiles.dart';
 
@@ -143,6 +144,7 @@ class _TeamRecruitingListScreenState extends State<TeamRecruitingListScreen> {
     final posts = _posts;
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/clubs'),
         title: const Text('전체 팀원모집'),
       ),
       body: posts.isEmpty
@@ -514,6 +516,7 @@ class _TeamRecruitingDetailScreenState
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/clubs'),
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
         title: const Text('팀원모집 상세'),

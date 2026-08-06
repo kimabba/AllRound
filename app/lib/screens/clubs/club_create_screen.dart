@@ -13,6 +13,7 @@ import '../../utils/club_create_draft.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
@@ -560,6 +561,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/clubs'),
         title: const Text('클럽 만들기'),
         actions: [
           IconButton(
