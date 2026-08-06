@@ -211,7 +211,7 @@ const SAMPLE_CLUB_ROW: ClubCardRow = {
   sport: 'tennis',
   name: '광주 아침테니스',
   region: '광주',
-  description: '평일 아침에 함께 치는 모임입니다.',
+  description: '평일 아침에 함께 치는 클럽입니다.',
   member_count: 24,
   monthly_fee: 20000,
   meeting_days: ['화', '목'],
@@ -226,7 +226,7 @@ Deno.test('buildClubCards maps rows to the fixed card contract', () => {
     name: '광주 아침테니스',
     sport: 'tennis',
     region: '광주',
-    description: '평일 아침에 함께 치는 모임입니다.',
+    description: '평일 아침에 함께 치는 클럽입니다.',
     member_count: 24,
     monthly_fee: 20000,
     meeting_days: ['화', '목'],
@@ -242,7 +242,7 @@ Deno.test('buildClubCards caps at 10 items and tolerates empty input', () => {
 
 Deno.test('renderClubSearchText summarizes results without duplicating card rows', () => {
   const text = renderClubSearchText([SAMPLE_CLUB_ROW], { sport: 'tennis', region: '광주' });
-  assert(text.includes('🎾 테니스 모임 1건'));
+  assert(text.includes('🎾 테니스 클럽 1건'));
   assert(text.includes('(광주)'));
   assert(text.includes('아래 카드'));
   assert(!text.includes(SAMPLE_CLUB_ROW.name));
@@ -250,12 +250,12 @@ Deno.test('renderClubSearchText summarizes results without duplicating card rows
 
 Deno.test('renderClubSearchEmptyText names the filters and suggests retry', () => {
   const text = renderClubSearchEmptyText({ sport: 'futsal', region: '광주' });
-  assert(text.includes('조건에 맞는 풋살 모임이 없습니다'));
+  assert(text.includes('조건에 맞는 풋살 클럽이 없습니다'));
   assert(text.includes('(광주)'));
-  assert(text.includes('모임 탭'));
+  assert(text.includes('클럽 탭'));
 
   const noFilter = renderClubSearchEmptyText({ region: null });
-  assert(noFilter.includes('조건에 맞는 모임이 없습니다.'));
+  assert(noFilter.includes('조건에 맞는 클럽이 없습니다.'));
 });
 
 Deno.test('renderClubDetailText renders full markdown detail', () => {
@@ -274,7 +274,7 @@ Deno.test('renderClubDetailText renders full markdown detail', () => {
   assert(text.includes('- 멤버: 24명'));
   assert(text.includes('- 성별: 혼성'));
   assert(text.includes('- 연락처: 오픈채팅 https://open.kakao.com/abc'));
-  assert(text.includes('평일 아침에 함께 치는 모임입니다.'));
+  assert(text.includes('평일 아침에 함께 치는 클럽입니다.'));
 });
 
 Deno.test('renderClubDetailText omits missing optional fields', () => {

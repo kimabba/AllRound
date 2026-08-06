@@ -160,7 +160,7 @@ Deno.serve(withCors(async (req) => {
   );
   if (accessError) return errorResponse(accessError, 403);
 
-  // 정기 일정은 첫 일정을 포함해 앞으로 12회 생성한다. 각 일정은 독립적으로
+  // 정기 모임은 첫 모임을 포함해 앞으로 12회 생성한다. 각 모임은 독립적으로
   // 참석·조기 종료·삭제할 수 있고, 반복 주기는 목록의 표시 정보로 남긴다.
   const occurrenceCount = repeat === null ? 1 : 12;
   const eventRows = Array.from({ length: occurrenceCount }, (_, index) => {
@@ -201,7 +201,7 @@ Deno.serve(withCors(async (req) => {
     .eq('club_id', clubId)
     .eq('status', 'active')
     .neq('user_id', auth.user.id);
-  const clubName = typeof club?.name === 'string' ? club.name : '모임';
+  const clubName = typeof club?.name === 'string' ? club.name : '클럽';
   // club_events SELECT RLS 는 차단 관계(is_user_blocked_pair)를 숨긴다.
   // 알림으로 제목을 보내면 그 차단이 무의미해지므로 수신자에서 제외한다.
   const { data: blockRows } = await supabase
@@ -222,7 +222,7 @@ Deno.serve(withCors(async (req) => {
       createNotification(supabase, {
         userId,
         type: 'club_event',
-        title: `${clubName} 새 일정`,
+        title: `${clubName} 새 모임`,
         body: title,
         referenceType: 'club_event',
         referenceId: event.id,

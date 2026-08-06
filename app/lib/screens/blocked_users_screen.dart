@@ -91,7 +91,7 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
               child: AppEmptyState(
                 icon: Icons.person_off_outlined,
                 title: '차단한 사용자가 없습니다',
-                description: '차단한 사용자는 내 모임 활동과 게시글에서 숨겨집니다.',
+                description: '차단한 사용자는 내 클럽 활동과 게시글에서 숨겨집니다.',
               ),
             );
           }
@@ -106,7 +106,7 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
               ),
               children: [
                 Text(
-                  '차단한 사용자는 내 콘텐츠에 댓글을 남기거나 모임 활동을 볼 수 없습니다.',
+                  '차단한 사용자는 내 콘텐츠에 댓글을 남기거나 클럽 활동을 볼 수 없습니다.',
                   style: tt.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,
                     height: 1.5,

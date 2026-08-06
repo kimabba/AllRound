@@ -21,13 +21,13 @@ Deno.test('clubs-create builds a deduplicated admin approval notification', () =
   assertEquals(
     buildClubApprovalNotification('admin-1', {
       clubId: 'club-1',
-      clubName: '주말 푸살 모임',
+      clubName: '주말 푸살 클럽',
     }),
     {
       userId: 'admin-1',
       type: 'club_approval_request',
-      title: '새 모임 승인 요청',
-      body: '“주말 푸살 모임” 모임이 승인을 기다리고 있습니다.',
+      title: '새 클럽 승인 요청',
+      body: '“주말 푸살 클럽” 클럽이 승인을 기다리고 있습니다.',
       referenceType: 'club_approval_request',
       referenceId: 'club-1',
       clubId: 'club-1',

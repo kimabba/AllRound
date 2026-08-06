@@ -93,12 +93,6 @@ const CASES: RuleCase[] = [
     intent: 'club_search',
     slots: {},
   },
-  // club_search — 새 UI 명칭인 '모임'도 기존 club_search로 연결
-  {
-    msg: '광주 테니스 모임 추천해줘',
-    intent: 'club_search',
-    slots: { region: 'gwangju', sport: 'tennis' },
-  },
   // my_profile — '내 등급' (대회 키워드 없을 때만)
   {
     msg: '내 등급이 뭐야?',

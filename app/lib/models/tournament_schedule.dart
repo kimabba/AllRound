@@ -101,10 +101,12 @@ List<ScheduleDay> parseTournamentSchedule(String value) {
     final time = '${when.group(5)!.padLeft(2, '0')}:${when.group(6)!}';
 
     final divisionMatch = _divisionPattern.firstMatch(rawDivision);
-    final division =
-        divisionMatch == null ? rawDivision : divisionMatch.group(1)!.trim();
-    final area =
-        divisionMatch == null ? null : _normalizeArea(divisionMatch.group(2)!);
+    final division = divisionMatch == null
+        ? rawDivision
+        : divisionMatch.group(1)!.trim();
+    final area = divisionMatch == null
+        ? null
+        : _normalizeArea(divisionMatch.group(2)!);
 
     final dayKey = '$year-$month-$day';
     final builder = days.putIfAbsent(

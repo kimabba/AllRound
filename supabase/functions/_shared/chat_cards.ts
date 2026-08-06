@@ -117,7 +117,7 @@ function sportNoun(sport: Sport | null | undefined, noun: string): string {
   return sport ? `${SPORT_LABELS[sport]} ${noun}` : noun;
 }
 
-/** '🎾 테니스 모임' — 종목 미지정이면 fallback. */
+/** '🎾 테니스 클럽' — 종목 미지정이면 fallback. */
 function sportHeadingWith(
   sport: Sport | null | undefined,
   noun: string,
@@ -198,7 +198,7 @@ export interface ClubCardRow {
   gender_preference: string | null;
 }
 
-/// 프론트와 계약된 카드 스키마 — 필드 추가/변경 시 앱 모임 카드 위젯과 동기화 필요.
+/// 프론트와 계약된 카드 스키마 — 필드 추가/변경 시 앱 클럽 카드 위젯과 동기화 필요.
 export interface ClubCardItem {
   id: string;
   name: string;
@@ -231,11 +231,11 @@ export interface ClubSearchTextContext {
 }
 
 function clubSportLabel(sport: ClubSearchTextContext['sport']): string {
-  return sportNoun(sport, '모임');
+  return sportNoun(sport, '클럽');
 }
 
 function clubSportHeading(sport: ClubSearchTextContext['sport']): string {
-  return sportHeadingWith(sport, '모임', '모임');
+  return sportHeadingWith(sport, '클럽', '클럽');
 }
 
 function clubFilterText(ctx: ClubSearchTextContext): string {
@@ -246,14 +246,14 @@ export function renderClubSearchText(rows: ClubCardRow[], ctx: ClubSearchTextCon
   return [
     `## ${clubSportHeading(ctx.sport)} ${rows.length}건${clubFilterText(ctx)}`,
     '',
-    '조건에 맞는 모임을 찾았습니다. 아래 카드에서 활동 요일·회비를 확인하고 관심 있는 모임을 선택해 주세요.',
+    '조건에 맞는 클럽을 찾았습니다. 아래 카드에서 모임 요일·회비를 확인하고 관심 있는 클럽을 선택해 주세요.',
   ].join('\n');
 }
 
 export function renderClubSearchEmptyText(ctx: ClubSearchTextContext): string {
   return [
     `조건에 맞는 ${clubSportLabel(ctx.sport)}이 없습니다${clubFilterText(ctx)}.`,
-    '지역·종목을 바꿔서 다시 물어보거나 모임 탭에서 전체 모임을 둘러봐 주세요.',
+    '지역·종목을 바꿔서 다시 물어보거나 클럽 탭에서 전체 클럽을 둘러봐 주세요.',
   ].join('\n');
 }
 

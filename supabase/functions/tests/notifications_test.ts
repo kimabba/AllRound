@@ -3,7 +3,7 @@ import { buildFcmPayload, parseFirebaseCredentials, sendFcm } from '../_shared/f
 Deno.test('FCM payload carries notification deep-link metadata', () => {
   const payload = buildFcmPayload({ token: 'token-1', soundEnabled: true }, {
     type: 'club_join_request',
-    title: '새 모임 가입 신청',
+    title: '새 클럽 가입 신청',
     body: ' 신청이 도착했습니다. ',
     referenceType: 'club_join_request',
     referenceId: 'request-1',

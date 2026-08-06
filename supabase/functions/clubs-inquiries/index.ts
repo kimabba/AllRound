@@ -179,7 +179,7 @@ async function notifyMessage(
       createNotification(supabase, {
         userId: recipientId,
         type: senderIsRequester ? 'club_inquiry_received' : 'club_inquiry_reply',
-        title: senderIsRequester ? '새 모임 문의' : `${input.club.name} 문의 답변`,
+        title: senderIsRequester ? '새 클럽 문의' : `${input.club.name} 문의 답변`,
         body: senderIsRequester
           ? `${label}님이 ${input.club.name}에 문의했습니다.`
           : '운영진의 새 답변이 도착했습니다.',
@@ -236,9 +236,9 @@ Deno.serve(withCors(async (req) => {
       }
     }
 
-    // 사용자가 먼저 문의를 보낸 경우 해당 모임 운영진에게만 가입 판단에 필요한
+    // 사용자가 먼저 문의를 보낸 경우 해당 클럽 운영진에게만 가입 판단에 필요한
     // 활동 프로필을 제공한다. 이 GET 자체가 canOperateClub 로 보호되며 일반 회원과
-    // 다른 모임 운영진은 접근할 수 없다.
+    // 다른 클럽 운영진은 접근할 수 없다.
     const details = new Map<string, Record<string, unknown>>();
     if (requesterIds.length > 0) {
       const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([

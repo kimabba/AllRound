@@ -112,7 +112,7 @@ void main() {
 
     router.go('/');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('모임을 찾아보세요'));
+    await tester.tap(find.text('클럽을 찾아보세요'));
     await tester.pumpAndSettle();
     expect(find.text('모임 목록'), findsOneWidget);
   });

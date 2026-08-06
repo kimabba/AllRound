@@ -6,7 +6,7 @@ function assertEquals(actual: boolean, expected: boolean): void {
   }
 }
 
-Deno.test('approved 모임의 멤버 목록은 가입 전에도 공개된다', () => {
+Deno.test('approved 클럽의 멤버 목록은 가입 전에도 공개된다', () => {
   assertEquals(
     canListClubMembers({
       isActiveMember: false,
@@ -17,7 +17,7 @@ Deno.test('approved 모임의 멤버 목록은 가입 전에도 공개된다', (
   );
 });
 
-Deno.test('승인 전·반려 모임의 멤버 목록은 비회원에게 공개되지 않는다', () => {
+Deno.test('승인 전·반려 클럽의 멤버 목록은 비회원에게 공개되지 않는다', () => {
   for (const clubStatus of ['pending', 'rejected', null]) {
     assertEquals(
       canListClubMembers({
@@ -30,7 +30,7 @@ Deno.test('승인 전·반려 모임의 멤버 목록은 비회원에게 공개�
   }
 });
 
-Deno.test('활성 멤버와 관리자는 모임 상태와 관계없이 멤버 목록을 볼 수 있다', () => {
+Deno.test('활성 멤버와 관리자는 클럽 상태와 관계없이 멤버 목록을 볼 수 있다', () => {
   assertEquals(
     canListClubMembers({
       isActiveMember: true,
@@ -46,5 +46,17 @@ Deno.test('활성 멤버와 관리자는 모임 상태와 관계없이 멤버 �
       clubStatus: 'rejected',
     }),
     true,
+  );
+});
+
+Deno.test('해당 클럽에서 차단된 비회원은 승인된 클럽 멤버 목록도 볼 수 없다', () => {
+  assertEquals(
+    canListClubMembers({
+      isActiveMember: false,
+      isAdmin: false,
+      clubStatus: 'approved',
+      isBanned: true,
+    }),
+    false,
   );
 });

@@ -74,40 +74,40 @@ class ChatTournamentCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            // 카드는 최소 정보만(일정+마감 한 줄, 장소). 참가비·주최/주관 등 상세는
-            // 상세 화면으로 유도해 카드가 길어지지 않게 한다.
+          const SizedBox(height: AppSpacing.sm),
+          // 카드는 최소 정보만(일정+마감 한 줄, 장소). 참가비·주최/주관 등 상세는
+          // 상세 화면으로 유도해 카드가 길어지지 않게 한다.
+          _InfoRow(
+            icon: Icons.calendar_today_rounded,
+            label: '일정',
+            value: item.applicationDeadline != null
+                ? '$dateText  ·  마감 ${item.applicationDeadline}'
+                : dateText,
+            cs: cs,
+            tt: tt,
+            // 마감이 붙는 경우 좁은 폰에서 잘리지 않게 2줄까지 허용.
+            maxLines: item.applicationDeadline != null ? 2 : 1,
+          ),
+          if (item.location != null) ...[
+            const SizedBox(height: AppSpacing.xs),
             _InfoRow(
-              icon: Icons.calendar_today_rounded,
-              label: '일정',
-              value: item.applicationDeadline != null
-                  ? '$dateText  ·  마감 ${item.applicationDeadline}'
-                  : dateText,
+              icon: Icons.location_on_rounded,
+              label: '장소',
+              value: item.location!,
               cs: cs,
               tt: tt,
-              // 마감이 붙는 경우 좁은 폰에서 잘리지 않게 2줄까지 허용.
-              maxLines: item.applicationDeadline != null ? 2 : 1,
-            ),
-            if (item.location != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              _InfoRow(
-                icon: Icons.location_on_rounded,
-                label: '장소',
-                value: item.location!,
-                cs: cs,
-                tt: tt,
-              ),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => onAction('상세 알려줘', item.id),
-                child: const Text('AI 상세 설명'),
-              ),
             ),
           ],
-        ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => onAction('상세 알려줘', item.id),
+              child: const Text('AI 상세 설명'),
+            ),
+          ),
+        ],
+      ),
       ),
     );
   }

@@ -37,12 +37,12 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   String? _nearbyError;
   String? _nearbyNotice;
 
-  // 내 모임 탭
+  // 내 클럽 탭
   List<Club>? _myClubs;
   List<Club> _pendingClubs = const <Club>[];
   bool _loadingMy = false;
 
-  // 모임 찾기 탭
+  // 클럽 찾기 탭
   List<Club>? _clubs;
   bool _loading = false;
   String? _searchError;
@@ -108,7 +108,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     } finally {
       if (mounted) setState(() => _loadingMy = false);
     }
-    // pending 조회 실패가 이미 로드된 가입 모임 목록을 지우지 않도록 별도 처리.
+    // pending 조회 실패가 이미 로드된 가입 클럽 목록을 지우지 않도록 별도 처리.
     try {
       final pending = await ref.read(apiProvider).myPendingJoinRequests();
       if (mounted) setState(() => _pendingClubs = pending);
@@ -150,7 +150,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       ];
       if (mounted) setState(() => _clubs = list);
     } catch (_) {
-      if (mounted) setState(() => _searchError = '모임 목록을 불러오지 못했습니다.');
+      if (mounted) setState(() => _searchError = '클럽 목록을 불러오지 못했습니다.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -242,7 +242,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     if (AppConfig.userDesignPreview) {
       setState(() {
         _nearbyClubs = _previewClubs.take(4).toList();
-        _nearbyNotice = '디자인 미리보기용 주변 모임입니다.';
+        _nearbyNotice = '디자인 미리보기용 주변 클럽입니다.';
         _loadingNearby = false;
       });
       return;
@@ -263,7 +263,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       }
       if (permission == LocationPermission.denied) {
         throw const _NearbyLocationException(
-          '위치 권한을 허용하면 가까운 모임을 찾을 수 있어요.',
+          '위치 권한을 허용하면 가까운 클럽을 찾을 수 있어요.',
         );
       }
       if (permission == LocationPermission.deniedForever) {
@@ -328,8 +328,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             final added = merged.length - precise.length;
             if (added > 0) {
               notice = precise.isEmpty
-                  ? '거리 정보가 등록된 모임이 없어 $region 지역 모임을 보여드려요.'
-                  : '거리 정보가 없는 $region 지역 모임 $added곳도 함께 보여드려요.';
+                  ? '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.'
+                  : '거리 정보가 없는 $region 지역 클럽 $added곳도 함께 보여드려요.';
               nearby = merged;
             }
           }
@@ -414,7 +414,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           controller: _clubNameQueryController,
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
-            hintText: '지역이나 모임 이름 검색',
+            hintText: '지역이나 클럽 이름 검색',
             prefixIcon: Icon(Icons.search_rounded),
           ),
           onSubmitted: (value) {
@@ -540,7 +540,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모임 정보를 불러오지 못했습니다.')),
+          const SnackBar(content: Text('클럽 정보를 불러오지 못했습니다.')),
         );
         return;
       }
@@ -650,7 +650,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
-    // 승인 대기 카드 = 내가 만든 승인 대기 모임(JY-150) + 내가 낸 가입신청.
+    // 승인 대기 카드 = 내가 만든 승인 대기 클럽(JY-150) + 내가 낸 가입신청.
     final pendingClubs = pendingClubCards(
       myClubs: myMembershipClubs,
       joinRequestClubs: _pendingClubs,
@@ -664,7 +664,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text('모임'),
+        title: const Text('클럽'),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -696,7 +696,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                 children: [
                   _buildClubFilterControls(hasClubNameQuery),
                   const SizedBox(height: AppSpacing.lg),
-                  if (joinedClubs.isNotEmpty) ...[
+                  if (joinedClubs.isNotEmpty || pendingClubs.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
@@ -710,8 +710,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SimpleSectionHeader(
-                            title: '나의 모임',
-                            subtitle: '내가 참여하고 있는 모임',
+                            title: '나의 클럽',
+                            subtitle: '내가 참여하거나 승인을 기다리는 클럽',
                             icon: Icons.verified_rounded,
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(
@@ -773,13 +773,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     favoriteClubIds: favoriteClubIds,
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  if (visibleRecruitingPosts.isNotEmpty) ...[
+                  if (_loadingRecruiting ||
+                      visibleRecruitingPosts.isNotEmpty ||
+                      managedClubs.isNotEmpty) ...[
                     if (managedClubs.isNotEmpty) ...[
                       SimpleActionCard(
                         icon: Icons.person_add_alt_1_rounded,
                         title: '팀원모집',
                         subtitle:
-                            '${managedClubs.length}개 운영 모임에서 모집글을 관리할 수 있어요.',
+                            '${managedClubs.length}개 운영 클럽에서 모집글을 관리할 수 있어요.',
                         color: cs.secondaryContainer,
                         onTap: () => _openTeamRecruitingSheet(managedClubs),
                       ),
@@ -800,7 +802,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     const SizedBox(height: AppSpacing.xl),
                   ],
                   SimpleSectionHeader(
-                    title: hasClubNameQuery ? '검색 결과' : '추천 모임',
+                    title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
                     icon: hasClubNameQuery
                         ? Icons.search_rounded
                         : Icons.explore_outlined,
@@ -835,14 +837,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                             ? Icons.search_off_rounded
                             : Icons.sports_rounded,
                         title: hasClubNameQuery || _clubFilters.hasActive
-                            ? '조건에 맞는 모임이 없어요'
-                            : '아직 등록된 모임이 없어요',
+                            ? '조건에 맞는 클럽이 없어요'
+                            : '아직 등록된 클럽이 없어요',
                         description: hasClubNameQuery || _clubFilters.hasActive
                             ? '검색어를 줄이거나 맞춤 조건을 바꿔보세요.'
-                            : '새 모임을 만들면 이곳에서 다른 사용자에게 소개돼요.',
+                            : '새 클럽을 만들면 이곳에서 다른 사용자에게 소개돼요.',
                         actionLabel: hasClubNameQuery || _clubFilters.hasActive
                             ? null
-                            : '첫 모임 만들기',
+                            : '첫 클럽 만들기',
                         onAction: hasClubNameQuery || _clubFilters.hasActive
                             ? null
                             : _openCreate,
@@ -879,7 +881,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                               ? Icons.expand_less_rounded
                               : Icons.groups_2_outlined,
                         ),
-                        label: Text(_showAllClubs ? '접기' : '전체 모임 더보기'),
+                        label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
                       ),
                     ),
                   ],
@@ -906,13 +908,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         collapsedShape: const Border(),
         leading: Icon(Icons.near_me_rounded, color: cs.primary),
         title: Text(
-          '내 주변 모임',
+          '내 주변 클럽',
           style: Theme.of(context)
               .textTheme
               .titleLarge
               ?.copyWith(fontWeight: FontWeight.w900),
         ),
-        subtitle: const Text('선택하면 현재 위치와 가까운 모임을 보여드려요'),
+        subtitle: const Text('선택하면 현재 위치와 가까운 클럽을 보여드려요'),
         onExpansionChanged: (expanded) {
           if (expanded && _nearbyClubs == null && !_loadingNearby) {
             _findNearbyClubs();
@@ -978,7 +980,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             if (_nearbyClubs!.isEmpty)
               const AppEmptyState(
                 icon: Icons.location_off_outlined,
-                title: '주변 모임을 찾지 못했어요',
+                title: '주변 클럽을 찾지 못했어요',
                 description: '반경을 넓히거나 지역을 직접 선택해보세요.',
               )
             else ...[
@@ -998,7 +1000,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () => _openNearbyNewClubsSheet(_nearbyClubs!),
-                    child: const Text('주변 모임 전체 보기'),
+                    child: const Text('주변 클럽 전체 보기'),
                   ),
                 ),
             ],
@@ -1041,14 +1043,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         _myClubs?.removeWhere((item) => item.id == club.id);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('모임이 삭제되었습니다.')),
+        const SnackBar(content: Text('클럽이 삭제되었습니다.')),
       );
     } else if (result == ClubDetailResult.membershipChanged) {
       setState(() {
         _myClubs?.removeWhere((item) => item.id == club.id);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('모임에서 탈퇴했습니다.')),
+        const SnackBar(content: Text('클럽에서 탈퇴했습니다.')),
       );
     }
 
@@ -1100,7 +1102,7 @@ final _previewClubs = [
     name: '서울 풋살 러너스',
     region: '서울',
     address: '서울 송파구 잠실동',
-    description: '주말 저녁, 꾸준히 함께 뛰는 생활체육 풋살 모임입니다.',
+    description: '주말 저녁, 꾸준히 함께 뛰는 생활체육 풋살 클럽입니다.',
     memberCount: 24,
     meetingDays: const ['토', '일'],
     monthlyFee: 30000,
@@ -1127,7 +1129,7 @@ final _previewClubs = [
     name: '광주 테니스 크루',
     region: '광주',
     address: '광주 서구 풍암동',
-    description: '초중급 복식 위주로 함께 치는 테니스 모임입니다.',
+    description: '초중급 복식 위주로 함께 치는 테니스 클럽입니다.',
     memberCount: 38,
     meetingDays: const ['화', '목'],
     monthlyFee: 20000,
@@ -1143,7 +1145,7 @@ final _previewMyClubs = [
     name: '성수 풋살 메이트',
     region: '서울',
     address: '서울 성동구 성수동',
-    description: '평일 퇴근 후 가볍게 뛰는 직장인 풋살 모임입니다.',
+    description: '평일 퇴근 후 가볍게 뛰는 직장인 풋살 클럽입니다.',
     memberCount: 16,
     meetingDays: const ['목'],
     monthlyFee: 20000,

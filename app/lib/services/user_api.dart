@@ -20,7 +20,7 @@ String _profileImageExtension(String extension, String contentType) {
 
 /// 유저 프로필·종목·협회·지역 API.
 mixin UserApi on ApiBase {
-  /// 프로필 저장. 실명(name)은 대회·모임용, 닉네임(nickname)은 앱 활동용,
+  /// 프로필 저장. 실명(name)은 대회·클럽용, 닉네임(nickname)은 앱 활동용,
   /// 생년월일(birth_date)은 연령·합산나이 대회 자격 매칭 내부용.
   /// 활동 지역(primary_region)은 유저 지역의 **단일 진실원천**이다.
   /// (협회 등록 여부와 무관하게 여기에 저장한다. user_tennis_orgs.region_code 는 deprecated)

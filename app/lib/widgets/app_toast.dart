@@ -14,25 +14,25 @@ class AppToast {
     final cs = Theme.of(context).colorScheme;
     final (Color bg, Color fg, IconData icon) = switch (kind) {
       AppToastKind.success => (
-          cs.primaryContainer,
-          cs.onPrimaryContainer,
-          Icons.check_circle_rounded
-        ),
+        cs.primaryContainer,
+        cs.onPrimaryContainer,
+        Icons.check_circle_rounded
+      ),
       AppToastKind.warning => (
-          cs.tertiaryContainer,
-          cs.onTertiaryContainer,
-          Icons.warning_amber_rounded
-        ),
+        cs.tertiaryContainer,
+        cs.onTertiaryContainer,
+        Icons.warning_amber_rounded
+      ),
       AppToastKind.error => (
-          cs.errorContainer,
-          cs.onErrorContainer,
-          Icons.error_rounded,
-        ),
+        cs.errorContainer,
+        cs.onErrorContainer,
+        Icons.error_rounded,
+      ),
       AppToastKind.info => (
-          cs.inverseSurface,
-          cs.onInverseSurface,
-          Icons.info_rounded,
-        ),
+        cs.inverseSurface,
+        cs.onInverseSurface,
+        Icons.info_rounded,
+      ),
     };
 
     ScaffoldMessenger.of(context)

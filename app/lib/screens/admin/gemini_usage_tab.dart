@@ -114,8 +114,7 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
                 const SizedBox(height: 4),
                 Text(
                   '로컬 자정 이후 · 게이지는 무료 티어 일일 요청 한도(RPD) 기준',
-                  style:
-                      theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
               ],
             ),
@@ -154,13 +153,13 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
     final barColor = pct >= 90
         ? Colors.red
         : pct >= 70
-            ? Colors.orange
-            : cs.primary;
+        ? Colors.orange
+        : cs.primary;
     final kindLabel = kind == 'llm'
         ? 'LLM'
         : kind == 'embedding'
-            ? '임베딩'
-            : kind;
+        ? '임베딩'
+        : kind;
 
     return Card(
       child: Padding(

@@ -7,7 +7,7 @@ import '../utils/club_labels.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 
-/// 채팅 안에 렌더되는 모임 카드. raw id 는 표시하지 않는다.
+/// 채팅 안에 렌더되는 클럽 카드. raw id 는 표시하지 않는다.
 /// 액션 버튼은 (message, entityId) 콜백으로 후속 chat 요청을 위임한다.
 class ChatClubCard extends StatelessWidget {
   final ClubChatCardItem item;
@@ -111,7 +111,7 @@ class ChatClubCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => onAction('이 모임 상세 알려줘', item.id),
+                  onPressed: () => onAction('이 클럽 상세 알려줘', item.id),
                   child: const Text('상세 보기'),
                 ),
               ),
@@ -119,7 +119,7 @@ class ChatClubCard extends StatelessWidget {
               Expanded(
                 child: FilledButton(
                   onPressed: () => context.push('/clubs/${item.id}'),
-                  child: const Text('모임 방문하기'),
+                  child: const Text('클럽 방문하기'),
                 ),
               ),
             ],

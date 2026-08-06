@@ -10,10 +10,10 @@ void main() {
     expect(source, contains('AuthChangeEvent.initialSession'));
   });
 
-  test('가입 신청 알림은 해당 모임 관리 탭으로 이동한다', () {
+  test('가입 신청 알림은 해당 클럽 관리 탭으로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 가입 신청',
+        title: '새 클럽 가입 신청',
         body: '가입 신청이 도착했습니다.',
         referenceType: 'club_join_request',
         referenceId: 'request-1',
@@ -24,10 +24,10 @@ void main() {
     expect(route, '/clubs/club-1?tab=manage');
   });
 
-  test('모임 문의 알림은 해당 문의 대화로 이동한다', () {
+  test('클럽 문의 알림은 해당 문의 대화로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 문의',
+        title: '새 클럽 문의',
         body: '문의가 도착했습니다.',
         referenceType: 'club_inquiry:thread-1',
         referenceId: 'message-1',
@@ -46,10 +46,10 @@ void main() {
     expect(route, '/notifications');
   });
 
-  test('모임 승인 요청 알림은 어드민 모임 화면으로 이동한다', () {
+  test('클럽 승인 요청 알림은 어드민 클럽 화면으로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 승인 요청',
+        title: '새 클럽 승인 요청',
         body: '',
         referenceType: 'club_approval_request',
       ),
@@ -71,7 +71,7 @@ void main() {
     expect(route, '/tournaments/tournament-1');
   });
 
-  test('대회 알림이라도 대회 ID가 공백이면 모임 홈으로 폴스루한다', () {
+  test('대회 알림이라도 대회 ID가 공백이면 클럽 홈으로 폴스루한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
         title: '대회 알림',
@@ -85,10 +85,10 @@ void main() {
     expect(route, '/clubs/club-1');
   });
 
-  test('참조 정보 없이 모임 ID만 있으면 모임 홈으로 이동한다', () {
+  test('참조 정보 없이 클럽 ID만 있으면 클럽 홈으로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '모임 알림',
+        title: '클럽 알림',
         body: '',
         clubId: 'club-1',
       ),
@@ -97,10 +97,10 @@ void main() {
     expect(route, '/clubs/club-1');
   });
 
-  test('문의 알림이라도 스레드 ID가 공백이면 모임 홈으로 폴스루한다', () {
+  test('문의 알림이라도 스레드 ID가 공백이면 클럽 홈으로 폴스루한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 문의',
+        title: '새 클럽 문의',
         body: '',
         referenceType: 'club_inquiry:   ',
         clubId: 'club-1',
@@ -110,10 +110,10 @@ void main() {
     expect(route, '/clubs/club-1');
   });
 
-  test('문의 알림이라도 모임 ID가 공백이면 알림함으로 폴스루한다', () {
+  test('문의 알림이라도 클럽 ID가 공백이면 알림함으로 폴스루한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 문의',
+        title: '새 클럽 문의',
         body: '',
         referenceType: 'club_inquiry:thread-1',
         clubId: '  ',
@@ -123,10 +123,10 @@ void main() {
     expect(route, '/notifications');
   });
 
-  test('가입 신청 알림이라도 모임 ID가 없으면 알림함으로 폴스루한다', () {
+  test('가입 신청 알림이라도 클럽 ID가 없으면 알림함으로 폴스루한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 가입 신청',
+        title: '새 클럽 가입 신청',
         body: '',
         referenceType: 'club_join_request',
       ),
@@ -138,7 +138,7 @@ void main() {
   test('참조 타입 앞뒤 공백은 무시하고 매칭한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(
-        title: '새 모임 가입 신청',
+        title: '새 클럽 가입 신청',
         body: '',
         referenceType: ' club_join_request ',
         clubId: 'club-1',

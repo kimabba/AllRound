@@ -132,7 +132,8 @@ class RankingList extends StatelessWidget {
                 ? () => onClaim!(rows[i])
                 : null,
           ),
-          if (i < rows.length - 1) Divider(height: 1, color: cs.outlineVariant),
+          if (i < rows.length - 1)
+            Divider(height: 1, color: cs.outlineVariant),
         ],
       ],
     );
@@ -222,8 +223,7 @@ final _kFetchedAtFormat = DateFormat('yyyy-MM-dd');
 /// 옛 상태로 남는데, 이 값이 없으면 화면이 그걸 "현재"인 것처럼 보여준다 — null 이면
 /// (아직 로드 전이거나 행이 없으면) 이 줄만 생략한다.
 class RankingSourceNotice extends StatelessWidget {
-  const RankingSourceNotice(
-      {super.key, required this.orgLabel, this.fetchedAt});
+  const RankingSourceNotice({super.key, required this.orgLabel, this.fetchedAt});
 
   final String orgLabel;
   final DateTime? fetchedAt;
@@ -432,7 +432,10 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   /// 최신값(가장 늦은 fetched_at)을 쓴다.
   DateTime? _latestFetchedAt(List<OrgRankingRow>? rows) {
     if (rows == null || rows.isEmpty) return null;
-    return rows.map((r) => r.fetchedAt).whereType<DateTime>().fold<DateTime?>(
+    return rows
+        .map((r) => r.fetchedAt)
+        .whereType<DateTime>()
+        .fold<DateTime?>(
           null,
           (latest, d) => latest == null || d.isAfter(latest) ? d : latest,
         );
@@ -497,8 +500,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             child: SegmentedButton<String>(
               segments: [
                 for (final org in orgCodes)
-                  ButtonSegment(
-                      value: org, label: Text(tennisOrgShortLabel(org))),
+                  ButtonSegment(value: org, label: Text(tennisOrgShortLabel(org))),
               ],
               selected: {_orgCode},
               onSelectionChanged: (s) => _changeOrg(s.first),
@@ -511,8 +513,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               decoration: const InputDecoration(labelText: '부서'),
               items: [
                 for (final code in divisions)
-                  DropdownMenuItem(
-                      value: code, child: Text(divisionLabel(code))),
+                  DropdownMenuItem(value: code, child: Text(divisionLabel(code))),
               ],
               onChanged: (v) {
                 if (v != null) _changeDivision(v);

@@ -19,10 +19,9 @@ const _kDefaultOrg = 'gj';
 // 카탈로그에 gj 가 없으면(비활성화·삭제) 첫 항목으로, 그마저 없으면 gj 로 떨어진다.
 // 톱레벨 함수로 뽑아 실제 OrgCatalog 상태와 무관하게 회귀 테스트할 수 있게 한다.
 @visibleForTesting
-String defaultTennisOrgFor(List<String> catalog) =>
-    catalog.contains(_kDefaultOrg)
-        ? _kDefaultOrg
-        : (catalog.isNotEmpty ? catalog.first : _kDefaultOrg);
+String defaultTennisOrgFor(List<String> catalog) => catalog.contains(_kDefaultOrg)
+    ? _kDefaultOrg
+    : (catalog.isNotEmpty ? catalog.first : _kDefaultOrg);
 
 class TournamentSubmitScreen extends ConsumerStatefulWidget {
   const TournamentSubmitScreen({super.key});
@@ -43,7 +42,8 @@ class _TournamentSubmitScreenState
   final _sourceUrl = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
-  String _tennisOrg = defaultTennisOrgFor(tennisOrgsWithDivisions); // 테니스 주최 협회
+  String _tennisOrg =
+      defaultTennisOrgFor(tennisOrgsWithDivisions); // 테니스 주최 협회
   DateTime? _startDate;
   final Set<String> _grades = {}; // eligible_grades ({org}_{div} 코드)
   bool _busy = false;

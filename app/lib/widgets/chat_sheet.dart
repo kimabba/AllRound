@@ -62,7 +62,7 @@ ChatEntryContext chatEntryContextForPath(String location) {
 
   if (segments.length >= 2 && segments.first == 'clubs') {
     return ChatEntryContext(
-      screenLabel: '현재 모임',
+      screenLabel: '현재 클럽',
       entityType: 'club',
       entityId: segments[1],
     );
@@ -76,7 +76,7 @@ ChatEntryContext chatEntryContextForPath(String location) {
 
   if (location.startsWith('/clubs')) {
     return const ChatEntryContext(
-      screenLabel: '모임',
+      screenLabel: '클럽',
     );
   }
 

@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   const draft = ClubCreateDraft(
     sport: 'tennis',
-    name: '한강 모임',
+    name: '한강 클럽',
     region: '서울',
     address: '잠실',
     contact: '010-0000-0000',
@@ -23,7 +23,7 @@ void main() {
 
     expect(restored, isNotNull);
     expect(restored!.sport, 'tennis');
-    expect(restored.name, '한강 모임');
+    expect(restored.name, '한강 클럽');
     expect(restored.meetingDays, ['월', '수']);
     expect(restored.genderPreference, 'mixed');
     expect(restored.step, 2);
@@ -71,7 +71,7 @@ void main() {
 
     await store.save('user-a', draft);
 
-    expect(store.load('user-a')?.name, '한강 모임');
+    expect(store.load('user-a')?.name, '한강 클럽');
     expect(store.load('user-b'), isNull);
     await store.clear('user-a');
     expect(store.load('user-a'), isNull);

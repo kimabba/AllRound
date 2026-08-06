@@ -63,8 +63,8 @@ void main() {
     });
 
     test('recruiting → recruiting 키 (open/closed)', () {
-      expect(
-          buildTournamentSearchQuery(recruiting: 'open')['recruiting'], 'open');
+      expect(buildTournamentSearchQuery(recruiting: 'open')['recruiting'],
+          'open');
       expect(buildTournamentSearchQuery(recruiting: 'closed')['recruiting'],
           'closed');
     });

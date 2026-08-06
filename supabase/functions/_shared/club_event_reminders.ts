@@ -43,7 +43,7 @@ export function parseClubEventReminders(
       id: row['id'],
       clubId: row['club_id'],
       title: row['title'],
-      clubName: isRecord(club) && typeof club['name'] === 'string' ? club['name'] : '모임',
+      clubName: isRecord(club) && typeof club['name'] === 'string' ? club['name'] : '클럽',
       createdBy: typeof row['created_by'] === 'string' ? row['created_by'] : null,
     });
   }

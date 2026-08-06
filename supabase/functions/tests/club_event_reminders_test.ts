@@ -27,13 +27,13 @@ Deno.test('club event reminder parser accepts object and array club joins', () =
       id: 'event-2',
       club_id: 'club-2',
       title: '번개 모임',
-      clubs: [{ name: '풋살 모임' }],
+      clubs: [{ name: '풋살 클럽' }],
     },
   ]);
   if (
     reminders.length !== 2 ||
     reminders[0].clubName !== '올라운드' ||
-    reminders[1].clubName !== '풋살 모임'
+    reminders[1].clubName !== '풋살 클럽'
   ) {
     throw new Error('valid event reminder rows must be parsed');
   }
