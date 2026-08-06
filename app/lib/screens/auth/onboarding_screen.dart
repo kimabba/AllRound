@@ -39,10 +39,28 @@ bool tennisOrgSelectionsAreComplete(Iterable<Set<String>> selectedPerOrg) =>
 /// (my_ranking_candidates)이 붙는다. 실측(2026-08-05 프로덕션) 가입자 20명 중
 /// 절반이 `이름1` 같은 값이라 매칭이 0건이었다. 랭킹표가 한글 실명이므로 한글만
 /// 받는다.
-// ponytail: 외국인·교포 실명 요구가 실제로 나오면 영문 분기를 여기 하나에 더한다.
-final _realNamePattern = RegExp(r'^[가-힣]{2,5}$');
+///
+/// 상한이 6자인 이유: 법정 이름 5자 제한은 성을 뺀 기준이라 `남궁`+3자, 단성+5자
+/// 이름이 실재한다. `테니스왕` 같은 한글 닉네임은 이 검사로 못 거른다 — 그건
+/// 관리자 승인 단계에서 본다. 여기서 막는 건 숫자·영문·자모·특수문자다.
+// ponytail: NFD(자모 분해) 로 붙여넣으면 거부된다. Dart 에 유니코드 정규화가
+// 없어 패키지를 붙여야 하는데, 에러 문구를 보고 직접 타이핑하면 풀리는 문제라
+// 그대로 둔다.
+final _realNamePattern = RegExp(r'^[가-힣]{2,6}$');
 
 bool isValidRealName(String value) => _realNamePattern.hasMatch(value.trim());
+
+/// 새 규칙 이전에 가입한 사람이 온보딩에 다시 들어와도 갇히지 않게 한다.
+///
+/// 재진입(종목 추가·맞춤 설정)에서는 서버에 저장된 이름이 칸에 복원된다. 그 값이
+/// 규칙 위반이면 `다음`이 잠겨, 생년월일만 고치러 온 기존 사용자가 이름을 바꾸기
+/// 전에는 빠져나갈 수 없다. 실측 20명 중 13명이 여기 걸린다. 저장돼 있던 값
+/// 그대로면 통과시킨다 — 새로 입력하는 값에만 규칙을 적용한다.
+bool realNameAccepted(String value, String? restoredName) =>
+    isValidRealName(value) ||
+    (restoredName != null &&
+        restoredName.trim().isNotEmpty &&
+        value.trim() == restoredName.trim());
 
 /// 서버에 등록돼 있는데 화면 초안에는 없는 협회를 고른다(#337).
 ///
@@ -64,6 +82,9 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final TextEditingController _realName = TextEditingController();
+
+  /// 재진입 때 서버에서 복원한 이름. realNameAccepted 의 예외 판정에만 쓴다.
+  String? _restoredName;
   final TextEditingController _nickname = TextEditingController();
   DateTime? _birthDate;
   Uint8List? _avatarBytes;
@@ -120,7 +141,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get _tennisRegistered => _selectedGrade[Sport.tennis] != null;
 
   bool get _canAdvance => switch (_step) {
-        0 => isValidRealName(_realName.text) &&
+        0 => realNameAccepted(_realName.text, _restoredName) &&
             _birthDate != null &&
             !isUnderMinSignupAge(_birthDate!, DateTime.now()),
         1 => _regionCode != null,
@@ -357,6 +378,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         if (_realName.text.trim().isEmpty &&
             (profile.name?.isNotEmpty ?? false)) {
           _realName.text = profile.name!;
+          _restoredName = profile.name;
         }
         if (_nickname.text.trim().isEmpty &&
             (profile.nickname?.isNotEmpty ?? false)) {
@@ -797,9 +819,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 counterText: '',
                 // 빈 칸에는 에러를 띄우지 않는다 — 아직 입력을 시작도 안 했다.
                 errorText: _realName.text.trim().isEmpty ||
-                        isValidRealName(_realName.text)
+                        realNameAccepted(_realName.text, _restoredName)
                     ? null
-                    : '한글 실명 2~5자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
+                    : '한글 실명 2~6자로 입력해주세요 (협회 랭킹표와 맞춰야 해요)',
               ),
             ),
             const SizedBox(height: AppSpacing.md),
