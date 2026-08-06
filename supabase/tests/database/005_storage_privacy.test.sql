@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(14);
+SELECT plan(17);
 
 SELECT is(
   (SELECT count(*) FROM storage.buckets
@@ -119,9 +119,43 @@ SELECT is(
   '탈퇴 테스트용 공개 Storage 객체가 준비됐다'
 );
 
+-- 사진 URL 은 우리 Storage 공개 경로만 허용한다. 열려 있으면 앱을 거치지 않은 쓰기가
+-- 외부 서버 이미지를 클럽 소개·게시글에 심어 열람자 IP 를 수집하거나, 검수 후 원격에서
+-- 이미지 내용만 바꿔치기할 수 있다.
+SELECT throws_ok(
+  $$UPDATE public.clubs
+      SET logo_url = 'https://evil.example.com/storage/v1/object/public/club-logos/x.jpg'
+    WHERE id = '00000000-0000-4000-8000-000000000201'$$,
+  '23514',
+  NULL,
+  '외부 도메인 로고 URL 은 CHECK 제약이 거부한다'
+);
+
+SELECT throws_ok(
+  $$UPDATE public.clubs
+      SET intro_image_urls = ARRAY['https://evil.example.com/x.jpg']
+    WHERE id = '00000000-0000-4000-8000-000000000201'$$,
+  '23514',
+  NULL,
+  '외부 도메인 소개 사진 URL 은 CHECK 제약이 거부한다'
+);
+
+SELECT is(
+  (SELECT count(*) FROM pg_constraint
+    WHERE conname IN (
+      'clubs_logo_url_is_app_storage',
+      'clubs_intro_image_urls_are_app_storage',
+      'club_posts_image_urls_are_app_storage'
+    )),
+  3::bigint,
+  '로고·소개 사진·게시글 사진 세 컬럼 모두 URL 형식 제약을 가진다'
+);
+
+-- clubs_logo_url_is_app_storage 제약이 생긴 뒤로 픽스처도 실제 앱이 저장하는
+-- 형식(로컬 스택 공개 URL)이어야 한다.
 UPDATE public.clubs
 SET logo_url =
-  'http://local/storage/v1/object/public/club-logos/qa-storage-delete-test.jpg'
+  'http://127.0.0.1:54321/storage/v1/object/public/club-logos/qa-storage-delete-test.jpg'
 WHERE id = '00000000-0000-4000-8000-000000000201';
 
 SELECT lives_ok(
