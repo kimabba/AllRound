@@ -328,8 +328,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             final added = merged.length - precise.length;
             if (added > 0) {
               notice = precise.isEmpty
-                  ? '거리 정보가 등록된 클럽이 없어 $region 지역 클럽을 보여드려요.'
-                  : '거리 정보가 없는 $region 지역 클럽 $added곳도 함께 보여드려요.';
+                  ? '거리 정보가 없어 $region 모임을 보여드려요.'
+                  : '거리 정보가 없는 $region 모임 $added곳도 보여드려요.';
               nearby = merged;
             }
           }
@@ -972,7 +972,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             const SizedBox(height: AppSpacing.sm),
             Text(
               _nearbyNotice!,
-              style: TextStyle(color: cs.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
             ),
           ],
           if (_nearbyClubs != null && !_loadingNearby) ...[
