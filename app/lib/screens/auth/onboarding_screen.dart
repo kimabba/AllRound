@@ -50,6 +50,15 @@ final _realNamePattern = RegExp(r'^[가-힣]{2,6}$');
 
 bool isValidRealName(String value) => _realNamePattern.hasMatch(value.trim());
 
+/// 재진입 때 실명 칸에 되돌릴 값. 규칙 밖이면 null — 칸을 비워 직접 쓰게 한다.
+///
+/// 가입 트리거가 users.name 을 `split_part(email,'@',1)` 로 채워둔다
+/// (20260719010238_enforce_pre_account_age.sql). 그대로 복원하면 `tennis1`
+/// 같은 자동 생성값이 칸에 들어앉고 사용자는 그게 자기 실명인 줄 안다 —
+/// 실측 20명 중 10명이 이 값이다.
+String? restoredRealName(String? savedName) =>
+    isValidRealName(savedName ?? '') ? savedName : null;
+
 /// 서버에 등록돼 있는데 화면 초안에는 없는 협회를 고른다(#337).
 ///
 /// 복원이 늦게 도착하는 사이 사용자가 협회를 먼저 추가할 수 있다. 그때 복원을
@@ -360,14 +369,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (!mounted || _existingProfileReady) return;
       setState(() {
         // 사용자가 이미 직접 입력한 값은 덮어쓰지 않는다.
-        // 실명은 규칙에 맞는 값만 되돌린다. 가입 트리거가 users.name 을
-        // 이메일 앞부분(split_part(email,'@',1))으로 채워두기 때문에, 그대로
-        // 복원하면 `tennis1` 같은 값이 칸에 들어앉고 사용자는 그게 자기 실명인
-        // 줄 안다 — 실측 20명 중 10명이 이 자동 생성값이다. 비워서 직접 쓰게
-        // 한다. 닉네임·생년월일은 사용자가 실제로 입력한 값이라 그대로 되돌린다.
-        if (_realName.text.trim().isEmpty &&
-            isValidRealName(profile.name ?? '')) {
-          _realName.text = profile.name!;
+        // 실명만 규칙 게이트를 거친다(restoredRealName). 닉네임·생년월일은
+        // 사용자가 실제로 입력한 값이라 그대로 되돌린다.
+        final restoredName = restoredRealName(profile.name);
+        if (_realName.text.trim().isEmpty && restoredName != null) {
+          _realName.text = restoredName;
         }
         if (_nickname.text.trim().isEmpty &&
             (profile.nickname?.isNotEmpty ?? false)) {
@@ -502,6 +508,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _submit() async {
     if (AppConfig.userDesignPreview) {
       context.go('/');
+      return;
+    }
+
+    // 0단계 버튼이 이미 막지만 여기서 한 번 더 본다 — users.name 이 실제로
+    // 바뀌는 지점은 여기뿐이고, 화면 흐름이 바뀌어도 규칙이 따라오게 한다.
+    if (!isValidRealName(_realName.text)) {
+      setState(() {
+        _step = 0;
+        _error = '이름을 한글 실명 2~6자로 입력해 주세요.';
+      });
       return;
     }
 

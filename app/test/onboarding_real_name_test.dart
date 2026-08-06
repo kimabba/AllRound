@@ -6,7 +6,7 @@ import 'package:allround/screens/auth/onboarding_screen.dart';
 // 후보가 붙는다. 길이 검사만 있던 동안 `이름1` 같은 값이 절반이었다.
 void main() {
   test('한글 실명 2~6자만 통과한다', () {
-    for (final ok in ['김민수', '남궁도원', '이도', ' 김민수 ', '남궁하늘가']) {
+    for (final ok in ['김민수', '남궁도원', '이도', ' 김민수 ', '남궁하늘가', '남궁하늘가람']) {
       expect(isValidRealName(ok), isTrue, reason: ok);
     }
     for (final bad in [
@@ -27,11 +27,14 @@ void main() {
     expect(isValidRealName('테니스왕'), isTrue);
   });
 
-  test('가입 트리거가 만든 이메일 앞부분 이름은 복원 대상이 아니다', () {
+  test('가입 트리거가 만든 이메일 앞부분 이름은 칸에 복원하지 않는다', () {
     // users.name 기본값은 split_part(email,'@',1) 이다. 재진입 때 이걸 칸에
     // 되돌리면 사용자가 자기 실명으로 오인한 채 그대로 저장한다.
     for (final generated in ['tennis1', 'ssfak', 'demian.772']) {
-      expect(isValidRealName(generated), isFalse, reason: generated);
+      expect(restoredRealName(generated), isNull, reason: generated);
     }
+    expect(restoredRealName(null), isNull);
+    // 사용자가 제대로 넣어둔 실명은 그대로 되돌려 재입력을 강요하지 않는다.
+    expect(restoredRealName('김민수'), '김민수');
   });
 }
