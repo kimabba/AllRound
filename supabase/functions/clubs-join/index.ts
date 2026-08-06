@@ -331,6 +331,7 @@ Deno.serve(withCors(async (req) => {
     if (existing?.status === 'active') {
       return errorResponse('Already a member', 409);
     }
+    const isRejoin = existing?.status === 'left';
 
     const { data: existingRequest, error: existingRequestError } = await supa
       .from('club_join_requests')
@@ -386,15 +387,20 @@ Deno.serve(withCors(async (req) => {
       await createNotification(supa, {
         userId: reviewerId,
         type: 'club_join_request',
-        title: '새 클럽 가입 신청',
-        body: `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
+        title: isRejoin ? '모임 재가입 승인 요청' : '새 모임 가입 신청',
+        body: isRejoin
+          ? `${requesterLabel}님이 ${club.name}에 다시 가입하길 요청했습니다. 재가입 여부를 확인해 주세요.`
+          : `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
         referenceType: 'club_join_request',
         referenceId: typeof joinRequest?.id === 'string' ? joinRequest.id : null,
         clubId,
       });
     }
 
-    return jsonResponse({ ok: true, action: 'requested' });
+    return jsonResponse({
+      ok: true,
+      action: isRejoin ? 'rejoin_requested' : 'requested',
+    });
   }
 
   if (action === 'cancel') {

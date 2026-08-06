@@ -1611,6 +1611,7 @@ class _ClubJoinRequest {
   final String? displayName;
   final String? avatarUrl;
   final String? email;
+  final bool isRejoin;
 
   const _ClubJoinRequest({
     required this.id,
@@ -1620,6 +1621,7 @@ class _ClubJoinRequest {
     required this.displayName,
     required this.avatarUrl,
     required this.email,
+    required this.isRejoin,
   });
 
   factory _ClubJoinRequest.fromJson(Map<String, dynamic> json) {
@@ -1633,6 +1635,7 @@ class _ClubJoinRequest {
           _stringValue(user?['display_name']) ?? _stringValue(user?['name']),
       avatarUrl: _stringValue(user?['avatar_url']),
       email: _stringValue(user?['email']),
+      isRejoin: json['is_rejoin'] == true,
     );
   }
 
@@ -1865,11 +1868,38 @@ class _JoinRequestManageCardState
     return ok == true;
   }
 
+  Future<bool> _confirmRejoinApproval(_ClubJoinRequest request) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('재가입 승인'),
+        content: Text(
+          '${request.label}님은 이전에 이 모임을 탈퇴했습니다.\n\n다시 가입하도록 승인할까요?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니요'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('재가입 승인'),
+          ),
+        ],
+      ),
+    );
+    return approved == true;
+  }
+
   Future<void> _review(
     _ClubJoinRequest request, {
     required bool approve,
   }) async {
     if (!approve && !await _confirmReject(request)) return;
+    if (approve && request.isRejoin && !await _confirmRejoinApproval(request)) {
+      return;
+    }
     if (!mounted) return;
     setState(() => _busyRequestIds.add(request.id));
     try {
@@ -2033,7 +2063,13 @@ class _JoinRequestManageRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    requestedAt.isEmpty ? '가입 신청 대기 중' : '신청일 $requestedAt',
+                    request.isRejoin
+                        ? (requestedAt.isEmpty
+                            ? '재가입 승인 대기 중'
+                            : '재가입 신청일 $requestedAt')
+                        : (requestedAt.isEmpty
+                            ? '가입 신청 대기 중'
+                            : '신청일 $requestedAt'),
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   if (message != null && message.isNotEmpty) ...[
