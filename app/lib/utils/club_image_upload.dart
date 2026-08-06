@@ -98,7 +98,8 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
   try {
     final converted = await _imageConverterChannel.invokeMethod<Uint8List>(
       'convertHeicToJpeg',
-      <String, Object>{'path': file.path, 'quality': 0.86},
+      // maxSide 는 ImagePicker 로 들어오는 다른 경로와 같은 상한이다.
+      <String, Object>{'path': file.path, 'quality': 0.86, 'maxSide': 1600},
     );
     if (converted == null || converted.isEmpty) {
       throw const ClubImagePreparationException('iPhone 사진 변환에 실패했습니다.');
@@ -115,6 +116,9 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
   }
 }
 
+/// 어느 클럽 사진 버킷에도 들어가는 상한. club-logos 가 5MB 로 가장 엄격하다.
+const clubImageMaxBytes = 5 * 1024 * 1024;
+
 /// Decodes and re-encodes an upload image before it leaves the device.
 ///
 /// ImagePicker resizing is not a privacy boundary: camera model, capture time,
@@ -122,9 +126,14 @@ Future<PreparedClubImage> prepareClubImage(XFile file) async {
 /// metadata. Re-encoding pixel data after baking orientation removes those
 /// fields while keeping PNG transparency. WebP is normalized to PNG because
 /// the image package intentionally has no WebP encoder.
+///
+/// 투명한 픽셀이 있을 때만 PNG 로 남긴다. 무손실 PNG 는 사진에서 원본보다 커져
+/// (1600×1600 실측 최대 7.5MB) 버킷 한도를 넘고, 그러면 업로드가 이유 없이
+/// 실패한 것처럼 보인다.
 PreparedClubImage prepareClubImageBytes(
   Uint8List originalBytes, {
   int jpegQuality = 86,
+  int maxBytes = clubImageMaxBytes,
 }) {
   final format = detectClubImageFormat(originalBytes);
   if (format == null || format == ClubImageFormat.heif) {
@@ -157,20 +166,44 @@ PreparedClubImage prepareClubImageBytes(
     ..iccProfile = null
     ..textData = null;
 
-  if (format == ClubImageFormat.jpeg) {
-    return PreparedClubImage(
-      bytes: img.encodeJpg(
-        clean,
-        quality: jpegQuality.clamp(1, 100).toInt(),
-      ),
-      extension: ClubImageFormat.jpeg.extension,
-      contentType: ClubImageFormat.jpeg.contentType,
+  if (_hasTransparentPixel(clean)) {
+    final png = img.encodePng(clean);
+    if (png.length <= maxBytes) {
+      return PreparedClubImage(
+        bytes: png,
+        extension: ClubImageFormat.png.extension,
+        contentType: ClubImageFormat.png.contentType,
+      );
+    }
+    // 투명도를 지키려면 PNG 여야 하는데 한도를 넘었다. 흰 배경에 합성해 JPEG 로
+    // 떨어뜨리는 대신 사용자에게 알린다 — 배경색을 임의로 정하면 로고가 망가진다.
+    throw const ClubImagePreparationException(
+      '사진 용량이 너무 커서 올릴 수 없습니다. 더 작은 사진을 선택해주세요.',
     );
   }
 
   return PreparedClubImage(
-    bytes: img.encodePng(clean),
-    extension: ClubImageFormat.png.extension,
-    contentType: ClubImageFormat.png.contentType,
+    bytes: _encodeJpegWithinLimit(clean, jpegQuality, maxBytes),
+    extension: ClubImageFormat.jpeg.extension,
+    contentType: ClubImageFormat.jpeg.contentType,
+  );
+}
+
+bool _hasTransparentPixel(img.Image image) {
+  if (!image.hasAlpha) return false;
+  for (final pixel in image) {
+    if (pixel.a < pixel.maxChannelValue) return true;
+  }
+  return false;
+}
+
+Uint8List _encodeJpegWithinLimit(img.Image image, int quality, int maxBytes) {
+  for (final q in <int>{quality.clamp(1, 100).toInt(), 70, 55}) {
+    final bytes = img.encodeJpg(image, quality: q);
+    if (bytes.length <= maxBytes) return bytes;
+  }
+  // 마지막 시도까지 한도를 넘겼다. 화질을 더 떨어뜨리는 대신 다른 사진을 받는다.
+  throw const ClubImagePreparationException(
+    '사진 용량이 너무 커서 올릴 수 없습니다. 더 작은 사진을 선택해주세요.',
   );
 }
