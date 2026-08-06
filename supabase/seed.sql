@@ -208,34 +208,3 @@ insert into public.tournaments (
  25000, null,
  '리그전',
  'manual', 'published');
-
--- ── 로컬 스택 전용 완화 (프로덕션에는 적용되지 않는다) ──────────────────
--- clubs/club_posts 의 사진 URL CHECK 는 프로덕션 호스트만 허용한다. 로컬 스택에
--- 붙여 앱을 돌리면(app/.env.local.example) 업로드 URL 이 127.0.0.1:54321 로 나와
--- 저장이 막히므로, 로컬 데이터베이스에서만 호스트를 하나 더 열어준다.
--- seed.sql 은 `supabase db reset` 에서만 실행되고 마이그레이션에 포함되지 않는다.
-create or replace function public.club_image_urls_are_app_storage(
-  p_urls text[],
-  p_bucket text
-)
-returns boolean
-language sql
-immutable
-parallel safe
-set search_path = ''
-as $$
-  select coalesce(
-    bool_and(
-      u is not null
-      and u ~ (
-        '^(https://bsjdgwmveokanclqwtvx\.supabase\.co'
-        || '|http://(127\.0\.0\.1|localhost):54321)'
-        || '/storage/v1/object/public/'
-        || p_bucket
-        || '/([0-9a-f-]{36}/)?[0-9a-f]{48}\.(jpg|png)$'
-      )
-    ),
-    true
-  )
-  from unnest(p_urls) as u;
-$$;
