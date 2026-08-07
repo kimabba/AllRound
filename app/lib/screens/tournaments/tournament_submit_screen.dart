@@ -69,12 +69,12 @@ class _TournamentSubmitScreenState
     );
     if (picked == null) return;
     try {
-      final image = await prepareClubImage(picked);
-      if (image.bytes.lengthInBytes > 10 * 1024 * 1024) {
-        throw const ClubImagePreparationException(
-          '포스터 사진은 10MB 이하여야 합니다.',
-        );
-      }
+      // 포스터 버킷은 10MB 까지 받는다. 클럽 기본값(5MB)을 그대로 쓰면 종전에
+      // 올라가던 큰 포스터가 막힌다.
+      final image = await prepareClubImage(
+        picked,
+        maxBytes: tournamentPosterMaxBytes,
+      );
       if (!mounted) return;
       setState(() {
         _posterImage = image;

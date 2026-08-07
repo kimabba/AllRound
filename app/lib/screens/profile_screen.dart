@@ -80,7 +80,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final PreparedClubImage image;
     try {
-      image = await prepareClubImage(picked);
+      // profile-avatars 버킷은 3MB 까지만 받는다.
+      image = await prepareClubImage(picked, maxBytes: profileAvatarMaxBytes);
     } on ClubImagePreparationException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -163,7 +163,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     final PreparedClubImage image;
     try {
-      image = await prepareClubImage(picked);
+      // 프로필 사진은 나중에 profile-avatars(3MB) 로 올라간다.
+      image = await prepareClubImage(picked, maxBytes: profileAvatarMaxBytes);
     } on ClubImagePreparationException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
