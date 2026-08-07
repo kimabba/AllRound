@@ -17,10 +17,19 @@ import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { parseOwnedPublicObjects, publicMediaBucketIds } from '../_shared/account_deletion.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
-/** 앱이 만드는 난수 파일명만 로그에 남기고, 사용자가 지은 이름은 가린다. */
-function loggableName(objectName: string): string {
-  const basename = objectName.split('/').pop() ?? '';
-  return /^[0-9a-f]{48}\.(jpg|png)$/.test(basename) ? basename : '(비표준 이름)';
+/**
+ * 로그에 남길 객체 지문. 객체명은 사용자가 정할 수 있는 값이라(Storage INSERT 정책은
+ * 소유자만 보고 이름 형식은 보지 않는다) 원문을 남기지 않는다. 사고 조사 때는 남아 있는
+ * 객체명을 같은 방식으로 해시해 대조한다.
+ */
+async function objectFingerprint(objectName: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(objectName),
+  );
+  return Array.from(new Uint8Array(digest).slice(0, 6))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 Deno.serve(withCors(async (req) => {
@@ -78,12 +87,10 @@ Deno.serve(withCors(async (req) => {
       if (chunk.length === 0) continue;
 
       // 되돌릴 수 없는 삭제라 지운 대상을 남긴다 — 사고가 나면 무엇이 사라졌는지
-      // 알아야 한다. 다만 객체명은 사용자가 정할 수 있는 값이다(Storage INSERT 정책은
-      // 소유자만 보고 이름 형식은 보지 않는다). 경로의 업로더 uuid 를 떼고, 앱이 만드는
-      // 난수 파일명일 때만 그대로 남긴다.
+      // 알아야 한다. 원문 대신 지문만 남기는 이유는 objectFingerprint 주석 참고.
       console.log('storage-gc removing', {
         bucketId,
-        names: chunk.map(loggableName),
+        objects: await Promise.all(chunk.map(objectFingerprint)),
       });
       const { error: removeError } = await svc.storage.from(bucketId).remove(chunk);
       if (removeError) {
