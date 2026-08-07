@@ -6,6 +6,7 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { requireEligibility, requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { canReviewClub, reviewJoin } from './review.ts';
+import { rejoiningUserIdsFromRows } from './request_history.ts';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -65,13 +66,28 @@ Deno.serve(withCors(async (req) => {
       ),
     ];
     const profiles = new Map<string, Record<string, unknown>>();
+    let rejoiningUserIds = new Set<string>();
     if (userIds.length > 0) {
-      const { data: rawProfiles, error: profilesError } = await supa
-        .from('users')
-        // 승인 판단에 필요한 표시 이름과 사용자가 공개 프로필로 등록한 사진만 반환한다.
-        .select('id, nickname, name, avatar_url')
-        .in('id', userIds);
+      const [
+        { data: rawProfiles, error: profilesError },
+        { data: memberHistory, error: memberHistoryError },
+      ] = await Promise.all([
+        supa
+          .from('users')
+          // 승인 판단에 필요한 표시 이름과 사용자가 공개 프로필로 등록한 사진만 반환한다.
+          .select('id, nickname, name, avatar_url')
+          .in('id', userIds),
+        supa
+          .from('club_members')
+          .select('user_id, status')
+          .eq('club_id', clubId)
+          .in('user_id', userIds)
+          .eq('status', 'left'),
+      ]);
       if (profilesError) return errorResponse('JOIN_REQUEST_PROFILE_FAILED', 500);
+      if (memberHistoryError) {
+        return errorResponse('JOIN_REQUEST_HISTORY_FAILED', 500);
+      }
       if (Array.isArray(rawProfiles)) {
         for (const value of rawProfiles) {
           const profile = recordField(value);
@@ -79,6 +95,7 @@ Deno.serve(withCors(async (req) => {
           if (profile && id) profiles.set(id, profile);
         }
       }
+      rejoiningUserIds = rejoiningUserIdsFromRows(memberHistory);
     }
 
     return jsonResponse({
@@ -87,6 +104,7 @@ Deno.serve(withCors(async (req) => {
         const profile = userId === null ? null : profiles.get(userId) ?? null;
         return {
           ...request,
+          is_rejoin: userId !== null && rejoiningUserIds.has(userId),
           applicant: profile === null ? null : {
             display_name: stringField(profile.nickname) ??
               stringField(profile.name),

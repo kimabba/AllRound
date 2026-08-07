@@ -380,6 +380,10 @@ verify_jwt = false
 [functions.notify-cron]
 verify_jwt = false
 
+# 참조 끊긴 클럽 사진 정리. requireServiceRoleOrAdmin 으로 자체 인증한다.
+[functions.storage-gc]
+verify_jwt = false
+
 # crawl-tennis-{gwangju,jeonnam,korea} thin wrapper 는 PR #(이번) 에서 제거됨.
 # cron 은 020 마이그레이션에서 crawl-dispatch 로 일원화. crawl-dispatch 는
 # requireServiceRoleOrAdmin 으로 자체 인증.

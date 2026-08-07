@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element, unused_element_parameter
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,9 +10,11 @@ import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
+import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -22,7 +26,16 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  _HomeTournamentFilter _filter = _HomeTournamentFilter.all;
+  final _searchController = TextEditingController();
+  String? _selectedSport;
+  String _selectedRegion = '전국';
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     ref.invalidate(homeTournamentsProvider);
@@ -32,7 +45,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await ref.read(homeTournamentsProvider.future);
   }
 
-  List<Tournament> _visibleTournaments(List<Tournament> source) {
+  List<Tournament> _visibleTournaments(
+    List<Tournament> source,
+    String selectedSport,
+  ) {
     final sorted = [...source]
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
     final now = DateTime.now();
@@ -40,30 +56,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final upcoming = sorted
         .where(
           (item) =>
-              !item.startDate.isBefore(today) && !item.isRegistrationClosed,
+              item.sport == selectedSport &&
+              !item.startDate.isBefore(today) &&
+              !item.isRegistrationClosed &&
+              (_selectedRegion == '전국' ||
+                  (item.region ?? '').contains(_selectedRegion)) &&
+              (_query.isEmpty ||
+                  item.title.toLowerCase().contains(_query.toLowerCase()) ||
+                  (item.region ?? '').contains(_query) ||
+                  (item.location ?? '').contains(_query)),
         )
         .toList(growable: false);
+    return upcoming;
+  }
 
-    return switch (_filter) {
-      _HomeTournamentFilter.recommended => upcoming.take(4).toList(),
-      _HomeTournamentFilter.thisWeek => upcoming
-          .where((item) => item.startDate.difference(today).inDays <= 7)
-          .take(5)
-          .toList(),
-      _HomeTournamentFilter.all => upcoming.take(7).toList(),
-    };
+  Future<void> _toggleFavorite(Tournament tournament, bool saved) async {
+    if (!AppConfig.userDesignPreview) {
+      await ref.read(apiProvider).toggleFavorite(tournament.id, !saved);
+    }
+    ref.invalidate(favoriteIdsProvider);
+    ref.invalidate(myTournamentRecordsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final tournaments = ref.watch(homeTournamentsProvider);
     final myTournaments = ref.watch(myTournamentRecordsProvider);
-    final myClubs = ref.watch(myClubsProvider);
     final cs = Theme.of(context).colorScheme;
+    final activeSport = ref.watch(activeSportProvider) ?? 'futsal';
+    final selectedSport = _selectedSport ?? activeSport;
+    final favoriteIds =
+        ref.watch(favoriteIdsProvider).value ?? const <String>{};
+    final source = AppConfig.userDesignPreview
+        ? AsyncValue.data(_previewTournaments())
+        : tournaments;
 
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
+        bottom: const TournamentSectionBar(
+          selected: TournamentSection.overview,
+        ),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -79,119 +112,956 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                0,
-              ),
-              sliver: SliverToBoxAdapter(child: _HomeIntro()),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xxl,
+                AppSpacing.md,
                 AppSpacing.xl,
                 0,
               ),
               sliver: SliverToBoxAdapter(
-                child: _HomePersonalSchedule(
-                  tournaments: myTournaments.value ?? const [],
-                  clubs: myClubs.value ?? const [],
-                  // 대회는 탭에서 빠져 하위 화면이 됐다 — go 로 가면 뒤로가기 스택이
-                  // 사라지므로 push. 클럽은 여전히 탭이라 go 가 맞다.
-                  onTournamentBrowse: () => context.push('/tournaments'),
-                  onClubBrowse: () => context.go('/clubs'),
-                  onTournamentTap: (item) =>
-                      context.push('/tournaments/${item.id}'),
-                  onClubTap: (club) => context.push('/clubs/${club.id}'),
+                child: _TournamentHomeControls(
+                  selectedSport: selectedSport,
+                  selectedRegion: _selectedRegion,
+                  searchController: _searchController,
+                  onSportSelected: (value) =>
+                      setState(() => _selectedSport = value),
+                  onRegionSelected: (value) =>
+                      setState(() => _selectedRegion = value),
+                  onQueryChanged: (value) =>
+                      setState(() => _query = value.trim()),
                 ),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xxxl,
-                AppSpacing.xl,
-                0,
+            source.when(
+              loading: () => const _HomeTournamentSkeleton(
+                key: AllRoundE2EKeys.homeLoadingState,
               ),
-              sliver: SliverToBoxAdapter(
-                child: _HomeSectionHeader(
-                  title: '신청 가능한 대회',
-                  // 대회가 탭에서 빠진 뒤로 여기가 대회 목록의 주 진입점이다.
-                  actionKey: AllRoundE2EKeys.navTournaments,
-                  onAction: () => context.push('/tournaments'),
+              error: (_, __) => SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                sliver: SliverToBoxAdapter(
+                  child: AppEmptyState(
+                    key: AllRoundE2EKeys.homeErrorState,
+                    icon: Icons.refresh_rounded,
+                    title: '대회를 불러오지 못했습니다',
+                    description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
+                    actionLabel: '다시 불러오기',
+                    onAction: () => ref.invalidate(homeTournamentsProvider),
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              sliver: SliverToBoxAdapter(
-                child: _HomeFilterTabs(
-                  selected: _filter,
-                  onSelected: (value) => setState(() => _filter = value),
-                ),
-              ),
-            ),
-            if (AppConfig.userDesignPreview)
-              _TournamentListSliver(
-                tournaments: _visibleTournaments(_previewTournaments()),
-                onTap: (item) => context.push('/tournaments/${item.id}'),
-              )
-            else
-              tournaments.when(
-                loading: () => const _HomeTournamentSkeleton(
-                  key: AllRoundE2EKeys.homeLoadingState,
-                ),
-                error: (_, __) => SliverPadding(
+              data: (items) {
+                final visible = _visibleTournaments(items, selectedSport);
+                return SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.xl,
                     AppSpacing.lg,
                     AppSpacing.xl,
-                    AppSpacing.huge,
+                    0,
                   ),
                   sliver: SliverToBoxAdapter(
-                    child: AppEmptyState(
-                      key: AllRoundE2EKeys.homeErrorState,
-                      icon: Icons.refresh_rounded,
-                      title: '대회를 불러오지 못했습니다',
-                      description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
-                      actionLabel: '다시 불러오기',
-                      onAction: () => ref.invalidate(homeTournamentsProvider),
+                    child: _TournamentHomeContent(
+                      key: AllRoundE2EKeys.homeTournamentList,
+                      tournaments: visible,
+                      favorites: myTournaments.value
+                              ?.where((item) => item.sport == selectedSport)
+                              .toList() ??
+                          const [],
+                      favoriteIds: favoriteIds,
+                      selectedSport: selectedSport,
+                      selectedRegion: _selectedRegion,
+                      searching: _query.isNotEmpty,
+                      onOpen: (item) => context.push('/tournaments/${item.id}'),
+                      onFavorite: _toggleFavorite,
+                      onBrowse: () => context.push('/tournaments'),
+                      onFavorites: () => context.push('/favorites'),
+                      onRules: () =>
+                          context.push('/rules?sport=$selectedSport'),
                     ),
                   ),
-                ),
-                data: (items) {
-                  final visible = _visibleTournaments(items);
-                  if (visible.isEmpty) {
-                    return SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                        AppSpacing.huge,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: AppEmptyState(
-                          key: AllRoundE2EKeys.homeEmptyState,
-                          icon: Icons.calendar_month_outlined,
-                          title: '예정된 대회가 없습니다',
-                          description: '필터를 바꾸거나 전체 대회에서 찾아보세요.',
-                          actionLabel: '전체 대회 보기',
-                          onAction: () => context.push('/tournaments'),
-                        ),
-                      ),
-                    );
-                  }
-                  return _TournamentListSliver(
-                    key: AllRoundE2EKeys.homeTournamentList,
-                    tournaments: visible,
-                    onTap: (item) => context.push('/tournaments/${item.id}'),
-                  );
-                },
-              ),
+                );
+              },
+            ),
             const SliverToBoxAdapter(child: SizedBox(height: 112)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TournamentHomeControls extends StatelessWidget {
+  const _TournamentHomeControls({
+    required this.selectedSport,
+    required this.selectedRegion,
+    required this.searchController,
+    required this.onSportSelected,
+    required this.onRegionSelected,
+    required this.onQueryChanged,
+  });
+
+  final String selectedSport;
+  final String selectedRegion;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSportSelected;
+  final ValueChanged<String> onRegionSelected;
+  final ValueChanged<String> onQueryChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _HomeMenuButton(
+                icon: selectedSport == 'tennis'
+                    ? Icons.sports_tennis_rounded
+                    : Icons.sports_soccer_rounded,
+                label: '내 주종목 ${sportLabelFromString(selectedSport)}',
+                values: {
+                  'futsal': sportLabel(Sport.futsal),
+                  'tennis': sportLabel(Sport.tennis),
+                },
+                selectedValue: selectedSport,
+                onSelected: onSportSelected,
+                emphasized: true,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _HomeMenuButton(
+                icon: Icons.location_on_outlined,
+                label: selectedRegion,
+                values: const {
+                  '전국': '전국',
+                  '서울': '서울',
+                  '경기': '경기',
+                  '인천': '인천',
+                  '부산': '부산',
+                  '광주': '광주',
+                },
+                selectedValue: selectedRegion,
+                onSelected: onRegionSelected,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: searchController,
+          textInputAction: TextInputAction.search,
+          onChanged: onQueryChanged,
+          decoration: InputDecoration(
+            hintText: '대회명 또는 지역을 검색해보세요',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '검색어 지우기',
+                    onPressed: () {
+                      searchController.clear();
+                      onQueryChanged('');
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+            filled: true,
+            fillColor: cs.surfaceContainerLowest,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeMenuButton extends StatelessWidget {
+  const _HomeMenuButton({
+    required this.icon,
+    required this.label,
+    required this.values,
+    required this.selectedValue,
+    required this.onSelected,
+    this.emphasized = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Map<String, String> values;
+  final String selectedValue;
+  final ValueChanged<String> onSelected;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      initialValue: selectedValue,
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        for (final entry in values.entries)
+          PopupMenuItem(value: entry.key, child: Text(entry.value)),
+      ],
+      child: Container(
+        constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border.all(
+            color: emphasized ? cs.primary : cs.outlineVariant,
+            width: emphasized ? 1.5 : 1,
+          ),
+          borderRadius: AppRadius.card,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: emphasized ? cs.primary : null),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentHomeContent extends StatelessWidget {
+  const _TournamentHomeContent({
+    super.key,
+    required this.tournaments,
+    required this.favorites,
+    required this.favoriteIds,
+    required this.selectedSport,
+    required this.selectedRegion,
+    required this.searching,
+    required this.onOpen,
+    required this.onFavorite,
+    required this.onBrowse,
+    required this.onFavorites,
+    required this.onRules,
+  });
+
+  final List<Tournament> tournaments;
+  final List<Tournament> favorites;
+  final Set<String> favoriteIds;
+  final String selectedSport;
+  final String selectedRegion;
+  final bool searching;
+  final ValueChanged<Tournament> onOpen;
+  final Future<void> Function(Tournament, bool) onFavorite;
+  final VoidCallback onBrowse;
+  final VoidCallback onFavorites;
+  final VoidCallback onRules;
+
+  @override
+  Widget build(BuildContext context) {
+    final deadlineSoon = tournaments.where((item) {
+      final deadline = item.applicationDeadline;
+      if (deadline == null) return false;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final days = deadline.difference(today).inDays;
+      return days >= 0 && days <= 7;
+    }).toList();
+
+    if (searching) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(title: '검색 결과', count: tournaments.length),
+          const SizedBox(height: AppSpacing.sm),
+          if (tournaments.isEmpty)
+            const AppEmptyState(
+              key: AllRoundE2EKeys.homeEmptyState,
+              icon: Icons.search_off_rounded,
+              title: '검색 결과가 없습니다',
+              description: '대회명이나 지역을 짧게 입력해보세요.',
+            )
+          else
+            for (final item in tournaments.take(12))
+              _TournamentListCard(
+                tournament: item,
+                saved: favoriteIds.contains(item.id),
+                onOpen: () => onOpen(item),
+                onFavorite: () =>
+                    onFavorite(item, favoriteIds.contains(item.id)),
+              ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (tournaments.isNotEmpty)
+          _TournamentHero(
+            tournaments: tournaments.take(5).toList(),
+            onOpen: onOpen,
+          ),
+        if (tournaments.isNotEmpty) const SizedBox(height: AppSpacing.xl),
+        _InterestTournamentBand(
+          tournaments: favorites,
+          onOpen: onOpen,
+          onBrowse: onBrowse,
+          onFavorites: onFavorites,
+        ),
+        if (deadlineSoon.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          const _SectionTitle(title: '접수 마감 임박'),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 226,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: deadlineSoon.take(6).length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final item = deadlineSoon[index];
+                return _TournamentPosterCard(
+                  tournament: item,
+                  saved: favoriteIds.contains(item.id),
+                  onOpen: () => onOpen(item),
+                  onFavorite: () =>
+                      onFavorite(item, favoriteIds.contains(item.id)),
+                );
+              },
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xxl),
+        _SectionTitle(
+          title: '지역별 대회',
+          subtitle: selectedRegion == '전국' ? '전국' : selectedRegion,
+          onAction: onBrowse,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (tournaments.isEmpty)
+          AppEmptyState(
+            key: AllRoundE2EKeys.homeEmptyState,
+            icon: Icons.calendar_month_outlined,
+            title: '예정된 대회가 없습니다',
+            description: '지역을 전국으로 바꾸거나 전체 대회에서 찾아보세요.',
+            actionLabel: '전체 대회 보기',
+            onAction: onBrowse,
+          )
+        else
+          for (final item in tournaments.take(5))
+            _TournamentListCard(
+              tournament: item,
+              saved: favoriteIds.contains(item.id),
+              onOpen: () => onOpen(item),
+              onFavorite: () => onFavorite(item, favoriteIds.contains(item.id)),
+            ),
+        const SizedBox(height: AppSpacing.xxl),
+        _RulebookBand(sport: selectedSport, onOpen: onRules),
+      ],
+    );
+  }
+}
+
+class _TournamentHero extends StatefulWidget {
+  const _TournamentHero({required this.tournaments, required this.onOpen});
+
+  final List<Tournament> tournaments;
+  final ValueChanged<Tournament> onOpen;
+
+  @override
+  State<_TournamentHero> createState() => _TournamentHeroState();
+}
+
+class _TournamentHeroState extends State<_TournamentHero> {
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 284,
+          child: PageView.builder(
+            itemCount: widget.tournaments.length,
+            onPageChanged: (value) => setState(() => _page = value),
+            itemBuilder: (context, index) {
+              final item = widget.tournaments[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index == widget.tournaments.length - 1 ? 0 : 6,
+                ),
+                child: _HeroTournamentCard(
+                  tournament: item,
+                  onOpen: () => widget.onOpen(item),
+                ),
+              );
+            },
+          ),
+        ),
+        if (widget.tournaments.length > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < widget.tournaments.length; index++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == _page ? 18 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: index == _page
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeroTournamentCard extends StatelessWidget {
+  const _HeroTournamentCard({required this.tournament, required this.onOpen});
+
+  final Tournament tournament;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: const Color(0xFF071B45),
+      borderRadius: AppRadius.hero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _TournamentImage(tournament: tournament)),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tournament.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '${DateFormat('M월 d일').format(tournament.startDate)} · ${tournament.location ?? tournament.region ?? '장소 미정'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  FilledButton(
+                    onPressed: onOpen,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                      fixedSize: const Size(112, 44),
+                      minimumSize: const Size(112, 44),
+                    ),
+                    child: const Text('대회 보기'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InterestTournamentBand extends StatelessWidget {
+  const _InterestTournamentBand({
+    required this.tournaments,
+    required this.onOpen,
+    required this.onBrowse,
+    required this.onFavorites,
+  });
+
+  final List<Tournament> tournaments;
+  final ValueChanged<Tournament> onOpen;
+  final VoidCallback onBrowse;
+  final VoidCallback onFavorites;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final first = tournaments.firstOrNull;
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    final info = Row(
+      children: [
+        Icon(
+          first == null
+              ? Icons.favorite_border_rounded
+              : Icons.favorite_rounded,
+          color: cs.primary,
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                first?.title ?? '관심 대회가 없어요',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                first == null
+                    ? '하트로 저장한 대회를 여기에 모아드려요'
+                    : '관심 대회 ${tournaments.length}개',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final action = Semantics(
+      button: true,
+      child: InkWell(
+        onTap: first == null ? onBrowse : onFavorites,
+        borderRadius: AppRadius.pill,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: cs.primary),
+            borderRadius: AppRadius.pill,
+          ),
+          child: Text(
+            first == null ? '대회 둘러보기' : '전체보기',
+            style: TextStyle(
+              color: cs.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+    return Material(
+      color: cs.surfaceContainerLow,
+      borderRadius: AppRadius.card,
+      child: InkWell(
+        onTap: first == null ? onBrowse : () => onOpen(first),
+        borderRadius: AppRadius.card,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: largeText
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    info,
+                    const SizedBox(height: AppSpacing.sm),
+                    action,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: info),
+                    const SizedBox(width: AppSpacing.sm),
+                    action,
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentPosterCard extends StatelessWidget {
+  const _TournamentPosterCard({
+    required this.tournament,
+    required this.saved,
+    required this.onOpen,
+    required this.onFavorite,
+  });
+
+  final Tournament tournament;
+  final bool saved;
+  final VoidCallback onOpen;
+  final VoidCallback onFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final deadline = tournament.applicationDeadline!;
+    final now = DateTime.now();
+    final days =
+        deadline.difference(DateTime(now.year, now.month, now.day)).inDays;
+    return Material(
+      color: cs.surface,
+      borderRadius: AppRadius.card,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Container(
+          width: 210,
+          decoration: BoxDecoration(
+            border: Border.all(color: cs.outlineVariant),
+            borderRadius: AppRadius.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  SizedBox(
+                    height: 128,
+                    width: double.infinity,
+                    child: _TournamentImage(tournament: tournament),
+                  ),
+                  Positioned(
+                    left: AppSpacing.sm,
+                    top: AppSpacing.sm,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.error,
+                        borderRadius: AppRadius.pill,
+                      ),
+                      child: Text(
+                        days == 0 ? 'D-day' : 'D-$days',
+                        style: TextStyle(
+                          color: cs.onError,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: AppSpacing.xs,
+                    top: AppSpacing.xs,
+                    child: IconButton.filledTonal(
+                      onPressed: onFavorite,
+                      icon: Icon(
+                        saved
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tournament.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      '${DateFormat('M월 d일').format(tournament.startDate)} · ${tournament.region ?? '지역 미정'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentListCard extends StatelessWidget {
+  const _TournamentListCard({
+    required this.tournament,
+    required this.saved,
+    required this.onOpen,
+    required this.onFavorite,
+  });
+
+  final Tournament tournament;
+  final bool saved;
+  final VoidCallback onOpen;
+  final VoidCallback onFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      child: InkWell(
+        onTap: onOpen,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 92),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 112,
+                height: 76,
+                child: ClipRRect(
+                  borderRadius: AppRadius.card,
+                  child: _TournamentImage(tournament: tournament),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tournament.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${DateFormat('M월 d일 (E)', 'ko').format(tournament.startDate)} · ${tournament.region ?? '지역 미정'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      tournament.applicationDeadline == null
+                          ? '접수 중'
+                          : '~${DateFormat('M/d').format(tournament.applicationDeadline!)} 접수',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: saved ? '관심 해제' : '관심 대회 저장',
+                onPressed: onFavorite,
+                icon: Icon(
+                  saved
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: saved ? cs.primary : cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentImage extends StatelessWidget {
+  const _TournamentImage({required this.tournament});
+
+  final Tournament tournament;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = tournament.posterUrl?.trim();
+    final fallback = ColoredBox(
+      color: const Color(0xFF102B62),
+      child: Center(
+        child: Icon(
+          tournament.sport == 'tennis'
+              ? Icons.sports_tennis_rounded
+              : Icons.sports_soccer_rounded,
+          size: 52,
+          color: Colors.white.withValues(alpha: 0.9),
+        ),
+      ),
+    );
+    if (url == null || url.isEmpty) return fallback;
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.title,
+    this.subtitle,
+    this.count,
+    this.onAction,
+  });
+
+  final String title;
+  final String? subtitle;
+  final int? count;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+        if (count != null) Text('$count개'),
+        if (subtitle != null) Text(subtitle!),
+        if (onAction != null)
+          TextButton(onPressed: onAction, child: const Text('전체보기')),
+      ],
+    );
+  }
+}
+
+class _RulebookBand extends StatelessWidget {
+  const _RulebookBand({required this.sport, required this.onOpen});
+
+  final String sport;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final title = sport == 'tennis' ? '테니스 룰북' : '풋살 룰북';
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    return Material(
+      color: cs.primaryContainer.withValues(alpha: 0.45),
+      borderRadius: AppRadius.hero,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: AppRadius.hero,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            children: [
+              if (largeText)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const Text('경기 전에 꼭 알아둘 규칙'),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const Text('경기 전에 꼭 알아둘 규칙'),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+              const SizedBox(height: AppSpacing.md),
+              const Row(
+                children: [
+                  Expanded(child: _RuleItem(Icons.sports_rounded, '경기 진행')),
+                  Expanded(child: _RuleItem(Icons.badge_outlined, '참가 자격')),
+                  Expanded(
+                      child: _RuleItem(Icons.scoreboard_outlined, '점수·승패')),
+                  Expanded(
+                      child: _RuleItem(Icons.warning_amber_rounded, '주의사항')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RuleItem extends StatelessWidget {
+  const _RuleItem(this.icon, this.label);
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Icon(icon, color: cs.primary),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ],
     );
   }
 }
@@ -228,7 +1098,7 @@ class _HomeIntro extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              '신청 가능한 대회와 클럽 일정을 빠르게 확인하세요.',
+              '신청 가능한 대회와 클럽 모임을 빠르게 확인하세요.',
               style: tt.bodyMedium?.copyWith(
                 color: cs.onPrimary.withValues(alpha: 0.82),
               ),
@@ -272,7 +1142,7 @@ class _HomePersonalSchedule extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _HomeSectionHeader(title: '나의 일정'),
+        const _HomeSectionHeader(title: '내 활동'),
         const SizedBox(height: AppSpacing.md),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +1248,8 @@ class _PersonalScheduleCard extends StatelessWidget {
 }
 
 class _HomeSectionHeader extends StatelessWidget {
-  const _HomeSectionHeader({required this.title, this.onAction, this.actionKey});
+  const _HomeSectionHeader(
+      {required this.title, this.onAction, this.actionKey});
 
   final String title;
   final VoidCallback? onAction;

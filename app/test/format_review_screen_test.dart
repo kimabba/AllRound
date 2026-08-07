@@ -29,6 +29,17 @@ void main() {
     expect(tester.getSize(reject).height, greaterThanOrEqualTo(48));
   });
 
+  testWidgets('v1 문서는 자유 라벨 대신 공통 섹션 위계로 검수한다', (tester) async {
+    await tester.pumpWidget(_app(queue: [_documentStagedItem()]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('신청 및 결제'), findsOneWidget);
+    expect(find.text('참가비'), findsOneWidget);
+    expect(find.text('54,000원'), findsOneWidget);
+    expect(find.text('레거시 요약'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('format_staged가 없는 검증 실패 행은 flags와 반려만 표시한다', (tester) async {
     await tester.pumpWidget(_app(queue: [_failedItem()]));
     await tester.pumpAndSettle();
@@ -149,6 +160,36 @@ FormatReviewItem _failedItem() {
       {'code': 'not_in_source', 'field': '참가비', 'masked': '3*,000원'},
       {'code': 'unusual', 'field': '_model', 'masked': null},
     ],
+  });
+}
+
+FormatReviewItem _documentStagedItem() {
+  return FormatReviewItem.fromJson({
+    'id': 'tid-document-staged',
+    'title': '공통 문서 검수 대회',
+    'source_url': 'https://example.com/tid-document-staged',
+    'format_source_hash': 'hash-document-staged',
+    'format_staged': {
+      'regulation_document': {
+        'schema_version': 1,
+        'sections': [
+          {
+            'code': 'registration_payment',
+            'availability': 'present',
+            'blocks': [
+              {
+                'type': 'key_values',
+                'entries': [
+                  {'label': '참가비', 'value': '54,000원'},
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      'description': '레거시 요약',
+    },
+    'format_flags': null,
   });
 }
 

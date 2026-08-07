@@ -30,11 +30,12 @@ export function buildClubApprovalNotification(
   return {
     userId: adminId,
     type: 'club_approval_request',
-    title: '새 클럽 승인 요청',
-    body: `“${club.clubName}” 클럽이 승인을 기다리고 있습니다.`,
+    title: '새 모임 승인 요청',
+    body: `“${club.clubName}” 모임이 승인을 기다리고 있습니다.`,
     referenceType: 'club_approval_request',
     referenceId: club.clubId,
     clubId: club.clubId,
+    delivery: 'latest_device',
   };
 }
 

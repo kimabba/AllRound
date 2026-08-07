@@ -53,6 +53,9 @@ Project ref: `bsjdgwmveokanclqwtvx`
 | host_orgs | tennis_org[] | 주최 협회 |
 | host_futsal_orgs | futsal_org[] | 풋살 주최 협회 |
 | source, source_url | text? | 크롤 출처 |
+| regulation_document | jsonb? | 공통 요강 문서 AST (`schema_version=1`, 고정 섹션/블록) |
+| regulation_schema_version | smallint? | 요강 문서 계약 버전. 문서가 없으면 NULL |
+| regulation_fields, regulation_notes, regulation_body | jsonb/text[]/text? | 구버전 앱·검색 호환용 파생 요강 |
 | 풋살 전용 | | entry_fee_unit, player_count, venue_type, surface_type 등 |
 
 ### clubs

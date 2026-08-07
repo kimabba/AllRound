@@ -5,7 +5,7 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
-import { ageGroupFromBirthDate, containsInquiryLink, parseInquiryRequest } from './validation.ts';
+import { ageGroupFromBirthDate, parseInquiryRequest } from './validation.ts';
 
 interface InquiryThreadRow {
   id: string;
@@ -18,7 +18,6 @@ interface ClubRow {
   name: string;
   status: string;
   created_by: string | null;
-  inquiry_links_enabled: boolean;
 }
 
 interface InquiryListRow extends InquiryThreadRow {
@@ -60,7 +59,6 @@ function clubFrom(value: unknown): ClubRow | null {
     name,
     status,
     created_by: stringField(row.created_by),
-    inquiry_links_enabled: row.inquiry_links_enabled !== false,
   };
 }
 
@@ -242,6 +240,58 @@ Deno.serve(withCors(async (req) => {
       }
     }
 
+    // 사용자가 먼저 문의를 보낸 경우 해당 클럽 운영진에게만 가입 판단에 필요한
+    // 활동 프로필을 제공한다. 이 GET 자체가 canOperateClub 로 보호되며 일반 회원과
+    // 다른 클럽 운영진은 접근할 수 없다.
+    const details = new Map<string, Record<string, unknown>>();
+    if (requesterIds.length > 0) {
+      const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
+        supabase.from('user_sports').select('user_id, sport, grade').in('user_id', requesterIds),
+        supabase.from('user_tennis_orgs').select('user_id, org, division_local, score')
+          .in('user_id', requesterIds),
+        supabase.from('club_members').select('user_id, club_id').in('user_id', requesterIds)
+          .eq('status', 'active'),
+        supabase.from('match_entries').select('user_id, tournament_id, division')
+          .in('user_id', requesterIds).order('created_at', { ascending: false }),
+      ]);
+      const detailError = sportsResult.error ?? orgsResult.error ?? membershipsResult.error ??
+        entriesResult.error;
+      if (detailError) return errorResponse('INQUIRY_PROFILE_FAILED', 500);
+      const clubIds = [
+        ...new Set((membershipsResult.data ?? []).map((row) => row.club_id as string)),
+      ];
+      const tournamentIds = [
+        ...new Set((entriesResult.data ?? []).map((row) => row.tournament_id as string)),
+      ];
+      const [{ data: clubs }, { data: tournaments }] = await Promise.all([
+        clubIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; name: string }> })
+          : supabase.from('clubs').select('id, name').in('id', clubIds),
+        tournamentIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; title: string }> })
+          : supabase.from('tournaments').select('id, title').in('id', tournamentIds),
+      ]);
+      const clubNames = new Map((clubs ?? []).map((row) => [row.id as string, row.name as string]));
+      const tournamentNames = new Map(
+        (tournaments ?? []).map((row) => [row.id as string, row.title as string]),
+      );
+      for (const requesterId of requesterIds) {
+        details.set(requesterId, {
+          sports: (sportsResult.data ?? []).filter((row) => row.user_id === requesterId)
+            .map((row) => ({ sport: row.sport, grade: row.grade })),
+          tennis_orgs: (orgsResult.data ?? []).filter((row) => row.user_id === requesterId)
+            .map((row) => ({ org: row.org, division: row.division_local, score: row.score })),
+          clubs: (membershipsResult.data ?? []).filter((row) => row.user_id === requesterId)
+            .map((row) => clubNames.get(row.club_id as string)).filter(Boolean),
+          tournaments: (entriesResult.data ?? []).filter((row) => row.user_id === requesterId)
+            .slice(0, 10).map((row) => ({
+              title: tournamentNames.get(row.tournament_id as string) ?? '대회',
+              division: row.division,
+            })),
+        });
+      }
+    }
+
     return jsonResponse({
       threads: threads.map((thread) => {
         const profile = profiles.get(thread.requester_id);
@@ -253,6 +303,7 @@ Deno.serve(withCors(async (req) => {
               avatar_url: profile.avatar_url,
               primary_region: profile.primary_region,
               age_group: ageGroupFromBirthDate(profile.birth_date),
+              ...(details.get(thread.requester_id) ?? {}),
             }
             : null,
         };
@@ -282,7 +333,7 @@ Deno.serve(withCors(async (req) => {
   if (parsed.value.clubId !== null) {
     const { data: clubData, error: clubError } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by, inquiry_links_enabled')
+      .select('id, name, status, created_by')
       .eq('id', parsed.value.clubId)
       .maybeSingle();
     club = clubFrom(clubData);
@@ -339,7 +390,7 @@ Deno.serve(withCors(async (req) => {
 
     const { data: clubData } = await supabase
       .from('clubs')
-      .select('id, name, status, created_by, inquiry_links_enabled')
+      .select('id, name, status, created_by')
       .eq('id', thread.club_id)
       .maybeSingle();
     club = clubFrom(clubData);
@@ -353,10 +404,6 @@ Deno.serve(withCors(async (req) => {
     .eq('user_id', auth.user.id)
     .maybeSingle();
   if (clubBan) return errorResponse('CLUB_BANNED', 403);
-
-  if (!club.inquiry_links_enabled && containsInquiryLink(parsed.value.body)) {
-    return errorResponse('INQUIRY_LINKS_DISABLED', 400);
-  }
 
   let operatorIds = await activeOperatorIds(supabase, thread.club_id);
   if (auth.user.id === thread.requester_id) {

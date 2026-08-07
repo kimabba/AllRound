@@ -6,6 +6,7 @@ import '../../models/club_event.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
 
 class ClubDuesScreen extends ConsumerStatefulWidget {
@@ -107,6 +108,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   onTap: initial != null
                       ? null
                       : () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showDatePicker(
                             context: dialogContext,
                             initialDate: month,
@@ -138,6 +140,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   ),
                   trailing: const Icon(Icons.event_outlined),
                   onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     final picked = await showDatePicker(
                       context: dialogContext,
                       initialDate: dueDate ?? month,
@@ -267,6 +270,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: AppBackButton(fallbackLocation: '/clubs/${widget.club.id}'),
         title: const Text('회비 장부'),
         actions: [
           IconButton(
@@ -352,8 +356,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
               const SizedBox(width: AppSpacing.sm),
               IconButton.filledTonal(
                 tooltip: '다른 달 장부 만들기',
-                onPressed:
-                    _busy ? null : () => _editPeriod(createNew: true),
+                onPressed: _busy ? null : () => _editPeriod(createNew: true),
                 icon: const Icon(Icons.add_rounded),
               ),
             ],

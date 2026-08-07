@@ -66,6 +66,9 @@ class AllRoundE2EKeys {
   static const adminScreen = Key('e2e-admin-screen');
 
   static const globalChatDock = Key('e2e-global-chat-dock');
+  static const miniChatBar = Key('e2e-mini-chat-bar');
+  static const miniChatOpen = Key('e2e-mini-chat-open');
+  static const miniChatClose = Key('e2e-mini-chat-close');
   static const embeddedChatSheet = Key('e2e-embedded-chat-sheet');
   static const fullChatScreen = Key('e2e-full-chat-screen');
   static const chatExpandButton = Key('e2e-chat-expand-button');
@@ -79,7 +82,7 @@ class AllRoundE2EKeys {
   static const navClubs = Key('e2e-nav-clubs');
   static const navRules = Key('e2e-nav-rules');
 
-  /// 탭에서 빠진 진입점 — 대회는 일정 화면의 "신청 가능한 대회" 헤더를 눌러,
+  /// 탭에서 빠진 진입점 — 대회는 대회 화면의 "신청 가능한 대회" 헤더를 눌러,
   /// 마이는 앱바 우상단 프로필 아이콘으로 들어간다.
   static const navTournaments = Key('e2e-nav-tournaments');
   static const navProfile = Key('e2e-nav-profile');

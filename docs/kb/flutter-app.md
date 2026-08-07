@@ -10,6 +10,8 @@
 | `app/lib/state/providers.dart` | Riverpod 전역 상태 |
 | `app/lib/services/api.dart` | Edge Function REST/SSE 클라이언트 |
 | `app/lib/models/tournament.dart` | Tournament, Club, Region, UserSport, UserTennisOrg 등 |
+| `app/lib/models/regulation_document.dart` | 대회 요강 v1 고정 섹션·블록 모델과 레거시 변환 |
+| `app/lib/widgets/tournaments/regulation_document_view.dart` | 대회별 원문 구조와 무관한 공통 요강 렌더러 |
 | `app/lib/utils/grade_labels.dart` | 부서코드·등급 레이블 + 테니스 협회 정의 |
 
 ## 내비게이션 (바텀탭 4개 + 전역 AI)
