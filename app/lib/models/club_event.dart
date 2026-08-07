@@ -1,4 +1,4 @@
-// 클럽 활동 MVP 모델: 가입 신청 + 모임 일정 + 멤버
+// 클럽 활동 MVP 모델: 가입 신청 + 모임(정기·번개) + 멤버
 
 class MyClubJoinRequest {
   const MyClubJoinRequest({
@@ -30,7 +30,12 @@ class ClubMember {
   final bool canCreateEvent;
   final bool canPostNotice;
   final String? displayName;
+  final String? avatarUrl;
   final DateTime? joinedAt;
+  final List<String> sports;
+  final List<String> teams;
+  final List<String> tournaments;
+  final List<String> tennisOrganizations;
 
   ClubMember({
     required this.userId,
@@ -38,7 +43,12 @@ class ClubMember {
     this.canCreateEvent = false,
     this.canPostNotice = false,
     this.displayName,
+    this.avatarUrl,
     this.joinedAt,
+    this.sports = const [],
+    this.teams = const [],
+    this.tournaments = const [],
+    this.tennisOrganizations = const [],
   });
 
   bool get isOwner => role == 'owner';
@@ -58,14 +68,34 @@ class ClubMember {
             ? Map<String, dynamic>.from(rawUser.first as Map)
             : null;
     return ClubMember(
-      userId: j['user_id'] as String,
+      userId: (j['user_id'] as String?) ?? '',
       role: (j['role'] as String?) ?? 'member',
       canCreateEvent: (j['can_create_event'] as bool?) ?? false,
       canPostNotice: (j['can_post_notice'] as bool?) ?? false,
-      displayName: user?['name'] as String?,
+      displayName: (user?['nickname'] as String?) ?? user?['name'] as String?,
+      avatarUrl: user?['avatar_url'] as String?,
       joinedAt: j['joined_at'] != null
           ? DateTime.tryParse(j['joined_at'] as String)
           : null,
+      sports: (user?['sports'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) => '${row['sport'] ?? ''}:${row['grade'] ?? ''}')
+          .toList(growable: false),
+      teams: (user?['clubs'] as List? ?? const []).whereType<String>().toList(),
+      tournaments: (user?['tournaments'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) => '${row['title'] ?? '대회'} · ${row['division'] ?? ''}')
+          .toList(growable: false),
+      tennisOrganizations: (user?['tennis_orgs'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) {
+        final details = [row['division'], row['score']]
+            .where((value) => value != null && '$value'.isNotEmpty)
+            .join(' · ');
+        return details.isEmpty
+            ? '${row['org'] ?? ''}'
+            : '${row['org'] ?? ''} · $details';
+      }).toList(growable: false),
     );
   }
 }
@@ -78,6 +108,8 @@ class ClubEvent {
   final String? description;
   final String? locationText;
   final DateTime startsAt;
+  final DateTime? endedEarlyAt;
+  final String? repeatInterval;
   final int? fee;
   final int? capacity;
   final int goingCount;
@@ -93,6 +125,8 @@ class ClubEvent {
     this.description,
     this.locationText,
     required this.startsAt,
+    this.endedEarlyAt,
+    this.repeatInterval,
     this.fee,
     this.capacity,
     this.goingCount = 0,
@@ -105,6 +139,12 @@ class ClubEvent {
   bool get iAmNotGoing => myStatus == 'not_going';
   int get responseCount => goingCount + notGoingCount;
   bool get isFull => capacity != null && goingCount >= capacity!;
+  bool get isEndedEarly => endedEarlyAt != null;
+  String? get repeatLabel => switch (repeatInterval) {
+        'weekly' => '매주',
+        'monthly' => '매월',
+        _ => null,
+      };
 
   factory ClubEvent.fromJson(
     Map<String, dynamic> j, {
@@ -136,6 +176,10 @@ class ClubEvent {
       description: j['description'] as String?,
       locationText: j['location_text'] as String?,
       startsAt: DateTime.parse(j['starts_at'] as String),
+      endedEarlyAt: j['ended_early_at'] is String
+          ? DateTime.tryParse(j['ended_early_at'] as String)
+          : null,
+      repeatInterval: j['repeat_interval'] as String?,
       fee: j['fee'] as int?,
       capacity: j['capacity'] as int?,
       goingCount: going,

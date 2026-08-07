@@ -8,6 +8,7 @@ class ClubPost {
   final String body;
   final List<String> imageUrls;
   final bool isPinned;
+  final List<String> noticeVisibleTags;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int commentCount;
@@ -22,6 +23,7 @@ class ClubPost {
     required this.body,
     this.imageUrls = const [],
     this.isPinned = false,
+    this.noticeVisibleTags = const [],
     required this.createdAt,
     required this.updatedAt,
     this.commentCount = 0,
@@ -40,6 +42,8 @@ class ClubPost {
       body: j['body'] as String,
       imageUrls: (j['image_urls'] as List?)?.cast<String>() ?? const [],
       isPinned: (j['is_pinned'] as bool?) ?? false,
+      noticeVisibleTags:
+          (j['notice_visible_tags'] as List?)?.cast<String>() ?? const [],
       createdAt: DateTime.parse(j['created_at'] as String),
       updatedAt: DateTime.parse(j['updated_at'] as String),
       commentCount: comments?.length ?? 0,

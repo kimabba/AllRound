@@ -1,3 +1,5 @@
+import 'regulation_document.dart';
+
 /// 대회 요강 AI 정형화 처리 상태 (관리자 전용, 유저 노출 없음).
 enum FormatStatus {
   pending,
@@ -79,6 +81,8 @@ class Tournament {
   final List<String> regulationNotes;
   // 마이그레이션 074: 읽기 쉬운 완전 본문 (여러 줄, "\n" 보존)
   final String? regulationBody;
+  // v1: 모든 소스가 공유하는 고정 섹션 + 제한된 블록 문서.
+  final RegulationDocument? regulationDocument;
   // AI 정형화 파이프라인 처리 상태 (관리자 전용)
   final FormatStatus formatStatus;
 
@@ -111,6 +115,7 @@ class Tournament {
     this.regulationFields = const [],
     this.regulationNotes = const [],
     this.regulationBody,
+    this.regulationDocument,
     this.formatStatus = FormatStatus.pending,
   });
 
@@ -173,6 +178,31 @@ class Tournament {
     final rawBody = j['regulation_body'];
     final regulationBody =
         rawBody is String && rawBody.trim().isNotEmpty ? rawBody : null;
+    final legacyDocumentFields = regulationFields
+        .map((field) => (label: field.label, value: field.value))
+        .toList(growable: true);
+    bool hasLegacyLabel(String label) => legacyDocumentFields.any(
+          (field) => field.label.replaceAll(' ', '') == label,
+        );
+    final rawPrize = j['prize'];
+    if (rawPrize is String &&
+        rawPrize.trim().isNotEmpty &&
+        !hasLegacyLabel('시상')) {
+      legacyDocumentFields.add((label: '시상', value: rawPrize.trim()));
+    }
+    final rawFormat = j['format'];
+    if (rawFormat is String &&
+        rawFormat.trim().isNotEmpty &&
+        !hasLegacyLabel('경기방식')) {
+      legacyDocumentFields.add((label: '경기방식', value: rawFormat.trim()));
+    }
+    final regulationDocument =
+        RegulationDocument.tryFromJson(j['regulation_document']) ??
+            RegulationDocument.fromLegacy(
+              fields: legacyDocumentFields,
+              notes: regulationNotes,
+              body: regulationBody,
+            );
 
     return Tournament(
       id: j['id'] as String,
@@ -213,6 +243,7 @@ class Tournament {
       regulationFields: regulationFields,
       regulationNotes: regulationNotes,
       regulationBody: regulationBody,
+      regulationDocument: regulationDocument,
       formatStatus: FormatStatus.fromString(j['format_status'] as String?),
     );
   }
@@ -315,6 +346,7 @@ class Club {
   final List<String> meetingDays;
   final int? monthlyFee;
   final String? genderPreference;
+  final String cardColor;
   final bool inquiryLinksEnabled;
   final double? latitude;
   final double? longitude;
@@ -342,6 +374,7 @@ class Club {
     this.meetingDays = const [],
     this.monthlyFee,
     this.genderPreference,
+    this.cardColor = '#3156D8',
     this.inquiryLinksEnabled = true,
     this.latitude,
     this.longitude,
@@ -389,6 +422,7 @@ class Club {
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
       genderPreference: j['gender_preference'] as String?,
+      cardColor: (j['card_color'] as String?) ?? '#3156D8',
       inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,
       latitude: (j['latitude'] as num?)?.toDouble(),
       longitude: (j['longitude'] as num?)?.toDouble(),

@@ -64,6 +64,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return;
       }
     }
+    if (referenceType != null &&
+        referenceType.startsWith('club_chat:') &&
+        clubId != null &&
+        clubId.isNotEmpty) {
+      final threadId = referenceType.substring('club_chat:'.length);
+      if (threadId.isNotEmpty) {
+        context.push('/clubs/$clubId/chat/$threadId');
+        return;
+      }
+    }
     if (notification.referenceType == 'club_approval_request') {
       context.push('/admin/clubs');
       return;
@@ -356,6 +366,8 @@ IconData _iconFor(String type) {
     case 'club_inquiry_received':
     case 'club_inquiry_reply':
       return Icons.forum_rounded;
+    case 'club_chat_message':
+      return Icons.chat_bubble_rounded;
     case 'club_approval_request':
       return Icons.admin_panel_settings_rounded;
     case 'club_join_request':
@@ -398,7 +410,7 @@ final _previewNotifications = [
   AppNotification(
     id: 'preview-notification-2',
     type: 'club_event',
-    title: '서울 풋살 러너스 일정이 등록됐습니다',
+    title: '서울 풋살 러너스 모임이 등록됐습니다',
     body: '7월 20일 오후 7시 잠실 풋살장',
     clubId: 'preview-club-futsal',
     isRead: false,
@@ -408,7 +420,7 @@ final _previewNotifications = [
     id: 'preview-notification-3',
     type: 'club_join_approved',
     title: '클럽 가입이 승인되었습니다',
-    body: '광주 테니스 크루의 일정과 게시판을 이용할 수 있어요.',
+    body: '광주 테니스 크루의 모임과 게시판을 이용할 수 있어요.',
     clubId: 'preview-club-tennis',
     isRead: true,
     createdAt: DateTime(2026, 7, 16, 14, 5),

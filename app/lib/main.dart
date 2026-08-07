@@ -19,7 +19,7 @@ import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
 import 'services/notification_events.dart';
 import 'services/release_gate.dart';
-import 'state/chat_state.dart';
+import 'state/chat_stream_controller.dart';
 import 'state/providers.dart';
 import 'state/theme_provider.dart';
 import 'theme/app_theme.dart';
@@ -123,7 +123,7 @@ class MatchUpApp extends ConsumerWidget {
         final nextUserId = next.value?.session?.user.id;
         if (previousUserId == nextUserId) return;
 
-        ref.read(chatProvider).reset();
+        ref.read(chatStreamControllerProvider).resetConversation();
         if (previousUserId != null) {
           unawaited(clearLocalUserPreferences(previousUserId));
         }

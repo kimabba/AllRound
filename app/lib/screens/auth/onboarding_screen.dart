@@ -143,6 +143,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       };
 
   Future<void> _pickBirthDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -179,6 +180,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _pickProfilePhoto(ImageSource source) async {
     final avatarKey = _profileAvatarPrefsKey;
     if (avatarKey == null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final picked = await ImagePicker().pickImage(
       source: source,
       maxWidth: 512,
@@ -189,7 +191,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     final PreparedClubImage image;
     try {
-      image = await prepareClubImage(picked);
+      // 프로필 사진은 나중에 profile-avatars(3MB) 로 올라간다.
+      image = await prepareClubImage(picked, maxBytes: profileAvatarMaxBytes);
     } on ClubImagePreparationException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -213,6 +216,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _showProfilePhotoSheet() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final cs = Theme.of(context).colorScheme;
 
     await showModalBottomSheet<void>(
@@ -412,6 +416,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // org 추가/삭제/수정
   // ───────────────────────────────────────────────────
   Future<void> _addOrg() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final used = _orgs.map((o) => o.org).toSet();
     // 부서 0개 협회를 고르면 부서 칩이 하나도 안 떠서 division_codes 가 빈 채로
     // 저장되고, 자격매칭(배열 교집합)이 항상 0건이 된다(JY-136). 제보 화면과
@@ -532,6 +537,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _busy = true;
       _error = null;
@@ -644,6 +650,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             Expanded(
               child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.xl,
                   AppSpacing.md,
@@ -816,6 +824,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               key: AllRoundE2EKeys.onboardingNameField,
               controller: _realName,
               maxLength: 20,
+              textInputAction: TextInputAction.next,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: '이름 (실명)',
@@ -834,6 +843,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               key: AllRoundE2EKeys.onboardingNicknameField,
               controller: _nickname,
               maxLength: 10,
+              textInputAction: TextInputAction.done,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: '닉네임 (선택)',
@@ -1183,6 +1193,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           TextField(
             controller: draft.score,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
               labelText: '점수 (선택, 0.0 ~ 10.0)',
               hintText: '예: 5.0',

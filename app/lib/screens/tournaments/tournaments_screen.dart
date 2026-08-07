@@ -16,6 +16,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/tournament_card.dart';
 import '../../widgets/notification_inbox_action.dart';
+import '../../widgets/tournament_section_bar.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
   const TournamentsScreen({super.key, this.previewTournaments});
@@ -208,6 +209,9 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
         title: const Text('대회'),
+        bottom: const TournamentSectionBar(
+          selected: TournamentSection.overview,
+        ),
         actions: [
           const NotificationInboxAction(),
           IconButton(
@@ -1581,6 +1585,10 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
 
   bool get _isTennis => widget.sport == 'tennis';
 
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1633,6 +1641,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
 
   /// 협회(_hostOrg) 변경 시: 새 스코프에 없는 선택 라벨은 자동 해제.
   void _setHostOrg(String? org) {
+    _dismissKeyboard();
     setState(() {
       _hostOrg = org;
       final allowed = _divisionLabelsForScope(org).toSet();
@@ -1642,6 +1651,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   }
 
   void _apply() {
+    _dismissKeyboard();
     Navigator.of(context).pop(
       _SearchFilterResult(
         query: _queryCtrl.text.trim(),
@@ -1657,6 +1667,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   }
 
   void _reset() {
+    _dismissKeyboard();
     setState(() {
       _queryCtrl.clear();
       _onlyMyGrade = false;
@@ -1673,6 +1684,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
 
   /// 프리셋 칩 선택 → 범위 환원. custom 은 picker 를 띄운다.
   void _selectDatePreset(DatePreset preset) {
+    _dismissKeyboard();
     if (preset == DatePreset.custom) {
       _pickDateRange();
       return;
@@ -1686,6 +1698,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
   }
 
   Future<void> _pickDateRange() async {
+    _dismissKeyboard();
     final now = DateTime.now();
     final firstDate = DateTime(now.year - 1, 1, 1);
     final lastDate = DateTime(now.year + 2, 12, 31);
@@ -1748,6 +1761,8 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
               const SizedBox(height: AppSpacing.md),
               Flexible(
                 child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1794,7 +1809,10 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                         ),
                         subtitle: const Text('내 등급 이하 대회만 표시'),
                         value: _onlyMyGrade,
-                        onChanged: (v) => setState(() => _onlyMyGrade = v),
+                        onChanged: (v) {
+                          _dismissKeyboard();
+                          setState(() => _onlyMyGrade = v);
+                        },
                         contentPadding: EdgeInsets.zero,
                       ),
                     ],
@@ -2045,7 +2063,10 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
     return FilterChip(
       label: Text(label),
       selected: selected,
-      onSelected: onSelected,
+      onSelected: (selected) {
+        _dismissKeyboard();
+        onSelected(selected);
+      },
       showCheckmark: false,
       selectedColor: cs.primaryContainer,
       backgroundColor: cs.surface,

@@ -143,8 +143,8 @@ Deno.serve(withCors(async (req) => {
     else dedupSkipped++;
   }
 
-  // KST 기준 내일 00:00~24:00 사이의 활성 클럽 일정.
-  // 삭제된 일정은 조회되지 않고, 조기 종료 일정은 ended_early_at 필터로 제외한다.
+  // KST 기준 내일 00:00~24:00 사이의 활성 클럽 모임.
+  // 삭제된 모임은 조회되지 않고, 조기 종료 모임은 ended_early_at 필터로 제외한다.
   const tomorrow = tomorrowKstBounds(new Date());
   const { data: eventRows, error: eventError } = await supabase
     .from('club_events')
@@ -216,7 +216,7 @@ Deno.serve(withCors(async (req) => {
       const outcome = await sendReminderIfClaimed(supabase, existing ?? null, {
         userId,
         type: 'club_event_reminder',
-        title: `${event.clubName} 일정 하루 전`,
+        title: `${event.clubName} 모임 하루 전`,
         body: event.title,
         referenceType: 'club_event',
         referenceId: event.id,

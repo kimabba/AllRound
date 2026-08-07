@@ -216,7 +216,7 @@ class NearbyNewClubCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  club.description ?? '가까운 클럽의 일정과 활동을 확인해보세요.',
+                  club.description ?? '가까운 클럽의 모임과 활동을 확인해보세요.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -443,7 +443,7 @@ class SimpleClubTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      item.description ?? '새로운 클럽 일정을 확인해보세요.',
+                      item.description ?? '새로운 클럽 모임을 확인해보세요.',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),

@@ -13,6 +13,7 @@ import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
+import { canListClubMembers } from './member_visibility.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -116,8 +117,31 @@ Deno.serve(withCors(async (req) => {
   if (action === 'list_members') {
     const member = await activeMember('role');
     const admin = member ? false : await isAdmin();
+    let isPublicClub = false;
     if (!member && !admin) {
-      return errorResponse('Only active club members can view members', 403);
+      const [clubResult, banResult] = await Promise.all([
+        supa.from('clubs').select('status').eq('id', clubId).maybeSingle(),
+        supa.from('club_bans').select('club_id').eq('club_id', clubId)
+          .eq('user_id', userId).maybeSingle(),
+      ]);
+      const { data: targetClub, error: clubError } = clubResult;
+      if (clubError) return errorResponse(clubError.message, 500);
+      if (banResult.error) return errorResponse(banResult.error.message, 500);
+      if (!targetClub) return errorResponse('Club not found', 404);
+      isPublicClub = targetClub.status === 'approved';
+      if (
+        !canListClubMembers({
+          isActiveMember: false,
+          isAdmin: false,
+          clubStatus: targetClub.status,
+          isBanned: banResult.data !== null,
+        })
+      ) {
+        return errorResponse(
+          banResult.data ? 'CLUB_BANNED' : 'Only approved club members are public',
+          403,
+        );
+      }
     }
 
     const { data, error } = await supa
@@ -133,21 +157,90 @@ Deno.serve(withCors(async (req) => {
     // users:{name} 형태로 합쳐 반환한다.
     const memberRows = data ?? [];
     const userIds = memberRows.map((r) => r.user_id as string);
-    const nameById = new Map<string, string | null>();
+    const profileById = new Map<string, Record<string, unknown>>();
     if (userIds.length > 0) {
       const { data: profiles, error: profileError } = await supa
         .from('users')
-        .select('id, name')
+        .select('id, name, nickname, avatar_url')
         .in('id', userIds);
       if (profileError) return errorResponse(profileError.message, 500);
       for (const p of profiles ?? []) {
-        nameById.set(p.id as string, (p.name as string | null) ?? null);
+        profileById.set(p.id as string, {
+          name: (p.name as string | null) ?? null,
+          nickname: (p.nickname as string | null) ?? null,
+          avatar_url: (p.avatar_url as string | null) ?? null,
+        });
       }
     }
-    const members = memberRows.map((r) => ({
-      ...r,
-      users: { name: nameById.get(r.user_id as string) ?? null },
-    }));
+    // 상세 프로필은 같은 클럽의 활성 멤버에게만 제공한다. 관리자 권한만 있고
+    // 해당 클럽 멤버가 아닌 계정도 목록 운영 정보만 볼 수 있다.
+    if (member !== null && userIds.length > 0) {
+      const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
+        supa.from('user_sports').select('user_id, sport, grade').in('user_id', userIds),
+        supa.from('user_tennis_orgs').select('user_id, org, division_local, score')
+          .in('user_id', userIds),
+        supa.from('club_members').select('user_id, club_id').in('user_id', userIds)
+          .eq('status', 'active'),
+        supa.from('match_entries').select('user_id, tournament_id, division')
+          .in('user_id', userIds).order('created_at', { ascending: false }),
+      ]);
+      const aggregateError = sportsResult.error ?? orgsResult.error ??
+        membershipsResult.error ?? entriesResult.error;
+      if (aggregateError) return errorResponse(aggregateError.message, 500);
+
+      const clubIds = [
+        ...new Set((membershipsResult.data ?? []).map((row) => row.club_id as string)),
+      ];
+      const tournamentIds = [
+        ...new Set((entriesResult.data ?? []).map((row) => row.tournament_id as string)),
+      ];
+      const [{ data: clubs }, { data: tournaments }] = await Promise.all([
+        clubIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; name: string }> })
+          : supa.from('clubs').select('id, name').in('id', clubIds),
+        tournamentIds.length === 0
+          ? Promise.resolve({ data: [] as Array<{ id: string; title: string }> })
+          : supa.from('tournaments').select('id, title').in('id', tournamentIds),
+      ]);
+      const clubNames = new Map((clubs ?? []).map((row) => [row.id as string, row.name as string]));
+      const tournamentNames = new Map(
+        (tournaments ?? []).map((row) => [row.id as string, row.title as string]),
+      );
+      for (const userId of userIds) {
+        const profile = profileById.get(userId) ?? {};
+        profileById.set(userId, {
+          ...profile,
+          sports: (sportsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => ({ sport: row.sport, grade: row.grade })),
+          tennis_orgs: (orgsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => ({ org: row.org, division: row.division_local, score: row.score })),
+          clubs: (membershipsResult.data ?? []).filter((row) => row.user_id === userId)
+            .map((row) => clubNames.get(row.club_id as string)).filter(Boolean),
+          tournaments: (entriesResult.data ?? []).filter((row) => row.user_id === userId)
+            .slice(0, 10).map((row) => ({
+              title: tournamentNames.get(row.tournament_id as string) ?? '대회',
+              division: row.division,
+            })),
+        });
+      }
+    }
+    const members = memberRows.map((r) => {
+      const profile = profileById.get(r.user_id as string) ?? {};
+      if (isPublicClub) {
+        return {
+          role: r.role,
+          users: { name: profile.nickname ?? profile.name ?? null },
+        };
+      }
+      return {
+        user_id: r.user_id,
+        role: r.role,
+        joined_at: r.joined_at,
+        can_create_event: r.can_create_event,
+        can_post_notice: r.can_post_notice,
+        users: profile,
+      };
+    });
 
     return jsonResponse({ members });
   }
@@ -238,6 +331,7 @@ Deno.serve(withCors(async (req) => {
     if (existing?.status === 'active') {
       return errorResponse('Already a member', 409);
     }
+    const isRejoin = existing?.status === 'left';
 
     const { data: existingRequest, error: existingRequestError } = await supa
       .from('club_join_requests')
@@ -293,15 +387,20 @@ Deno.serve(withCors(async (req) => {
       await createNotification(supa, {
         userId: reviewerId,
         type: 'club_join_request',
-        title: '새 클럽 가입 신청',
-        body: `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
+        title: isRejoin ? '모임 재가입 승인 요청' : '새 모임 가입 신청',
+        body: isRejoin
+          ? `${requesterLabel}님이 ${club.name}에 다시 가입하길 요청했습니다. 재가입 여부를 확인해 주세요.`
+          : `${requesterLabel}님이 ${club.name} 가입을 신청했습니다.`,
         referenceType: 'club_join_request',
         referenceId: typeof joinRequest?.id === 'string' ? joinRequest.id : null,
         clubId,
       });
     }
 
-    return jsonResponse({ ok: true, action: 'requested' });
+    return jsonResponse({
+      ok: true,
+      action: isRejoin ? 'rejoin_requested' : 'requested',
+    });
   }
 
   if (action === 'cancel') {

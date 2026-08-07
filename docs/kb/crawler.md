@@ -44,6 +44,14 @@ DB-driven 크롤러 소스 관리. 어드민 UI에서 CRUD 가능.
 - 기존 description이 있으면 보존 (크롤러 덮어쓰기 방지)
 - `embedding = null` 설정하여 embed-pending 워커가 재임베딩
 
+## 요강 정형화 (`format-pending`)
+- 상세 원문은 `regulation_document` v1으로 정규화한다.
+- 앱이 소스와 무관하게 같은 순서로 읽도록 섹션 코드는 `eligibility → schedule_venue → registration_payment → match_operations → awards → refund_changes → notices_contact → other`로 고정한다.
+- 섹션 내부는 `paragraph`, `subheading`, `bullets`, `key_values`, `table`, `notice`, `division_schedule` 블록만 허용한다.
+- KATO처럼 결정적 파서가 있는 소스는 금액·계좌·일정 값을 우선하고 AI 결과는 누락 섹션을 보충한다.
+- 금액·계좌·날짜는 저장 전 원문 대조를 거친다. 공개 중인 기존 대회의 첫 정형화 결과는 관리자 검수 후 반영한다.
+- `regulation_fields`, `regulation_notes`, `regulation_body`는 구버전 앱과 검색 호환을 위해 문서에서 함께 파생한다.
+
 ## 인증
 - pg_cron 호출: `INTERNAL_CRON_JWT` (Vault/Edge Function env에 저장한 랜덤 secret)
 - 어드민 수동 실행: 사용자 JWT → requireServiceRoleOrAdmin 체크

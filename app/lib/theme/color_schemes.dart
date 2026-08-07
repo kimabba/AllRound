@@ -25,9 +25,9 @@ class AppPalette {
   static const Color appBackground = canvas;
 }
 
-/// 오늘·모임 화면의 다이어리형 정보 구분 팔레트.
+/// 대회·클럽 화면의 다이어리형 정보 구분 팔레트.
 ///
-/// 기능 상태를 대신하지 않고 일정 종류와 콘텐츠 묶음을 부드럽게 구분한다.
+/// 기능 상태를 대신하지 않고 콘텐츠 묶음을 부드럽게 구분한다.
 class AppDiaryColors {
   AppDiaryColors._();
 

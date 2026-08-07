@@ -3,6 +3,16 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { serviceClient } from '../_shared/supabase.ts';
 import { GEMINI_MODEL, generateStructured } from '../_shared/gemini.ts';
 import { capRegulationBody, normalizeRegulationFields } from '../_shared/regulation.ts';
+import {
+  mergeRegulationDocuments,
+  normalizeRegulationDocument,
+  REGULATION_DOCUMENT_VERSION,
+  regulationDocumentFromLegacy,
+  regulationDocumentToBody,
+  regulationDocumentToFields,
+  regulationDocumentToNotes,
+  regulationDocumentVerificationFields,
+} from '../_shared/regulation_document.ts';
 import { isKatoSource, parseKatoRegulation } from '../_shared/crawler/parsers/kato_regulation.ts';
 import { extractPlainText, type RegulationResult, verifyAgainstSource } from './logic.ts';
 
@@ -12,36 +22,139 @@ const SOURCE_MAX = 12000; // Gemini 입력 상한
 const SOURCE_VERIFY_MAX = 50000; // 결정적 파서 값의 원문 대조 상한
 const BODY_MAX = 2500; // regulation_body 저장 상한(077 계약)
 
+interface StructuredRegulationResponse {
+  regulation_document: unknown;
+  prize: string;
+  format: string;
+  description: string;
+  confidence: number;
+  unusual: boolean;
+}
+
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
-    regulation_fields: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: { label: { type: 'string' }, value: { type: 'string' } },
-        required: ['label', 'value'],
+    regulation_document: {
+      type: 'object',
+      properties: {
+        schema_version: { type: 'integer', enum: [REGULATION_DOCUMENT_VERSION] },
+        summary: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                enum: [
+                  'eligibility',
+                  'schedule_venue',
+                  'registration_payment',
+                  'match_operations',
+                  'awards',
+                  'refund_changes',
+                  'notices_contact',
+                  'other',
+                ],
+              },
+              availability: {
+                type: 'string',
+                enum: ['present', 'not_announced', 'not_applicable'],
+              },
+              blocks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: {
+                      type: 'string',
+                      enum: [
+                        'paragraph',
+                        'subheading',
+                        'bullets',
+                        'key_values',
+                        'table',
+                        'notice',
+                        'division_schedule',
+                      ],
+                    },
+                    text: { type: 'string' },
+                    items: { type: 'array', items: { type: 'string' } },
+                    entries: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: { label: { type: 'string' }, value: { type: 'string' } },
+                        required: ['label', 'value'],
+                      },
+                    },
+                    columns: { type: 'array', items: { type: 'string' } },
+                    rows: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          cells: { type: 'array', items: { type: 'string' } },
+                        },
+                        required: ['cells'],
+                      },
+                    },
+                    divisions: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          name: { type: 'string' },
+                          date: { type: 'string' },
+                          venue: { type: 'string' },
+                          fee: { type: 'string' },
+                          account: { type: 'string' },
+                          capacity: { type: 'string' },
+                        },
+                        required: ['name'],
+                      },
+                    },
+                  },
+                  required: ['type'],
+                },
+              },
+            },
+            required: ['code', 'availability', 'blocks'],
+          },
+        },
       },
+      required: ['schema_version', 'sections'],
     },
-    regulation_notes: { type: 'array', items: { type: 'string' } },
-    regulation_body: { type: 'string' },
     prize: { type: 'string' },
     format: { type: 'string' },
     description: { type: 'string' },
     confidence: { type: 'number' },
     unusual: { type: 'boolean' },
   },
-  required: ['regulation_fields', 'regulation_notes', 'description', 'confidence', 'unusual'],
+  required: [
+    'regulation_document',
+    'prize',
+    'format',
+    'description',
+    'confidence',
+    'unusual',
+  ],
 };
 
 function buildPrompt(title: string, sourceText: string): string {
   return [
-    '다음은 동호인 테니스/풋살 대회 공고 원문이다. 요강을 구조화하라.',
+    '다음은 동호인 테니스/풋살 대회 공고 원문이다. 요강을 고정 문서 구조로 정리하라.',
     '규칙: 원문에 없는 정보(금액·계좌·날짜 등)를 절대 만들지 말 것. 불명확하면 생략.',
     '값을 지어냈거나 형식이 처음 보는 구조면 unusual=true. 확신도는 confidence(0~1).',
-    'regulation_fields는 {label,value} 배열(참가비/입금계좌/시상/일정/접수/경기방식 등),',
-    '입금계좌가 원문에 있으면 반드시 field로 포함하라(은행명·계좌번호·예금주). 부서별로 다르면 각각.',
-    'regulation_notes는 ※ 유의사항 문장 배열, regulation_body는 나머지 서술 본문,',
+    'regulation_document.schema_version은 반드시 1이다.',
+    '섹션 code와 순서는 eligibility, schedule_venue, registration_payment, match_operations,',
+    'awards, refund_changes, notices_contact, other만 사용한다. 같은 code를 중복 생성하지 않는다.',
+    '원문에 내용이 있으면 availability=present, 추후 공지는 not_announced, 해당 없음은 not_applicable.',
+    'blocks는 paragraph/subheading/bullets/key_values/table/notice/division_schedule만 사용한다.',
+    '대제목은 만들지 말고 section code로만 구분한다. 원문 소제목은 subheading에 넣는다.',
+    '입금계좌가 원문에 있으면 key_values 또는 division_schedule에 은행명·계좌번호·예금주를 포함한다.',
+    '부서마다 일정·장소·참가비·계좌가 다르면 division_schedule 배열에서 부서별로 분리한다.',
+    '표는 columns와 rows[{cells}]로 보존하고, 일반 설명은 paragraph, 열거는 bullets로 정리한다.',
     'prize/시상은 순위·부서별 상금액을 원문 그대로 구체적으로(예: 우승 30만원, 준우승 15만원). 뭉뚱그리지 말 것.',
     'format은 경기방식 요약, description은 1~2줄 요약.',
     `대회명: ${title}`,
@@ -126,28 +239,44 @@ Deno.serve(withCors(async (req) => {
         }
       }
 
-      const parsed = await generateStructured<RegulationResult>(
+      const parsed = await generateStructured<StructuredRegulationResponse>(
         buildPrompt(c.title, sourceText),
         RESPONSE_SCHEMA,
+        { maxOutputTokens: 6144 },
       );
-      const effective: RegulationResult = katoRegulation
-        ? {
-          ...parsed,
-          regulation_fields: katoRegulation.fields,
-          regulation_notes: katoRegulation.notes,
-          prize: katoRegulation.prize ?? parsed.prize,
-        }
-        : parsed;
-      const fields = normalizeRegulationFields(effective.regulation_fields);
-      const verdict = verifyAgainstSource(effective, verificationText);
-
-      if (fields.length === 0 || !verdict.ok) {
+      const aiDocument = normalizeRegulationDocument(parsed.regulation_document);
+      if (!aiDocument) {
         await supabase.rpc('format_pending_reject', {
           p_tid: c.tournament_id,
           p_token: c.claim_token,
-          p_flags: fields.length === 0
-            ? [{ code: 'empty_fields', field: '_all', masked: '' }, ...verdict.flags]
-            : verdict.flags,
+          p_flags: [{ code: 'invalid_document', field: '_all', masked: '' }],
+          p_source_hash: c.content_hash,
+        });
+        result.needs_review++;
+        continue;
+      }
+      const deterministicDocument = katoRegulation
+        ? regulationDocumentFromLegacy(katoRegulation.fields, katoRegulation.notes)
+        : null;
+      const document = mergeRegulationDocuments(deterministicDocument, aiDocument);
+      const fields = normalizeRegulationFields(regulationDocumentToFields(document));
+      const effective: RegulationResult = {
+        regulation_fields: regulationDocumentVerificationFields(document),
+        regulation_notes: regulationDocumentToNotes(document),
+        regulation_body: regulationDocumentToBody(document),
+        prize: katoRegulation?.prize ?? parsed.prize,
+        format: parsed.format,
+        description: parsed.description,
+        confidence: parsed.confidence,
+        unusual: parsed.unusual,
+      };
+      const verdict = verifyAgainstSource(effective, verificationText);
+
+      if (!verdict.ok) {
+        await supabase.rpc('format_pending_reject', {
+          p_tid: c.tournament_id,
+          p_token: c.claim_token,
+          p_flags: verdict.flags,
           p_source_hash: c.content_hash,
         });
         result.needs_review++;
@@ -156,11 +285,13 @@ Deno.serve(withCors(async (req) => {
 
       // 스테이징 판정: 이미 노출 중(published/closed)인데 최초 정형화면 검수 스테이징.
       const stage = (c.status === 'published' || c.status === 'closed') && c.formatted_at === null;
-      const { error: compErr } = await supabase.rpc('format_pending_complete', {
+      const { error: compErr } = await supabase.rpc('format_pending_complete_v2', {
         p_tid: c.tournament_id,
         p_token: c.claim_token,
         p_document_id: c.document_id,
         p_source_hash: c.content_hash,
+        p_regulation_document: document,
+        p_regulation_schema_version: REGULATION_DOCUMENT_VERSION,
         p_regulation_fields: fields,
         p_regulation_notes: effective.regulation_notes ?? [],
         p_regulation_body: capRegulationBody(effective.regulation_body, BODY_MAX) || null,
