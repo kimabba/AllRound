@@ -236,6 +236,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _submitting = true;
       _submittingLabel = '권한 확인 중';
@@ -422,6 +423,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _showLogoSheet() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final cs = Theme.of(context).colorScheme;
     await showModalBottomSheet<void>(
       context: context,
@@ -486,6 +488,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     final picked = await ImagePicker().pickMultiImage(
       maxWidth: 1600,
       maxHeight: 1600,
@@ -529,6 +532,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _showRegionPicker() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await showModalBottomSheet<_RegionOption>(
       context: context,
       isScrollControlled: true,

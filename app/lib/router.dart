@@ -295,21 +295,25 @@ class _MainShell extends ConsumerWidget {
   static const _tabs = <String>[
     '/',
     '/clubs',
-    '/rules',
   ];
 
-  /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
-  /// (마이는 앱바 우상단, 대회 전체 목록은 대회 화면에서 들어간다).
+  /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다.
+  /// 대회 전체·랭킹·룰북은 대회 하위 화면이므로 위의 분기에서 0을 반환한다.
   static const _untabbedPaths = [
     '/more',
     '/profile',
     '/notifications',
     '/favorites',
     '/blocked-users',
-    '/tournaments',
   ];
 
   int _indexOf(String location) {
+    if (location == '/tournaments' ||
+        location.startsWith('/tournaments/') ||
+        location == '/rankings' ||
+        location == '/rules') {
+      return 0;
+    }
     if (_untabbedPaths.any(
       (p) => location == p || location.startsWith('$p/'),
     )) {

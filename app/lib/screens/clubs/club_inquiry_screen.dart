@@ -97,6 +97,7 @@ class _ClubInquiryConversationScreenState
   Future<void> _send() async {
     final body = _controller.text.trim();
     if (body.isEmpty || body.length > 1000 || _sending) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _sending = true);
     try {
       final threadId = await ref.read(apiProvider).sendClubInquiry(
@@ -173,6 +174,8 @@ class _ClubInquiryConversationScreenState
                           )
                         : ListView.builder(
                             controller: _scrollController,
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
                             padding: const EdgeInsets.all(AppSpacing.lg),
                             itemCount: _messages.length,
                             itemBuilder: (context, index) {
@@ -373,6 +376,7 @@ Future<void> _showRequesterProfile(
   BuildContext context,
   ClubInquiryThread thread,
 ) {
+  FocusManager.instance.primaryFocus?.unfocus();
   final cs = Theme.of(context).colorScheme;
   return showModalBottomSheet<void>(
     context: context,

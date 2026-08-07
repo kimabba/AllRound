@@ -866,6 +866,7 @@ class _TeamRecruitingDraftSheetState
   }
 
   Future<void> _showClubPicker() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await showModalBottomSheet<Club>(
       context: context,
       isScrollControlled: true,
@@ -910,6 +911,7 @@ class _TeamRecruitingDraftSheetState
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     try {
       await ref.read(apiProvider).createTeamRecruitingPost(
@@ -957,6 +959,7 @@ class _TeamRecruitingDraftSheetState
           MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
         ),
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

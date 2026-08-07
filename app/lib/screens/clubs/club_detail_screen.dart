@@ -1947,6 +1947,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
 
   Future<void> _pickImages() async {
     if (!_canAddImage) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final remaining = 5 - _imageCount;
     final picked = await ImagePicker().pickMultiImage(
       maxWidth: 1600,
@@ -1992,6 +1993,7 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     try {
       final uploadedUrls = <String>[];
@@ -2272,6 +2274,7 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     try {
       await ref.read(apiProvider).updateClubMonthlyFee(widget.club.id, fee);
@@ -3056,7 +3059,7 @@ class _EventsTab extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-      builder: (_) => _EventCreateSheet(club: club),
+      builder: (_) => ClubEventCreateSheet(club: club),
     );
     if (created == true) onChanged();
   }
@@ -3524,15 +3527,15 @@ class _ResponseMemberRow extends StatelessWidget {
 }
 
 // ─── 모임 생성 시트 ───────────────────────────────────────────────
-class _EventCreateSheet extends ConsumerStatefulWidget {
+class ClubEventCreateSheet extends ConsumerStatefulWidget {
   final Club club;
-  const _EventCreateSheet({required this.club});
+  const ClubEventCreateSheet({super.key, required this.club});
 
   @override
-  ConsumerState<_EventCreateSheet> createState() => _EventCreateSheetState();
+  ConsumerState<ClubEventCreateSheet> createState() => _EventCreateSheetState();
 }
 
-class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
+class _EventCreateSheetState extends ConsumerState<ClubEventCreateSheet> {
   final _title = TextEditingController();
   final _location = TextEditingController();
   final _desc = TextEditingController();
@@ -3552,6 +3555,7 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
   }
 
   Future<void> _pickDateTime() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -3596,6 +3600,7 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
       );
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     final allowed = await ensureUgcPermission(
       context,
       ref,
@@ -3634,86 +3639,92 @@ class _EventCreateSheetState extends ConsumerState<_EventCreateSheet> {
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: EdgeInsets.only(
-        left: AppSpacing.xl,
-        right: AppSpacing.xl,
-        top: AppSpacing.xl,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl,
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('모임 만들기', style: tt.titleLarge),
-          const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: '제목 *',
-              hintText: '예: 주말 정기 모임',
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xl,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('모임 만들기', style: tt.titleLarge),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(
+                labelText: '제목 *',
+                hintText: '예: 주말 정기 모임',
+              ),
+              maxLength: 100,
             ),
-            maxLength: 100,
-          ),
-          TextField(
-            controller: _location,
-            decoration: const InputDecoration(
-              labelText: '장소',
-              hintText: '예: ○○구장',
+            TextField(
+              controller: _location,
+              decoration: const InputDecoration(
+                labelText: '장소',
+                hintText: '예: ○○구장',
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(
-            controller: _desc,
-            decoration: const InputDecoration(labelText: '설명'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _fee,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '참가 비용',
-                    suffixText: '원',
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _desc,
+              decoration: const InputDecoration(labelText: '설명'),
+              maxLines: 2,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _fee,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '참가 비용',
+                      suffixText: '원',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: TextField(
-                  controller: _capacity,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '제한 인원',
-                    suffixText: '명',
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: TextField(
+                    controller: _capacity,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '제한 인원',
+                      suffixText: '명',
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            onPressed: _pickDateTime,
-            icon: const Icon(Icons.calendar_today_rounded, size: 18),
-            label:
-                Text(_startsAt == null ? '일시 선택 *' : _fmtDateTime(_startsAt!)),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          FilledButton(
-            onPressed: _busy ? null : _submit,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(AppSizes.control),
+              ],
             ),
-            child: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('만들기'),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _pickDateTime,
+              icon: const Icon(Icons.calendar_today_rounded, size: 18),
+              label: Text(
+                  _startsAt == null ? '일시 선택 *' : _fmtDateTime(_startsAt!)),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(AppSizes.control),
+              ),
+              child: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('만들기'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4551,6 +4562,7 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
 
   Future<void> _pickImages() async {
     if (_images.length >= 5) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final picked = await ImagePicker().pickMultiImage(
       maxWidth: 1600,
       maxHeight: 1600,

@@ -226,6 +226,10 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
   late final TextEditingController _nameQueryCtrl =
       TextEditingController(text: widget.initialNameQuery);
 
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   @override
   void dispose() {
     _nameQueryCtrl.dispose();
@@ -285,6 +289,8 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
               const SizedBox(height: AppSpacing.lg),
               Flexible(
                 child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -339,11 +345,14 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                             values: _regions,
                             selected:
                                 {_filters.region}.whereType<String>().toSet(),
-                            onSelected: (value) => setState(() {
-                              _filters = _filters.region == value
-                                  ? _filters.copyWith(clearRegion: true)
-                                  : _filters.copyWith(region: value);
-                            }),
+                            onSelected: (value) {
+                              _dismissKeyboard();
+                              setState(() {
+                                _filters = _filters.region == value
+                                    ? _filters.copyWith(clearRegion: true)
+                                    : _filters.copyWith(region: value);
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -354,11 +363,14 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                             values: _genders,
                             selected:
                                 {_filters.gender}.whereType<String>().toSet(),
-                            onSelected: (value) => setState(() {
-                              _filters = _filters.gender == value
-                                  ? _filters.copyWith(clearGender: true)
-                                  : _filters.copyWith(gender: value);
-                            }),
+                            onSelected: (value) {
+                              _dismissKeyboard();
+                              setState(() {
+                                _filters = _filters.gender == value
+                                    ? _filters.copyWith(clearGender: true)
+                                    : _filters.copyWith(gender: value);
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -368,11 +380,14 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                           FilterChipWrap(
                             values: _days,
                             selected: _filters.days,
-                            onSelected: (value) => setState(() {
-                              final next = {..._filters.days};
-                              if (!next.add(value)) next.remove(value);
-                              _filters = _filters.copyWith(days: next);
-                            }),
+                            onSelected: (value) {
+                              _dismissKeyboard();
+                              setState(() {
+                                final next = {..._filters.days};
+                                if (!next.add(value)) next.remove(value);
+                                _filters = _filters.copyWith(days: next);
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -383,10 +398,13 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                             contentPadding: EdgeInsets.zero,
                             title: const Text('현재 모집 중인 모임만 보기'),
                             value: _filters.recruitingOnly,
-                            onChanged: (value) => setState(() {
-                              _filters =
-                                  _filters.copyWith(recruitingOnly: value);
-                            }),
+                            onChanged: (value) {
+                              _dismissKeyboard();
+                              setState(() {
+                                _filters =
+                                    _filters.copyWith(recruitingOnly: value);
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -403,9 +421,12 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                               formatFee(_filters.feeRange.start),
                               formatFee(_filters.feeRange.end),
                             ),
-                            onChanged: (value) => setState(() {
-                              _filters = _filters.copyWith(feeRange: value);
-                            }),
+                            onChanged: (value) {
+                              _dismissKeyboard();
+                              setState(() {
+                                _filters = _filters.copyWith(feeRange: value);
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -418,13 +439,16 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() {
-                        _filters = _filters.cleared();
-                        _nameQueryCtrl.clear();
-                        _selectedInterests = widget.initialInterests.isEmpty
-                            ? const {'tennis', 'futsal'}
-                            : {...widget.initialInterests};
-                      }),
+                      onPressed: () {
+                        _dismissKeyboard();
+                        setState(() {
+                          _filters = _filters.cleared();
+                          _nameQueryCtrl.clear();
+                          _selectedInterests = widget.initialInterests.isEmpty
+                              ? const {'tennis', 'futsal'}
+                              : {...widget.initialInterests};
+                        });
+                      },
                       child: const Text('초기화'),
                     ),
                   ),
@@ -447,6 +471,7 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
   }
 
   void _apply() {
+    _dismissKeyboard();
     Navigator.pop(
       context,
       ClubFilterResult(
@@ -458,6 +483,7 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
   }
 
   void _selectSport(String sport) {
+    _dismissKeyboard();
     setState(() {
       _selectedInterests = {sport};
     });

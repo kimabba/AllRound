@@ -11,6 +11,7 @@ import '../theme/tokens.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -64,6 +65,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
+        bottom: const TournamentSectionBar(
+          selected: TournamentSection.overview,
+        ),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -378,7 +382,8 @@ class _PersonalScheduleCard extends StatelessWidget {
 }
 
 class _HomeSectionHeader extends StatelessWidget {
-  const _HomeSectionHeader({required this.title, this.onAction, this.actionKey});
+  const _HomeSectionHeader(
+      {required this.title, this.onAction, this.actionKey});
 
   final String title;
   final VoidCallback? onAction;

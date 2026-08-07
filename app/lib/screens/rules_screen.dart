@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config.dart';
@@ -12,6 +12,7 @@ import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_skeleton_card.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/tournament_section_bar.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
   const RulesScreen({super.key});
@@ -141,7 +142,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           title: const Text('룰북'),
           actions: _rulesAppBarActions,
         ),
-        body: const _RulesLoadingState(),
+        body: _withTournamentSectionBar(const _RulesLoadingState()),
       );
     }
 
@@ -152,12 +153,14 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           title: const Text('룰북'),
           actions: _rulesAppBarActions,
         ),
-        body: AppEmptyState(
-          icon: Icons.menu_book_outlined,
-          title: '룰북을 불러올 수 없어요',
-          description: _error,
-          actionLabel: '다시 시도',
-          onAction: _load,
+        body: _withTournamentSectionBar(
+          AppEmptyState(
+            icon: Icons.menu_book_outlined,
+            title: '룰북을 불러올 수 없어요',
+            description: _error,
+            actionLabel: '다시 시도',
+            onAction: _load,
+          ),
         ),
       );
     }
@@ -170,14 +173,16 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           actions: _rulesAppBarActions,
         ),
         backgroundColor: cs.surface,
-        body: KeyedSubtree(
-          key: AllRoundE2EKeys.rulesReady,
-          child: _RuleBookBody(
-            grouped: _activeByCat,
-            sport: _activeSport!,
-            query: _query,
-            searchController: _search,
-            usingPreviewData: _usingPreviewData,
+        body: _withTournamentSectionBar(
+          KeyedSubtree(
+            key: AllRoundE2EKeys.rulesReady,
+            child: _RuleBookBody(
+              grouped: _activeByCat,
+              sport: _activeSport!,
+              query: _query,
+              searchController: _search,
+              usingPreviewData: _usingPreviewData,
+            ),
           ),
         ),
       );
@@ -206,28 +211,39 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         ),
       ),
       backgroundColor: cs.surface,
-      body: KeyedSubtree(
-        key: AllRoundE2EKeys.rulesReady,
-        child: TabBarView(
-          controller: _tab,
-          children: [
-            _RuleBookBody(
-              grouped: _tennisByCat,
-              sport: 'tennis',
-              query: _query,
-              searchController: _search,
-              usingPreviewData: _usingPreviewData,
-            ),
-            _RuleBookBody(
-              grouped: _futsalByCat,
-              sport: 'futsal',
-              query: _query,
-              searchController: _search,
-              usingPreviewData: _usingPreviewData,
-            ),
-          ],
+      body: _withTournamentSectionBar(
+        KeyedSubtree(
+          key: AllRoundE2EKeys.rulesReady,
+          child: TabBarView(
+            controller: _tab,
+            children: [
+              _RuleBookBody(
+                grouped: _tennisByCat,
+                sport: 'tennis',
+                query: _query,
+                searchController: _search,
+                usingPreviewData: _usingPreviewData,
+              ),
+              _RuleBookBody(
+                grouped: _futsalByCat,
+                sport: 'futsal',
+                query: _query,
+                searchController: _search,
+                usingPreviewData: _usingPreviewData,
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _withTournamentSectionBar(Widget child) {
+    return Column(
+      children: [
+        const TournamentSectionBar(selected: TournamentSection.rules),
+        Expanded(child: child),
+      ],
     );
   }
 
@@ -255,6 +271,7 @@ class _RuleBookBody extends StatelessWidget {
 
     if (grouped == null || grouped!.isEmpty) {
       return ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.xl,
           AppSpacing.lg,
@@ -282,6 +299,7 @@ class _RuleBookBody extends StatelessWidget {
     final hasQuery = query.isNotEmpty;
 
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
         AppSpacing.lg,

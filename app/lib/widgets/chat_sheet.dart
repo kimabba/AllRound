@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/chat_entry_context.dart';
 import '../screens/chat_screen.dart';
+import '../theme/motion.dart';
 import '../theme/tokens.dart';
 
 Future<void> openChatSheet(
@@ -17,33 +20,110 @@ Future<void> openChatSheet(
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.28),
-    builder: (sheetContext) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.62,
-        minChildSize: 0.46,
-        maxChildSize: 0.94,
-        expand: false,
-        snap: true,
-        snapSizes: const [0.62, 0.94],
-        builder: (sheetBodyContext, scrollController) {
-          return ClipRRect(
-            borderRadius: AppRadius.sheet,
-            child: ChatScreen(
-              embedded: true,
-              scrollController: scrollController,
-              entryContext: entryContext,
-              onExpand: (expandedContext) async {
-                await Navigator.of(sheetContext).maybePop();
-                if (hostContext.mounted) {
-                  hostContext.push('/chat', extra: expandedContext);
-                }
-              },
-            ),
-          );
-        },
-      );
-    },
+    builder: (sheetContext) => _KeyboardAwareChatSheet(
+      entryContext: entryContext,
+      onExpand: (expandedContext) async {
+        await Navigator.of(sheetContext).maybePop();
+        if (hostContext.mounted) {
+          hostContext.push('/chat', extra: expandedContext);
+        }
+      },
+    ),
   );
+}
+
+class _KeyboardAwareChatSheet extends StatefulWidget {
+  const _KeyboardAwareChatSheet({
+    required this.entryContext,
+    required this.onExpand,
+  });
+
+  final ChatEntryContext entryContext;
+  final ValueChanged<ChatEntryContext?> onExpand;
+
+  @override
+  State<_KeyboardAwareChatSheet> createState() =>
+      _KeyboardAwareChatSheetState();
+}
+
+class _KeyboardAwareChatSheetState extends State<_KeyboardAwareChatSheet> {
+  static const _initialSize = 0.62;
+  static const _minSize = 0.46;
+  static const _maxSize = 0.94;
+
+  final _sheetController = DraggableScrollableController();
+  bool _keyboardVisible = false;
+  double? _sizeBeforeKeyboard;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardVisible && !_keyboardVisible) {
+      _sizeBeforeKeyboard =
+          _sheetController.isAttached ? _sheetController.size : _initialSize;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_keyboardVisible || !_sheetController.isAttached) {
+          return;
+        }
+        unawaited(
+          _sheetController.animateTo(
+            _maxSize,
+            duration: AppDuration.medium1,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
+    } else if (!keyboardVisible && _keyboardVisible) {
+      final restoreSize = (_sizeBeforeKeyboard ?? _initialSize)
+          .clamp(_minSize, _maxSize)
+          .toDouble();
+      _sizeBeforeKeyboard = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _keyboardVisible || !_sheetController.isAttached) {
+          return;
+        }
+        unawaited(
+          _sheetController.animateTo(
+            restoreSize,
+            duration: AppDuration.medium1,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
+    }
+    _keyboardVisible = keyboardVisible;
+  }
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      controller: _sheetController,
+      initialChildSize: _initialSize,
+      minChildSize: _minSize,
+      maxChildSize: _maxSize,
+      expand: false,
+      snap: true,
+      snapSizes: const [_initialSize, _maxSize],
+      builder: (sheetBodyContext, scrollController) {
+        return ClipRRect(
+          borderRadius: AppRadius.sheet,
+          child: ChatScreen(
+            embedded: true,
+            scrollController: scrollController,
+            entryContext: widget.entryContext,
+            onExpand: widget.onExpand,
+          ),
+        );
+      },
+    );
+  }
 }
 
 ChatEntryContext chatEntryContextForPath(String location) {
@@ -83,6 +163,12 @@ ChatEntryContext chatEntryContextForPath(String location) {
   if (location.startsWith('/rules')) {
     return const ChatEntryContext(
       screenLabel: '룰북',
+    );
+  }
+
+  if (location.startsWith('/rankings')) {
+    return const ChatEntryContext(
+      screenLabel: '랭킹',
     );
   }
 

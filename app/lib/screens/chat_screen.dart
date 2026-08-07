@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -95,6 +95,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final text = _ctrl.text.trim();
     final chat = ref.read(chatProvider);
     if (text.isEmpty || chat.busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     _ctrl.clear();
 
     chat.addUserMessage(text);
@@ -278,10 +279,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.watch(chatProvider);
     final messages = chat.messages;
     final busy = chat.busy;
+    final compactForKeyboard =
+        widget.embedded && MediaQuery.viewInsetsOf(context).bottom > 0;
 
     final chatBody = Column(
       children: [
-        if (widget.embedded)
+        if (widget.embedded && !compactForKeyboard)
           _EmbeddedChatHeader(
             hasMessages: messages.isNotEmpty,
             busy: busy,
@@ -295,7 +298,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               widget.onExpand?.call(expandedContext);
             },
           ),
-        if (widget.entryContext?.canAttachEntity ?? false)
+        if (!compactForKeyboard &&
+            (widget.entryContext?.canAttachEntity ?? false))
           _EntityContextToggle(
             key: AllRoundE2EKeys.chatContextToggle,
             stateKey: _attachEntryContext
@@ -314,6 +318,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 )
               : ListView.builder(
                   controller: _scroll,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
                     vertical: AppSpacing.md,
@@ -347,6 +353,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           busy: busy,
           onSend: _send,
           onStop: _stopStreaming,
+          showDisclosure: !compactForKeyboard,
         ),
       ],
     );
@@ -565,6 +572,7 @@ class _EmptyHint extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return SingleChildScrollView(
       controller: scrollController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
         AppSpacing.xxl,
@@ -600,11 +608,13 @@ class _InputBar extends StatelessWidget {
   final bool busy;
   final VoidCallback onSend;
   final VoidCallback onStop;
+  final bool showDisclosure;
   const _InputBar({
     required this.controller,
     required this.busy,
     required this.onSend,
     required this.onStop,
+    required this.showDisclosure,
   });
 
   @override
@@ -660,8 +670,9 @@ class _InputBar extends StatelessWidget {
                     final canSend = value.text.trim().isNotEmpty;
                     return _ChatComposerAction(
                       onPressed: busy ? onStop : (canSend ? onSend : null),
-                      icon:
-                          busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
+                      icon: busy
+                          ? Icons.stop_rounded
+                          : Icons.arrow_upward_rounded,
                       tooltip: busy ? '응답 중지' : '메시지 보내기',
                       backgroundColor: busy ? cs.error : cs.primary,
                       foregroundColor: busy ? cs.onError : cs.onPrimary,
@@ -672,8 +683,10 @@ class _InputBar extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            const ChatAiDisclosure(),
+            if (showDisclosure) ...[
+              const SizedBox(height: AppSpacing.sm),
+              const ChatAiDisclosure(),
+            ],
           ],
         ),
       ),
