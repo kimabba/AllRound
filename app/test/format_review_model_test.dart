@@ -9,6 +9,23 @@ void main() {
       'source_url': 'https://example.com/tid-1',
       'format_source_hash': 'hash-1',
       'format_staged': {
+        'regulation_document': {
+          'schema_version': 1,
+          'sections': [
+            {
+              'code': 'registration_payment',
+              'availability': 'present',
+              'blocks': [
+                {
+                  'type': 'key_values',
+                  'entries': [
+                    {'label': '참가비', 'value': '30,000원'},
+                  ],
+                },
+              ],
+            },
+          ],
+        },
         'regulation_fields': [
           {'label': '참가비', 'value': '30,000원'},
           {'label': '', 'value': '버려질 항목'},
@@ -24,6 +41,8 @@ void main() {
     expect(item.sourceUrl, Uri.parse('https://example.com/tid-1'));
     expect(item.staged?.fields, hasLength(1));
     expect(item.staged?.notes, ['주의 사항']);
+    expect(item.staged?.document?.sections.single.code.value,
+        'registration_payment');
     expect(item.flags.single.code, 'masked');
   });
 

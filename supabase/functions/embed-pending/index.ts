@@ -4,6 +4,10 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { serviceClient } from '../_shared/supabase.ts';
 import { embedBatch, toVectorLiteral } from '../_shared/embedding.ts';
 import { normalizeRegulationFields, regulationEmbeddingText } from '../_shared/regulation.ts';
+import {
+  normalizeRegulationDocument,
+  regulationDocumentText,
+} from '../_shared/regulation_document.ts';
 
 /**
  * pg_cron 이 5분마다 호출.
@@ -23,7 +27,7 @@ export interface TournamentSelectSpec {
 export function buildTournamentSelect(): TournamentSelectSpec {
   return {
     columns:
-      'id, title, description, region, format, organizer, regulation_fields, regulation_body, embedding_input_revision',
+      'id, title, description, region, format, organizer, regulation_document, regulation_fields, regulation_body, embedding_input_revision',
     onlyStatus: 'published',
     excludeFormatStatus: ['pending', 'processing'],
   };
@@ -38,6 +42,7 @@ interface PendingTournament {
   organizer: string | null;
   // 요강(regulation): migration 077 에서 임베딩 입력에 포함하기로 결정.
   // regulation_fields 는 jsonb 라서 unknown 으로 받고 사용 시 narrow.
+  regulation_document: unknown;
   regulation_fields: unknown;
   regulation_body: string | null;
   embedding_input_revision: number;
@@ -55,10 +60,13 @@ function tournamentText(t: PendingTournament): string {
     .join(' / ');
   // 요강(요강 fields + 본문)을 임베딩 입력에 포함 → "경기방식/시상/참가자격" 류
   // 질문이 시맨틱 검색에 매칭되도록. 본문은 임베딩 입력 비대화 방지를 위해 cap.
-  const regulation = regulationEmbeddingText(
-    normalizeRegulationFields(t.regulation_fields),
-    t.regulation_body,
-  );
+  const document = normalizeRegulationDocument(t.regulation_document);
+  const regulation = document
+    ? regulationDocumentText(document).slice(0, 2500)
+    : regulationEmbeddingText(
+      normalizeRegulationFields(t.regulation_fields),
+      t.regulation_body,
+    );
   return regulation ? `${base}\n${regulation}` : base;
 }
 

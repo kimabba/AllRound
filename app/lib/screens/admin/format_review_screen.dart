@@ -6,6 +6,7 @@ import '../../models/format_review.dart';
 import '../../services/api.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/tournaments/regulation_document_view.dart';
 
 final formatReviewQueueProvider =
     FutureProvider.autoDispose<List<FormatReviewItem>>((ref) async {
@@ -285,7 +286,8 @@ class _StagedContent extends StatelessWidget {
         staged.notes.isNotEmpty ||
         staged.body != null ||
         staged.prize != null ||
-        staged.format != null;
+        staged.format != null ||
+        staged.document != null;
 
     if (!hasContent) {
       return Text(
@@ -301,42 +303,46 @@ class _StagedContent extends StatelessWidget {
       children: [
         Text('AI 정형화 제안', style: textTheme.titleMedium),
         const SizedBox(height: AppSpacing.md),
-        ...staged.fields.map(
-          (field) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${field.label}  ',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: field.value),
-                ],
+        if (staged.document != null)
+          RegulationDocumentView(document: staged.document!)
+        else ...[
+          ...staged.fields.map(
+            (field) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${field.label}  ',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    TextSpan(text: field.value),
+                  ],
+                ),
+                style: textTheme.bodyMedium,
               ),
-              style: textTheme.bodyMedium,
             ),
           ),
-        ),
-        if (staged.format != null)
-          _LabeledParagraph(label: '진행 방식', value: staged.format!),
-        if (staged.prize != null)
-          _LabeledParagraph(label: '시상', value: staged.prize!),
-        if (staged.description != null)
-          _LabeledParagraph(label: '요약', value: staged.description!),
-        if (staged.notes.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text('유의 사항', style: textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          ...staged.notes.map(
-            (note) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Text('• $note', style: textTheme.bodyMedium),
+          if (staged.format != null)
+            _LabeledParagraph(label: '진행 방식', value: staged.format!),
+          if (staged.prize != null)
+            _LabeledParagraph(label: '시상', value: staged.prize!),
+          if (staged.description != null)
+            _LabeledParagraph(label: '요약', value: staged.description!),
+          if (staged.notes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text('유의 사항', style: textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            ...staged.notes.map(
+              (note) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text('• $note', style: textTheme.bodyMedium),
+              ),
             ),
-          ),
+          ],
+          if (staged.body != null)
+            _LabeledParagraph(label: '상세 요강', value: staged.body!),
         ],
-        if (staged.body != null)
-          _LabeledParagraph(label: '상세 요강', value: staged.body!),
       ],
     );
   }
