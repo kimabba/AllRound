@@ -141,7 +141,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
           GoRoute(
             path: '/rules',
-            builder: (_, __) => catalogAware(RulesScreen.new),
+            builder: (_, state) => catalogAware(
+              () => RulesScreen(
+                initialSport: switch (state.uri.queryParameters['sport']) {
+                  'tennis' => 'tennis',
+                  'futsal' => 'futsal',
+                  _ => null,
+                },
+              ),
+            ),
           ),
           GoRoute(
             path: '/rankings',
