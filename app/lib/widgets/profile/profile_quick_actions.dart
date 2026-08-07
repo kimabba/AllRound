@@ -56,7 +56,7 @@ class ProfileQuickActions extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: '빠른 메뉴'),
+        const SectionHeader(title: 'MY 바로가기'),
         const SizedBox(height: AppSpacing.md),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -108,7 +108,8 @@ class _ProfileQuickAction extends StatelessWidget {
 
     return AppCard(
       onTap: action.onTap,
-      variant: AppCardVariant.outlined,
+      variant: AppCardVariant.filled,
+      backgroundColor: cs.surfaceContainerLow,
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
@@ -117,7 +118,7 @@ class _ProfileQuickAction extends StatelessWidget {
             height: AppSizes.touchTarget,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: AppRadius.card,
+              borderRadius: AppRadius.hero,
             ),
             alignment: Alignment.center,
             child: Icon(action.icon, color: cs.primary, size: 22),
