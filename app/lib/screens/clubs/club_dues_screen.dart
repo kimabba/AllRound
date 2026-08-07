@@ -107,6 +107,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   onTap: initial != null
                       ? null
                       : () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showDatePicker(
                             context: dialogContext,
                             initialDate: month,
@@ -138,6 +139,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   ),
                   trailing: const Icon(Icons.event_outlined),
                   onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     final picked = await showDatePicker(
                       context: dialogContext,
                       initialDate: dueDate ?? month,
@@ -352,8 +354,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
               const SizedBox(width: AppSpacing.sm),
               IconButton.filledTonal(
                 tooltip: '다른 달 장부 만들기',
-                onPressed:
-                    _busy ? null : () => _editPeriod(createNew: true),
+                onPressed: _busy ? null : () => _editPeriod(createNew: true),
                 icon: const Icon(Icons.add_rounded),
               ),
             ],

@@ -48,6 +48,32 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.signupBirthDate), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('이메일 시트는 스크롤하면 키보드 포커스를 해제한다', (tester) async {
+    _setViewport(tester, const Size(320, 568));
+    await tester.pumpWidget(_app(textScale: 1));
+
+    await tester.ensureVisible(find.byKey(AllRoundE2EKeys.emailFlowButton));
+    await tester.tap(find.byKey(AllRoundE2EKeys.emailFlowButton));
+    await tester.pumpAndSettle();
+
+    final emailField = find.byKey(AllRoundE2EKeys.emailField);
+    await tester.tap(emailField);
+    await tester.showKeyboard(emailField);
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+
+    await tester.drag(
+      find.byType(SingleChildScrollView).last,
+      const Offset(0, -120),
+    );
+    await tester.pump();
+
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
 }
 
 Widget _app({required double textScale}) {

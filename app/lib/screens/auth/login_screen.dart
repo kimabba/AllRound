@@ -79,6 +79,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     set(() {
       _busy = true;
       _error = null;
@@ -219,6 +220,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _pickSignupBirthDate({required VoidCallback onChanged}) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
     final latestEligible = _safeAnniversary(now, kMinSignupAge);
     final initial = _signupBirthDate ?? _safeAnniversary(now, 20);
@@ -344,6 +346,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
                 ),
                 child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -551,6 +555,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           builder: (context, constraints) {
             return Center(
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.xl,
                   vertical: AppSpacing.xl,

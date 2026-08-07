@@ -342,6 +342,7 @@ class _ModerationDecisionDialogState extends State<_ModerationDecisionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('관리자 처리'),
       content: SizedBox(
         width: 520,
@@ -357,6 +358,7 @@ class _ModerationDecisionDialogState extends State<_ModerationDecisionDialog> {
               title: const Text('신고된 콘텐츠 삭제'),
             ),
             DropdownButtonFormField<UgcPenaltyType?>(
+              isExpanded: true,
               initialValue: _penaltyType,
               decoration: const InputDecoration(labelText: '사용자 제재'),
               items: [
@@ -370,6 +372,7 @@ class _ModerationDecisionDialogState extends State<_ModerationDecisionDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int?>(
+              isExpanded: true,
               initialValue: _durationDays,
               decoration: const InputDecoration(labelText: '제재 기간'),
               items: const [

@@ -48,7 +48,7 @@
 | `go_router` | 아니오 | 화면 이동·딥링크 경로 | 초기부터 | — |
 | `http` | 아니오 | 일반 네트워크 요청 | 초기부터 | — |
 | `intl` | 아니오 | 날짜·숫자 한국어 표시 | 초기부터 | — |
-| `flutter_markdown` | 아니오 | 챗봇 답변 서식 표시 | 초기부터 | — |
+| `flutter_markdown_plus` | 아니오 | 챗봇 답변·룰북 서식 표시 | **2026-08-07** — Flutter 3.44 호환을 위해 기존 `flutter_markdown`을 대체 | — |
 | `skeletonizer` | 아니오 | 로딩 중 뼈대 화면 | 초기부터 | — |
 | `image` | 아니오 | 업로드 전 이미지 처리(순수 Dart) | 클럽 사진 업로드 | — |
 | `firebase_core` | **예** | Firebase 기반 | 푸시 알림(JY-43) | 미기록 |

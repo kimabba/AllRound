@@ -66,9 +66,10 @@ void main() {
     await pumpHome(tester, load: () => pending.future);
     await tester.pump();
 
-    expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
     expect(find.text('내 활동'), findsOneWidget);
+    await revealHomeContent(tester);
+    expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

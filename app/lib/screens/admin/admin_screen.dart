@@ -237,8 +237,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         ],
       ),
     );
-    if (confirmed != true) return;
     final reason = reasonController.text.trim();
+    reasonController.dispose();
+    if (confirmed != true) return;
     if (reason.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -321,13 +322,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         ],
       ),
     );
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
     if (confirmed != true) return;
     try {
       final api = ref.read(apiProvider);
-      final reason = reasonController.text.trim().isEmpty
-          ? null
-          : reasonController.text.trim();
-      await api.approveTournament(id, approve: false, reason: reason);
+      await api.approveTournament(
+        id,
+        approve: false,
+        reason: reason.isEmpty ? null : reason,
+      );
       await _loadDrafts();
     } catch (e) {
       if (mounted) {

@@ -34,6 +34,13 @@ void main() {
     expect(context.canAttachEntity, isFalse);
   });
 
+  test('랭킹 화면은 대회 하위 문맥을 표시한다', () {
+    final context = chatEntryContextForPath('/rankings');
+
+    expect(context.screenLabel, '랭킹');
+    expect(context.canAttachEntity, isFalse);
+  });
+
   test('바텀시트에서 전체 화면으로 확장할 때 작성 중인 질문을 유지한다', () {
     final context = chatEntryContextForPath('/').copyWith(
       initialMessage: '작성 중인 질문',
@@ -87,6 +94,62 @@ void main() {
       tester.widget<IconButton>(sendButtonFinder).onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('작은 화면에서 키보드가 열리면 채팅 시트가 자동 확장된다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: Builder(
+              builder: (context) => AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () => openChatSheet(
+                  context,
+                  chatEntryContextForPath('/'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
+    await tester.pumpAndSettle();
+
+    var sheet = tester.widget<DraggableScrollableSheet>(
+      find.byType(DraggableScrollableSheet),
+    );
+    expect(sheet.controller?.size, closeTo(0.62, 0.01));
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    sheet = tester.widget<DraggableScrollableSheet>(
+      find.byType(DraggableScrollableSheet),
+    );
+    expect(sheet.controller?.size, closeTo(0.94, 0.01));
+    expect(find.byKey(AllRoundE2EKeys.chatInput), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    tester.view.viewInsets = FakeViewPadding.zero;
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    sheet = tester.widget<DraggableScrollableSheet>(
+      find.byType(DraggableScrollableSheet),
+    );
+    expect(sheet.controller?.size, closeTo(0.62, 0.01));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('전체 화면 확장 콜백에 작성 중인 초안을 전달한다', (tester) async {
