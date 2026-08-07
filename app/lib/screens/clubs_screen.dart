@@ -14,6 +14,7 @@ import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/club_sections.dart';
 import '../utils/club_sort.dart';
+import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
@@ -1093,7 +1094,7 @@ class _ClubSportSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = selectedSports.contains('tennis') ? 'tennis' : 'futsal';
-    final label = selected == 'tennis' ? '테니스' : '풋살';
+    final label = sportLabelFromString(selected);
     final icon = selected == 'tennis'
         ? Icons.sports_tennis_rounded
         : Icons.sports_soccer_rounded;
@@ -1112,9 +1113,15 @@ class _ClubSportSelector extends StatelessWidget {
           tooltip: '주종목 선택',
           initialValue: selected,
           onSelected: onSelected,
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'futsal', child: Text('풋살')),
-            PopupMenuItem(value: 'tennis', child: Text('테니스')),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'futsal',
+              child: Text(sportLabel(Sport.futsal)),
+            ),
+            PopupMenuItem(
+              value: 'tennis',
+              child: Text(sportLabel(Sport.tennis)),
+            ),
           ],
           child: Container(
             constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
