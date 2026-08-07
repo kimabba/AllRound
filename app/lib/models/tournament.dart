@@ -519,6 +519,7 @@ class UserProfile {
   final DateTime? birthDate;
   final String? primaryRegion;
   final String? avatarUrl;
+  final DateTime? phoneVerifiedAt;
 
   const UserProfile({
     this.name,
@@ -526,6 +527,7 @@ class UserProfile {
     this.birthDate,
     this.primaryRegion,
     this.avatarUrl,
+    this.phoneVerifiedAt,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -536,6 +538,9 @@ class UserProfile {
             : DateTime.tryParse(j['birth_date'] as String),
         primaryRegion: j['primary_region'] as String?,
         avatarUrl: j['avatar_url'] as String?,
+        phoneVerifiedAt: j['phone_verified_at'] == null
+            ? null
+            : DateTime.tryParse(j['phone_verified_at'] as String),
       );
 
   /// 앱 활동 표시명: 닉네임 우선, 없으면 실명. 둘 다 없으면 null.
