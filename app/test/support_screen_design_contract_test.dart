@@ -10,6 +10,8 @@ import 'package:allround/theme/tokens.dart';
 import 'package:allround/widgets/profile/profile_settings_widgets.dart';
 import 'package:allround/widgets/profile/profile_records_widgets.dart';
 import 'package:allround/widgets/profile/profile_sports_widgets.dart';
+import 'package:allround/widgets/profile/profile_hero_widgets.dart';
+import 'package:allround/widgets/profile/profile_quick_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -133,6 +135,60 @@ void main() {
 
     expect(find.text('기본 종목'), findsOneWidget);
     expect(find.text(tournament.title), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('MY 요약 카드와 빠른 메뉴는 320px 200% 글자에서 넘치지 않는다', (tester) async {
+    _setViewport(tester, const Size(320, 568));
+    final sports = [
+      UserSport(sport: 'futsal', grade: 'beginner', isPrimary: true),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myTournamentRecordsProvider.overrideWith((ref) async => const []),
+          myClubsProvider.overrideWith((ref) async => const []),
+          userSportsProvider.overrideWith((ref) async => sports),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  ProfileHeroSliver(
+                    initial: '올',
+                    title: '매우 긴 이름을 사용하는 올라운드 사용자',
+                    subtitle: 'long-profile-address@example.com',
+                    infoLine: '실명 사용자 · 만 30세',
+                    sports: AsyncData(sports),
+                    tennisOrgs: const AsyncData([]),
+                    avatarBytes: null,
+                    avatarUrl: null,
+                    onAvatarTap: () {},
+                    onNotificationsTap: () {},
+                    unreadNotificationCount: 3,
+                    onMoreTap: () {},
+                  ),
+                  const SliverPadding(
+                    padding: EdgeInsets.all(AppSpacing.xl),
+                    sliver: SliverToBoxAdapter(child: ProfileQuickActions()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('빠른 메뉴'), findsOneWidget);
+    expect(find.text('프로필 수정'), findsOneWidget);
+    expect(find.text('관심 대회'), findsOneWidget);
+    expect(find.text('내 클럽'), findsOneWidget);
+    expect(find.text('룰북'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
