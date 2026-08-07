@@ -408,7 +408,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     final PreparedClubImage image;
     try {
-      image = await prepareClubImage(picked);
+      // 로고는 club-logos(5MB) 로 올라간다 — prepareClubImage 의 기본값과 같다.
+      image = await prepareClubImage(picked, maxBytes: clubImageMaxBytes);
     } on ClubImagePreparationException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -501,7 +502,11 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     final nextImages = <_PendingIntroImage>[];
     try {
       for (final file in picked.take(remaining)) {
-        final image = await prepareClubImage(file);
+        // 소개 사진 버킷(club-intro-images)은 10MB 까지 받는다.
+        final image = await prepareClubImage(
+          file,
+          maxBytes: clubPhotoMaxBytes,
+        );
         nextImages.add(
           _PendingIntroImage(
             bytes: image.bytes,

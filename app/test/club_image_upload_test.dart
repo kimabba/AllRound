@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:allround/utils/club_image_upload.dart';
@@ -81,6 +82,56 @@ void main() {
       expect(decoded, isNotNull);
       expect(decoded!.textData, isNull);
       expect(decoded.getPixel(0, 0).a, 40);
+    });
+
+    test('불투명한 PNG 는 JPEG 로 내보낸다 (무손실 PNG 는 한도를 넘긴다)', () {
+      final opaque = img.Image(width: 64, height: 64, numChannels: 4);
+      for (final pixel in opaque) {
+        pixel.setRgba(120, 60, 30, 255);
+      }
+
+      final prepared = prepareClubImageBytes(img.encodePng(opaque));
+
+      expect(prepared.extension, 'jpg');
+      expect(prepared.contentType, 'image/jpeg');
+      expect(img.decodeJpg(prepared.bytes), isNotNull);
+    });
+
+    test('한도를 넘는 사진은 화질을 낮춰 담고, 그래도 넘치면 안내한다', () {
+      final noisy = img.Image(width: 400, height: 400);
+      final random = Random(11);
+      for (final pixel in noisy) {
+        pixel.setRgb(
+          random.nextInt(256),
+          random.nextInt(256),
+          random.nextInt(256),
+        );
+      }
+      final source = img.encodeJpg(noisy, quality: 100);
+
+      // 기본 화질로는 넘치지만 낮추면 들어가는 한도
+      final atQuality86 = prepareClubImageBytes(source).bytes.length;
+      final squeezed = prepareClubImageBytes(source, maxBytes: atQuality86 - 1);
+      expect(squeezed.bytes.length, lessThan(atQuality86));
+
+      // 어떤 화질로도 못 담으면 실패를 삼키지 않고 알린다
+      expect(
+        () => prepareClubImageBytes(source, maxBytes: 100),
+        throwsA(isA<ClubImagePreparationException>()),
+      );
+    });
+
+    test('투명도가 있으면 한도를 넘겨도 JPEG 로 바꾸지 않고 알린다', () {
+      final transparent = img.Image(width: 64, height: 64, numChannels: 4)
+        ..setPixelRgba(0, 0, 10, 20, 30, 0);
+
+      expect(
+        () => prepareClubImageBytes(
+          img.encodePng(transparent),
+          maxBytes: 10,
+        ),
+        throwsA(isA<ClubImagePreparationException>()),
+      );
     });
 
     test('rejects malformed bytes even when the header looks supported', () {
