@@ -6,10 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_entry_context.dart';
-import '../models/chat_ui.dart';
 import '../models/moderation.dart';
-import '../services/api.dart';
 import '../state/chat_state.dart';
+import '../state/chat_stream_controller.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
@@ -37,11 +36,8 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  static const _firstByteTimeout = Duration(seconds: 15);
-
   final _ctrl = TextEditingController();
   late final ScrollController _ownedScroll;
-  StreamSubscription<ChatStreamEvent>? _streamSub;
   late bool _attachEntryContext;
 
   ScrollController get _scroll => widget.scrollController ?? _ownedScroll;
@@ -50,10 +46,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final entryContext = widget.entryContext;
     if (!_attachEntryContext || entryContext == null) return null;
     if (!entryContext.canAttachEntity) return null;
-    return {
-      'type': entryContext.entityType!,
-      'id': entryContext.entityId!,
-    };
+    return {'type': entryContext.entityType!, 'id': entryContext.entityId!};
   }
 
   @override
@@ -69,7 +62,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
-    _streamSub?.cancel();
     _ctrl.removeListener(_syncDraft);
     _ctrl.dispose();
     _ownedScroll.dispose();
@@ -77,9 +69,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _stopStreaming() {
-    _streamSub?.cancel();
-    _streamSub = null;
-    ref.read(chatProvider).finishStreaming();
+    ref.read(chatStreamControllerProvider).stop();
   }
 
   void _syncDraft() {
@@ -97,66 +87,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isEmpty || chat.busy) return;
     _ctrl.clear();
 
-    chat.addUserMessage(text);
+    final api = ref.read(apiProvider);
+    final stream = api.chat(
+      message: text,
+      conversationId: chat.conversationId,
+      activeSport: ref.read(activeSportProvider),
+      selectedEntity: _selectedEntryEntity,
+    );
     _scrollToBottom();
 
-    final assistantIdx = chat.lastAssistantIndex;
-    final api = ref.read(apiProvider);
-
-    await _consumeChatStream(
-      api.chat(
-        message: text,
-        conversationId: chat.conversationId,
-        activeSport: ref.read(activeSportProvider),
-        selectedEntity: _selectedEntryEntity,
-      ),
-      assistantIdx,
-    );
+    await ref
+        .read(chatStreamControllerProvider)
+        .start(userMessage: text, stream: stream);
   }
 
   Future<void> _sendWithEntity(
-      String message, String entityType, String entityId) async {
+    String message,
+    String entityType,
+    String entityId,
+  ) async {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
 
-    chat.addUserMessage(message);
+    final api = ref.read(apiProvider);
+    final stream = api.chat(
+      message: message,
+      conversationId: chat.conversationId,
+      activeSport: ref.read(activeSportProvider),
+      selectedEntity: {'type': entityType, 'id': entityId},
+    );
     _scrollToBottom();
 
-    final assistantIdx = chat.lastAssistantIndex;
-    final api = ref.read(apiProvider);
-
-    await _consumeChatStream(
-      api.chat(
-        message: message,
-        conversationId: chat.conversationId,
-        activeSport: ref.read(activeSportProvider),
-        selectedEntity: {'type': entityType, 'id': entityId},
-      ),
-      assistantIdx,
-    );
+    await ref
+        .read(chatStreamControllerProvider)
+        .start(userMessage: message, stream: stream);
   }
 
   /// 대회검색 정제 칩("내 등급만 보기"/"전체 대회 보기") 탭 → refine 페이로드로 재요청(JY-101).
   Future<void> _sendWithRefine(
-      String label, Map<String, dynamic> refine) async {
+    String label,
+    Map<String, dynamic> refine,
+  ) async {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
 
-    chat.addUserMessage(label);
+    final api = ref.read(apiProvider);
+    final stream = api.chat(
+      message: label,
+      conversationId: chat.conversationId,
+      activeSport: ref.read(activeSportProvider),
+      tournamentRefine: refine,
+    );
     _scrollToBottom();
 
-    final assistantIdx = chat.lastAssistantIndex;
-    final api = ref.read(apiProvider);
-
-    await _consumeChatStream(
-      api.chat(
-        message: label,
-        conversationId: chat.conversationId,
-        activeSport: ref.read(activeSportProvider),
-        tournamentRefine: refine,
-      ),
-      assistantIdx,
-    );
+    await ref
+        .read(chatStreamControllerProvider)
+        .start(userMessage: label, stream: stream);
   }
 
   Future<void> _reportAssistantMessage(ChatMessage message) async {
@@ -183,76 +169,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('AI 답변을 신고하지 못했습니다.')));
       }
     }
-  }
-
-  Future<void> _consumeChatStream(
-      Stream<ChatStreamEvent> stream, int assistantIdx) async {
-    final chat = ref.read(chatProvider);
-    final completer = Completer<void>();
-
-    _streamSub = stream.timeout(_firstByteTimeout, onTimeout: (sink) {
-      sink.addError(TimeoutException('응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'));
-      sink.close();
-    }).listen(
-      (evt) {
-        if (!mounted) {
-          _streamSub?.cancel();
-          if (!completer.isCompleted) completer.complete();
-          return;
-        }
-        switch (evt.event) {
-          case 'meta':
-            chat.setConversationId(evt.data['conversation_id'] as String?);
-          case 'delta':
-            chat.appendContent(assistantIdx, evt.data['text'] as String? ?? '');
-            _scrollToBottom();
-          case 'citation':
-            final items = (evt.data['items'] as List?) ?? const [];
-            chat.setCitations(assistantIdx, items.cast<Map<String, dynamic>>());
-          case 'ui':
-            final blocks = ChatUiBlock.listFromEvent(evt.data);
-            if (blocks.isNotEmpty) {
-              chat.addUiBlocks(assistantIdx, blocks);
-              _scrollToBottom();
-            }
-          case 'error':
-            chat.appendContent(assistantIdx,
-                '\n\n[오류] ${_formatChatError(evt.data['message'])}');
-        }
-      },
-      onError: (Object e) {
-        chat.appendContent(assistantIdx, '\n\n[연결 실패] ${_formatChatError(e)}');
-      },
-      onDone: () {
-        chat.finishStreaming();
-        _streamSub = null;
-        if (!completer.isCompleted) completer.complete();
-      },
-    );
-
-    return completer.future;
-  }
-
-  String _formatChatError(Object? error) {
-    final text = error?.toString() ?? '';
-    if (text.contains('API_KEY_INVALID') ||
-        text.contains('API key not valid') ||
-        text.contains('GEMINI_API_KEY')) {
-      // 내부 경로·환경변수명(GEMINI_API_KEY 등)은 사용자에게 노출하지 않는다.
-      return 'AI 코치를 일시적으로 이용할 수 없어요. 잠시 후 다시 시도해 주세요.';
-    }
-    if (text.contains('401') || text.contains('JWT')) {
-      return '로그인 세션을 확인할 수 없습니다. 다시 로그인한 뒤 시도해 주세요.';
-    }
-    if (text.contains('rate limit') || text.contains('429')) {
-      return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
-    }
-    return '챗봇 응답을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   Future<void> sendText(String text) async {
@@ -278,6 +199,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.watch(chatProvider);
     final messages = chat.messages;
     final busy = chat.busy;
+
+    if (messages.isNotEmpty) _scrollToBottom();
 
     final chatBody = Column(
       children: [
@@ -309,9 +232,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         Expanded(
           child: messages.isEmpty
-              ? _EmptyHint(
-                  scrollController: widget.embedded ? _scroll : null,
-                )
+              ? _EmptyHint(scrollController: widget.embedded ? _scroll : null)
               : ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.symmetric(
@@ -422,8 +343,9 @@ class _EmbeddedChatHeader extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'BB',
-                      style:
-                          tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   if (hasMessages)
@@ -660,8 +582,9 @@ class _InputBar extends StatelessWidget {
                     final canSend = value.text.trim().isNotEmpty;
                     return _ChatComposerAction(
                       onPressed: busy ? onStop : (canSend ? onSend : null),
-                      icon:
-                          busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
+                      icon: busy
+                          ? Icons.stop_rounded
+                          : Icons.arrow_upward_rounded,
                       tooltip: busy ? '응답 중지' : '메시지 보내기',
                       backgroundColor: busy ? cs.error : cs.primary,
                       foregroundColor: busy ? cs.onError : cs.onPrimary,
@@ -797,8 +720,9 @@ class _MessageBubble extends StatelessWidget {
                                   color: cs.onSurface,
                                   fontWeight: FontWeight.bold,
                                 ),
-                                listBullet: tt.bodyMedium
-                                    ?.copyWith(color: cs.onSurface),
+                                listBullet: tt.bodyMedium?.copyWith(
+                                  color: cs.onSurface,
+                                ),
                                 strong: tt.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: cs.onSurface,
@@ -810,9 +734,11 @@ class _MessageBubble extends StatelessWidget {
                   // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
                   // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
                   if (msg.citations.isNotEmpty &&
-                      !msg.uiBlocks.any((b) =>
-                          b.tournamentItems.isNotEmpty ||
-                          b.clubItems.isNotEmpty)) ...[
+                      !msg.uiBlocks.any(
+                        (b) =>
+                            b.tournamentItems.isNotEmpty ||
+                            b.clubItems.isNotEmpty,
+                      )) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Divider(
                       color: cs.outlineVariant.withValues(alpha: 0.5),
@@ -891,8 +817,9 @@ String _cleanAssistantContent(String content) {
       // "(id: xxx-xxx, ...)" — 규정/대회 컨텍스트의 raw DB id 인라인 노출 제거
       .replaceAll(RegExp(r'\s*\(id:\s*[a-f0-9\-,\s]+\)'), '')
       .replaceAll(
-          RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'),
-          '')
+        RegExp(r'출처:\s*(?:id\s+)?[a-f0-9\-]+(?:,\s*(?:id\s+)?[a-f0-9\-]+)*'),
+        '',
+      )
       .trim();
 }
 
@@ -926,9 +853,7 @@ class _CitationRow extends StatelessWidget {
           onTap: url != null ? openCitation : null,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSizes.touchTarget,
-            ),
+            constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
             child: Row(
               children: [
                 Icon(

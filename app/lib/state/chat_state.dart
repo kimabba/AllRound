@@ -19,6 +19,7 @@ class ChatNotifier extends ChangeNotifier {
   String? conversationId;
   String draft = '';
   bool busy = false;
+  bool miniBarVisible = false;
 
   void setDraft(String text) {
     draft = text;
@@ -28,6 +29,40 @@ class ChatNotifier extends ChangeNotifier {
     messages.add(ChatMessage(role: 'user', content: text));
     messages.add(ChatMessage(role: 'assistant', content: ''));
     busy = true;
+    miniBarVisible = true;
+    notifyListeners();
+  }
+
+  bool get hasConversation => messages.isNotEmpty;
+
+  String get miniBarPreview {
+    final assistantMessages = messages.reversed.where(
+      (message) => message.role == 'assistant',
+    );
+    final content =
+        assistantMessages.isEmpty ? '' : assistantMessages.first.content.trim();
+    if (busy && content.isEmpty) {
+      return '답변을 작성하고 있어요…';
+    }
+    if (content.isEmpty) {
+      return '볼보이에게 질문을 보냈어요.';
+    }
+    return content
+        .replaceAll(RegExp(r'[\n\r]+'), ' ')
+        .replaceAll(RegExp(r'[*_`#>]'), '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .trim();
+  }
+
+  void showMiniBar() {
+    if (!hasConversation || miniBarVisible) return;
+    miniBarVisible = true;
+    notifyListeners();
+  }
+
+  void hideMiniBar() {
+    if (!miniBarVisible) return;
+    miniBarVisible = false;
     notifyListeners();
   }
 
@@ -68,6 +103,7 @@ class ChatNotifier extends ChangeNotifier {
     conversationId = null;
     draft = '';
     busy = false;
+    miniBarVisible = false;
     notifyListeners();
   }
 }

@@ -31,10 +31,12 @@ import 'screens/rules_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
+import 'state/chat_state.dart';
 import 'state/providers.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
+import 'widgets/mini_ballboy_bar.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -343,6 +345,7 @@ class _MainShell extends ConsumerWidget {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isFullChat = currentPath == '/chat';
     final showChatDock = !isFullChat;
+    final chat = ref.watch(chatProvider);
 
     final entryContext = chatEntryContextForPath(currentPath);
 
@@ -350,13 +353,25 @@ class _MainShell extends ConsumerWidget {
       body: child,
       bottomNavigationBar: keyboardVisible || isFullChat
           ? null
-          : AppBottomNav(
-              currentIndex: idx,
-              onChanged: (index) => context.go(_tabs[index]),
-              onChatTap: showChatDock
-                  ? () => openChatSheet(context, entryContext)
-                  : null,
-              chatHint: '${entryContext.screenLabel} 화면에서 채팅 열기',
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (chat.hasConversation && chat.miniBarVisible)
+                  MiniBallboyBar(
+                    onOpen: () => openChatSheet(context, entryContext),
+                  ),
+                AppBottomNav(
+                  currentIndex: idx,
+                  onChanged: (index) => context.go(_tabs[index]),
+                  onChatTap: showChatDock
+                      ? () {
+                          chat.showMiniBar();
+                          openChatSheet(context, entryContext);
+                        }
+                      : null,
+                  chatHint: '${entryContext.screenLabel} 화면에서 채팅 열기',
+                ),
+              ],
             ),
     );
   }
