@@ -6,6 +6,7 @@ import '../../models/club_event.dart';
 import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
 
 class ClubDuesScreen extends ConsumerStatefulWidget {
@@ -269,6 +270,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: AppBackButton(fallbackLocation: '/clubs/${widget.club.id}'),
         title: const Text('회비 장부'),
         actions: [
           IconButton(

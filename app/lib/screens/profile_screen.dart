@@ -15,6 +15,7 @@ import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
 import '../widgets/profile/my_record_widgets.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
+import '../widgets/profile/profile_quick_actions.dart';
 import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
 import '../widgets/profile/profile_sports_widgets.dart';
@@ -309,7 +310,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
     if (!soundSynced) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
+        const SnackBar(
+            content: Text('알림음 설정은 이 기기에만 저장했어요. 다음 실행 때 서버와 다시 맞춥니다.')),
       );
     }
   }
@@ -360,13 +362,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
               AppSpacing.lg,
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                const ProfileQuickActions(),
+                const SizedBox(height: AppSpacing.xxl),
                 if (profile?.birthDate == null) ...[
                   AppCard(
                     variant: AppCardVariant.outlined,
@@ -397,20 +401,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                const MyClubsSection(),
-                const SizedBox(height: AppSpacing.xl),
                 const MyRecordSection(),
-                const SizedBox(height: AppSpacing.xl),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => context.push('/onboarding'),
-                    icon: const Icon(Icons.manage_accounts_rounded, size: 18),
-                    label: const Text('프로필·생년월일 수정'),
-                  ),
-                ),
+                const SizedBox(height: AppSpacing.xxl),
+                const MyClubsSection(),
+                const SizedBox(height: AppSpacing.xxl),
                 SportsSection(sports: sports),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
                 tennisOrgs.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
@@ -418,13 +414,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ? const SizedBox.shrink()
                       : TennisOrgsSection(orgs: orgs),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
                 ProfileServiceSection(
                   onRulesTap: () => context.push('/rules'),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
                 AppearanceSection(),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
                 AccountSection(
                   ref: ref,
                   unreadNotificationCount: unreadNotificationCount,

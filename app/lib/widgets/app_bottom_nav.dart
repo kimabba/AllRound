@@ -3,15 +3,13 @@ import 'package:flutter/material.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
-/// 하단 냅. 대회·클럽 탭 뒤 가장 오른쪽에 볼보이를 놓는다.
-/// 랭킹과 룰북은 대회 메뉴 안의 2차 탭으로 연다.
-/// 볼보이는 탭 인덱스를 점유하지 않고
-/// 별도 콜백(onChatTap)으로 현재 화면 맥락의 채팅 시트를 연다.
+/// 메인 하단 메뉴. 최종 사용자 동선은 대회·클럽·볼보이·MY 네 가지다.
+/// 룰북은 대회 화면 안에서 열고, 볼보이는 현재 화면의 대화를 시트로 이어간다.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  /// 가장 오른쪽 볼보이 탭 콜백. null이면 볼보이 탭 숨김(채팅 미지원 화면).
+  /// 가운데 볼보이 탭 콜백. null이면 볼보이 탭 숨김(채팅 미지원 화면).
   final VoidCallback? onChatTap;
 
   /// 볼보이 탭 접근성 hint (예: '대회 화면에서 채팅 열기').
@@ -29,10 +27,21 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['대회', '클럽'];
+    const labels = ['대회', '클럽', 'MY'];
+    const icons = [
+      Icons.emoji_events_outlined,
+      Icons.groups_outlined,
+      Icons.person_outline_rounded,
+    ];
+    const selectedIcons = [
+      Icons.emoji_events_rounded,
+      Icons.groups_rounded,
+      Icons.person_rounded,
+    ];
     const keys = [
       AllRoundE2EKeys.navToday,
       AllRoundE2EKeys.navClubs,
+      AllRoundE2EKeys.navProfile,
     ];
 
     Widget tab(int index) {
@@ -46,34 +55,41 @@ class AppBottomNav extends StatelessWidget {
           child: ExcludeSemantics(
             child: InkWell(
               onTap: () => onChanged(index),
-              child: Stack(
-                alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Positioned(
-                    top: 7,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      curve: Curves.easeOut,
-                      width: currentIndex == index ? 20 : 0,
-                      height: 2,
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(AppRadius.xs),
-                      ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    width: 42,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: currentIndex == index
+                          ? cs.primaryContainer
+                          : Colors.transparent,
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Icon(
+                      currentIndex == index
+                          ? selectedIcons[index]
+                          : icons[index],
+                      size: 23,
+                      color: currentIndex == index
+                          ? cs.primary
+                          : cs.onSurfaceVariant,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      labels[index],
-                      style: tt.labelSmall?.copyWith(
-                        color: currentIndex == index
-                            ? cs.onSurface
-                            : cs.onSurfaceVariant,
-                        fontWeight: currentIndex == index
-                            ? FontWeight.w800
-                            : FontWeight.w600,
-                      ),
+                  const SizedBox(height: 2),
+                  Text(
+                    labels[index],
+                    style: tt.labelSmall?.copyWith(
+                      color: currentIndex == index
+                          ? cs.onSurface
+                          : cs.onSurfaceVariant,
+                      fontWeight: currentIndex == index
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                     ),
                   ),
                 ],
@@ -84,8 +100,8 @@ class AppBottomNav extends StatelessWidget {
       );
     }
 
-    // 볼보이 진입 탭 — 메인 기능 강조(아이콘 + primary 라벨). 탭 인덱스를
-    // 점유하지 않고 onChatTap 으로 현재 화면 맥락의 채팅을 연다.
+    // 볼보이는 가운데 고정한다. 탭 인덱스를 점유하지 않고 현재 화면 위에
+    // 대화 시트를 열어 사용자가 다른 화면으로 이동해도 대화를 이어간다.
     Widget chatTab() {
       return Expanded(
         child: Semantics(
@@ -101,10 +117,18 @@ class AppBottomNav extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    size: 22,
-                    color: cs.primary,
+                  Container(
+                    width: 42,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Icon(
+                      Icons.chat_bubble_rounded,
+                      size: 21,
+                      color: cs.onPrimary,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -127,6 +151,13 @@ class AppBottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: 0.98),
         border: Border(top: BorderSide(color: cs.outlineVariant)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -143,6 +174,7 @@ class AppBottomNav extends StatelessWidget {
                 tab(0),
                 tab(1),
                 if (onChatTap != null) chatTab(),
+                tab(2),
               ],
             ),
           ),

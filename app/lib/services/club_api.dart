@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_event.dart';
+import '../models/club_chat.dart';
 import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
@@ -27,7 +28,7 @@ String _verifiedImageExtension(String extension, String contentType) {
   return normalized;
 }
 
-/// 클럽 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
+/// 모임 CRUD·가입·멤버·이벤트·게시판·즐겨찾기 API.
 mixin ClubApi on ApiBase {
   // ── 검색 / 생성 ──────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ mixin ClubApi on ApiBase {
         .toList();
   }
 
-  /// 내 pending 가입 신청 클럽(승인 대기중). 활성 멤버십과 별개 목록.
+  /// 내 pending 가입 신청 모임(승인 대기중). 활성 멤버십과 별개 목록.
   Future<List<Club>> myPendingJoinRequests() async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return const [];
@@ -120,6 +121,7 @@ mixin ClubApi on ApiBase {
     List<String>? meetingDays,
     int? monthlyFee,
     String? genderPreference,
+    String cardColor = '#3156D8',
     double? latitude,
     double? longitude,
   }) async {
@@ -142,6 +144,7 @@ mixin ClubApi on ApiBase {
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
+        'card_color': cardColor,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
       }),
@@ -197,7 +200,7 @@ mixin ClubApi on ApiBase {
     return supabase.storage.from('club-intro-images').getPublicUrl(path);
   }
 
-  /// 단일 클럽 상세 조회 (딥링크 등 ID만 있을 때 사용).
+  /// 단일 모임 상세 조회 (딥링크 등 ID만 있을 때 사용).
   Future<Club> getClub(String clubId) async {
     final uid = supabase.auth.currentUser?.id;
     var query = supabase.from('clubs').select(
@@ -245,9 +248,9 @@ mixin ClubApi on ApiBase {
     required String title,
     required String place,
     required String schedule,
-    required String skillLevel,
+    required List<String> skillLevels,
     required String gender,
-    required String age,
+    required List<String> ages,
     required int fieldCount,
     required int keeperCount,
     required int totalCount,
@@ -262,12 +265,17 @@ mixin ClubApi on ApiBase {
     // assert 가 아니라 예외인 이유: assert 는 릴리스 빌드에서 제거돼 정작 운영에서
     // 무력해지고, 디버그와 릴리스의 동작이 갈린다. 이 앱을 거치지 않는 경로(PostgREST
     // 직접 호출)는 여전히 열려 있다 — 근본 차단은 P3 의 데이터 정규화 후 DB 제약.
-    if (!isAllowedSkillLevelLabel(sport, skillLevel)) {
+    if (skillLevels.isEmpty ||
+        skillLevels.any((level) => !isAllowedSkillLevelLabel(sport, level)) ||
+        (skillLevels.length > 1 && skillLevels.contains(anyGradeLabel))) {
       throw ArgumentError.value(
-        skillLevel,
-        'skillLevel',
+        skillLevels,
+        'skillLevels',
         '${sportLabel(sport)} 등급 정본에 없는 값',
       );
+    }
+    if (ages.isEmpty || (ages.length > 1 && ages.contains('무관'))) {
+      throw ArgumentError.value(ages, 'ages', '연령 선택이 올바르지 않음');
     }
 
     final Object raw = await supabase
@@ -278,9 +286,9 @@ mixin ClubApi on ApiBase {
           'title': title.trim(),
           'place': place.trim(),
           'schedule_text': schedule.trim(),
-          'skill_level': skillLevel,
+          'skill_level': skillLevels.join(' · '),
           'gender_text': gender,
-          'age_text': age,
+          'age_text': ages.join(' · '),
           'position_text': position,
           'field_count': fieldCount,
           'keeper_count': keeperCount,
@@ -448,22 +456,6 @@ mixin ClubApi on ApiBase {
     check(res);
   }
 
-  Future<void> updateClubInquiryLinks(
-    String clubId, {
-    required bool enabled,
-  }) async {
-    final res = await httpPost(
-      uri('clubs-join'),
-      headers: await authHeaders(),
-      body: jsonEncode({
-        'club_id': clubId,
-        'action': 'update_inquiry_links',
-        'enabled': enabled,
-      }),
-    );
-    check(res);
-  }
-
   Future<void> setClubMemberRole({
     required String clubId,
     required String targetUserId,
@@ -585,8 +577,11 @@ mixin ClubApi on ApiBase {
         .whereType<Map>()
         .map((row) => ClubMember.fromJson(Map<String, dynamic>.from(row)))
         .toList();
-    const rank = {'owner': 0, 'manager': 1, 'member': 2};
-    members.sort((a, b) => (rank[a.role] ?? 3).compareTo(rank[b.role] ?? 3));
+    members.sort((a, b) {
+      if (a.joinedAt == null) return b.joinedAt == null ? 0 : 1;
+      if (b.joinedAt == null) return -1;
+      return a.joinedAt!.compareTo(b.joinedAt!);
+    });
     return members;
   }
 
@@ -715,7 +710,6 @@ mixin ClubApi on ApiBase {
         .from('club_events')
         .select('*, club_event_attendees(user_id, status)')
         .eq('club_id', clubId)
-        .isFilter('ended_early_at', null)
         .gte('starts_at', nowIso)
         .order('starts_at');
     final uid = supabase.auth.currentUser?.id;
@@ -757,6 +751,7 @@ mixin ClubApi on ApiBase {
     required DateTime startsAt,
     int? fee,
     int? capacity,
+    String? repeatInterval,
   }) async {
     if (supabase.auth.currentUser == null) {
       throw StateError('Not authenticated');
@@ -774,6 +769,7 @@ mixin ClubApi on ApiBase {
         'starts_at': startsAt.toUtc().toIso8601String(),
         if (fee != null) 'fee': fee,
         if (capacity != null) 'capacity': capacity,
+        if (repeatInterval != null) 'repeat_interval': repeatInterval,
       }),
     );
     check(response);
@@ -782,20 +778,56 @@ mixin ClubApi on ApiBase {
   Future<void> respondEvent(String eventId, {required bool going}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) throw StateError('Not authenticated');
-    try {
-      await supabase.rpc('respond_club_event', params: {
-        'p_event_id': eventId,
-        'p_status': going ? 'going' : 'not_going',
-      });
-    } catch (error) {
-      if (!error.toString().contains('respond_club_event')) rethrow;
-      await supabase.from('club_event_attendees').upsert({
-        'event_id': eventId,
-        'user_id': uid,
-        'status': going ? 'going' : 'not_going',
-        'responded_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'event_id,user_id');
+    await supabase.rpc('respond_club_event', params: {
+      'p_event_id': eventId,
+      'p_status': going ? 'going' : 'not_going',
+    });
+  }
+
+  Future<String> openClubChat({
+    required String clubId,
+    String? otherUserId,
+  }) async {
+    final result = await supabase.rpc('open_club_chat', params: {
+      'p_club_id': clubId,
+      'p_other_user_id': otherUserId,
+    });
+    if (result is! String) {
+      throw const FormatException('대화방 정보를 확인하지 못했습니다.');
     }
+    return result;
+  }
+
+  Future<List<ClubChatMessage>> clubChatMessages(String threadId) async {
+    final rows = await supabase
+        .from('club_chat_messages')
+        .select('id, thread_id, sender_id, body, created_at')
+        .eq('thread_id', threadId)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(300);
+    final messages = (rows as List)
+        .whereType<Map>()
+        .map((row) => ClubChatMessage.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+    return messages.reversed.toList(growable: false);
+  }
+
+  Future<void> sendClubChatMessage({
+    required String threadId,
+    required String body,
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Not authenticated');
+    final text = body.trim();
+    if (text.isEmpty || text.length > 1000) {
+      throw const FormatException('메시지는 1자 이상 1,000자 이하로 입력해주세요.');
+    }
+    await supabase.from('club_chat_messages').insert({
+      'thread_id': threadId,
+      'sender_id': userId,
+      'body': text,
+    });
   }
 
   // ── 즐겨찾기 ─────────────────────────────────────────────────
@@ -867,7 +899,13 @@ mixin ClubApi on ApiBase {
               : '*, users!author_id(name), club_post_comments(id)',
         )
         .eq('club_id', clubId);
-    if (tag != null) query = query.eq('tag', tag);
+    if (tag != null && tag != 'notice') {
+      query = query.or(
+        'tag.eq.$tag,and(tag.eq.notice,notice_visible_tags.cs.{$tag})',
+      );
+    } else if (tag == 'notice') {
+      query = query.eq('tag', tag!);
+    }
     if (searchingAuthor) {
       query = query.ilike('users.name', '%$normalizedAuthor%');
     }
@@ -887,6 +925,7 @@ mixin ClubApi on ApiBase {
     required String body,
     bool isPinned = false,
     List<String> imageUrls = const [],
+    List<String> noticeVisibleTags = const [],
   }) async {
     final userId = supabase.auth.currentUser!.id;
     final payload = <String, Object>{
@@ -896,6 +935,7 @@ mixin ClubApi on ApiBase {
       'title': title,
       'body': body,
       'image_urls': imageUrls,
+      'notice_visible_tags': noticeVisibleTags,
     };
     if (isPinned) payload['is_pinned'] = true;
     final row = await supabase

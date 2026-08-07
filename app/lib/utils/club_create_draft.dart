@@ -5,6 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _allowedSports = {'tennis', 'futsal'};
 const _allowedMeetingDays = {'월', '화', '수', '목', '금', '토', '일'};
 const _allowedGenderPreferences = {'mixed', 'male', 'female'};
+const _allowedCardColors = {
+  '#18376D',
+  '#3156D8',
+  '#176B63',
+  '#6941C6',
+  '#C2413B',
+  '#A15C08',
+};
 
 class ClubCreateDraft {
   const ClubCreateDraft({
@@ -18,6 +26,7 @@ class ClubCreateDraft {
     required this.monthlyFee,
     required this.meetingDays,
     required this.genderPreference,
+    required this.cardColor,
     required this.step,
     required this.hadSelectedImages,
   });
@@ -32,6 +41,7 @@ class ClubCreateDraft {
   final String monthlyFee;
   final List<String> meetingDays;
   final String? genderPreference;
+  final String cardColor;
   final int step;
   final bool hadSelectedImages;
 
@@ -45,6 +55,7 @@ class ClubCreateDraft {
       monthlyFee.trim().isNotEmpty ||
       meetingDays.isNotEmpty ||
       genderPreference != null ||
+      cardColor != '#3156D8' ||
       hadSelectedImages;
 
   String toJsonString() => jsonEncode(<String, Object?>{
@@ -59,6 +70,7 @@ class ClubCreateDraft {
         'monthly_fee': monthlyFee,
         'meeting_days': meetingDays,
         'gender_preference': genderPreference,
+        'card_color': cardColor,
         'step': step,
         'had_selected_images': hadSelectedImages,
       });
@@ -105,6 +117,10 @@ class ClubCreateDraft {
       monthlyFee: _stringValue(decoded['monthly_fee']),
       meetingDays: meetingDays,
       genderPreference: genderPreference,
+      cardColor: decoded['card_color'] is String &&
+              _allowedCardColors.contains(decoded['card_color'])
+          ? decoded['card_color']! as String
+          : '#3156D8',
       step: step,
       hadSelectedImages: decoded['had_selected_images'] == true,
     );

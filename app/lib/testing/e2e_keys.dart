@@ -61,6 +61,9 @@ class AllRoundE2EKeys {
   static const adminScreen = Key('e2e-admin-screen');
 
   static const globalChatDock = Key('e2e-global-chat-dock');
+  static const miniChatBar = Key('e2e-mini-chat-bar');
+  static const miniChatOpen = Key('e2e-mini-chat-open');
+  static const miniChatClose = Key('e2e-mini-chat-close');
   static const embeddedChatSheet = Key('e2e-embedded-chat-sheet');
   static const fullChatScreen = Key('e2e-full-chat-screen');
   static const chatExpandButton = Key('e2e-chat-expand-button');

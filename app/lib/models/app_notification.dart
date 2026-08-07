@@ -44,6 +44,7 @@ class AppNotification {
         'club_approval_request' => '클럽 승인 요청',
         'club_inquiry_received' => '새 클럽 문의',
         'club_inquiry_reply' => '문의 답변',
+        'club_chat_message' => '새 채팅',
         'club_dues_reminder' => '회비 안내',
         'club_mention' => '멘션',
         'club_comment' => '댓글',

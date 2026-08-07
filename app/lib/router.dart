@@ -19,6 +19,7 @@ import 'models/chat_entry_context.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
 import 'screens/clubs/club_inquiry_screen.dart';
+import 'screens/clubs/club_member_chat_screen.dart';
 import 'screens/clubs_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/home_screen.dart';
@@ -30,10 +31,12 @@ import 'screens/rules_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
 import 'screens/tournaments/tournaments_screen.dart';
+import 'state/chat_state.dart';
 import 'state/providers.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
+import 'widgets/mini_ballboy_bar.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -138,7 +141,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
           GoRoute(
             path: '/rules',
-            builder: (_, __) => catalogAware(RulesScreen.new),
+            builder: (_, state) => catalogAware(
+              () => RulesScreen(
+                initialSport: switch (state.uri.queryParameters['sport']) {
+                  'tennis' => 'tennis',
+                  'futsal' => 'futsal',
+                  _ => null,
+                },
+              ),
+            ),
           ),
           GoRoute(
             path: '/rankings',
@@ -250,6 +261,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        path: '/clubs/:id/chat/:threadId',
+        builder: (_, state) => catalogAware(
+          () => ClubMemberChatScreen(
+            clubId: state.pathParameters['id']!,
+            threadId: state.pathParameters['threadId']!,
+            title: '클럽 채팅',
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/clubs/:id/inquiries/manage',
         builder: (_, state) => catalogAware(
           () => ClubInquiryInboxScreen(
@@ -295,13 +316,13 @@ class _MainShell extends ConsumerWidget {
   static const _tabs = <String>[
     '/',
     '/clubs',
+    '/profile',
   ];
 
-  /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다.
-  /// 대회 전체·랭킹·룰북은 대회 하위 화면이므로 위의 분기에서 0을 반환한다.
+  /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
+  /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
   static const _untabbedPaths = [
     '/more',
-    '/profile',
     '/notifications',
     '/favorites',
     '/blocked-users',
@@ -336,6 +357,7 @@ class _MainShell extends ConsumerWidget {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isFullChat = currentPath == '/chat';
     final showChatDock = !isFullChat;
+    final chat = ref.watch(chatProvider);
 
     final entryContext = chatEntryContextForPath(currentPath);
 
@@ -343,13 +365,25 @@ class _MainShell extends ConsumerWidget {
       body: child,
       bottomNavigationBar: keyboardVisible || isFullChat
           ? null
-          : AppBottomNav(
-              currentIndex: idx,
-              onChanged: (index) => context.go(_tabs[index]),
-              onChatTap: showChatDock
-                  ? () => openChatSheet(context, entryContext)
-                  : null,
-              chatHint: '${entryContext.screenLabel} 화면에서 채팅 열기',
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (chat.hasConversation && chat.miniBarVisible)
+                  MiniBallboyBar(
+                    onOpen: () => openChatSheet(context, entryContext),
+                  ),
+                AppBottomNav(
+                  currentIndex: idx,
+                  onChanged: (index) => context.go(_tabs[index]),
+                  onChatTap: showChatDock
+                      ? () {
+                          chat.showMiniBar();
+                          openChatSheet(context, entryContext);
+                        }
+                      : null,
+                  chatHint: '${entryContext.screenLabel} 화면에서 채팅 열기',
+                ),
+              ],
             ),
     );
   }

@@ -5,6 +5,29 @@ export type ValidationResult<T> =
 const meetingDays = new Set(['월', '화', '수', '목', '금', '토', '일']);
 const genderPreferences = new Set(['mixed', 'male', 'female']);
 const maxMonthlyFee = 1_000_000;
+const clubCardColors = new Set([
+  '#18376D',
+  '#3156D8',
+  '#176B63',
+  '#6941C6',
+  '#C2413B',
+  '#A15C08',
+]);
+
+export function parseClubCardColor(
+  value: unknown,
+): ValidationResult<string> {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: '#3156D8' };
+  }
+  if (typeof value !== 'string') {
+    return { ok: false, message: 'card_color is invalid' };
+  }
+  const normalized = value.toUpperCase();
+  return clubCardColors.has(normalized)
+    ? { ok: true, value: normalized }
+    : { ok: false, message: 'card_color is invalid' };
+}
 
 export function parseMeetingDays(
   value: unknown,
@@ -69,8 +92,9 @@ export function parseWebsite(
 
   const website = value.trim();
   if (website === '') return { ok: true, value: null };
+  const normalized = website.includes('://') ? website : `https://${website}`;
   try {
-    const url = new URL(website);
+    const url = new URL(normalized);
     if (
       (url.protocol !== 'http:' && url.protocol !== 'https:') ||
       url.hostname === ''
@@ -80,5 +104,5 @@ export function parseWebsite(
   } catch {
     return { ok: false, message: 'website must be a valid HTTP(S) URL' };
   }
-  return { ok: true, value: website };
+  return { ok: true, value: normalized };
 }

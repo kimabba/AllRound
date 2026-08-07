@@ -99,16 +99,23 @@ String? clubMonthlyFeeInputError(String? value) {
 }
 
 String? clubWebsiteInputError(String? value) {
-  final raw = value?.trim() ?? '';
+  final raw = normalizeClubWebsiteInput(value);
   if (raw.isEmpty) return null;
 
   final uri = Uri.tryParse(raw);
   if (uri == null ||
       (uri.scheme != 'http' && uri.scheme != 'https') ||
       uri.host.isEmpty) {
-    return '웹사이트 주소는 http:// 또는 https://로 입력해주세요';
+    return '올바른 웹사이트 주소를 입력해주세요';
   }
   return null;
+}
+
+/// 사용자가 `example.com`처럼 입력해도 바로 열 수 있는 HTTPS 주소로 만든다.
+String normalizeClubWebsiteInput(String? value) {
+  final raw = value?.trim() ?? '';
+  if (raw.isEmpty || raw.contains('://')) return raw;
+  return 'https://$raw';
 }
 
 String clubMemberCountLabel(int count) => '총 ${count < 0 ? 0 : count}명';
