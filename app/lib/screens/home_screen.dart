@@ -10,6 +10,7 @@ import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
+import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
@@ -212,8 +213,11 @@ class _TournamentHomeControls extends StatelessWidget {
                 icon: selectedSport == 'tennis'
                     ? Icons.sports_tennis_rounded
                     : Icons.sports_soccer_rounded,
-                label: '내 주종목 ${selectedSport == 'tennis' ? '테니스' : '풋살'}',
-                values: const {'futsal': '풋살', 'tennis': '테니스'},
+                label: '내 주종목 ${sportLabelFromString(selectedSport)}',
+                values: {
+                  'futsal': sportLabel(Sport.futsal),
+                  'tennis': sportLabel(Sport.tennis),
+                },
                 selectedValue: selectedSport,
                 onSelected: onSportSelected,
                 emphasized: true,
