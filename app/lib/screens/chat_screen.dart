@@ -78,7 +78,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _resetConversation() {
     _ctrl.clear();
-    ref.read(chatProvider).reset();
+    ref.read(chatStreamControllerProvider).resetConversation();
   }
 
   Future<void> _send() async {

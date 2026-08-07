@@ -101,6 +101,10 @@ create policy club_chat_messages_insert on public.club_chat_messages
   for insert to authenticated
   with check (
     sender_id = (select auth.uid())
+    and (select public.has_accepted_current_ugc_terms())
+    and not (select public.has_active_ugc_penalty(
+      array['community_restriction']::public.ugc_penalty_type[]
+    ))
     and public.can_access_club_chat(thread_id)
   );
 
@@ -252,7 +256,10 @@ revoke all on public.club_chat_threads, public.club_chat_participants,
   public.club_chat_messages from anon, authenticated;
 grant select on public.club_chat_threads, public.club_chat_participants
   to authenticated, service_role;
-grant select, insert on public.club_chat_messages to authenticated, service_role;
+grant select on public.club_chat_messages to authenticated, service_role;
+grant insert (thread_id, sender_id, body) on public.club_chat_messages
+  to authenticated;
+grant insert on public.club_chat_messages to service_role;
 grant insert, update, delete on public.club_chat_threads,
   public.club_chat_participants to service_role;
 

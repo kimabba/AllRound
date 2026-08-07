@@ -53,4 +53,26 @@ void main() {
     expect(chat.messages, hasLength(2));
     await events.close();
   });
+
+  test('reset cancels an active stream before clearing messages', () async {
+    final chat = ChatNotifier();
+    final controller = ChatStreamController(chat);
+    final events = StreamController<ChatStreamEvent>();
+
+    final completed = controller.start(
+      userMessage: '질문',
+      stream: events.stream,
+    );
+    events.add(ChatStreamEvent('delta', {'text': '받은 답변'}));
+    await Future<void>.delayed(Duration.zero);
+
+    controller.resetConversation();
+    await completed;
+    events.add(ChatStreamEvent('delta', {'text': '늦은 답변'}));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(chat.messages, isEmpty);
+    expect(chat.busy, isFalse);
+    await events.close();
+  });
 }

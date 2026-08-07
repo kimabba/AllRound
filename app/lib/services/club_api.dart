@@ -803,12 +803,14 @@ mixin ClubApi on ApiBase {
         .from('club_chat_messages')
         .select('id, thread_id, sender_id, body, created_at')
         .eq('thread_id', threadId)
-        .order('created_at')
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
         .limit(300);
-    return (rows as List)
+    final messages = (rows as List)
         .whereType<Map>()
         .map((row) => ClubChatMessage.fromJson(Map<String, dynamic>.from(row)))
         .toList(growable: false);
+    return messages.reversed.toList(growable: false);
   }
 
   Future<void> sendClubChatMessage({

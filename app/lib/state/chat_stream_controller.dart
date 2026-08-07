@@ -67,6 +67,13 @@ class ChatStreamController {
     _activeCompleter = null;
   }
 
+  /// 인증 전환이나 사용자의 초기화 요청에서는 구독을 먼저 끊어야 한다.
+  /// 그렇지 않으면 늦게 도착한 delta가 비워진 메시지 인덱스를 갱신할 수 있다.
+  void resetConversation() {
+    stop();
+    _chat.reset();
+  }
+
   void dispose() {
     final completer = _activeCompleter;
     _requestId += 1;

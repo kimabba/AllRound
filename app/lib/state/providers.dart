@@ -170,6 +170,54 @@ final activeSportProvider = Provider<String?>((ref) {
   return primarySportFrom(sports);
 });
 
+typedef HomeTournamentSearch = Future<List<Tournament>> Function({
+  required String sport,
+  required bool onlyMyGrade,
+  required int limit,
+});
+
+/// 홈에서 종목별 결과가 서로의 50건 제한을 잠식하지 않도록 각각 조회한다.
+Future<List<Tournament>> loadHomeTournamentsBySport({
+  required bool hasGradeBasis,
+  required DateTime now,
+  required HomeTournamentSearch search,
+}) async {
+  const sports = ['futsal', 'tennis'];
+  final matchedBySport = await Future.wait(
+    sports.map(
+      (sport) => search(
+        sport: sport,
+        onlyMyGrade: hasGradeBasis,
+        limit: 50,
+      ),
+    ),
+  );
+  final today = DateTime(now.year, now.month, now.day);
+  final result = <Tournament>[];
+
+  for (var index = 0; index < sports.length; index += 1) {
+    final matched = matchedBySport[index];
+    final hasUpcoming = matched.any((item) => !item.startDate.isBefore(today));
+    if (hasGradeBasis && !hasUpcoming) {
+      try {
+        result.addAll(
+          await search(
+            sport: sports[index],
+            onlyMyGrade: false,
+            limit: 50,
+          ),
+        );
+        continue;
+      } catch (_) {
+        // fallback 조회 실패 시 해당 종목의 1차 결과라도 보존한다.
+      }
+    }
+    result.addAll(matched);
+  }
+
+  return result;
+}
+
 /// 대회 홈은 사용자가 화면에서 종목을 바꿀 수 있으므로 두 종목을 함께 받아오고,
 /// 화면에서 선택한 종목만 즉시 보여준다.
 final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
@@ -180,25 +228,19 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   // 등급·협회 등록이 하나도 없으면 자격 매칭이 전부 실패해 목록이 빈다.
   // 그 경우엔 전체 published 를 보여준다(등록이 있으면 내 등급 필터 유지).
   final hasGradeBasis = sports.isNotEmpty || tennisOrgs.isNotEmpty;
-  final matched = await api.searchTournaments(
-    sport: null,
-    onlyMyGrade: hasGradeBasis,
-    limit: 50,
-  );
   // 임시책(지역↔KATO 등급 대응표 완성 전): 내 등급 매칭 중 '다가오는' 대회가
-  // 하나도 없으면 같은 종목 전체 대회로 fallback 해 추천이 비지 않게 한다.
+  // 하나도 없는 종목만 전체 대회로 fallback 해 추천이 비지 않게 한다.
   // 예) 광주 등급 유저에게 8월 KATO 전국대회가 등급 불일치로 전부 걸러지는 경우.
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final hasUpcoming = matched.any((t) => !t.startDate.isBefore(today));
-  if (hasGradeBasis && !hasUpcoming) {
-    try {
-      return await api.searchTournaments(onlyMyGrade: false, limit: 50);
-    } catch (_) {
-      return matched; // fallback 조회 실패 시 1차 결과라도 보존 (codex P2)
-    }
-  }
-  return matched;
+  return loadHomeTournamentsBySport(
+    hasGradeBasis: hasGradeBasis,
+    now: DateTime.now(),
+    search: ({required sport, required onlyMyGrade, required limit}) =>
+        api.searchTournaments(
+          sport: sport,
+          onlyMyGrade: onlyMyGrade,
+          limit: limit,
+        ),
+  );
 });
 
 /// 홈 노출용 팀원 모집글 — 모집중만, 풋살 우선, 상위 4개.

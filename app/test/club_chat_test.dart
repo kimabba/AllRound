@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:allround/models/club_chat.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,5 +29,13 @@ void main() {
     });
 
     expect(message.senderId, isNull);
+  });
+
+  test('최신 메시지 300개를 조회한 뒤 시간순으로 반환한다', () {
+    final source = File('lib/services/club_api.dart').readAsStringSync();
+
+    expect(source, contains(".order('created_at', ascending: false)"));
+    expect(source, contains(".order('id', ascending: false)"));
+    expect(source, contains('return messages.reversed.toList'));
   });
 }
