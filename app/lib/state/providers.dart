@@ -120,8 +120,7 @@ final myTournamentRecordsProvider =
 });
 
 /// 내 협회 전적(연결 승인된 경우에만 행이 온다)
-final myPlayerResultsProvider =
-    FutureProvider<List<PlayerResult>>((ref) async {
+final myPlayerResultsProvider = FutureProvider<List<PlayerResult>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
   return api.myPlayerResults();
@@ -171,18 +170,18 @@ final activeSportProvider = Provider<String?>((ref) {
   return primarySportFrom(sports);
 });
 
-/// 홈 자동 필터 결과 (activeSportProvider 기반)
+/// 대회 홈은 사용자가 화면에서 종목을 바꿀 수 있으므로 두 종목을 함께 받아오고,
+/// 화면에서 선택한 종목만 즉시 보여준다.
 final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
-  final sport = ref.watch(activeSportProvider);
   final sports = ref.watch(userSportsProvider).value ?? const [];
   final tennisOrgs = ref.watch(userTennisOrgsProvider).value ?? const [];
   // 등급·협회 등록이 하나도 없으면 자격 매칭이 전부 실패해 목록이 빈다.
   // 그 경우엔 전체 published 를 보여준다(등록이 있으면 내 등급 필터 유지).
   final hasGradeBasis = sports.isNotEmpty || tennisOrgs.isNotEmpty;
   final matched = await api.searchTournaments(
-    sport: sport,
+    sport: null,
     onlyMyGrade: hasGradeBasis,
     limit: 50,
   );
@@ -194,7 +193,7 @@ final homeTournamentsProvider = FutureProvider<List<Tournament>>((ref) async {
   final hasUpcoming = matched.any((t) => !t.startDate.isBefore(today));
   if (hasGradeBasis && !hasUpcoming) {
     try {
-      return await api.searchTournaments(sport: sport, onlyMyGrade: false, limit: 50);
+      return await api.searchTournaments(onlyMyGrade: false, limit: 50);
     } catch (_) {
       return matched; // fallback 조회 실패 시 1차 결과라도 보존 (codex P2)
     }
