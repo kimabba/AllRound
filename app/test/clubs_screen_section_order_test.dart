@@ -13,7 +13,7 @@ void main() {
       '_buildClubDiscoveryResults(',
       search,
     );
-    final mine = buildSource.indexOf("title: '나의 클럽'");
+    final mine = buildSource.indexOf('_MyClubsCarousel(');
     final nearby = buildSource.indexOf('_buildNearbyClubsSection');
     final recruiting = buildSource.indexOf('TeamRecruitingBoard(');
     final recommended = buildSource.indexOf(

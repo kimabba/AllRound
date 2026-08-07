@@ -213,10 +213,7 @@ class TeamRecruitingPostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final isFutsal = post.sport == 'futsal';
     final accent = post.isClosed ? cs.outline : cs.primary;
-    final chipColor =
-        post.isClosed ? cs.surfaceContainerHighest : cs.primaryContainer;
 
     return AppCard(
       onTap: onTap,
@@ -232,21 +229,6 @@ class TeamRecruitingPostCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: chipColor,
-                      borderRadius: BorderRadius.circular(AppRadius.xl),
-                    ),
-                    child: Icon(
-                      isFutsal
-                          ? Icons.sports_soccer_rounded
-                          : Icons.sports_tennis_rounded,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,13 +239,11 @@ class TeamRecruitingPostCard extends StatelessWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             RecruitingStatusPill(isClosed: post.isClosed),
-                            Text(
-                              sportLabelFromString(post.sport),
-                              style: tt.labelMedium?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                            Text(post.clubName,
+                                style: tt.labelMedium?.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w900,
+                                )),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -273,14 +253,6 @@ class TeamRecruitingPostCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: tt.titleSmall?.copyWith(
                             fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          post.clubName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -304,24 +276,71 @@ class TeamRecruitingPostCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          _RecruitingFacts(post: post),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
             children: [
-              MiniInfoChip(icon: Icons.place_rounded, label: post.region),
-              MiniInfoChip(icon: Icons.schedule_rounded, label: post.schedule),
-              MiniInfoChip(icon: Icons.stars_rounded, label: post.grade),
-              MiniInfoChip(icon: Icons.groups_rounded, label: post.countLabel),
+              Icon(Icons.place_outlined, size: 15, color: cs.onSurfaceVariant),
+              const SizedBox(width: 3),
+              Expanded(
+                child: Text(
+                  '${post.region} · ${post.age} · ${post.gender}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+              Text(
+                post.cost,
+                style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '${post.place} · ${post.gender} · ${post.age} · ${post.cost}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecruitingFacts extends StatelessWidget {
+  const _RecruitingFacts({required this.post});
+
+  final RecruitingPostPreview post;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        _Fact(label: post.grade),
+        _Fact(label: post.countLabel),
+        if (post.schedule.trim().isNotEmpty) _Fact(label: post.schedule),
+      ],
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(fontWeight: FontWeight.w800),
       ),
     );
   }
