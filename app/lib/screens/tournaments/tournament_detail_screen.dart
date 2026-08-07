@@ -17,6 +17,7 @@ import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/tournaments/regulation_document_view.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
   const TournamentDetailScreen({super.key, required this.tournamentId});
@@ -431,6 +432,21 @@ class _DetailBody extends StatelessWidget {
     BuildContext context, {
     required bool hasDescription,
   }) {
+    final document = t.regulationDocument;
+    if (document != null && !document.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: RegulationDocumentView(document: document),
+        ),
+      ];
+    }
+
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = t.regulationFields
