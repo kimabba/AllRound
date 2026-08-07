@@ -686,7 +686,7 @@ class _FriendActivitySummary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '친구가 참여하는 대회와 클럽 일정을 모아봤어요.',
+            '친구가 참여하는 대회와 클럽 모임을 모아봤어요.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.3,

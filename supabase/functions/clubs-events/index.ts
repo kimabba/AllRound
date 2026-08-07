@@ -24,6 +24,25 @@ function optionalInteger(value: unknown, minimum: number): number | null {
   return Number.isInteger(value) && Number(value) >= minimum ? Number(value) : null;
 }
 
+function repeatInterval(value: unknown): 'weekly' | 'monthly' | null {
+  return value === 'weekly' || value === 'monthly' ? value : null;
+}
+
+function nextMonthlyOccurrence(base: Date, offset: number): Date {
+  const year = base.getUTCFullYear();
+  const month = base.getUTCMonth() + offset;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(
+    year,
+    month,
+    Math.min(base.getUTCDate(), lastDay),
+    base.getUTCHours(),
+    base.getUTCMinutes(),
+    base.getUTCSeconds(),
+    base.getUTCMilliseconds(),
+  ));
+}
+
 Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -111,6 +130,12 @@ Deno.serve(withCors(async (req) => {
   const locationText = optionalText(rawBody.location_text, 300);
   const fee = optionalInteger(rawBody.fee, 0);
   const capacity = optionalInteger(rawBody.capacity, 1);
+  const repeat = repeatInterval(rawBody.repeat_interval);
+  if (
+    rawBody.repeat_interval !== null && rawBody.repeat_interval !== undefined && repeat === null
+  ) {
+    return errorResponse('Invalid repeat interval', 400);
+  }
   // 길이 초과는 null 로 바뀌므로, 값이 들어왔는데 null 이면 조용히 버리지 말고
   // 오류로 돌려준다(입력이 사라진 채 생성 성공하는 것을 막는다).
   if (
@@ -135,20 +160,32 @@ Deno.serve(withCors(async (req) => {
   );
   if (accessError) return errorResponse(accessError, 403);
 
-  const { data: event, error: eventError } = await supabase
-    .from('club_events')
-    .insert({
+  // 정기 모임은 첫 모임을 포함해 앞으로 12회 생성한다. 각 모임은 독립적으로
+  // 참석·조기 종료·삭제할 수 있고, 반복 주기는 목록의 표시 정보로 남긴다.
+  const occurrenceCount = repeat === null ? 1 : 12;
+  const eventRows = Array.from({ length: occurrenceCount }, (_, index) => {
+    const occurrence = repeat === 'weekly'
+      ? new Date(startsAt.getTime() + index * 7 * 24 * 60 * 60 * 1000)
+      : repeat === 'monthly'
+      ? nextMonthlyOccurrence(startsAt, index)
+      : startsAt;
+    return {
       club_id: clubId,
       created_by: auth.user.id,
       title,
       description,
       location_text: locationText,
-      starts_at: startsAt.toISOString(),
+      starts_at: occurrence.toISOString(),
       fee,
       capacity,
-    })
-    .select()
-    .single();
+      repeat_interval: repeat,
+    };
+  });
+  const { data: events, error: eventError } = await supabase
+    .from('club_events')
+    .insert(eventRows)
+    .select();
+  const event = events?.[0];
   if (eventError || !event) {
     return errorResponse(eventError?.message ?? 'Event creation failed', 500);
   }
@@ -185,7 +222,7 @@ Deno.serve(withCors(async (req) => {
       createNotification(supabase, {
         userId,
         type: 'club_event',
-        title: `${clubName} 새 일정`,
+        title: `${clubName} 새 모임`,
         body: title,
         referenceType: 'club_event',
         referenceId: event.id,
@@ -200,6 +237,7 @@ Deno.serve(withCors(async (req) => {
   return jsonResponse(
     {
       event,
+      created_count: events?.length ?? 1,
       notified_count: recipients.length - notificationFailures,
       notification_failed_count: notificationFailures,
     },

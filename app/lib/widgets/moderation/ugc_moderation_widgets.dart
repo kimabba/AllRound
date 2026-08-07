@@ -37,6 +37,7 @@ Future<bool> ensureUgcPermission(
   WidgetRef ref,
   UgcActionKind action,
 ) async {
+  FocusManager.instance.primaryFocus?.unfocus();
   try {
     var access = await ref.read(apiProvider).myUgcAccess();
     if (!access.termsAccepted) {
@@ -103,6 +104,7 @@ Future<bool> _showUgcTermsDialog(BuildContext context) async {
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
         title: const Text('커뮤니티 이용약관 동의'),
+        scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,6 +236,7 @@ class _UgcReportSheetState extends ConsumerState<_UgcReportSheet> {
 
   Future<void> _pickImages() async {
     if (_images.length >= 3) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final files = await ImagePicker().pickMultiImage(
       maxWidth: 1800,
       maxHeight: 1800,
@@ -271,6 +274,7 @@ class _UgcReportSheetState extends ConsumerState<_UgcReportSheet> {
 
   Future<void> _submit() async {
     if (_busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     final api = ref.read(apiProvider);
     final paths = <String>[];
@@ -320,6 +324,7 @@ class _UgcReportSheetState extends ConsumerState<_UgcReportSheet> {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
           0,

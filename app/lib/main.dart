@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -15,12 +18,14 @@ import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
     if (dart.library.html) 'services/notifications_web.dart';
 import 'services/notification_events.dart';
-import 'state/chat_state.dart';
+import 'services/release_gate.dart';
+import 'state/chat_stream_controller.dart';
 import 'state/providers.dart';
 import 'state/theme_provider.dart';
 import 'theme/app_theme.dart';
 import 'utils/grade_labels.dart';
 import 'widgets/allround_logo.dart';
+import 'widgets/update_required_view.dart';
 
 bool _allRoundServicesInitialized = false;
 
@@ -71,14 +76,40 @@ Future<void> initializeAllRoundServices({
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeAllRoundServices();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeAllRoundServices();
+    await _initCrashlytics();
 
-  // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
-  // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
-  runApp(
-    ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
-  );
+    // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
+    // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
+    runApp(
+      ProviderScope(retry: (_, __) => null, child: const MatchUpApp()),
+    );
+  }, (error, stack) {
+    // Firebase 초기화 자체가 실패했으면(구성 파일 없는 개발환경 등) Firebase.apps 가
+    // 비어있다 — 이때 FirebaseCrashlytics.instance 를 부르면 "기본 앱 없음" 예외가
+    // 새로 나면서 원래 에러 처리를 덮어버린다.
+    if (!kIsWeb && Firebase.apps.isNotEmpty) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
+  });
+}
+
+/// firebase_crashlytics 는 web 을 지원하지 않는다. 구성 파일(GoogleService-Info.plist /
+/// google-services.json) 이 없는 개발 환경에서는 조용히 skip한다(notifications.dart 와 동일 정책).
+Future<void> _initCrashlytics() async {
+  if (kIsWeb) return;
+  try {
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+  } catch (_) {
+    return;
+  }
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 }
 
 class MatchUpApp extends ConsumerWidget {
@@ -92,7 +123,7 @@ class MatchUpApp extends ConsumerWidget {
         final nextUserId = next.value?.session?.user.id;
         if (previousUserId == nextUserId) return;
 
-        ref.read(chatProvider).reset();
+        ref.read(chatStreamControllerProvider).resetConversation();
         if (previousUserId != null) {
           unawaited(clearLocalUserPreferences(previousUserId));
         }
@@ -226,6 +257,10 @@ class _AllRoundStartupSplash extends StatefulWidget {
 class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   bool _visible = true;
 
+  /// 최소 지원 빌드 미달이면 여기에 게이트가 담기고, 앱 대신 업데이트 화면이 나간다.
+  /// null 이면 통과 — 조회 실패도 null 이다(fail-open, release_gate.dart 참고).
+  ReleaseGate? _blockingGate;
+
   @override
   void initState() {
     super.initState();
@@ -238,6 +273,11 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   Future<void> _dismissSplashWhenReady() async {
     final waits = <Future<void>>[
       Future<void>.delayed(const Duration(milliseconds: 1800)),
+      // 최소 지원 빌드 확인. 어차피 기다리는 1800ms 안에 끝나므로 체감 지연이 없다.
+      // 느리면 상한 3초에서 포기하고 통과시킨다(막지 않는 쪽이 안전한 실패다).
+      checkForcedUpdate(Supabase.instance.client)
+          .timeout(const Duration(milliseconds: 3000), onTimeout: () => null)
+          .then((gate) => _blockingGate = gate),
     ];
     if (Supabase.instance.client.auth.currentSession != null) {
       waits.add(
@@ -269,7 +309,11 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
         // 화면들이 카탈로그 로드 전 fallback 라벨로 먼저 빌드되고, plain singleton
         // 이라 리빌드 트리거가 없어 stale kato 라벨이 남는다. child 를 로드 완료
         // 후 최초 빌드시켜 첫 프레임부터 kato 한글 라벨이 나오게 한다.
-        if (!_visible) widget.child,
+        if (!_visible)
+          if (_blockingGate case final gate?)
+            UpdateRequiredView(gate: gate)
+          else
+            widget.child,
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(

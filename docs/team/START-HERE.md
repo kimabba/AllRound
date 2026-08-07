@@ -75,7 +75,7 @@
 | 🔴 | JY-113 구글 로그아웃 세션 잔존 버그 | **[드론]** | signOut 스코프/OAuth 쿠키 |
 | 🔴 | JY-114 정책·법무·컴플라이언스 체크리스트 | **[kimabba/백과장]** | 개인정보·약관·데이터고지·리스팅, due 7/14 |
 | 🔴 | JY-115 클럽 UGC 신고·차단(애플 1.2) | **[시리]** | UGC 앱 제출 블로커, due 7/15 |
-| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 7/14, 불변. redirect `io.matchup.app` 표기 확인 |
+| 🔴 | JY-68 식별자 확정 | **[kimabba 결정 → 드론 반영]** | 딥링크 스킴 `kr.allround.app` 유지, iOS Bundle ID는 `kr.jyoung.allround` |
 | ✅결정 | 애플 로그인 생략 · 카카오 출시후로 연기(JY-7) | **[kimabba]** | **구글 + 이메일**로 진행. 이메일 로그인이 애플 4.8 면제 |
 | High | JY-1 스토어 에셋 | **[백과장]** | 아이콘/스플래시/스크린샷 |
 | High | JY-6 메타데이터·릴리스 빌드 준비 | **[드론]** | dev-auth 프로덕션 차단 포함 |
@@ -138,6 +138,54 @@ Linear backlog에 보관. 시연/제출 이후.
 
 ---
 
+## 5-2. PR·이슈는 쉬운 한글로 쓴다 (Discord 알림 규칙) 💬
+
+**PR·이슈에 쓴 글은 그대로 Discord로 흘러간다.** 팀에는 개발자가 아닌 사람이 있고, 알림만 보고 "무슨 작업을 한 건지" 알 수 있어야 한다. 읽는 사람은 리뷰어가 아니라 **kimabba와 백과장**이라고 생각하고 쓴다.
+
+### 지켜야 할 것
+
+1. **제목은 무엇이 달라지는지 한글로.** 타입 접두사(`fix:` `feat:` `docs:`)는 그대로 두고, 뒤를 사람 말로 쓴다.
+2. **본문 맨 위에 세 줄을 먼저 쓴다.** 이 세 줄만 읽어도 이해되게 한다.
+   - **무엇이 달라지나** — 앱·운영에서 눈에 보이는 변화
+   - **왜 했나** — 무슨 문제가 있었나
+   - **확인하는 법** — 어디를 보면 되나
+3. **전문용어는 설명 없이 쓰지 않는다.** 꼭 필요하면 괄호로 한 번 풀어준다.
+   `RLS(로그인한 사람만 자기 데이터를 보게 막는 DB 잠금장치)`
+4. **기술 상세는 아래로 민다.** 파일명·함수명·SQL은 본문 뒤쪽 "기술 메모"에 모은다. 지우라는 게 아니라 **순서를 바꾸라는 것**이다.
+5. **숫자로 말한다.** "개선했다"보다 "매일 6번씩 나던 실패가 0번이 됐다".
+
+### 예시
+
+❌ **나쁜 예 — 알림만 보면 뭘 한 건지 모른다**
+```
+fix(ranking): retire gj/jn m_rookie division — parity sync
+
+MEMBER_KIND_SUFFIX 에서 제외하고 tennis_divisions is_active=false.
+division_fallback.json 과 grade_labels.dart 동기화. RLS 영향 없음.
+```
+
+⭕ **좋은 예 — 알림만 보고 이해된다**
+```
+fix(ranking): 남자신인부 폐지 — 협회가 일반부로 합쳤습니다
+
+**무엇이 달라지나** — 랭킹 화면에서 항상 비어 있던 "남자신인부"가 목록에서 사라집니다.
+**왜 했나** — 협회가 이 부서를 없앴는데 앱은 계속 찾고 있어서, 매일 6번씩 크롤 실패가 났습니다.
+**확인하는 법** — 앱 랭킹 탭에서 부서 목록에 남자신인부가 없으면 됩니다. 여자신인부는 그대로 있어야 합니다.
+
+## 기술 메모
+- MEMBER_KIND_SUFFIX 에서 제외, tennis_divisions.is_active=false
+- 과거 대회 12건이 이 코드를 쓰므로 삭제가 아니라 비활성화
+```
+
+### 안 해도 되는 것
+
+- 영어를 다 없애라는 게 아니다. `PR` `CI` `DB` 처럼 팀에서 이미 쓰는 말은 그대로 둔다.
+- 커밋 메시지는 이 규칙 대상이 아니다(Discord로 안 간다). 커밋은 지금처럼 쓰면 된다.
+
+> 이 문서가 이 규칙의 **정본**이다. PR·이슈 템플릿과 `docs/rules/CODING_RULES.md` 는 여기를 가리킨다.
+
+---
+
 ## 6. 데일리 싱크
 
 - **아침**: 이 문서 + Linear 확인 → 오늘 티켓 픽업(레인 안에서) → 진행중(In Progress) 표시.
@@ -155,7 +203,7 @@ Linear backlog에 보관. 시연/제출 이후.
 
 ### 7/09 머지됨 (참고, 이미 main)
 - **JY-103** chat 삭제 컬럼(#179) · **JY-104/105** 검색 taxonomy·오버로드(#180)
-- **JY-68** 식별자 `kr.allround.app` 통일 + 서명키 gitignore(#182)
+- **JY-68** 딥링크 스킴 `kr.allround.app` 통일 + 서명키 gitignore(#182); iOS App Store Bundle ID는 서명 설정에 따라 `kr.jyoung.allround`
 - **JY-112** 회원 탈퇴 — 백엔드(#189) + UI(#190) **코드 완료** (배포 대기)
 - 공유문서·PR규율(#181) · 스토어 리스팅(#184) · 개인정보·데이터안전(#188)
 
@@ -174,7 +222,10 @@ Linear backlog에 보관. 시연/제출 이후.
 - ✅ 안드로이드 `.aab` 빌드 완료 (키스토어 alias `allround-upload`, 재현정보 메모리화)
 - ✅ Supabase Redirect URL `kr.allround.app://login-callback/` 등록 (JY-113 콜백)
 - ✅ Supabase Redirect URL에서 옛 스킴 `io.matchup.app://login-callback/` 삭제 (잔재 정리)
-- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일(demian.772) 확정 (#197~199)
+- ✅ 개인정보/약관 GitHub Pages 호스팅 + 지원이메일 확정 (#197~199)
+- ⚠️ 지원이메일: 2026-08-04 `ssfak@jyoungad.kr` 로 바꿨다가 **같은 날 `play@jyoungad.kr` 로 재변경**.
+  `ssfak@` 는 열 수 없는 주소였다. `jyoungad.kr` 메일은 Google 이 아니라 **Daum 스마트워크**(MX `aspmx.daum.net`)로 간다.
+  **연락처를 바꿀 때는 그 주소로 실제 메일을 받아본 뒤 반영한다** — 처리방침이 공개하는 삭제 요청 접수처다.
 - ⏳ 개발자 계정 = **조직(제이영컨설팅)**, D-U-N-S 발급 대기 → Play/Apple 가입 (JY-118/117)
 - ⏳ Play 내부 트랙 `.aab` 업로드 (조직 계정 활성화 후. .aab는 빌드 완료)
 - ⏳ 실기기 검증: JY-113 재로그인 계정선택 노출 / JY-112 탈퇴 E2E
@@ -191,8 +242,17 @@ Linear backlog에 보관. 시연/제출 이후.
 
 ---
 
+## 8. 최신 출시 확인 (2026-08-04)
+
+- Apple App Store 한국 제품 페이지 정식 출시 완료: 1.0.0 (5), Apple ID `6792671473`
+- 7/30 심사 미통과 1회 후 8/4 승인·배포 완료
+- 심사용 계정·심사 노트·연령 등급·App Privacy·법적 문서 경로 등록 확인
+- 현재 앱과 스토어의 개인정보 처리방침 주소: `https://kimabba.github.io/AllRound/legal/privacy-policy.html`
+- 다음 출시 트랙은 Google Play 조직 계정 등록 및 Android 배포이며, Play 관련 미완료 항목은 기존 체크리스트를 따른다.
+
 ## 관련 문서
 - 프로세스·하네스·PR 기준: [`docs/team-collaboration.md`](../team-collaboration.md)
+- Apple 출시·업데이트 기준: [`docs/team/apple-release-runbook.md`](./apple-release-runbook.md)
 - 규칙 라우터: [`AGENTS.md`](../../AGENTS.md) · 로드온디맨드 `docs/rules/`
 - 현재 상태 KB: `docs/kb/`
 - 로드맵 요약: [`docs/plans/MVP-roadmap.md`](../plans/MVP-roadmap.md)

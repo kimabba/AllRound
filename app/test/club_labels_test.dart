@@ -63,8 +63,9 @@ void main() {
       expect(clubWebsiteInputError('http://example.com'), isNull);
     });
 
-    test('missing scheme and non-web schemes fail', () {
-      expect(clubWebsiteInputError('example.com'), isNotNull);
+    test('missing scheme is normalized and non-web schemes fail', () {
+      expect(clubWebsiteInputError('example.com'), isNull);
+      expect(normalizeClubWebsiteInput('example.com'), 'https://example.com');
       expect(clubWebsiteInputError('ftp://example.com'), isNotNull);
       expect(clubWebsiteInputError('https://'), isNotNull);
     });

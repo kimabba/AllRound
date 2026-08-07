@@ -150,7 +150,7 @@ class FirstClubEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '함께 운동할 사람을 모으고\n일정과 회비까지 한곳에서 관리할 수 있어요.',
+            '함께 운동할 사람을 모으고\n모임과 회비까지 한곳에서 관리할 수 있어요.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.45,

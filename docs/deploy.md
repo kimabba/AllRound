@@ -167,14 +167,18 @@ flutter build appbundle --dart-define-from-file=.env.local
 
 ## 5. 스토어 제출
 
+Apple 업데이트 절차·권한·버전 이력은 [`docs/team/apple-release-runbook.md`](team/apple-release-runbook.md)를 정본으로 사용한다.
+
 ### App Store (iOS)
-- Bundle ID: `io.matchup.app`
+- Bundle ID: `kr.jyoung.allround`
+- 딥링크 스킴: `kr.allround.app` (Bundle ID와 다름)
+- Apple App ID: `6792671473`
 - 카테고리: 스포츠
-- 등급: 4+
+- 등급: 한국 12+, 대부분 국가 13+
 - 개인정보처리방침 URL 필수
 
 ### Google Play (Android)
-- Application ID: `io.matchup.app`
+- Application ID: `kr.allround.app`
 - 카테고리: 스포츠
 - 콘텐츠 등급: 전체이용가
 - 개인정보처리방침 URL 필수

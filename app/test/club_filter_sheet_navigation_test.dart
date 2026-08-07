@@ -40,4 +40,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('상세검색'), findsNothing);
   });
+
+  testWidgets('모임 상세검색은 작은 화면에서 스크롤하면 키보드를 닫는다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ClubFilterSheet(
+            initialFilters: ClubSearchFilters(),
+            initialInterests: {'tennis', 'futsal'},
+            title: '상세검색',
+            icon: Icons.tune_rounded,
+            accentColor: Colors.blue,
+            onAccentColor: Colors.white,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final field = find.byType(TextField);
+    await tester.tap(field);
+    await tester.showKeyboard(field);
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    final scrollView = find.byType(SingleChildScrollView);
+    expect(
+      tester.widget<SingleChildScrollView>(scrollView).keyboardDismissBehavior,
+      ScrollViewKeyboardDismissBehavior.onDrag,
+    );
+    await tester.drag(scrollView, const Offset(0, -120));
+    await tester.pump();
+
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(tester.takeException(), isNull);
+  });
 }

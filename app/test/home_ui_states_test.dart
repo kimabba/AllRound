@@ -67,12 +67,13 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
-    expect(find.text('오늘,\n어디서 뛸까요?'), findsOneWidget);
-    expect(find.text('나의 일정'), findsOneWidget);
+    expect(find.text('대회'), findsOneWidget);
+    expect(find.textContaining('내 주종목'), findsOneWidget);
+    expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('나의 일정 빈 카드는 대회와 모임 목록으로 이동한다', (tester) async {
+  testWidgets('관심 대회 빈 카드는 대회 목록으로 이동한다', (tester) async {
     final router = GoRouter(
       initialLocation: '/',
       routes: [
@@ -81,10 +82,7 @@ void main() {
           path: '/tournaments',
           builder: (_, __) => const Scaffold(body: Text('대회 목록')),
         ),
-        GoRoute(
-          path: '/clubs',
-          builder: (_, __) => const Scaffold(body: Text('모임 목록')),
-        ),
+        GoRoute(path: '/favorites', builder: (_, __) => const SizedBox()),
       ],
     );
     addTearDown(router.dispose);
@@ -106,15 +104,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('대회를 둘러보세요'));
+    await tester.tap(find.text('대회 둘러보기'));
     await tester.pumpAndSettle();
     expect(find.text('대회 목록'), findsOneWidget);
-
-    router.go('/');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('클럽을 찾아보세요'));
-    await tester.pumpAndSettle();
-    expect(find.text('모임 목록'), findsOneWidget);
   });
 
   testWidgets('home empty state remains usable at 200% text in dark mode',

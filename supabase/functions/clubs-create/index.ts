@@ -7,6 +7,7 @@ import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
 import { notifyAdminsOfPendingClub } from './notifications.ts';
 import {
+  parseClubCardColor,
   parseGenderPreference,
   parseMeetingDays,
   parseMonthlyFee,
@@ -85,6 +86,10 @@ Deno.serve(withCors(async (req) => {
   if (!parsedWebsite.ok) {
     return errorResponse(parsedWebsite.message, 400);
   }
+  const parsedCardColor = parseClubCardColor(body.card_color);
+  if (!parsedCardColor.ok) {
+    return errorResponse(parsedCardColor.message, 400);
+  }
   const latitude = typeof body.latitude === 'number' ? body.latitude : null;
   const longitude = typeof body.longitude === 'number' ? body.longitude : null;
   if (
@@ -117,6 +122,7 @@ Deno.serve(withCors(async (req) => {
     meeting_days: parsedMeetingDays.value,
     monthly_fee: parsedMonthlyFee.value,
     gender_preference: parsedGenderPreference.value,
+    card_color: parsedCardColor.value,
     latitude,
     longitude,
     status: 'pending',
@@ -133,15 +139,18 @@ Deno.serve(withCors(async (req) => {
   if (
     clubErr &&
     (clubErr.message.includes("'logo_url' column") ||
-      clubErr.message.includes("'intro_image_urls' column"))
+      clubErr.message.includes("'intro_image_urls' column") ||
+      clubErr.message.includes("'card_color' column"))
   ) {
     const {
       logo_url: _logoUrl,
       intro_image_urls: _introImageUrls,
+      card_color: _cardColor,
       ...fallbackPayload
     } = insertPayload;
     void _logoUrl;
     void _introImageUrls;
+    void _cardColor;
     const fallback = await supa
       .from('clubs')
       .insert(fallbackPayload)

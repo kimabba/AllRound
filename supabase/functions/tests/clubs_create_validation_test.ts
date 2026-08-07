@@ -1,11 +1,25 @@
 import { assertEquals, assertFalse } from 'std/assert/mod.ts';
 
 import {
+  parseClubCardColor,
   parseGenderPreference,
   parseMeetingDays,
   parseMonthlyFee,
   parseWebsite,
 } from '../clubs-create/validation.ts';
+
+Deno.test('clubs-create card color accepts only the shared palette', () => {
+  assertEquals(parseClubCardColor(undefined), {
+    ok: true,
+    value: '#3156D8',
+  });
+  assertEquals(parseClubCardColor('#176b63'), {
+    ok: true,
+    value: '#176B63',
+  });
+  assertFalse(parseClubCardColor('#FFFFFF').ok);
+  assertFalse(parseClubCardColor(123).ok);
+});
 
 Deno.test('clubs-create meeting days validates and deduplicates', () => {
   assertEquals(parseMeetingDays(['월', '수', '월']), {
@@ -38,7 +52,10 @@ Deno.test('clubs-create website accepts only HTTP(S) URLs', () => {
     ok: true,
     value: 'https://example.com/club',
   });
-  assertFalse(parseWebsite('example.com').ok);
+  assertEquals(parseWebsite('example.com'), {
+    ok: true,
+    value: 'https://example.com',
+  });
   assertFalse(parseWebsite('ftp://example.com').ok);
   assertFalse(parseWebsite(123).ok);
 });

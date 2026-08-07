@@ -10,9 +10,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_create_draft.dart';
+import '../../utils/club_card_colors.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
@@ -38,6 +40,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   final List<_PendingIntroImage> _introImages = [];
   final Set<String> _meetingDays = {};
   String? _genderPreference;
+  String _cardColor = defaultClubCardColor;
   int _step = 0;
   bool _submitting = false;
   String? _submittingLabel;
@@ -108,6 +111,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             ..clear()
             ..addAll(draft.meetingDays);
           _genderPreference = draft.genderPreference;
+          _cardColor = draft.cardColor;
           _step = draft.step;
         }
         _draftReady = true;
@@ -138,6 +142,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         monthlyFee: _monthlyFee.text,
         meetingDays: _meetingDays.toList(growable: false),
         genderPreference: _genderPreference,
+        cardColor: _cardColor,
         step: _step,
         hadSelectedImages: _logoBytes != null || _introImages.isNotEmpty,
       );
@@ -236,6 +241,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _submitting = true;
       _submittingLabel = '권한 확인 중';
@@ -311,12 +317,13 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             address: address,
             logoUrl: logoUrl,
             contact: _contact.text.trim(),
-            website: _website.text.trim(),
+            website: normalizeClubWebsiteInput(_website.text),
             description: _description.text.trim(),
             introImageUrls: introImageUrls,
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
             genderPreference: _genderPreference,
+            cardColor: _cardColor,
             latitude: latitude,
             longitude: longitude,
           );
@@ -402,7 +409,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     final PreparedClubImage image;
     try {
-      image = await prepareClubImage(picked);
+      // 로고는 club-logos(5MB) 로 올라간다 — prepareClubImage 의 기본값과 같다.
+      image = await prepareClubImage(picked, maxBytes: clubImageMaxBytes);
     } on ClubImagePreparationException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -421,6 +429,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _showLogoSheet() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final cs = Theme.of(context).colorScheme;
     await showModalBottomSheet<void>(
       context: context,
@@ -485,6 +494,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
     final picked = await ImagePicker().pickMultiImage(
       maxWidth: 1600,
       maxHeight: 1600,
@@ -495,7 +505,11 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     final nextImages = <_PendingIntroImage>[];
     try {
       for (final file in picked.take(remaining)) {
-        final image = await prepareClubImage(file);
+        // 소개 사진 버킷(club-intro-images)은 10MB 까지 받는다.
+        final image = await prepareClubImage(
+          file,
+          maxBytes: clubPhotoMaxBytes,
+        );
         nextImages.add(
           _PendingIntroImage(
             bytes: image.bytes,
@@ -524,6 +538,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   }
 
   Future<void> _showRegionPicker() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await showModalBottomSheet<_RegionOption>(
       context: context,
       isScrollControlled: true,
@@ -560,6 +575,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/clubs'),
         title: const Text('클럽 만들기'),
         actions: [
           IconButton(
@@ -597,12 +613,17 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               name: _name,
                               region: _region,
                               address: _address,
+                              cardColor: _cardColor,
                               onLogoTap: _showLogoSheet,
                               onSportChanged: (sport) {
                                 setState(() => _sport = sport);
                                 _scheduleDraftSave();
                               },
                               onRegionTap: _showRegionPicker,
+                              onCardColorChanged: (value) {
+                                setState(() => _cardColor = value);
+                                _scheduleDraftSave();
+                              },
                             )
                           else if (_step == 1)
                             _OperationClubStep(
@@ -781,9 +802,11 @@ class _BasicClubStep extends StatelessWidget {
     required this.name,
     required this.region,
     required this.address,
+    required this.cardColor,
     required this.onLogoTap,
     required this.onSportChanged,
     required this.onRegionTap,
+    required this.onCardColorChanged,
   });
 
   final String sport;
@@ -792,9 +815,11 @@ class _BasicClubStep extends StatelessWidget {
   final TextEditingController name;
   final TextEditingController region;
   final TextEditingController address;
+  final String cardColor;
   final VoidCallback onLogoTap;
   final ValueChanged<String> onSportChanged;
   final VoidCallback onRegionTap;
+  final ValueChanged<String> onCardColorChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -875,6 +900,48 @@ class _BasicClubStep extends StatelessWidget {
           ),
           textInputAction: TextInputAction.next,
         ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('클럽 카드 색상', style: tt.labelLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '나의 클럽 카드 배경에 사용돼요.',
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final value in clubCardColorChoices)
+              Semantics(
+                label: '클럽 카드 색상 $value',
+                selected: cardColor == value,
+                button: true,
+                child: InkWell(
+                  onTap: () => onCardColorChanged(value),
+                  customBorder: const CircleBorder(),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: AppSizes.touchTarget,
+                    height: AppSizes.touchTarget,
+                    decoration: BoxDecoration(
+                      color: clubCardColor(value),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: cardColor == value
+                            ? cs.onSurface
+                            : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                    child: cardColor == value
+                        ? const Icon(Icons.check_rounded, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -921,7 +988,7 @@ class _OperationClubStep extends StatelessWidget {
           validator: clubWebsiteInputError,
           decoration: const InputDecoration(
             labelText: '웹사이트 / SNS',
-            hintText: 'https://',
+            hintText: '예: instagram.com/계정명',
           ),
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.next,

@@ -16,6 +16,7 @@ Map<String, dynamic> postJson({
     'body': '게시글 내용',
     'image_urls': <String>[],
     'is_pinned': false,
+    'notice_visible_tags': <String>[],
     'created_at': '2026-07-15T00:00:00Z',
     'updated_at': '2026-07-15T00:00:00Z',
     'club_post_comments': <Object>[],
@@ -33,6 +34,13 @@ void main() {
     final post = ClubPost.fromJson(postJson(tag: 'notice'));
 
     expect(post.allowsComments, isFalse);
+  });
+
+  test('공지가 함께 표시될 게시판을 파싱한다', () {
+    final json = postJson(tag: 'notice');
+    json['notice_visible_tags'] = ['free', 'photo'];
+
+    expect(ClubPost.fromJson(json).noticeVisibleTags, ['free', 'photo']);
   });
 
   test('알 수 없는 게시글 종류도 댓글을 허용하지 않는다', () {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/tournament.dart';
@@ -164,7 +164,6 @@ class _RuleEditScreenState extends ConsumerState<RuleEditScreen> {
               },
               onSelected: (s) => _category.text = s,
               fieldViewBuilder: (context, controller, focus, _) {
-                controller.text = _category.text;
                 return TextFormField(
                   controller: controller,
                   focusNode: focus,

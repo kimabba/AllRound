@@ -10,6 +10,10 @@ class ClubInquiryThread {
     this.requesterAvatarUrl,
     this.requesterRegion,
     this.requesterAgeGroup,
+    this.requesterSports = const [],
+    this.requesterTeams = const [],
+    this.requesterTournaments = const [],
+    this.requesterTennisOrganizations = const [],
   });
 
   final String id;
@@ -22,6 +26,10 @@ class ClubInquiryThread {
   final String? requesterAvatarUrl;
   final String? requesterRegion;
   final String? requesterAgeGroup;
+  final List<String> requesterSports;
+  final List<String> requesterTeams;
+  final List<String> requesterTournaments;
+  final List<String> requesterTennisOrganizations;
 
   String get requesterLabel {
     final nickname = requesterNickname?.trim();
@@ -44,6 +52,28 @@ class ClubInquiryThread {
       requesterAvatarUrl: requesterMap['avatar_url'] as String?,
       requesterRegion: requesterMap['primary_region'] as String?,
       requesterAgeGroup: requesterMap['age_group'] as String?,
+      requesterSports: (requesterMap['sports'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) => '${row['sport'] ?? ''}:${row['grade'] ?? ''}')
+          .toList(growable: false),
+      requesterTeams: (requesterMap['clubs'] as List? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      requesterTournaments: (requesterMap['tournaments'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) => '${row['title'] ?? '대회'} · ${row['division'] ?? ''}')
+          .toList(growable: false),
+      requesterTennisOrganizations:
+          (requesterMap['tennis_orgs'] as List? ?? const [])
+              .whereType<Map>()
+              .map((row) {
+        final details = [row['division'], row['score']]
+            .where((value) => value != null && '$value'.isNotEmpty)
+            .join(' · ');
+        return details.isEmpty
+            ? '${row['org'] ?? ''}'
+            : '${row['org'] ?? ''} · $details';
+      }).toList(growable: false),
     );
   }
 }

@@ -27,6 +27,7 @@ scripts/harness/
   run_all.sh              # one local entrypoint for common gates
   check_enums.py          # Dart/TS/SQL enum consistency
   check_static_rules.py   # root rules, docs/templates, Pureform token drift
+  check_dependencies.py   # pubspec deps <-> docs/team/dependencies.md ledger
   check_secrets.sh        # cheap secret scanning for git-visible files
 ```
 
@@ -38,6 +39,10 @@ scripts/harness/
 - GitHub PR/Issue templates and harness workflow exist.
 - User UI cannot introduce undocumented radius or fixed button-size literals;
   `AppRadius` and `AppSizes` are the contract.
+- Every `dependencies`/`dev_dependencies` entry in `app/pubspec.yaml` is recorded in
+  `docs/team/dependencies.md`. Name matching only — the ledger's `네이티브` column is
+  written by humans and is **not** verified. Run `check_dependencies.py --classify`
+  locally (needs pub cache) for a starting point.
 - Cheap secret scan for files Git would track or add.
 - Flutter `analyze` and `test`.
 - Deno `fmt`, `lint`, `check`, and `test`.
@@ -56,6 +61,7 @@ Individual gates:
 ```bash
 python3 scripts/harness/check_enums.py
 python3 scripts/harness/check_static_rules.py
+python3 scripts/harness/check_dependencies.py
 bash scripts/harness/check_secrets.sh
 
 cd app && flutter analyze && flutter test
