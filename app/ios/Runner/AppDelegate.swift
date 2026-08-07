@@ -45,7 +45,9 @@ import UIKit
       }
 
       let quality = (arguments["quality"] as? NSNumber)?.doubleValue ?? 0.86
-      guard let data = image.jpegData(compressionQuality: quality) else {
+      let maxSide = (arguments["maxSide"] as? NSNumber)?.doubleValue ?? 1600
+      let resized = Self.downscaled(image, maxSide: maxSide)
+      guard let data = resized.jpegData(compressionQuality: quality) else {
         result(
           FlutterError(
             code: "conversion_failed",
@@ -58,5 +60,23 @@ import UIKit
       result(FlutterStandardTypedData(bytes: data))
     }
     clubImageConverterChannel = channel
+  }
+
+  /// HEIC 원본은 4800만 화소까지 오고, 다른 경로(ImagePicker)는 이미 1600px 로 줄어든
+  /// 뒤에 넘어온다. 여기서 줄이지 않으면 Dart 쪽 디코딩이 수백 MB 를 잡아 앱이 꺼진다.
+  private static func downscaled(_ image: UIImage, maxSide: Double) -> UIImage {
+    let longest = max(image.size.width, image.size.height)
+    guard maxSide > 0, longest > CGFloat(maxSide) else { return image }
+
+    let scale = CGFloat(maxSide) / longest
+    let target = CGSize(
+      width: (image.size.width * scale).rounded(),
+      height: (image.size.height * scale).rounded()
+    )
+    let format = UIGraphicsImageRendererFormat.default()
+    format.scale = 1
+    return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+      image.draw(in: CGRect(origin: .zero, size: target))
+    }
   }
 }

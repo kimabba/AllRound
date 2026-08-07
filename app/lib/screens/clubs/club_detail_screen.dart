@@ -1958,7 +1958,11 @@ class _ClubIntroManageCardState extends ConsumerState<_ClubIntroManageCard> {
     final next = <_PendingPostImage>[];
     try {
       for (final file in picked.take(remaining)) {
-        final image = await prepareClubImage(file);
+        // 클럽 사진 버킷(club-intro-images / club-posts)은 10MB 까지 받는다.
+        final image = await prepareClubImage(
+          file,
+          maxBytes: clubPhotoMaxBytes,
+        );
         next.add(
           _PendingPostImage(
             bytes: image.bytes,
@@ -4557,7 +4561,11 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
     final next = <_PendingPostImage>[];
     try {
       for (final file in picked.take(5 - _images.length)) {
-        final image = await prepareClubImage(file);
+        // 클럽 사진 버킷(club-intro-images / club-posts)은 10MB 까지 받는다.
+        final image = await prepareClubImage(
+          file,
+          maxBytes: clubPhotoMaxBytes,
+        );
         next.add(
           _PendingPostImage(
             bytes: image.bytes,
