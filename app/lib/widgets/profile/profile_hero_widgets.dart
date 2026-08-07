@@ -45,9 +45,11 @@ class ProfileHeroSliver extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final expandedHeight = 316.0 + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
 
     return SliverAppBar(
-      expandedHeight: 286,
+      expandedHeight: expandedHeight,
       pinned: true,
       backgroundColor: cs.surface,
       foregroundColor: cs.onSurface,
@@ -87,23 +89,31 @@ class ProfileHeroSliver extends StatelessWidget {
             AppSpacing.xl,
             AppSpacing.lg,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ProfileHeaderContent(
-                initial: initial,
-                title: title,
-                subtitle: subtitle,
-                infoLine: infoLine,
-                sports: sports,
-                avatarBytes: avatarBytes,
-                avatarUrl: avatarUrl,
-                onAvatarTap: onAvatarTap,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
-            ],
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              border: Border.all(color: cs.outlineVariant),
+              borderRadius: AppRadius.hero,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ProfileHeaderContent(
+                  initial: initial,
+                  title: title,
+                  subtitle: subtitle,
+                  infoLine: infoLine,
+                  sports: sports,
+                  avatarBytes: avatarBytes,
+                  avatarUrl: avatarUrl,
+                  onAvatarTap: onAvatarTap,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
+              ],
+            ),
           ),
         ),
       ),
@@ -317,11 +327,10 @@ class StatsGrid extends StatelessWidget {
 
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      padding: const EdgeInsets.only(top: AppSpacing.md),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: cs.outlineVariant),
-          bottom: BorderSide(color: cs.outlineVariant),
         ),
       ),
       child: IntrinsicHeight(
