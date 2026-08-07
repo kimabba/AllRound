@@ -17,6 +17,12 @@ import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { parseOwnedPublicObjects, publicMediaBucketIds } from '../_shared/account_deletion.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
+/** 앱이 만드는 난수 파일명만 로그에 남기고, 사용자가 지은 이름은 가린다. */
+function loggableName(objectName: string): string {
+  const basename = objectName.split('/').pop() ?? '';
+  return /^[0-9a-f]{48}\.(jpg|png)$/.test(basename) ? basename : '(비표준 이름)';
+}
+
 Deno.serve(withCors(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -72,11 +78,12 @@ Deno.serve(withCors(async (req) => {
       if (chunk.length === 0) continue;
 
       // 되돌릴 수 없는 삭제라 지운 대상을 남긴다 — 사고가 나면 무엇이 사라졌는지
-      // 알아야 한다. 로고·소개 사진 경로는 `업로더 uuid/파일명` 이므로 업로더를
-      // 드러내지 않도록 파일명만 남긴다.
+      // 알아야 한다. 다만 객체명은 사용자가 정할 수 있는 값이다(Storage INSERT 정책은
+      // 소유자만 보고 이름 형식은 보지 않는다). 경로의 업로더 uuid 를 떼고, 앱이 만드는
+      // 난수 파일명일 때만 그대로 남긴다.
       console.log('storage-gc removing', {
         bucketId,
-        names: chunk.map((name) => name.split('/').pop()),
+        names: chunk.map(loggableName),
       });
       const { error: removeError } = await svc.storage.from(bucketId).remove(chunk);
       if (removeError) {

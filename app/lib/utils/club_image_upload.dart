@@ -119,12 +119,14 @@ Future<PreparedClubImage> prepareClubImage(
   }
 }
 
-/// 어느 클럽 사진 버킷에도 들어가는 상한. club-logos 가 5MB 로 가장 엄격하다.
-const clubImageMaxBytes = 5 * 1024 * 1024;
-
-/// 대회 포스터 버킷(tournament-posters) 상한. 이 처리기는 클럽 밖에서도 쓰이므로
-/// 가장 엄격한 값을 모두에게 강요하지 않는다.
-const tournamentPosterMaxBytes = 10 * 1024 * 1024;
+/// 버킷별 상한. 이 처리기는 클럽 밖(대회 포스터·프로필 사진)에서도 쓰므로 상한을
+/// 하나로 고정하지 않는다. 앱이 서버보다 헐거우면 처리에 성공하고 업로드에서
+/// 실패하고(프로필 사진), 앱이 더 빡빡하면 버킷이 받는 사진을 앱이 거부한다.
+/// 값은 각 버킷의 file_size_limit 과 맞춘다.
+const clubImageMaxBytes = 5 * 1024 * 1024; // club-logos
+const clubPhotoMaxBytes = 10 * 1024 * 1024; // club-intro-images, club-posts
+const tournamentPosterMaxBytes = 10 * 1024 * 1024; // tournament-posters
+const profileAvatarMaxBytes = 3 * 1024 * 1024; // profile-avatars
 
 /// Decodes and re-encodes an upload image before it leaves the device.
 ///
