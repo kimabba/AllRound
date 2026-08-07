@@ -14,6 +14,7 @@ import '../utils/grade_labels.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -93,7 +94,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
-        title: const Text('대회'),
+        bottom: const TournamentSectionBar(
+          selected: TournamentSection.overview,
+        ),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),

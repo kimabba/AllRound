@@ -88,6 +88,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   Future<void> _selectClubSortOrder(ClubSortOrder? order) async {
     if (order == null || order == _clubSortOrder) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _clubSortOrder = order);
     await saveClubSortOrder(order);
   }
@@ -208,6 +209,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openClubFilterSheet() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final cs = Theme.of(context).colorScheme;
     final result = await showModalBottomSheet<ClubFilterResult>(
       context: context,
@@ -434,6 +436,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             setState(() => _clubNameQuery = value.trim());
           },
           onSubmitted: (value) {
+            FocusManager.instance.primaryFocus?.unfocus();
             setState(() => _clubNameQuery = value.trim());
           },
         ),
@@ -814,6 +817,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       body: RefreshIndicator(
         onRefresh: _refreshClubLists,
         child: CustomScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(

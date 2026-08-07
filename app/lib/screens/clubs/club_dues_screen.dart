@@ -108,6 +108,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   onTap: initial != null
                       ? null
                       : () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showDatePicker(
                             context: dialogContext,
                             initialDate: month,
@@ -139,6 +140,7 @@ class _ClubDuesScreenState extends ConsumerState<ClubDuesScreen> {
                   ),
                   trailing: const Icon(Icons.event_outlined),
                   onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     final picked = await showDatePicker(
                       context: dialogContext,
                       initialDate: dueDate ?? month,

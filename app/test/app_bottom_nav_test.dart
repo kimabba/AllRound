@@ -65,4 +65,22 @@ void main() {
     // 볼보이는 탭 슬롯을 차지하지 않으므로 탭 인덱스를 바꾸지 않는다.
     expect(changedIndex, -1);
   });
+
+  testWidgets('볼보이는 클럽과 MY 사이에 표시된다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: AppBottomNav(
+            currentIndex: 0,
+            onChanged: (_) {},
+            onChatTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    final ballboyX = tester.getCenter(find.text('볼보이')).dx;
+    expect(ballboyX, greaterThan(tester.getCenter(find.text('클럽')).dx));
+    expect(ballboyX, lessThan(tester.getCenter(find.text('MY')).dx));
+  });
 }

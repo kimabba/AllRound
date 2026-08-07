@@ -7,6 +7,7 @@ import '../../models/org_ranking.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/tournament_section_bar.dart';
 
 /// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
 /// 일치). 부서 카탈로그 전체(rankingGradesForOrg)와 다르다 — 오픈부·베테랑부 등은
@@ -87,8 +88,7 @@ List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
   if (q.isEmpty) return rows;
   return rows
       .where(
-        (r) =>
-            r.playerName.contains(q) || (r.clubRaw?.contains(q) ?? false),
+        (r) => r.playerName.contains(q) || (r.clubRaw?.contains(q) ?? false),
       )
       .toList();
 }
@@ -132,8 +132,7 @@ class RankingList extends StatelessWidget {
                 ? () => onClaim!(rows[i])
                 : null,
           ),
-          if (i < rows.length - 1)
-            Divider(height: 1, color: cs.outlineVariant),
+          if (i < rows.length - 1) Divider(height: 1, color: cs.outlineVariant),
         ],
       ],
     );
@@ -223,7 +222,8 @@ final _kFetchedAtFormat = DateFormat('yyyy-MM-dd');
 /// 옛 상태로 남는데, 이 값이 없으면 화면이 그걸 "현재"인 것처럼 보여준다 — null 이면
 /// (아직 로드 전이거나 행이 없으면) 이 줄만 생략한다.
 class RankingSourceNotice extends StatelessWidget {
-  const RankingSourceNotice({super.key, required this.orgLabel, this.fetchedAt});
+  const RankingSourceNotice(
+      {super.key, required this.orgLabel, this.fetchedAt});
 
   final String orgLabel;
   final DateTime? fetchedAt;
@@ -432,10 +432,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   /// 최신값(가장 늦은 fetched_at)을 쓴다.
   DateTime? _latestFetchedAt(List<OrgRankingRow>? rows) {
     if (rows == null || rows.isEmpty) return null;
-    return rows
-        .map((r) => r.fetchedAt)
-        .whereType<DateTime>()
-        .fold<DateTime?>(
+    return rows.map((r) => r.fetchedAt).whereType<DateTime>().fold<DateTime?>(
           null,
           (latest, d) => latest == null || d.isAfter(latest) ? d : latest,
         );
@@ -492,7 +489,12 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     final divisions = _kRankingDivisions[_orgCode]!;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('협회 랭킹')),
+      appBar: AppBar(
+        title: const Text('협회 랭킹'),
+        bottom: const TournamentSectionBar(
+          selected: TournamentSection.rankings,
+        ),
+      ),
       body: Column(
         children: [
           Padding(
@@ -500,7 +502,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             child: SegmentedButton<String>(
               segments: [
                 for (final org in orgCodes)
-                  ButtonSegment(value: org, label: Text(tennisOrgShortLabel(org))),
+                  ButtonSegment(
+                      value: org, label: Text(tennisOrgShortLabel(org))),
               ],
               selected: {_orgCode},
               onSelectionChanged: (s) => _changeOrg(s.first),
@@ -513,7 +516,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               decoration: const InputDecoration(labelText: '부서'),
               items: [
                 for (final code in divisions)
-                  DropdownMenuItem(value: code, child: Text(divisionLabel(code))),
+                  DropdownMenuItem(
+                      value: code, child: Text(divisionLabel(code))),
               ],
               onChanged: (v) {
                 if (v != null) _changeDivision(v);
@@ -528,6 +532,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               0,
             ),
             child: TextField(
+              textInputAction: TextInputAction.search,
               decoration: const InputDecoration(
                 labelText: '이름·소속 검색',
                 prefixIcon: Icon(Icons.search),
@@ -557,6 +562,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                 final data = snap.data!;
                 final visibleRows = filterRankingRows(data.rows, _query);
                 return ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   children: [
                     if (data.candidate != null)
@@ -588,10 +595,12 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                           '이 표에서 신청할 수 있는 줄이 없습니다. '
                           '가입할 때 넣은 이름이 협회 명단과 같아야 하고, '
                           '이미 신청했거나 연결된 선수는 제외됩니다.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color:
-                                    Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
                       ),
                     if (visibleRows.isEmpty)
@@ -599,9 +608,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         padding: const EdgeInsets.all(AppSpacing.xxl),
                         child: Center(
                           child: Text(
-                            data.rows.isEmpty
-                                ? '공표된 랭킹이 없습니다'
-                                : '검색 결과가 없습니다',
+                            data.rows.isEmpty ? '공표된 랭킹이 없습니다' : '검색 결과가 없습니다',
                           ),
                         ),
                       )

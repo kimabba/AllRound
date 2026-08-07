@@ -320,17 +320,21 @@ class _MainShell extends ConsumerWidget {
   ];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
-  /// (룰북과 대회 전체 목록은 대회 화면 안에서 들어간다).
+  /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
   static const _untabbedPaths = [
     '/more',
-    '/rules',
     '/notifications',
     '/favorites',
     '/blocked-users',
-    '/tournaments',
   ];
 
   int _indexOf(String location) {
+    if (location == '/tournaments' ||
+        location.startsWith('/tournaments/') ||
+        location == '/rankings' ||
+        location == '/rules') {
+      return 0;
+    }
     if (_untabbedPaths.any(
       (p) => location == p || location.startsWith('$p/'),
     )) {

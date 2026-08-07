@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-
   // 색 대비는 위젯 테스트(textContrastGuideline)가 아니라 여기서 못 박는다.
   // 그 가이드라인은 렌더된 픽셀을 샘플링하기 때문에 이 화면에서 양쪽으로 틀렸다:
   //   - 놓침: pill 이 렌더되는데도 다크 4.04:1 미달을 잡지 못했다
@@ -98,6 +97,8 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.text('MY'), findsOneWidget);
+    expect(find.text('클럽'), findsOneWidget);
+    expect(find.text('룰북'), findsNothing);
     expect(find.text('볼보이'), findsOneWidget);
   });
 
