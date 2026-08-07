@@ -184,7 +184,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('빠른 메뉴'), findsOneWidget);
+    expect(find.text('MY 바로가기'), findsOneWidget);
     expect(find.text('프로필 수정'), findsOneWidget);
     expect(find.text('관심 대회'), findsOneWidget);
     expect(find.text('내 클럽'), findsOneWidget);

@@ -47,6 +47,10 @@ class ProfileHeroSliver extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final expandedHeight = 316.0 + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
+    final primarySport = sports.maybeWhen(
+      data: (items) => items.where((item) => item.isPrimary).firstOrNull?.sport,
+      orElse: () => null,
+    );
 
     return SliverAppBar(
       expandedHeight: expandedHeight,
@@ -92,26 +96,40 @@ class ProfileHeroSliver extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              border: Border.all(color: cs.outlineVariant),
+              color: cs.primary,
               borderRadius: AppRadius.hero,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+            child: Stack(
               children: [
-                ProfileHeaderContent(
-                  initial: initial,
-                  title: title,
-                  subtitle: subtitle,
-                  infoLine: infoLine,
-                  sports: sports,
-                  avatarBytes: avatarBytes,
-                  avatarUrl: avatarUrl,
-                  onAvatarTap: onAvatarTap,
+                Positioned(
+                  right: -AppSpacing.md,
+                  top: -AppSpacing.md,
+                  child: Icon(
+                    primarySport == 'tennis'
+                        ? Icons.sports_tennis_rounded
+                        : Icons.sports_soccer_rounded,
+                    size: 104,
+                    color: cs.onPrimary.withValues(alpha: 0.08),
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ProfileHeaderContent(
+                      initial: initial,
+                      title: title,
+                      subtitle: subtitle,
+                      infoLine: infoLine,
+                      sports: sports,
+                      avatarBytes: avatarBytes,
+                      avatarUrl: avatarUrl,
+                      onAvatarTap: onAvatarTap,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
+                  ],
+                ),
               ],
             ),
           ),
@@ -171,7 +189,7 @@ class ProfileHeaderContent extends StatelessWidget {
                 height: 72,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer,
+                  color: cs.onPrimary.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(AppRadius.xl),
                   image: avatarImage == null
                       ? null
@@ -185,7 +203,7 @@ class ProfileHeaderContent extends StatelessWidget {
                     ? Text(
                         initial,
                         style: tt.headlineMedium?.copyWith(
-                          color: cs.primary,
+                          color: cs.onPrimary,
                           fontWeight: FontWeight.w800,
                         ),
                       )
@@ -198,13 +216,15 @@ class ProfileHeaderContent extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: cs.surface,
-                    border: Border.all(color: cs.outlineVariant),
+                    color: cs.onPrimary,
+                    border: Border.all(
+                      color: cs.onPrimary.withValues(alpha: 0.4),
+                    ),
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Icon(
                     Icons.camera_alt_rounded,
-                    color: cs.onSurfaceVariant,
+                    color: cs.primary,
                     size: 15,
                   ),
                 ),
@@ -221,7 +241,7 @@ class ProfileHeaderContent extends StatelessWidget {
               Text(
                 title.isEmpty ? '사용자' : title,
                 style: tt.titleLarge?.copyWith(
-                  color: cs.onSurface,
+                  color: cs.onPrimary,
                   fontWeight: FontWeight.w800,
                 ),
                 maxLines: 1,
@@ -232,7 +252,7 @@ class ProfileHeaderContent extends StatelessWidget {
                 Text(
                   subtitle,
                   style: tt.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
+                    color: cs.onPrimary.withValues(alpha: 0.72),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -243,7 +263,7 @@ class ProfileHeaderContent extends StatelessWidget {
                 Text(
                   infoLine!,
                   style: tt.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
+                    color: cs.onPrimary.withValues(alpha: 0.82),
                     fontWeight: FontWeight.w700,
                   ),
                   maxLines: 1,
@@ -289,14 +309,16 @@ class HeroChip extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
+        color: cs.onPrimary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: cs.outlineVariant),
+        border: Border.all(
+          color: cs.onPrimary.withValues(alpha: 0.22),
+        ),
       ),
       child: Text(
         label,
         style: tt.labelSmall?.copyWith(
-          color: cs.onSurfaceVariant,
+          color: cs.onPrimary,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -330,7 +352,7 @@ class StatsGrid extends StatelessWidget {
       padding: const EdgeInsets.only(top: AppSpacing.md),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: cs.outlineVariant),
+          top: BorderSide(color: cs.onPrimary.withValues(alpha: 0.22)),
         ),
       ),
       child: IntrinsicHeight(
@@ -342,14 +364,20 @@ class StatsGrid extends StatelessWidget {
                 label: '등록 종목',
               ),
             ),
-            VerticalDivider(width: 1, color: cs.outlineVariant),
+            VerticalDivider(
+              width: 1,
+              color: cs.onPrimary.withValues(alpha: 0.22),
+            ),
             Expanded(
               child: StatCard(
                 value: '$orgCount',
                 label: '소속 협회',
               ),
             ),
-            VerticalDivider(width: 1, color: cs.outlineVariant),
+            VerticalDivider(
+              width: 1,
+              color: cs.onPrimary.withValues(alpha: 0.22),
+            ),
             Expanded(
               child: StatCard(
                 value: primary == null ? '-' : sportLabelFromString(primary),
@@ -388,7 +416,7 @@ class StatCard extends StatelessWidget {
           Text(
             value,
             style: (compact ? tt.labelLarge : tt.titleLarge)?.copyWith(
-              color: cs.onSurface,
+              color: cs.onPrimary,
               fontWeight: FontWeight.w800,
             ),
             maxLines: 1,
@@ -398,7 +426,7 @@ class StatCard extends StatelessWidget {
           Text(
             label,
             style: tt.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
+              color: cs.onPrimary.withValues(alpha: 0.72),
               fontWeight: FontWeight.w600,
             ),
           ),
