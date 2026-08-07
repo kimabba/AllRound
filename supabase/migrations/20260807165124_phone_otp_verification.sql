@@ -1,4 +1,4 @@
--- 20260723040000_phone_otp_verification.sql
+-- 20260807165124_phone_otp_verification.sql
 -- 가입 신원 무결성용 전화번호 SMS OTP 인증 (신원확인 전용, 로그인 미변경).
 --
 -- 인증은 "인증된 사용자"(온보딩 단계)가 수행 → verify→가입 사이 claim 토큰 불필요.
@@ -50,6 +50,8 @@ create table if not exists public.phone_otp (
   attempts          int not null default 0,          -- 검증 실패 카운트
   send_count        int not null default 1,          -- 시간당 발송(fixed window)
   window_started_at timestamptz not null default now(),
+  daily_send_count  int not null default 1,          -- 번호당 일일 발송(fixed window)
+  daily_started_on  date not null default current_date,
   locked_until      timestamptz,                     -- 검증 실패 초과 잠금
   created_at        timestamptz not null default now()
 );
@@ -113,6 +115,7 @@ create trigger trg_log_phone_withdraw
 -- ── request_phone_otp: rate-limit 게이트 + OTP 저장 (service_role 전용, fail-closed) ─
 -- 반환 jsonb: { allowed, reason, retry_after? }. Edge Function 이 RPC 에러 시 발송 금지.
 drop function if exists public.request_phone_otp(text, text, int, int, int, int);
+drop function if exists public.request_phone_otp(uuid, text, text, int, int, int, int, int);
 create or replace function public.request_phone_otp(
   p_user_id uuid,
   p_phone_hash text,
@@ -120,6 +123,7 @@ create or replace function public.request_phone_otp(
   p_ttl_seconds int,
   p_cooldown_seconds int,
   p_hourly_cap int,
+  p_phone_daily_cap int,
   p_daily_global_cap int,
   p_user_daily_cap int
 )
@@ -157,6 +161,13 @@ begin
         ceil(extract(epoch from
           (v_row.window_started_at + interval '1 hour' - v_now)))::int);
     end if;
+    if v_row.daily_started_on = current_date
+       and v_row.daily_send_count >= p_phone_daily_cap then
+      return jsonb_build_object('allowed', false, 'reason', 'PHONE_DAILY_LIMIT',
+        'retry_after',
+        ceil(extract(epoch from
+          (date_trunc('day', v_now) + interval '1 day' - v_now)))::int);
+    end if;
   end if;
 
   -- 2) 계정별 일일 상한(H3) — 한 계정이 번호를 돌려 예산을 소진하지 못하게.
@@ -186,9 +197,9 @@ begin
   -- 4) OTP upsert. 재발송이면 시간당 윈도우 유지·증가, 만료됐으면 리셋.
   insert into public.phone_otp as o
       (phone_hash, code_hash, expires_at, attempts, send_count, window_started_at,
-       locked_until, created_at)
+       daily_send_count, daily_started_on, locked_until, created_at)
     values (p_phone_hash, p_code_hash, v_now + make_interval(secs => p_ttl_seconds),
-       0, 1, v_now, null, v_now)
+       0, 1, v_now, 1, current_date, null, v_now)
     on conflict (phone_hash) do update set
       code_hash    = excluded.code_hash,
       expires_at   = excluded.expires_at,
@@ -200,16 +211,22 @@ begin
         else o.window_started_at end,
       send_count = case
         when o.window_started_at + interval '1 hour' <= v_now then 1
-        else o.send_count + 1 end;
+        else o.send_count + 1 end,
+      daily_started_on = case
+        when o.daily_started_on < current_date then current_date
+        else o.daily_started_on end,
+      daily_send_count = case
+        when o.daily_started_on < current_date then 1
+        else o.daily_send_count + 1 end;
 
   return jsonb_build_object('allowed', true, 'reason', 'OK');
 end;
 $$;
 revoke execute on function
-  public.request_phone_otp(uuid, text, text, int, int, int, int, int)
+  public.request_phone_otp(uuid, text, text, int, int, int, int, int, int)
   from public, anon, authenticated;
 grant execute on function
-  public.request_phone_otp(uuid, text, text, int, int, int, int, int) to service_role;
+  public.request_phone_otp(uuid, text, text, int, int, int, int, int, int) to service_role;
 
 -- ── verify_phone_otp: 원자적 시도검증 + 성공 시 users 기록 (service_role 전용) ─
 -- 신원은 Edge Function 이 검증한 JWT 에서 뽑아 p_user_id 로 넘긴다(auth.uid 미의존).

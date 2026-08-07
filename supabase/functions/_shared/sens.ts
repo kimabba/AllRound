@@ -61,7 +61,8 @@ export async function sendSms(cfg: SensConfig, to: string, content: string): Pro
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`SENS ${res.status}: ${body.slice(0, 200)}`);
+    // 공급자 오류 본문에는 수신번호·메시지 같은 개인정보가 포함될 수 있다.
+    // 호출부가 예외 메시지를 로그에 남기므로 상태코드만 전달한다.
+    throw new Error(`SENS ${res.status}`);
   }
 }

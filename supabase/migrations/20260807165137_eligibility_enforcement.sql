@@ -1,4 +1,4 @@
--- 20260724010000_eligibility_enforcement.sql
+-- 20260807165137_eligibility_enforcement.sql
 -- 계정 자격(standing) 단일 술어 + 참여 쓰기 RLS 강제.
 --
 -- 배경: 앱은 Edge Function 뿐 아니라 PostgREST 로 직접 쓰는 경로가 20+ 테이블에 있다.

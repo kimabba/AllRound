@@ -17,6 +17,7 @@ import { serviceClient } from '../_shared/supabase.ts';
 const TTL_SECONDS = 180; // OTP 유효 3분
 const COOLDOWN_SECONDS = 60; // 재발송 쿨다운
 const HOURLY_CAP = 5; // 번호당 시간당 발송
+const PHONE_DAILY_CAP = 10; // 번호당 일일 발송(계정 교체 우회 차단)
 const USER_DAILY_CAP = Number(Deno.env.get('OTP_USER_DAILY_CAP') ?? '5'); // 계정당 일일
 // 글로벌 일일 상한 = 금전 서킷브레이커. 예상량 x5 수준으로 env 조정.
 const DAILY_GLOBAL_CAP = Number(Deno.env.get('OTP_DAILY_GLOBAL_CAP') ?? '2000');
@@ -63,6 +64,7 @@ Deno.serve(async (req) => {
     p_ttl_seconds: TTL_SECONDS,
     p_cooldown_seconds: COOLDOWN_SECONDS,
     p_hourly_cap: HOURLY_CAP,
+    p_phone_daily_cap: PHONE_DAILY_CAP,
     p_daily_global_cap: DAILY_GLOBAL_CAP,
     p_user_daily_cap: USER_DAILY_CAP,
   });
