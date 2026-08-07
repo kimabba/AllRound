@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(18);
+select plan(22);
 
 select has_table('public', 'club_chat_threads', '모임 채팅방 테이블 존재');
 select has_table('public', 'club_chat_participants', '1:1 참여자 테이블 존재');
@@ -30,6 +30,31 @@ select has_function(
 select has_function(
   'public', 'open_club_chat', array['uuid', 'uuid'],
   '채팅방 열기 함수 존재'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.can_access_club_chat(uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.open_club_chat(uuid,uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.touch_club_chat_thread()', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.notify_club_chat_message()', 'EXECUTE'),
+  '비로그인 사용자는 채팅 SECURITY DEFINER 함수를 실행할 수 없다'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.can_access_club_chat(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.open_club_chat(uuid,uuid)', 'EXECUTE'),
+  '로그인 사용자는 채팅 접근 확인과 채팅방 열기만 실행할 수 있다'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.touch_club_chat_thread()', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.notify_club_chat_message()', 'EXECUTE'),
+  '로그인 사용자는 채팅 트리거 함수를 직접 실행할 수 없다'
+);
+select ok(
+  has_function_privilege('service_role', 'public.can_access_club_chat(uuid)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.open_club_chat(uuid,uuid)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.touch_club_chat_thread()', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.notify_club_chat_message()', 'EXECUTE'),
+  'service_role 은 모든 채팅 함수를 실행할 수 있다'
 );
 
 select policies_are(
