@@ -578,6 +578,8 @@ class _HeroTournamentCard extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: cs.primary,
                       foregroundColor: cs.onPrimary,
+                      fixedSize: const Size(112, 44),
+                      minimumSize: const Size(112, 44),
                     ),
                     child: const Text('대회 보기'),
                   ),
