@@ -5,6 +5,29 @@ export type ValidationResult<T> =
 const meetingDays = new Set(['월', '화', '수', '목', '금', '토', '일']);
 const genderPreferences = new Set(['mixed', 'male', 'female']);
 const maxMonthlyFee = 1_000_000;
+const clubCardColors = new Set([
+  '#18376D',
+  '#3156D8',
+  '#176B63',
+  '#6941C6',
+  '#C2413B',
+  '#A15C08',
+]);
+
+export function parseClubCardColor(
+  value: unknown,
+): ValidationResult<string> {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: '#3156D8' };
+  }
+  if (typeof value !== 'string') {
+    return { ok: false, message: 'card_color is invalid' };
+  }
+  const normalized = value.toUpperCase();
+  return clubCardColors.has(normalized)
+    ? { ok: true, value: normalized }
+    : { ok: false, message: 'card_color is invalid' };
+}
 
 export function parseMeetingDays(
   value: unknown,

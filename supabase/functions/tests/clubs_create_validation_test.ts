@@ -1,11 +1,25 @@
 import { assertEquals, assertFalse } from 'std/assert/mod.ts';
 
 import {
+  parseClubCardColor,
   parseGenderPreference,
   parseMeetingDays,
   parseMonthlyFee,
   parseWebsite,
 } from '../clubs-create/validation.ts';
+
+Deno.test('clubs-create card color accepts only the shared palette', () => {
+  assertEquals(parseClubCardColor(undefined), {
+    ok: true,
+    value: '#3156D8',
+  });
+  assertEquals(parseClubCardColor('#176b63'), {
+    ok: true,
+    value: '#176B63',
+  });
+  assertFalse(parseClubCardColor('#FFFFFF').ok);
+  assertFalse(parseClubCardColor(123).ok);
+});
 
 Deno.test('clubs-create meeting days validates and deduplicates', () => {
   assertEquals(parseMeetingDays(['월', '수', '월']), {

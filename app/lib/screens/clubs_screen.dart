@@ -12,6 +12,7 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
+import '../utils/club_card_colors.dart';
 import '../utils/club_sections.dart';
 import '../utils/club_sort.dart';
 import '../utils/grade_labels.dart';
@@ -1180,7 +1181,7 @@ class _MyClubsCarousel extends StatelessWidget {
             itemBuilder: (context, index) {
               final club = clubs[index];
               final pending = pendingClubs.contains(club);
-              final color = _clubCardColor(club.id);
+              final color = clubCardColor(club.cardColor);
               return Material(
                 color: color,
                 borderRadius: AppRadius.hero,
@@ -1250,17 +1251,6 @@ class _MyClubsCarousel extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Color _clubCardColor(String id) {
-    const colors = [
-      Color(0xFF18376D),
-      Color(0xFF3156D8),
-      Color(0xFF176B63),
-      Color(0xFF6941C6),
-    ];
-    final hash = id.codeUnits.fold<int>(0, (sum, value) => sum + value);
-    return colors[hash % colors.length];
   }
 }
 

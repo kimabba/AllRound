@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_create_draft.dart';
+import '../../utils/club_card_colors.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/grade_labels.dart';
@@ -39,6 +40,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   final List<_PendingIntroImage> _introImages = [];
   final Set<String> _meetingDays = {};
   String? _genderPreference;
+  String _cardColor = defaultClubCardColor;
   int _step = 0;
   bool _submitting = false;
   String? _submittingLabel;
@@ -109,6 +111,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             ..clear()
             ..addAll(draft.meetingDays);
           _genderPreference = draft.genderPreference;
+          _cardColor = draft.cardColor;
           _step = draft.step;
         }
         _draftReady = true;
@@ -139,6 +142,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         monthlyFee: _monthlyFee.text,
         meetingDays: _meetingDays.toList(growable: false),
         genderPreference: _genderPreference,
+        cardColor: _cardColor,
         step: _step,
         hadSelectedImages: _logoBytes != null || _introImages.isNotEmpty,
       );
@@ -318,6 +322,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
             genderPreference: _genderPreference,
+            cardColor: _cardColor,
             latitude: latitude,
             longitude: longitude,
           );
@@ -599,12 +604,17 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               name: _name,
                               region: _region,
                               address: _address,
+                              cardColor: _cardColor,
                               onLogoTap: _showLogoSheet,
                               onSportChanged: (sport) {
                                 setState(() => _sport = sport);
                                 _scheduleDraftSave();
                               },
                               onRegionTap: _showRegionPicker,
+                              onCardColorChanged: (value) {
+                                setState(() => _cardColor = value);
+                                _scheduleDraftSave();
+                              },
                             )
                           else if (_step == 1)
                             _OperationClubStep(
@@ -783,9 +793,11 @@ class _BasicClubStep extends StatelessWidget {
     required this.name,
     required this.region,
     required this.address,
+    required this.cardColor,
     required this.onLogoTap,
     required this.onSportChanged,
     required this.onRegionTap,
+    required this.onCardColorChanged,
   });
 
   final String sport;
@@ -794,9 +806,11 @@ class _BasicClubStep extends StatelessWidget {
   final TextEditingController name;
   final TextEditingController region;
   final TextEditingController address;
+  final String cardColor;
   final VoidCallback onLogoTap;
   final ValueChanged<String> onSportChanged;
   final VoidCallback onRegionTap;
+  final ValueChanged<String> onCardColorChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -876,6 +890,48 @@ class _BasicClubStep extends StatelessWidget {
             prefixIcon: Icon(Icons.place_outlined),
           ),
           textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('클럽 카드 색상', style: tt.labelLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '나의 클럽 카드 배경에 사용돼요.',
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final value in clubCardColorChoices)
+              Semantics(
+                label: '클럽 카드 색상 $value',
+                selected: cardColor == value,
+                button: true,
+                child: InkWell(
+                  onTap: () => onCardColorChanged(value),
+                  customBorder: const CircleBorder(),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: AppSizes.touchTarget,
+                    height: AppSizes.touchTarget,
+                    decoration: BoxDecoration(
+                      color: clubCardColor(value),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: cardColor == value
+                            ? cs.onSurface
+                            : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                    child: cardColor == value
+                        ? const Icon(Icons.check_rounded, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );

@@ -14,6 +14,7 @@ void main() {
     monthlyFee: '30000',
     meetingDays: ['월', '수'],
     genderPreference: 'mixed',
+    cardColor: '#176B63',
     step: 2,
     hadSelectedImages: true,
   );
@@ -26,6 +27,7 @@ void main() {
     expect(restored.name, '한강 클럽');
     expect(restored.meetingDays, ['월', '수']);
     expect(restored.genderPreference, 'mixed');
+    expect(restored.cardColor, '#176B63');
     expect(restored.step, 2);
     expect(restored.hadSelectedImages, isTrue);
     expect(restored.hasUserContent, isTrue);
@@ -43,11 +45,32 @@ void main() {
       monthlyFee: '',
       meetingDays: [],
       genderPreference: null,
+      cardColor: '#3156D8',
       step: 2,
       hadSelectedImages: false,
     );
 
     expect(emptyDraft.hasUserContent, isFalse);
+  });
+
+  test('a non-default card color is draft content', () {
+    const colorOnlyDraft = ClubCreateDraft(
+      sport: 'tennis',
+      name: '',
+      region: '',
+      address: '',
+      contact: '',
+      website: '',
+      description: '',
+      monthlyFee: '',
+      meetingDays: [],
+      genderPreference: null,
+      cardColor: '#176B63',
+      step: 0,
+      hadSelectedImages: false,
+    );
+
+    expect(colorOnlyDraft.hasUserContent, isTrue);
   });
 
   test('club create draft rejects invalid JSON and filters unknown values', () {
@@ -61,6 +84,7 @@ void main() {
     expect(restored!.sport, 'tennis');
     expect(restored.meetingDays, ['월']);
     expect(restored.genderPreference, isNull);
+    expect(restored.cardColor, '#3156D8');
     expect(restored.step, 2);
   });
 

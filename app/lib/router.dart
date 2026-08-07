@@ -316,14 +316,14 @@ class _MainShell extends ConsumerWidget {
   static const _tabs = <String>[
     '/',
     '/clubs',
-    '/rules',
+    '/profile',
   ];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
-  /// (마이는 앱바 우상단, 대회 전체 목록은 대회 화면에서 들어간다).
+  /// (룰북과 대회 전체 목록은 대회 화면 안에서 들어간다).
   static const _untabbedPaths = [
     '/more',
-    '/profile',
+    '/rules',
     '/notifications',
     '/favorites',
     '/blocked-users',

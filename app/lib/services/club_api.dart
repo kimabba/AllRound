@@ -121,6 +121,7 @@ mixin ClubApi on ApiBase {
     List<String>? meetingDays,
     int? monthlyFee,
     String? genderPreference,
+    String cardColor = '#3156D8',
     double? latitude,
     double? longitude,
   }) async {
@@ -143,6 +144,7 @@ mixin ClubApi on ApiBase {
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
+        'card_color': cardColor,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
       }),

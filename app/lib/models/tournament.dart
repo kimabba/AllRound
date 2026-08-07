@@ -315,6 +315,7 @@ class Club {
   final List<String> meetingDays;
   final int? monthlyFee;
   final String? genderPreference;
+  final String cardColor;
   final bool inquiryLinksEnabled;
   final double? latitude;
   final double? longitude;
@@ -342,6 +343,7 @@ class Club {
     this.meetingDays = const [],
     this.monthlyFee,
     this.genderPreference,
+    this.cardColor = '#3156D8',
     this.inquiryLinksEnabled = true,
     this.latitude,
     this.longitude,
@@ -389,6 +391,7 @@ class Club {
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
       genderPreference: j['gender_preference'] as String?,
+      cardColor: (j['card_color'] as String?) ?? '#3156D8',
       inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,
       latitude: (j['latitude'] as num?)?.toDouble(),
       longitude: (j['longitude'] as num?)?.toDouble(),
