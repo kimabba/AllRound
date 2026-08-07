@@ -57,7 +57,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               item.sport == selectedSport &&
               !item.startDate.isBefore(today) &&
               !item.isRegistrationClosed &&
-              (_selectedRegion == '전국' || item.region == _selectedRegion) &&
+              (_selectedRegion == '전국' ||
+                  (item.region ?? '').contains(_selectedRegion)) &&
               (_query.isEmpty ||
                   item.title.toLowerCase().contains(_query.toLowerCase()) ||
                   (item.region ?? '').contains(_query) ||
@@ -166,7 +167,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onOpen: (item) => context.push('/tournaments/${item.id}'),
                       onFavorite: _toggleFavorite,
                       onBrowse: () => context.push('/tournaments'),
-                      onRules: () => context.go('/rules'),
+                      onFavorites: () => context.push('/favorites'),
+                      onRules: () =>
+                          context.push('/rules?sport=$selectedSport'),
                     ),
                   ),
                 );
@@ -332,6 +335,7 @@ class _TournamentHomeContent extends StatelessWidget {
     required this.onOpen,
     required this.onFavorite,
     required this.onBrowse,
+    required this.onFavorites,
     required this.onRules,
   });
 
@@ -344,6 +348,7 @@ class _TournamentHomeContent extends StatelessWidget {
   final ValueChanged<Tournament> onOpen;
   final Future<void> Function(Tournament, bool) onFavorite;
   final VoidCallback onBrowse;
+  final VoidCallback onFavorites;
   final VoidCallback onRules;
 
   @override
@@ -396,6 +401,7 @@ class _TournamentHomeContent extends StatelessWidget {
           tournaments: favorites,
           onOpen: onOpen,
           onBrowse: onBrowse,
+          onFavorites: onFavorites,
         ),
         if (deadlineSoon.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xxl),
@@ -586,16 +592,78 @@ class _InterestTournamentBand extends StatelessWidget {
     required this.tournaments,
     required this.onOpen,
     required this.onBrowse,
+    required this.onFavorites,
   });
 
   final List<Tournament> tournaments;
   final ValueChanged<Tournament> onOpen;
   final VoidCallback onBrowse;
+  final VoidCallback onFavorites;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final first = tournaments.firstOrNull;
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    final info = Row(
+      children: [
+        Icon(
+          first == null
+              ? Icons.favorite_border_rounded
+              : Icons.favorite_rounded,
+          color: cs.primary,
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                first?.title ?? '관심 대회가 없어요',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                first == null
+                    ? '하트로 저장한 대회를 여기에 모아드려요'
+                    : '관심 대회 ${tournaments.length}개',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final action = Semantics(
+      button: true,
+      child: InkWell(
+        onTap: first == null ? onBrowse : onFavorites,
+        borderRadius: AppRadius.pill,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: cs.primary),
+            borderRadius: AppRadius.pill,
+          ),
+          child: Text(
+            first == null ? '대회 둘러보기' : '전체보기',
+            style: TextStyle(
+              color: cs.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
     return Material(
       color: cs.surfaceContainerLow,
       borderRadius: AppRadius.card,
@@ -604,46 +672,22 @@ class _InterestTournamentBand extends StatelessWidget {
         borderRadius: AppRadius.card,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Icon(
-                first == null
-                    ? Icons.favorite_border_rounded
-                    : Icons.favorite_rounded,
-                color: cs.primary,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: largeText
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      first?.title ?? '관심 대회가 없어요',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      first == null
-                          ? '하트로 저장한 대회를 여기에 모아드려요'
-                          : '관심 대회 ${tournaments.length}개',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
+                    info,
+                    const SizedBox(height: AppSpacing.sm),
+                    action,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: info),
+                    const SizedBox(width: AppSpacing.sm),
+                    action,
                   ],
                 ),
-              ),
-              OutlinedButton(
-                onPressed: onBrowse,
-                child: Text(first == null ? '대회 둘러보기' : '전체보기'),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -926,6 +970,7 @@ class _RulebookBand extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final title = sport == 'tennis' ? '테니스 룰북' : '풋살 룰북';
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
     return Material(
       color: cs.primaryContainer.withValues(alpha: 0.45),
       borderRadius: AppRadius.hero,
@@ -936,21 +981,36 @@ class _RulebookBand extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
+              if (largeText)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       title,
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
-                  ),
-                  const Text('경기 전에 꼭 알아둘 규칙'),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
-              ),
+                    const Text('경기 전에 꼭 알아둘 규칙'),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const Text('경기 전에 꼭 알아둘 규칙'),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
               const SizedBox(height: AppSpacing.md),
               const Row(
                 children: [

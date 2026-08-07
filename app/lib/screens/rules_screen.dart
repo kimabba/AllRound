@@ -14,7 +14,9 @@ import '../widgets/app_skeleton_card.dart';
 import '../widgets/notification_inbox_action.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
-  const RulesScreen({super.key});
+  const RulesScreen({super.key, this.initialSport});
+
+  final String? initialSport;
 
   @override
   ConsumerState<RulesScreen> createState() => _RulesScreenState();
@@ -57,7 +59,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     });
 
     final api = ref.read(apiProvider);
-    final sport = ref.read(activeSportProvider);
+    final sport = widget.initialSport ?? ref.read(activeSportProvider);
     _activeSport = sport;
 
     if (!kReleaseMode &&
@@ -130,7 +132,9 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(activeSportProvider, (_, __) => _load());
+    if (widget.initialSport == null) {
+      ref.listen(activeSportProvider, (_, __) => _load());
+    }
 
     final cs = Theme.of(context).colorScheme;
 
