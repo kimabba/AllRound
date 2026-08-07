@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(22);
+select plan(24);
 
 select has_table('public', 'club_chat_threads', '모임 채팅방 테이블 존재');
 select has_table('public', 'club_chat_participants', '1:1 참여자 테이블 존재');
@@ -80,6 +80,14 @@ select col_is_pk(
 select col_type_is(
   'public', 'club_chat_messages', 'body', 'text',
   '메시지 본문은 text 타입이다'
+);
+select ok(
+  to_regclass('public.club_chat_threads_created_by_idx') is not null,
+  '채팅방 생성자 외래키 인덱스가 있다'
+);
+select ok(
+  to_regclass('public.club_chat_messages_sender_idx') is not null,
+  '메시지 작성자 외래키 인덱스가 있다'
 );
 
 select ok(
