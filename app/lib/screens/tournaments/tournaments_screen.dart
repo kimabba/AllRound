@@ -214,6 +214,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
         ),
         actions: [
           const NotificationInboxAction(),
+          const ProfileAction(),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: '최근 본 대회',
