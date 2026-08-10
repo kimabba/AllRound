@@ -175,6 +175,12 @@ PreparedClubImage prepareClubImageBytes(
     ..iccProfile = null
     ..textData = null;
 
+  if (_isSolidBlack(clean)) {
+    throw const ClubImagePreparationException(
+      '사진을 안전하게 처리하지 못했습니다. 다른 사진으로 다시 시도해주세요.',
+    );
+  }
+
   if (_hasTransparentPixel(clean)) {
     final png = img.encodePng(clean);
     if (png.length <= maxBytes) {
@@ -196,6 +202,16 @@ PreparedClubImage prepareClubImageBytes(
     extension: ClubImageFormat.jpeg.extension,
     contentType: ClubImageFormat.jpeg.contentType,
   );
+}
+
+/// 디코더가 예외 없이 픽셀 버퍼를 전부 0으로 채운 손상된 결과(완전 검정 한 장)를
+/// 잡아낸다. 검정이 아닌 단색(로고 등)은 정상 입력으로 통과시킨다.
+bool _isSolidBlack(img.Image image) {
+  if (image.width < 2 || image.height < 2) return false;
+  for (final pixel in image) {
+    if (pixel.r != 0 || pixel.g != 0 || pixel.b != 0) return false;
+  }
+  return true;
 }
 
 bool _hasTransparentPixel(img.Image image) {

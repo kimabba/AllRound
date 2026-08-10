@@ -134,6 +134,31 @@ void main() {
       );
     });
 
+    test('디코더가 예외 없이 완전 검정만 내놓으면 손상으로 보고 거부한다', () {
+      final corrupt = img.Image(width: 8, height: 8, numChannels: 4);
+      // 기본값이 이미 (0,0,0,0) 이라 명시적으로 검정을 채운다.
+      for (final pixel in corrupt) {
+        pixel.setRgba(0, 0, 0, 255);
+      }
+
+      expect(
+        () => prepareClubImageBytes(img.encodePng(corrupt)),
+        throwsA(isA<ClubImagePreparationException>()),
+      );
+    });
+
+    test('검정이 아닌 단색(로고 등)은 정상 입력으로 통과시킨다', () {
+      final solidBlue = img.Image(width: 8, height: 8, numChannels: 4);
+      for (final pixel in solidBlue) {
+        pixel.setRgba(30, 60, 200, 255);
+      }
+
+      expect(
+        () => prepareClubImageBytes(img.encodePng(solidBlue)),
+        returnsNormally,
+      );
+    });
+
     test('rejects malformed bytes even when the header looks supported', () {
       expect(
         () => prepareClubImageBytes(
