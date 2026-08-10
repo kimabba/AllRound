@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/org_ranking.dart';
 import '../../models/player_result.dart';
+import '../../models/org_ranking_snapshot.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
@@ -65,10 +66,9 @@ class _PlayerDetailSheet extends ConsumerWidget {
               if (orgPlayerId == null)
                 Text('전적을 조회할 수 없는 행입니다.', style: tt.bodyMedium)
               else
-                FutureBuilder<List<PlayerResult>>(
-                  future: ref
-                      .read(apiProvider)
-                      .playerResults(orgCode: row.orgCode, orgPlayerId: orgPlayerId),
+                FutureBuilder<
+                    ({List<PlayerResult> results, List<OrgRankingSnapshot> snapshots})>(
+                  future: _loadRecord(ref, row, orgPlayerId),
                   builder: (context, snap) {
                     if (snap.connectionState == ConnectionState.waiting) {
                       return const Center(
@@ -81,9 +81,11 @@ class _PlayerDetailSheet extends ConsumerWidget {
                     if (snap.hasError) {
                       return Text('전적을 불러오지 못했습니다.', style: tt.bodyMedium);
                     }
+                    final data = snap.data;
                     return RecordContent(
-                      results: snap.data ?? const [],
+                      results: data?.results ?? const [],
                       rankings: [row],
+                      snapshots: data?.snapshots ?? const [],
                     );
                   },
                 ),
@@ -93,4 +95,19 @@ class _PlayerDetailSheet extends ConsumerWidget {
       },
     );
   }
+}
+
+Future<({List<PlayerResult> results, List<OrgRankingSnapshot> snapshots})>
+    _loadRecord(WidgetRef ref, OrgRankingRow row, String orgPlayerId) async {
+  final api = ref.read(apiProvider);
+  final results = await api.playerResults(
+    orgCode: row.orgCode,
+    orgPlayerId: orgPlayerId,
+  );
+  final snapshots = await api.playerRankingHistory(
+    orgCode: row.orgCode,
+    divisionCode: row.divisionCode,
+    orgPlayerId: orgPlayerId,
+  );
+  return (results: results, snapshots: snapshots);
 }
