@@ -28,7 +28,7 @@ void main() {
     ),
   );
 
-  testWidgets('모임 탭은 모집글 3개와 전체 보기 진입점을 노출한다', (tester) async {
+  testWidgets('클럽 탭은 모집글 2개와 전체보기 진입점을 먼저 노출한다', (tester) async {
     var opened = false;
     await tester.pumpWidget(
       MaterialApp(
@@ -48,9 +48,10 @@ void main() {
     );
 
     expect(find.text('팀원 모집 0'), findsOneWidget);
-    expect(find.text('팀원 모집 2'), findsOneWidget);
+    expect(find.text('팀원 모집 1'), findsOneWidget);
+    expect(find.text('팀원 모집 2'), findsNothing);
     expect(find.text('팀원 모집 3'), findsNothing);
-    await tester.tap(find.text('전체 보기'));
+    await tester.tap(find.text('전체보기'));
     expect(opened, isTrue);
   });
 

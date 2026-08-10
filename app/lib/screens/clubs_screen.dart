@@ -35,7 +35,7 @@ class ClubsScreen extends ConsumerStatefulWidget {
 class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   List<Club>? _nearbyClubs;
   bool _loadingNearby = false;
-  double _nearbyRadiusKm = 5;
+  final double _nearbyRadiusKm = 5;
   String? _nearbyError;
   String? _nearbyNotice;
 
@@ -72,6 +72,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _load();
       _loadRecruitingPosts();
       _restoreClubSortOrder();
+      if (AppConfig.userDesignPreview) _findNearbyClubs();
     });
   }
 
@@ -84,13 +85,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   Future<void> _restoreClubSortOrder() async {
     final order = await loadClubSortOrder();
     if (mounted) setState(() => _clubSortOrder = order);
-  }
-
-  Future<void> _selectClubSortOrder(ClubSortOrder? order) async {
-    if (order == null || order == _clubSortOrder) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _clubSortOrder = order);
-    await saveClubSortOrder(order);
   }
 
   Future<void> _loadMyClubs() async {
@@ -245,7 +239,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
     if (AppConfig.userDesignPreview) {
       setState(() {
-        _nearbyClubs = _previewClubs.take(4).toList();
+        _nearbyClubs = _previewClubs
+            .where((club) => _clubInterests.contains(club.sport))
+            .take(4)
+            .toList();
         _nearbyNotice = '디자인 미리보기용 주변 클럽입니다.';
         _loadingNearby = false;
       });
@@ -428,9 +425,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         TextField(
           controller: _clubNameQueryController,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: '지역이나 클럽 이름 검색',
-            prefixIcon: Icon(Icons.search_rounded),
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: IconButton(
+              tooltip: '지역·요일·조건 필터',
+              onPressed: _openClubFilterSheet,
+              icon: const Icon(Icons.tune_rounded),
+            ),
           ),
           onChanged: (value) {
             setState(() => _clubNameQuery = value.trim());
@@ -439,37 +441,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             FocusManager.instance.primaryFocus?.unfocus();
             setState(() => _clubNameQuery = value.trim());
           },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<ClubSortOrder>(
-                initialValue: _clubSortOrder,
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
-                ),
-                onChanged: _selectClubSortOrder,
-                items: [
-                  for (final order in ClubSortOrder.values)
-                    DropdownMenuItem(
-                      value: order,
-                      child: Text(order.label),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _openClubFilterSheet,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: const Text('지역·요일·조건'),
-              ),
-            ),
-          ],
         ),
         if (labels.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -511,16 +482,21 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SimpleSectionHeader(
-          title: hasClubNameQuery ? '검색 결과' : '추천 클럽',
-          icon:
-              hasClubNameQuery ? Icons.search_rounded : Icons.explore_outlined,
-          subtitle: hasClubNameQuery
-              ? '"${_clubNameQuery.trim()}"'
-              : (_clubFilters.hasActive
-                  ? _clubFilters.labels.join(' · ')
-                  : '관심 종목을 기준으로 추천해요'),
-          trailing: Text('${recommendedClubs.length}개'),
+        _ClubHomeSectionHeader(
+          title:
+              hasClubNameQuery ? '검색 결과 ${recommendedClubs.length}' : '추천 클럽',
+          trailingLabel: hasClubNameQuery ? null : '전체보기',
+          onTrailingTap: hasClubNameQuery
+              ? null
+              : () {
+                  setState(() {
+                    _showAllClubs = !_showAllClubs;
+                    if (_showAllClubs) {
+                      _clubInterests = {'tennis', 'futsal'};
+                    }
+                  });
+                  if (_showAllClubs) _load();
+                },
         ),
         const SizedBox(height: AppSpacing.sm),
         if (_loading || _loadingMy) const LinearProgressIndicator(),
@@ -557,19 +533,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           )
         else if (hasClubNameQuery)
           for (final club in displayedClubs)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: SimpleClubTile(
-                club: club,
-                backgroundColor: cs.surfaceContainerLowest,
-                isFavorite: favoriteClubIds.contains(club.id),
-                onFavoriteToggle: _toggleClubFavorite,
-                onOpen: () => _openClub(club),
-              ),
+            _ClubSearchResultRow(
+              club: club,
+              onOpen: () => _openClub(club),
             )
         else
           SizedBox(
-            height: 224,
+            height: 196,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: displayedClubs.length,
@@ -588,29 +558,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
               },
             ),
           ),
-        if (!hasClubNameQuery) ...[
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _showAllClubs = !_showAllClubs;
-                  if (_showAllClubs) {
-                    _clubInterests = {'tennis', 'futsal'};
-                  }
-                });
-                if (_showAllClubs) _load();
-              },
-              icon: Icon(
-                _showAllClubs
-                    ? Icons.expand_less_rounded
-                    : Icons.groups_2_outlined,
-              ),
-              label: Text(_showAllClubs ? '접기' : '전체 클럽 더보기'),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -780,8 +727,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final displayedRecommendationClubs = hasClubNameQuery || _showAllClubs
         ? recommendedClubs
         : recommendedClubs.take(3).toList();
-    final myMembershipClubs =
-        (_myClubs ?? const <Club>[]).where((club) => club.isMember).toList();
+    final myMembershipClubs = (_myClubs ?? const <Club>[])
+        .where((club) => club.isMember)
+        .where((club) => _clubInterests.contains(club.sport))
+        .toList();
     final joinedClubs =
         myMembershipClubs.where((club) => club.isApproved).toList();
     // 승인 대기 카드 = 내가 만든 승인 대기 클럽(JY-150) + 내가 낸 가입신청.
@@ -900,111 +849,77 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     required Set<String> favoriteClubIds,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final nearby = _nearbyClubs ?? const <Club>[];
 
-    return SimplePanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SimpleSectionHeader(
-            title: '내 주변 클럽',
-            subtitle: '현재 위치와 가까운 클럽을 보여드려요',
-            icon: Icons.near_me_rounded,
-            trailing: TextButton(
-              onPressed: _loadingNearby ? null : _findNearbyClubs,
-              child: Text(_nearbyClubs == null ? '내 위치로 찾기' : '다시 찾기'),
-            ),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ClubHomeSectionHeader(
+          title: '내 주변 클럽',
+          trailingLabel: nearby.isEmpty ? null : '전체보기',
+          onTrailingTap:
+              nearby.isEmpty ? null : () => _openNearbyNewClubsSheet(nearby),
+        ),
+        if (_loadingNearby) ...[
           const SizedBox(height: AppSpacing.sm),
-          SegmentedButton<double>(
-            segments: const [
-              ButtonSegment(value: 3, label: Text('3km')),
-              ButtonSegment(value: 5, label: Text('5km')),
-              ButtonSegment(value: 10, label: Text('10km')),
-            ],
-            selected: {_nearbyRadiusKm},
-            onSelectionChanged: _loadingNearby
-                ? null
-                : (values) {
-                    setState(() {
-                      _nearbyRadiusKm = values.first;
-                      _nearbyClubs = null;
-                      _nearbyNotice = null;
-                    });
-                    _findNearbyClubs();
-                  },
-          ),
-          if (_loadingNearby) ...[
-            const SizedBox(height: AppSpacing.md),
-            const LinearProgressIndicator(),
-          ],
-          if (_nearbyError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(_nearbyError!, style: TextStyle(color: cs.error)),
-          ],
-          if (_nearbyNotice != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              _nearbyNotice!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-            ),
-          ],
-          if (_nearbyClubs == null && !_loadingNearby) ...[
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _findNearbyClubs,
-                icon: const Icon(Icons.my_location_rounded),
-                label: const Text('내 위치로 찾기'),
-              ),
-            ),
-          ],
-          if (_nearbyClubs != null && !_loadingNearby) ...[
-            const SizedBox(height: AppSpacing.md),
-            if (_nearbyClubs!.isEmpty)
-              const AppEmptyState(
-                icon: Icons.location_off_outlined,
-                title: '주변 클럽을 찾지 못했어요',
-                description: '반경을 넓히거나 지역을 직접 선택해보세요.',
-              )
-            else ...[
-              SizedBox(
-                height: 224,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _nearbyClubs!.take(6).length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final club = _nearbyClubs![index];
-                    return _ClubDiscoveryCard(
-                      club: club,
-                      isFavorite: favoriteClubIds.contains(club.id),
-                      onFavoriteToggle: () => _toggleClubFavorite(
-                        club,
-                        favoriteClubIds.contains(club.id),
-                      ),
-                      onOpen: () => _openClub(club),
-                    );
-                  },
-                ),
-              ),
-              if (_nearbyClubs!.length > 4)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => _openNearbyNewClubsSheet(_nearbyClubs!),
-                    child: const Text('전체보기'),
-                  ),
-                ),
-            ],
-          ],
+          const LinearProgressIndicator(),
         ],
-      ),
+        if (_nearbyError != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(_nearbyError!, style: TextStyle(color: cs.error)),
+        ],
+        if (_nearbyNotice != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _nearbyNotice!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ],
+        if (nearby.isNotEmpty && !_loadingNearby) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 196,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: nearby.take(6).length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final club = nearby[index];
+                return _ClubDiscoveryCard(
+                  club: club,
+                  isFavorite: favoriteClubIds.contains(club.id),
+                  onFavoriteToggle: () => _toggleClubFavorite(
+                    club,
+                    favoriteClubIds.contains(club.id),
+                  ),
+                  onOpen: () => _openClub(club),
+                );
+              },
+            ),
+          ),
+        ],
+        if (_nearbyClubs != null && nearby.isEmpty && !_loadingNearby) ...[
+          const SizedBox(height: AppSpacing.sm),
+          const AppEmptyState(
+            icon: Icons.location_off_outlined,
+            title: '주변 클럽을 찾지 못했어요',
+            description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _loadingNearby ? null : _findNearbyClubs,
+            icon: const Icon(Icons.my_location_rounded),
+            label: Text(_nearbyClubs == null ? '내 위치로 찾기' : '내 위치로 다시 찾기'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1103,57 +1018,49 @@ class _ClubSportSelector extends StatelessWidget {
     final icon = selected == 'tennis'
         ? Icons.sports_tennis_rounded
         : Icons.sports_soccer_rounded;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '내 주종목',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w900),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: PopupMenuButton<String>(
+        tooltip: '주종목 선택',
+        initialValue: selected,
+        onSelected: onSelected,
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'futsal',
+            child: Text(sportLabel(Sport.futsal)),
+          ),
+          PopupMenuItem(
+            value: 'tennis',
+            child: Text(sportLabel(Sport.tennis)),
+          ),
+        ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.primary),
+            borderRadius: AppRadius.pill,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 19),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '내 주종목  $label',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            ],
           ),
         ),
-        PopupMenuButton<String>(
-          tooltip: '주종목 선택',
-          initialValue: selected,
-          onSelected: onSelected,
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'futsal',
-              child: Text(sportLabel(Sport.futsal)),
-            ),
-            PopupMenuItem(
-              value: 'tennis',
-              child: Text(sportLabel(Sport.tennis)),
-            ),
-          ],
-          child: Container(
-            constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).colorScheme.primary),
-              borderRadius: AppRadius.pill,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 19),
-                const SizedBox(width: AppSpacing.sm),
-                Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-              ],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _MyClubsCarousel extends StatelessWidget {
+class _MyClubsCarousel extends StatefulWidget {
   const _MyClubsCarousel({
     required this.joinedClubs,
     required this.pendingClubs,
@@ -1165,86 +1072,141 @@ class _MyClubsCarousel extends StatelessWidget {
   final ValueChanged<Club> onOpen;
 
   @override
+  State<_MyClubsCarousel> createState() => _MyClubsCarouselState();
+}
+
+class _MyClubsCarouselState extends State<_MyClubsCarousel> {
+  late final PageController _controller = PageController(viewportFraction: .9);
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final clubs = [...pendingClubs, ...joinedClubs];
+    final clubs = [...widget.pendingClubs, ...widget.joinedClubs];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SimpleSectionHeader(
+        _ClubHomeSectionHeader(
           title: '나의 클럽',
-          subtitle: '참여 중 ${joinedClubs.length} · 승인 대기 ${pendingClubs.length}',
-          icon: Icons.verified_rounded,
         ),
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
-          height: 148,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+          height: 108,
+          child: PageView.builder(
+            controller: _controller,
             itemCount: clubs.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+            onPageChanged: (value) => setState(() => _page = value),
             itemBuilder: (context, index) {
               final club = clubs[index];
-              final pending = pendingClubs.contains(club);
+              final pending = widget.pendingClubs.contains(club);
               final color = clubCardColor(club.cardColor);
-              return Material(
-                color: color,
-                borderRadius: AppRadius.hero,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => onOpen(club),
-                  child: SizedBox(
-                    width: 260,
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              SimpleClubAvatar(club: club, size: 44),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.sm,
-                                  vertical: AppSpacing.xs,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: AppRadius.pill,
-                                ),
-                                child: Text(
-                                  pending ? '승인 대기' : '참여 중',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-                          Text(
-                            club.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          Text(
-                            clubRegionMemberLabel(
-                                club.region, club.memberCount),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.82),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index == clubs.length - 1 ? 0 : AppSpacing.sm,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: AppRadius.hero,
+                  clipBehavior: Clip.antiAlias,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          color,
+                          Color.lerp(color, Colors.black, .18)!,
                         ],
+                      ),
+                      borderRadius: AppRadius.hero,
+                    ),
+                    child: InkWell(
+                      onTap: () => widget.onOpen(club),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.md,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.xs),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .94),
+                                shape: BoxShape.circle,
+                              ),
+                              child: SimpleClubAvatar(club: club, size: 48),
+                            ),
+                            const SizedBox(width: AppSpacing.lg),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    club.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.xs,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: Colors.white.withValues(
+                                              alpha: .72,
+                                            ),
+                                          ),
+                                          borderRadius: AppRadius.pill,
+                                        ),
+                                        child: Text(
+                                          pending ? '승인 대기' : '멤버',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
+                                        child: Text(
+                                          clubRegionMemberLabel(
+                                            club.region,
+                                            club.memberCount,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: .88,
+                                            ),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1253,6 +1215,27 @@ class _MyClubsCarousel extends StatelessWidget {
             },
           ),
         ),
+        if (clubs.length > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < clubs.length; index++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == _page ? 10 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: index == _page
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1284,7 +1267,7 @@ class _ClubDiscoveryCard extends StatelessWidget {
       child: InkWell(
         onTap: onOpen,
         child: Container(
-          width: 210,
+          width: 172,
           decoration: BoxDecoration(
             border: Border.all(color: cs.outlineVariant),
             borderRadius: AppRadius.card,
@@ -1295,7 +1278,7 @@ class _ClubDiscoveryCard extends StatelessWidget {
               Stack(
                 children: [
                   SizedBox(
-                    height: 122,
+                    height: 112,
                     width: double.infinity,
                     child: imageUrl == null || imageUrl.isEmpty
                         ? ColoredBox(
@@ -1318,13 +1301,20 @@ class _ClubDiscoveryCard extends StatelessWidget {
                   Positioned(
                     top: AppSpacing.xs,
                     right: AppSpacing.xs,
-                    child: IconButton.filledTonal(
-                      tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
-                      onPressed: onFavoriteToggle,
-                      icon: Icon(
-                        isFavorite
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: cs.surface.withValues(alpha: .86),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+                        onPressed: onFavoriteToggle,
+                        icon: Icon(
+                          isFavorite
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                        ),
+                        color: isFavorite ? cs.primary : cs.onSurface,
                       ),
                     ),
                   ),
@@ -1361,6 +1351,97 @@ class _ClubDiscoveryCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClubHomeSectionHeader extends StatelessWidget {
+  const _ClubHomeSectionHeader({
+    required this.title,
+    this.trailingLabel,
+    this.onTrailingTap,
+  });
+
+  final String title;
+  final String? trailingLabel;
+  final VoidCallback? onTrailingTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+        if (trailingLabel != null)
+          TextButton.icon(
+            onPressed: onTrailingTap,
+            label: Text(trailingLabel!),
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.chevron_right_rounded, size: 18),
+          ),
+      ],
+    );
+  }
+}
+
+class _ClubSearchResultRow extends StatelessWidget {
+  const _ClubSearchResultRow({required this.club, required this.onOpen});
+
+  final Club club;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 72),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              SimpleClubAvatar(club: club, size: 48),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      club.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      clubRegionMemberLabel(club.region, club.memberCount),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
             ],
           ),
         ),
@@ -1431,6 +1512,19 @@ final _previewMyClubs = [
     monthlyFee: 20000,
     myRole: 'member',
   ),
+  Club(
+    id: 'preview-club-my-2',
+    sport: 'futsal',
+    name: '한강 풋살 유나이티드',
+    region: '서울',
+    address: '서울 마포구 망원동',
+    description: '수요일 저녁에 함께 뛰는 직장인 풋살 클럽입니다.',
+    memberCount: 18,
+    meetingDays: const ['수'],
+    monthlyFee: 25000,
+    myRole: 'member',
+    cardColor: '#E05252',
+  ),
 ];
 
 final _previewRecruitingPosts = [
@@ -1453,5 +1547,25 @@ final _previewRecruitingPosts = [
     cost: '회당 1만원',
     intro: '기본 매너를 지키며 꾸준히 함께할 멤버를 찾습니다.',
     createdAt: DateTime(2026, 7, 17),
+  ),
+  RecruitingPostPreview(
+    id: 'preview-recruiting-2',
+    clubId: 'preview-club-futsal-2',
+    sport: 'futsal',
+    clubName: '한강 풋살 유나이티드',
+    title: '평일 저녁 회원 모집',
+    region: '서울',
+    place: '망원 풋살장',
+    schedule: '매주 수요일 20:00',
+    grade: '중급',
+    gender: '여성',
+    age: '30–50대',
+    position: '필드',
+    fieldCount: 4,
+    keeperCount: 0,
+    totalCount: 4,
+    cost: '월 2.5만원',
+    intro: '즐겁게 오래 함께할 팀원을 찾습니다.',
+    createdAt: DateTime(2026, 7, 18),
   ),
 ];
