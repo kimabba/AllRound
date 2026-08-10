@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 랭킹 표 어느 선수든(연결 여부 무관) 순위 추이 그래프를 보고, 연결된 본인은 "이 시즌 기록"(올해 참가 수·누적 우승·시즌 최고 순위·전적 분포)까지 보는 화면을 랭킹 탭 안에 만든다. MY 화면에서 기록 섹션을 완전히 뗀다.
+**Goal:** 랭킹 표 어느 선수든(연결 여부 무관) 순위 추이 그래프를 보고, 연결된 본인은 "이 시즌 기록"(올해 참가 수·누적 우승·역대 최고 순위·전적 분포)까지 보는 화면을 랭킹 탭 안에 만든다. MY 화면에서 기록 섹션을 완전히 뗀다.
 
 **Architecture:** 이미 있는 `RecordContent` 위젯(내부: 현재 순위 → 최고의 순간 → 전적 리스트)을 확장 지점으로 삼아 "이 시즌 기록" 블록과 순위 추이 스파크라인을 끼워 넣는다. 이 컴포넌트를 두 곳에서 재사용한다 — 신규 `/rankings/me`(내 기록, 랭킹 탭 진입) 화면과 오늘 만든 선수 상세시트(`player_detail_sheet.dart`). 순위 스냅샷(`org_ranking_snapshots`)은 이미 2026-08-04부터 매일 자동 적재 중이며, 이번 작업은 그 위에 RLS를 열고 조회·표시 레이어만 얹는다.
 
@@ -141,7 +141,7 @@ git commit -m "feat(ranking): OrgRankingSnapshot 모델 추가"
 
 **Interfaces:**
 - Consumes: `PlayerResult`(`app/lib/models/player_result.dart` — 필드 `playedOn DateTime`, `resultRound int?`, 이미 존재), `OrgRankingSnapshot`(Task 1의 `rank int`, `orgPlayerId` 등).
-- Produces: `SeasonStats`(필드: `tournamentsThisYear int`, `careerWins int`, `seasonBestRank int?`, `resultDistribution Map<int?, int>`), `SeasonStats.compute({required results, required snapshots, required currentYear})`, 최상위 함수 `String seasonDistributionLabel(int? resultRound)`.
+- Produces: `SeasonStats`(필드: `tournamentsThisYear int`, `careerWins int`, `allTimeBestRank int?`, `resultDistribution Map<int?, int>`), `SeasonStats.compute({required results, required snapshots, required currentYear})`, 최상위 함수 `String seasonDistributionLabel(int? resultRound)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -183,7 +183,7 @@ void main() {
       );
       expect(stats.tournamentsThisYear, 0);
       expect(stats.careerWins, 0);
-      expect(stats.seasonBestRank, isNull);
+      expect(stats.allTimeBestRank, isNull);
       expect(stats.resultDistribution, isEmpty);
     });
 
@@ -212,7 +212,7 @@ void main() {
       expect(stats.careerWins, 2);
     });
 
-    test('가장 낮은(=가장 좋은) 순위를 시즌 최고로 뽑는다', () {
+    test('가장 낮은(=가장 좋은) 순위를 역대 최고로 뽑는다', () {
       final stats = SeasonStats.compute(
         results: const [],
         snapshots: [
@@ -222,7 +222,7 @@ void main() {
         ],
         currentYear: 2026,
       );
-      expect(stats.seasonBestRank, 3);
+      expect(stats.allTimeBestRank, 3);
     });
 
     test('resultRound가 null인 행은 null 키로 묶인다', () {
@@ -270,13 +270,13 @@ class SeasonStats {
   const SeasonStats({
     required this.tournamentsThisYear,
     required this.careerWins,
-    required this.seasonBestRank,
+    required this.allTimeBestRank,
     required this.resultDistribution,
   });
 
   final int tournamentsThisYear;
   final int careerWins;
-  final int? seasonBestRank;
+  final int? allTimeBestRank;
 
   /// key: result_round(1=우승, 2=준우승, 4=4강 …). null 은 정규화 실패(원문만 있음).
   final Map<int?, int> resultDistribution;
@@ -290,10 +290,10 @@ class SeasonStats {
         results.where((r) => r.playedOn.year == currentYear).length;
     final careerWins = results.where((r) => r.resultRound == 1).length;
 
-    int? seasonBestRank;
+    int? allTimeBestRank;
     for (final s in snapshots) {
-      if (seasonBestRank == null || s.rank < seasonBestRank) {
-        seasonBestRank = s.rank;
+      if (allTimeBestRank == null || s.rank < allTimeBestRank) {
+        allTimeBestRank = s.rank;
       }
     }
 
@@ -305,7 +305,7 @@ class SeasonStats {
     return SeasonStats(
       tournamentsThisYear: tournamentsThisYear,
       careerWins: careerWins,
-      seasonBestRank: seasonBestRank,
+      allTimeBestRank: allTimeBestRank,
       resultDistribution: distribution,
     );
   }
@@ -374,7 +374,14 @@ void main() {
   testWidgets('점이 0개면 안내 문구를 보여주고 그래프는 안 그린다', (tester) async {
     await tester.pumpWidget(_wrap(const RankTrendSparkline(snapshots: [])));
     expect(find.text('추이를 보려면 며칠 더 필요해요'), findsOneWidget);
-    expect(find.byType(CustomPaint), findsNothing);
+    // Scaffold/Material이 내부적으로 CustomPaint를 쓰므로 위젯 하위로 좁힌다.
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('점이 1개여도 안내 문구를 보여준다', (tester) async {
@@ -392,7 +399,13 @@ void main() {
       ],
     )));
     expect(find.text('추이를 보려면 며칠 더 필요해요'), findsNothing);
-    expect(find.byType(CustomPaint), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -643,6 +656,7 @@ import 'package:allround/models/org_ranking_snapshot.dart';
 import 'package:allround/models/player_result.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:allround/widgets/profile/my_record_widgets.dart';
+import 'package:allround/widgets/rankings/rank_trend_sparkline.dart';
 
 // AppTheme.light 는 게터가 아니라 메서드다(app/lib/theme/app_theme.dart:9).
 // 테마를 빼면 안 된다 — 이 프로젝트 테마가 버튼 폭을 무한으로 강제해서,
@@ -803,7 +817,13 @@ void main() {
         _snap(on: '2026-08-05', rank: 3),
       ],
     )));
-    expect(find.byType(CustomPaint), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
   });
 }
 ```
@@ -999,8 +1019,8 @@ class _SeasonStatsBlock extends StatelessWidget {
             children: [
               _StatItem(label: '올해 참가', value: '${stats.tournamentsThisYear}개 대회'),
               _StatItem(label: '누적 우승', value: '${stats.careerWins}회'),
-              if (stats.seasonBestRank != null)
-                _StatItem(label: '시즌 최고', value: '${stats.seasonBestRank}위'),
+              if (stats.allTimeBestRank != null)
+                _StatItem(label: '역대 최고', value: '${stats.allTimeBestRank}위'),
             ],
           ),
           if (distributionEntries.isNotEmpty) ...[
