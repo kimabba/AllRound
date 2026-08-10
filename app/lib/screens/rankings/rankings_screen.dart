@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -529,6 +530,17 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               onChanged: (v) {
                 if (v != null) _changeDivision(v);
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => context.push('/rankings/me'),
+                icon: const Icon(Icons.query_stats_rounded),
+                label: const Text('내 기록 보기'),
+              ),
             ),
           ),
           Padding(
