@@ -34,7 +34,7 @@ void main() {
       );
       expect(stats.tournamentsThisYear, 0);
       expect(stats.careerWins, 0);
-      expect(stats.seasonBestRank, isNull);
+      expect(stats.allTimeBestRank, isNull);
       expect(stats.resultDistribution, isEmpty);
     });
 
@@ -63,7 +63,7 @@ void main() {
       expect(stats.careerWins, 2);
     });
 
-    test('가장 낮은(=가장 좋은) 순위를 시즌 최고로 뽑는다', () {
+    test('가장 낮은(=가장 좋은) 순위를 역대 최고로 뽑는다', () {
       final stats = SeasonStats.compute(
         results: const [],
         snapshots: [
@@ -73,7 +73,7 @@ void main() {
         ],
         currentYear: 2026,
       );
-      expect(stats.seasonBestRank, 3);
+      expect(stats.allTimeBestRank, 3);
     });
 
     test('resultRound가 null인 행은 null 키로 묶인다', () {

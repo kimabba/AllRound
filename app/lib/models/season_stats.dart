@@ -8,13 +8,13 @@ class SeasonStats {
   const SeasonStats({
     required this.tournamentsThisYear,
     required this.careerWins,
-    required this.seasonBestRank,
+    required this.allTimeBestRank,
     required this.resultDistribution,
   });
 
   final int tournamentsThisYear;
   final int careerWins;
-  final int? seasonBestRank;
+  final int? allTimeBestRank;
 
   /// key: result_round(1=우승, 2=준우승, 4=4강 …). null 은 정규화 실패(원문만 있음).
   final Map<int?, int> resultDistribution;
@@ -28,10 +28,10 @@ class SeasonStats {
         results.where((r) => r.playedOn.year == currentYear).length;
     final careerWins = results.where((r) => r.resultRound == 1).length;
 
-    int? seasonBestRank;
+    int? allTimeBestRank;
     for (final s in snapshots) {
-      if (seasonBestRank == null || s.rank < seasonBestRank) {
-        seasonBestRank = s.rank;
+      if (allTimeBestRank == null || s.rank < allTimeBestRank) {
+        allTimeBestRank = s.rank;
       }
     }
 
@@ -43,7 +43,7 @@ class SeasonStats {
     return SeasonStats(
       tournamentsThisYear: tournamentsThisYear,
       careerWins: careerWins,
-      seasonBestRank: seasonBestRank,
+      allTimeBestRank: allTimeBestRank,
       resultDistribution: distribution,
     );
   }
