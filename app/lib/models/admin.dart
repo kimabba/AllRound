@@ -1,3 +1,50 @@
+class ClubReviewRecord {
+  final String id;
+  final String name;
+  final String sport;
+  final String? region;
+  final String? address;
+  final String status;
+  final String? statusReason;
+  final String? reviewedBy;
+  final String? reviewerName;
+  final DateTime reviewedAt;
+
+  const ClubReviewRecord({
+    required this.id,
+    required this.name,
+    required this.sport,
+    this.region,
+    this.address,
+    required this.status,
+    this.statusReason,
+    this.reviewedBy,
+    this.reviewerName,
+    required this.reviewedAt,
+  });
+
+  bool get isApproved => status == 'approved';
+
+  factory ClubReviewRecord.fromJson(
+    Map<String, dynamic> json, {
+    required Map<String, String> reviewerNames,
+  }) {
+    final reviewedBy = json['approved_by'] as String?;
+    return ClubReviewRecord(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      sport: json['sport'] as String,
+      region: json['region'] as String?,
+      address: json['address'] as String?,
+      status: json['status'] as String,
+      statusReason: json['status_reason'] as String?,
+      reviewedBy: reviewedBy,
+      reviewerName: reviewedBy == null ? null : reviewerNames[reviewedBy],
+      reviewedAt: DateTime.parse(json['approved_at'] as String),
+    );
+  }
+}
+
 class CrawlAuditLog {
   final String id;
   final String source;

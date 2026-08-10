@@ -99,6 +99,46 @@ mixin AdminApi on ApiBase {
     return List<Map<String, dynamic>>.from(rows).map(Club.fromJson).toList();
   }
 
+  /// 다른 관리자가 처리한 건도 확인할 수 있도록 최근 승인·거절 내역을 반환한다.
+  Future<List<ClubReviewRecord>> recentClubReviews({int limit = 30}) async {
+    final rows = await supabase
+        .from('clubs')
+        .select(
+          'id, name, sport, region, address, status, status_reason, '
+          'approved_by, approved_at',
+        )
+        .inFilter('status', const ['approved', 'rejected'])
+        .not('approved_at', 'is', null)
+        .order('approved_at', ascending: false)
+        .limit(limit);
+    final reviewRows = List<Map<String, dynamic>>.from(rows as List);
+    final reviewerIds = reviewRows
+        .map((row) => row['approved_by'])
+        .whereType<String>()
+        .toSet()
+        .toList();
+    final reviewerNames = <String, String>{};
+    if (reviewerIds.isNotEmpty) {
+      final users = await supabase
+          .from('users')
+          .select('id, name')
+          .inFilter('id', reviewerIds);
+      for (final user in List<Map<String, dynamic>>.from(users as List)) {
+        final id = user['id'] as String;
+        final name = (user['name'] as String?)?.trim();
+        if (name != null && name.isNotEmpty) reviewerNames[id] = name;
+      }
+    }
+    return reviewRows
+        .map(
+          (row) => ClubReviewRecord.fromJson(
+            row,
+            reviewerNames: reviewerNames,
+          ),
+        )
+        .toList();
+  }
+
   Future<void> approveClub(
     String clubId, {
     required bool approve,
@@ -117,22 +157,22 @@ mixin AdminApi on ApiBase {
     if (!approve && (trimmedReason == null || trimmedReason.isEmpty)) {
       throw ArgumentError('rejection reason required');
     }
-    var processed = 0;
-    for (final clubId in clubIds) {
-      final res = await httpPost(
-        uri('clubs-approve'),
-        headers: await authHeaders(),
-        body: jsonEncode({
-          'club_id': clubId,
-          'action': approve ? 'approve' : 'reject',
-          if (trimmedReason != null && trimmedReason.isNotEmpty)
-            'reason': trimmedReason,
-        }),
-      );
-      check(res);
-      processed++;
+    final res = await httpPost(
+      uri('clubs-approve'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'club_ids': clubIds,
+        'action': approve ? 'approve' : 'reject',
+        if (trimmedReason != null && trimmedReason.isNotEmpty)
+          'reason': trimmedReason,
+      }),
+    );
+    check(res);
+    final decoded = jsonDecode(res.body);
+    if (decoded is! Map<String, dynamic> || decoded['count'] is! num) {
+      throw const FormatException('invalid club review response');
     }
-    return processed;
+    return (decoded['count'] as num).toInt();
   }
 
   // ── 협회 랭킹 클레임 ──────────────────────────────────────────
@@ -384,11 +424,8 @@ mixin AdminApi on ApiBase {
       patch['notes'] = notes;
     }
     if (patch.isEmpty) {
-      final row = await supabase
-          .from('crawl_sources')
-          .select()
-          .eq('id', id)
-          .single();
+      final row =
+          await supabase.from('crawl_sources').select().eq('id', id).single();
       return CrawlSource.fromJson(row);
     }
     final row = await supabase

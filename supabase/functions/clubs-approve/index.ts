@@ -71,7 +71,19 @@ Deno.serve(withCors(async (req) => {
 
   if (error) return errorResponse(error.message, 500);
   if (!data || data.length === 0) {
-    return errorResponse('No pending clubs were found', 409);
+    const { data: current } = await supa
+      .from('clubs')
+      .select('id, name, status, status_reason, approved_by, approved_at')
+      .in('id', clubIds);
+    return jsonResponse({
+      error: '이미 다른 관리자가 처리한 요청입니다.',
+      clubs: current ?? [],
+    }, { status: 409 });
   }
-  return jsonResponse({ ok: true, action, count: data.length });
+  return jsonResponse({
+    ok: true,
+    action,
+    count: data.length,
+    skipped_count: clubIds.length - data.length,
+  });
 }));
