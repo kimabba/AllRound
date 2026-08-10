@@ -441,7 +441,10 @@ class _DetailBody extends StatelessWidget {
             AppSpacing.lg,
             AppSpacing.lg,
           ),
-          child: RegulationDocumentView(document: document),
+          child: RegulationDocumentView(
+            document: document,
+            hidePublicMetadata: true,
+          ),
         ),
       ];
     }

@@ -136,7 +136,9 @@ bool isHiddenPublicRegulationLabel(String? label) {
       normalized == 'source' ||
       normalized == 'sourceurl' ||
       normalized == '풋살허브id' ||
-      normalized == 'futsalhubid';
+      normalized == 'futsalhubid' ||
+      normalized == '모집상태' ||
+      normalized == 'recruitingstatus';
 }
 
 /// 전체 요강에서 사용자에게 필요한 대회 정보만 반환한다.
