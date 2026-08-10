@@ -5,6 +5,9 @@ import 'api_base.dart';
 /// 협회 랭킹 조회 + 본인 계정 연결(클레임). 관리자 승인 큐는 AdminApi 를 쓴다.
 mixin RankingApi on ApiBase {
   /// 협회·부서 하나의 순위표. rank 오름차순(협회 공표 그대로, 앱이 재계산하지 않음).
+  ///
+  /// supabase-dart 의 order() 는 SQL/postgrest-js 와 반대로 ascending 기본값이
+  /// false 다 — 명시하지 않으면 조용히 내림차순(꼴찌부터)이 된다.
   Future<List<OrgRankingRow>> orgRankings({
     required String orgCode,
     required String divisionCode,
@@ -14,7 +17,7 @@ mixin RankingApi on ApiBase {
         .select()
         .eq('org_code', orgCode)
         .eq('division_code', divisionCode)
-        .order('rank');
+        .order('rank', ascending: true);
     return List<Map<String, dynamic>>.from(
       rows,
     ).map(OrgRankingRow.fromJson).toList();
