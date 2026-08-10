@@ -57,6 +57,27 @@ mixin RankingApi on ApiBase {
     });
   }
 
+  /// 랭킹 표의 아무 선수나 눌렀을 때 보는 전적(최신 대회순).
+  ///
+  /// org_player_results_read RLS(2026-08-10)로 로그인 사용자 전체에게 열려
+  /// 있다 — org_rankings 표 자체가 이미 공개하는 것과 같은 데이터다. 다만
+  /// 크롤러가 아직 "본인 연결 승인자"만 전적을 적재하므로, 연결 안 된 선수는
+  /// 빈 목록이 정상이다(전적이 없는 게 아니라 아직 안 모은 것).
+  Future<List<PlayerResult>> playerResults({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_player_results')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('played_on', ascending: false);
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(PlayerResult.fromJson).toList();
+  }
+
   /// 내 협회 전적 전량(최신 대회순).
   ///
   /// org_code/org_player_id 로 명시 필터한다 — RLS 에 기대면 관리자 계정은
