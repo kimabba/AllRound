@@ -23,7 +23,13 @@ void main() {
   testWidgets('점이 0개면 안내 문구를 보여주고 그래프는 안 그린다', (tester) async {
     await tester.pumpWidget(_wrap(const RankTrendSparkline(snapshots: [])));
     expect(find.text('추이를 보려면 며칠 더 필요해요'), findsOneWidget);
-    expect(find.byType(CustomPaint), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('점이 1개여도 안내 문구를 보여준다', (tester) async {
@@ -41,7 +47,13 @@ void main() {
       ],
     )));
     expect(find.text('추이를 보려면 며칠 더 필요해요'), findsNothing);
-    expect(find.byType(CustomPaint), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
