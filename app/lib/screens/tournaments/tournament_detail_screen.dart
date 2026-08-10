@@ -21,8 +21,13 @@ import '../../widgets/tournament_cover_image.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
-  const TournamentDetailScreen({super.key, required this.tournamentId});
+  const TournamentDetailScreen({
+    super.key,
+    required this.tournamentId,
+    this.adminPreview = false,
+  });
   final String tournamentId;
+  final bool adminPreview;
 
   @override
   ConsumerState<TournamentDetailScreen> createState() =>
@@ -103,12 +108,12 @@ class _TournamentDetailScreenState
     final isFav = (favorites.value ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview = _isPreviewTournament;
+    final isPreview = _isPreviewTournament || widget.adminPreview;
 
     return Scaffold(
       key: AllRoundE2EKeys.tournamentDetailScreen,
       appBar: AppBar(
-        title: const Text('대회'),
+        title: Text(widget.adminPreview ? '사용자 화면 미리보기' : '대회'),
         actions: [
           if (_t != null && !isPreview)
             IconButton(
@@ -160,7 +165,12 @@ class _TournamentDetailScreenState
                       title: '대회 정보가 없습니다',
                       description: '대회 목록에서 다른 대회를 확인해 주세요.',
                     )
-                  : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+                  : _DetailBody(
+                      t: _t!,
+                      df: _df,
+                      isPreview: isPreview,
+                      adminPreview: widget.adminPreview,
+                    ),
     );
   }
 }
@@ -209,10 +219,12 @@ class _DetailBody extends StatelessWidget {
   final Tournament t;
   final DateFormat df;
   final bool isPreview;
+  final bool adminPreview;
   const _DetailBody({
     required this.t,
     required this.df,
     required this.isPreview,
+    required this.adminPreview,
   });
 
   static final _feeFormat = NumberFormat.decimalPattern('ko');
@@ -242,7 +254,7 @@ class _DetailBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (isPreview) ...[
-                const _DetailPreviewBanner(),
+                _DetailPreviewBanner(adminPreview: adminPreview),
                 const SizedBox(height: AppSpacing.md),
               ],
 
@@ -667,7 +679,9 @@ class _DetailFact extends StatelessWidget {
 }
 
 class _DetailPreviewBanner extends StatelessWidget {
-  const _DetailPreviewBanner();
+  const _DetailPreviewBanner({required this.adminPreview});
+
+  final bool adminPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -686,7 +700,9 @@ class _DetailPreviewBanner extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
+              adminPreview
+                  ? '승인 후 사용자에게 보일 대회 화면입니다. 이 화면에서는 신청과 관심 저장이 작동하지 않습니다.'
+                  : '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,

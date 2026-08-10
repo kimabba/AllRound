@@ -37,11 +37,13 @@ class ClubDetailScreen extends ConsumerStatefulWidget {
   final Club? club;
   final String? clubId;
   final bool openManagement;
+  final bool adminPreview;
   const ClubDetailScreen({
     super.key,
     this.club,
     this.clubId,
     this.openManagement = false,
+    this.adminPreview = false,
   }) : assert(club != null || clubId != null);
 
   @override
@@ -476,21 +478,22 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         leading: const AppBackButton(fallbackLocation: '/clubs'),
-        title: Text(club.name),
+        title: Text(widget.adminPreview ? '사용자 화면 미리보기' : club.name),
         actions: [
-          IconButton(
-            key: isFavorite
-                ? AllRoundE2EKeys.clubFavoriteSaved
-                : AllRoundE2EKeys.clubFavoriteUnsaved,
-            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
-            onPressed: () => _toggleFavorite(isFavorite),
-            icon: Icon(
-              isFavorite
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_outline_rounded,
+          if (!widget.adminPreview)
+            IconButton(
+              key: isFavorite
+                  ? AllRoundE2EKeys.clubFavoriteSaved
+                  : AllRoundE2EKeys.clubFavoriteUnsaved,
+              tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+              onPressed: () => _toggleFavorite(isFavorite),
+              icon: Icon(
+                isFavorite
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_outline_rounded,
+              ),
             ),
-          ),
-          if (canModerateClub)
+          if (canModerateClub && !widget.adminPreview)
             PopupMenuButton<String>(
               tooltip: '클럽 더보기',
               onSelected: (value) {
@@ -506,6 +509,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       ),
       body: Column(
         children: [
+          if (widget.adminPreview) _ClubAdminPreviewBanner(clubName: club.name),
           if (club.isRejected && club.statusReason != 'deleted_by_owner')
             _RejectedClubBanner(
               reason: club.statusReason,
@@ -613,6 +617,37 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           ),
         ],
       );
+}
+
+class _ClubAdminPreviewBanner extends StatelessWidget {
+  const _ClubAdminPreviewBanner({required this.clubName});
+
+  final String clubName;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: cs.primaryContainer,
+      child: Row(
+        children: [
+          Icon(Icons.visibility_outlined, color: cs.onPrimaryContainer),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '$clubName 승인 후 사용자에게 보일 화면입니다.',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── 헤더 ────────────────────────────────────────────────────────
@@ -3876,8 +3911,7 @@ class _EventCreateSheetState extends ConsumerState<ClubEventCreateSheet> {
               selected: {_repeatInterval},
               onSelectionChanged: _busy
                   ? null
-                  : (values) =>
-                      setState(() => _repeatInterval = values.first),
+                  : (values) => setState(() => _repeatInterval = values.first),
             ),
             if (_repeatInterval != null) ...[
               const SizedBox(height: AppSpacing.xs),

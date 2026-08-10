@@ -75,7 +75,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       }
     }
     if (notification.referenceType == 'club_approval_request') {
-      context.push('/admin/clubs');
+      if (referenceId != null && referenceId.isNotEmpty) {
+        context.push('/admin/clubs?clubId=$referenceId');
+      } else {
+        context.push('/admin/clubs');
+      }
+      return;
+    }
+    if ((notification.referenceType == 'tournament_submission' ||
+            notification.referenceType == 'tournament_approval_request') &&
+        referenceId != null &&
+        referenceId.isNotEmpty) {
+      context.push('/admin/edit/$referenceId');
       return;
     }
     // 관리자는 승인 큐로, 신청자는 개인 기록장으로

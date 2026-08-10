@@ -136,6 +136,14 @@ class _TournamentEditScreenState extends ConsumerState<TournamentEditScreen> {
       appBar: AppBar(
         title: const Text('대회 편집'),
         actions: [
+          OutlinedButton.icon(
+            onPressed: () => context.push(
+              '/admin/preview/tournaments/${widget.tournamentId}',
+            ),
+            icon: const Icon(Icons.visibility_outlined),
+            label: const Text('사용자 미리보기'),
+          ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _saving ? null : _save,
             icon: _saving

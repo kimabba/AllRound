@@ -17,8 +17,9 @@ import 'knowledge_base_tab.dart';
 import 'ranking_claims_tab.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
-  const AdminScreen({super.key, this.initialTab = 0});
+  const AdminScreen({super.key, this.initialTab = 0, this.focusClubId});
   final int initialTab;
+  final String? focusClubId;
 
   @override
   ConsumerState<AdminScreen> createState() => _AdminScreenState();
@@ -910,7 +911,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               SubmissionKindBadge(kind: kind),
                               const SizedBox(width: 6),
@@ -955,6 +958,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                           const SizedBox(height: 8),
                           Row(
                             children: [
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 36),
+                                ),
+                                onPressed: () =>
+                                    context.push('/admin/edit/$id'),
+                                icon: const Icon(Icons.description_outlined),
+                                label: const Text('등록 정보'),
+                              ),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 36),
+                                ),
+                                onPressed: () => context.push(
+                                  '/admin/preview/tournaments/$id',
+                                ),
+                                icon: const Icon(Icons.visibility_outlined),
+                                label: const Text('사용자 미리보기'),
+                              ),
                               FilledButton(
                                 style: FilledButton.styleFrom(
                                   minimumSize: const Size(0, 36),
@@ -962,7 +984,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                                 onPressed: () => _approve(id),
                                 child: const Text('승인'),
                               ),
-                              const SizedBox(width: 8),
                               OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size(0, 36),
@@ -1068,8 +1089,11 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ),
             const SizedBox(height: 8),
           ],
-          for (final c in _pendingClubs) ...[
+          for (final c in _orderedPendingClubs) ...[
             Card(
+              color: c.id == widget.focusClubId
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
@@ -1176,6 +1200,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (club.id == widget.focusClubId) ...[
+          Text(
+            '알림에서 선택한 승인 요청',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(club.name, style: Theme.of(context).textTheme.titleMedium),
         if (meta.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -1198,8 +1232,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           ),
         ],
         const SizedBox(height: 10),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+              ),
+              onPressed: () => context.push(
+                '/admin/preview/clubs/${club.id}',
+              ),
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('사용자 미리보기'),
+            ),
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
               onPressed: _clubReviewInFlight
@@ -1207,7 +1253,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                   : () => _approveClub(club.id, approve: true),
               child: const Text('승인'),
             ),
-            const SizedBox(width: 8),
             OutlinedButton(
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
               onPressed: _clubReviewInFlight
@@ -1219,6 +1264,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         ),
       ],
     );
+  }
+
+  List<Club> get _orderedPendingClubs {
+    final focusedId = widget.focusClubId;
+    if (focusedId == null || focusedId.isEmpty) return _pendingClubs;
+    final focused = _pendingClubs.where((club) => club.id == focusedId);
+    final rest = _pendingClubs.where((club) => club.id != focusedId);
+    return [...focused, ...rest];
   }
 
   // ── Tab 2: Crawl Sources (DB-driven CRUD) ─────────────────────────────────

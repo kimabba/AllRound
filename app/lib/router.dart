@@ -45,6 +45,7 @@ import 'widgets/mini_ballboy_bar.dart';
 const kMobileAdminPaths = {
   '/admin/clubs',
   '/admin/ranking-claims',
+  '/admin/drafts',
 };
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -96,7 +97,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 허용한다. 권한 판정은 서버 role이 기준이다.
       // 여기 없는 /admin/* 는 아래에서 홈으로 돌려보내므로, 알림 딥링크를 새로
       // 만들 때는 이 목록에도 넣어야 한다(랭킹 연결 알림이 그래서 추가됐다).
-      if (kMobileAdminPaths.contains(loc)) {
+      if (kMobileAdminPaths.contains(loc) ||
+          loc.startsWith('/admin/edit/') ||
+          loc.startsWith('/admin/preview/')) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
         return (adminAsync.value ?? false) ? null : '/';
@@ -251,7 +254,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 3)),
+            builder: (_, state) => catalogAware(
+              () => AdminScreen(
+                initialTab: 3,
+                focusClubId: state.uri.queryParameters['clubId'],
+              ),
+            ),
           ),
           GoRoute(
             path: '/admin/kb',
@@ -274,6 +282,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, state) => catalogAware(
               () => TournamentEditScreen(
                 tournamentId: state.pathParameters['id']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/preview/tournaments/:id',
+            builder: (_, state) => catalogAware(
+              () => TournamentDetailScreen(
+                tournamentId: state.pathParameters['id']!,
+                adminPreview: true,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/preview/clubs/:id',
+            builder: (_, state) => catalogAware(
+              () => ClubDetailScreen(
+                clubId: state.pathParameters['id']!,
+                adminPreview: true,
               ),
             ),
           ),
