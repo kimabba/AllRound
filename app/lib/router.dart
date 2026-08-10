@@ -321,16 +321,18 @@ class _MainShell extends ConsumerWidget {
   static const _tabs = <String>[
     '/',
     '/clubs',
-    '/profile',
   ];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
   /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
+  /// 마이는 하단 탭에서 빠지고 각 화면 상단의 ProfileAction 아이콘으로만
+  /// 들어오므로 여기 포함한다.
   static const _untabbedPaths = [
     '/more',
     '/notifications',
     '/favorites',
     '/blocked-users',
+    '/profile',
     '/rankings/me',
   ];
 
