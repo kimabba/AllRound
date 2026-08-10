@@ -8,6 +8,7 @@ import '../../models/org_ranking.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/rankings/player_detail_sheet.dart';
 import '../../widgets/tournament_section_bar.dart';
 
@@ -162,7 +163,6 @@ class _RankingRow extends StatelessWidget {
       child: Container(
         color: isMine ? cs.primaryContainer : null,
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
           vertical: AppSpacing.sm,
         ),
         child: Row(
@@ -242,11 +242,11 @@ class RankingSourceNotice extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
-      color: cs.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -506,7 +506,12 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              0,
+            ),
             child: SegmentedButton<String>(
               segments: [
                 for (final org in orgCodes)
@@ -518,7 +523,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: DropdownButtonFormField<String>(
               initialValue: _divisionCode,
               decoration: const InputDecoration(labelText: '부서'),
@@ -533,7 +538,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -545,9 +550,9 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
+              AppSpacing.xl,
               AppSpacing.sm,
-              AppSpacing.md,
+              AppSpacing.xl,
               0,
             ),
             child: TextField(
@@ -561,11 +566,14 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          FutureBuilder<_RankingScreenData>(
-            future: _future,
-            builder: (context, snap) => RankingSourceNotice(
-              orgLabel: tennisOrgLabel(_orgCode),
-              fetchedAt: _latestFetchedAt(snap.data?.rows),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: FutureBuilder<_RankingScreenData>(
+              future: _future,
+              builder: (context, snap) => RankingSourceNotice(
+                orgLabel: tennisOrgLabel(_orgCode),
+                fetchedAt: _latestFetchedAt(snap.data?.rows),
+              ),
             ),
           ),
           Expanded(
@@ -583,7 +591,10 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                 return ListView(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.all(AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.md,
+                  ),
                   children: [
                     if (data.candidate != null)
                       RankingClaimPrompt(
@@ -632,11 +643,14 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         ),
                       )
                     else
-                      RankingList(
-                        rows: visibleRows,
-                        linkedOrgPlayerId: data.linkedOrgPlayerId,
-                        claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                        onClaim: _claim,
+                      AppCard(
+                        variant: AppCardVariant.outlined,
+                        child: RankingList(
+                          rows: visibleRows,
+                          linkedOrgPlayerId: data.linkedOrgPlayerId,
+                          claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                          onClaim: _claim,
+                        ),
                       ),
                   ],
                 );
