@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,6 +8,7 @@ import '../../models/org_ranking.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../widgets/rankings/player_detail_sheet.dart';
 import '../../widgets/tournament_section_bar.dart';
 
 /// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
@@ -154,52 +156,58 @@ class _RankingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Container(
+    return InkWell(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
-      color: isMine ? cs.primaryContainer : null,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          SizedBox(width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.playerName,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
-                  Text(
-                    row.clubRaw!,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-              ],
-            ),
-          ),
-          Text('${row.totalPoints}', style: tt.bodyLarge),
-          if (onClaim != null) ...[
+      onTap: () => openPlayerDetailSheet(context, row),
+      child: Container(
+        color: isMine ? cs.primaryContainer : null,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+                width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
             const SizedBox(width: AppSpacing.sm),
-            OutlinedButton(
-              // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
-              // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
-              style: OutlinedButton.styleFrom(
-                // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
-                // 폭만 내용에 맞게 줄인다.
-                minimumSize: const Size(0, AppSizes.control),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.playerName,
+                    style:
+                        tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
+                    Text(
+                      row.clubRaw!,
+                      style:
+                          tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                ],
               ),
-              onPressed: onClaim,
-              child: const Text('본인'),
             ),
+            Text('${row.totalPoints}', style: tt.bodyLarge),
+            if (onClaim != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton(
+                // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
+                // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
+                style: OutlinedButton.styleFrom(
+                  // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
+                  // 폭만 내용에 맞게 줄인다.
+                  minimumSize: const Size(0, AppSizes.control),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                ),
+                onPressed: onClaim,
+                child: const Text('본인'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -522,6 +530,17 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               onChanged: (v) {
                 if (v != null) _changeDivision(v);
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => context.push('/rankings/me'),
+                icon: const Icon(Icons.query_stats_rounded),
+                label: const Text('내 기록 보기'),
+              ),
             ),
           ),
           Padding(

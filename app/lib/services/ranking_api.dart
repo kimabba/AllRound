@@ -1,4 +1,5 @@
 import '../models/org_ranking.dart';
+import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import 'api_base.dart';
 
@@ -58,6 +59,47 @@ mixin RankingApi on ApiBase {
       'user_id': userId,
       'status': 'pending',
     });
+  }
+
+  /// 랭킹 표의 아무 선수나 눌렀을 때 보는 전적(최신 대회순).
+  ///
+  /// org_player_results_read RLS(2026-08-10)로 로그인 사용자 전체에게 열려
+  /// 있다 — org_rankings 표 자체가 이미 공개하는 것과 같은 데이터다. 다만
+  /// 크롤러가 아직 "본인 연결 승인자"만 전적을 적재하므로, 연결 안 된 선수는
+  /// 빈 목록이 정상이다(전적이 없는 게 아니라 아직 안 모은 것).
+  Future<List<PlayerResult>> playerResults({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_player_results')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('played_on', ascending: false);
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(PlayerResult.fromJson).toList();
+  }
+
+  /// 순위 추이(부서 하나). org_ranking_snapshots_read RLS(2026-08-10)로
+  /// 로그인 사용자 전체에게 열려 있다. 전 선수가 매일 자동 적재되므로
+  /// (연결 여부 무관) 대부분의 선수가 이 데이터를 갖는다.
+  Future<List<OrgRankingSnapshot>> playerRankingHistory({
+    required String orgCode,
+    required String divisionCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_ranking_snapshots')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('division_code', divisionCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('captured_on', ascending: true);
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(OrgRankingSnapshot.fromJson).toList();
   }
 
   /// 내 협회 전적 전량(최신 대회순).

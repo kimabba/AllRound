@@ -13,7 +13,6 @@ import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
-import '../widgets/profile/my_record_widgets.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_quick_actions.dart';
 import '../widgets/profile/profile_records_widgets.dart';
@@ -401,7 +400,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                const MyRecordSection(),
                 const SizedBox(height: AppSpacing.xxl),
                 const MyClubsSection(),
                 const SizedBox(height: AppSpacing.xxl),

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_recruiting.dart';
 import '../models/org_ranking.dart';
+import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
@@ -140,6 +141,24 @@ final myCurrentRankingsProvider =
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
   return api.myCurrentRankings();
+});
+
+/// 연결된 내 순위 추이. 여러 부서에 연결돼 있으면 첫 번째(myCurrentRankings
+/// 순서 기준) 부서만 그린다 — 부서별로 나눠 그리는 건 이번 스코프 밖이다.
+final myRankingHistoryProvider =
+    FutureProvider<List<OrgRankingSnapshot>>((ref) async {
+  ref.watch(authStateProvider);
+  final rankings = await ref.watch(myCurrentRankingsProvider.future);
+  if (rankings.isEmpty) return const [];
+  final primary = rankings.first;
+  final orgPlayerId = primary.orgPlayerId;
+  if (orgPlayerId == null) return const [];
+  final api = ref.watch(apiProvider);
+  return api.playerRankingHistory(
+    orgCode: primary.orgCode,
+    divisionCode: primary.divisionCode,
+    orgPlayerId: orgPlayerId,
+  );
 });
 
 /// 관심 화면용 스크랩 대회

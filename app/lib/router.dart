@@ -27,6 +27,7 @@ import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rankings/rankings_screen.dart';
+import 'screens/rankings/my_record_screen.dart';
 import 'screens/rules_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
@@ -154,6 +155,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/rankings',
             builder: (_, __) => catalogAware(RankingsScreen.new),
+          ),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => catalogAware(MyRecordScreen.new),
           ),
           GoRoute(
             path: '/profile',
@@ -328,6 +333,7 @@ class _MainShell extends ConsumerWidget {
     '/favorites',
     '/blocked-users',
     '/profile',
+    '/rankings/me',
   ];
 
   int _indexOf(String location) {
