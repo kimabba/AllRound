@@ -50,6 +50,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   String? _searchError;
   String _clubNameQuery = '';
   late final TextEditingController _clubNameQueryController;
+  late final FocusNode _clubNameQueryFocusNode;
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
   bool _showAllClubs = false;
@@ -66,6 +67,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   void initState() {
     super.initState();
     _clubNameQueryController = TextEditingController();
+    _clubNameQueryFocusNode = FocusNode()
+      ..addListener(_handleClubSearchFocusChanged);
     _clubInterests = {ref.read(activeSportProvider) ?? 'futsal'};
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMyClubs();
@@ -78,8 +81,15 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   @override
   void dispose() {
+    _clubNameQueryFocusNode
+      ..removeListener(_handleClubSearchFocusChanged)
+      ..dispose();
     _clubNameQueryController.dispose();
     super.dispose();
+  }
+
+  void _handleClubSearchFocusChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _restoreClubSortOrder() async {
@@ -424,14 +434,27 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _clubNameQueryController,
+          focusNode: _clubNameQueryFocusNode,
           textInputAction: TextInputAction.search,
+          onTapOutside: (_) => _clubNameQueryFocusNode.unfocus(),
           decoration: InputDecoration(
             hintText: '지역이나 클럽 이름 검색',
             prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: IconButton(
-              tooltip: '지역·요일·조건 필터',
-              onPressed: _openClubFilterSheet,
-              icon: const Icon(Icons.tune_rounded),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_clubNameQueryFocusNode.hasFocus)
+                  IconButton(
+                    tooltip: '키보드 닫기',
+                    onPressed: _clubNameQueryFocusNode.unfocus,
+                    icon: const Icon(Icons.keyboard_hide_rounded),
+                  ),
+                IconButton(
+                  tooltip: '지역·요일·조건 필터',
+                  onPressed: _openClubFilterSheet,
+                  icon: const Icon(Icons.tune_rounded),
+                ),
+              ],
             ),
           ),
           onChanged: (value) {
@@ -1095,15 +1118,15 @@ class _MyClubsCarouselState extends State<_MyClubsCarousel> {
           title: '나의 클럽',
         ),
         const SizedBox(height: AppSpacing.sm),
-        LayoutBuilder(
-          builder: (context, constraints) => Transform.translate(
-            offset: const Offset(-AppSpacing.md, 0),
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: constraints.maxWidth + AppSpacing.xxl,
-              maxWidth: constraints.maxWidth + AppSpacing.xxl,
-              child: SizedBox(
-                height: 108,
+        SizedBox(
+          height: 108,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Transform.translate(
+              offset: const Offset(-AppSpacing.md, 0),
+              child: OverflowBox(
+                alignment: Alignment.centerLeft,
+                minWidth: constraints.maxWidth + AppSpacing.xxl,
+                maxWidth: constraints.maxWidth + AppSpacing.xxl,
                 child: PageView.builder(
                   controller: _controller,
                   itemCount: clubs.length,

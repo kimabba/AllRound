@@ -39,6 +39,34 @@ void main() {
     );
   });
 
+  test('클럽 검색은 스크롤과 버튼으로 키보드를 닫는다', () {
+    final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
+
+    expect(
+      source,
+      contains(
+        'keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag',
+      ),
+    );
+    expect(source, contains("tooltip: '키보드 닫기'"));
+    expect(source,
+        contains('onTapOutside: (_) => _clubNameQueryFocusNode.unfocus()'));
+  });
+
+  test('나의 클럽 배너는 카드 높이를 먼저 확보해 다음 내용과 겹치지 않는다', () {
+    final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
+    final carousel = source.indexOf('class _MyClubsCarouselState');
+    final banner =
+        source.indexOf('SizedBox(\n          height: 108,', carousel);
+    final layout = source.indexOf('child: LayoutBuilder(', banner);
+    final pageView = source.indexOf('child: PageView.builder(', layout);
+
+    expect(carousel, greaterThanOrEqualTo(0));
+    expect(banner, greaterThan(carousel));
+    expect(layout, greaterThan(banner));
+    expect(pageView, greaterThan(layout));
+  });
+
   test('가입·승인대기 클럽이 없으면 나의 클럽 섹션을 만들지 않는다', () {
     final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
 
