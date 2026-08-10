@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('대회·클럽·MY 탭을 표시한다', (tester) async {
+  testWidgets('대회·클럽 탭을 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,17 +15,19 @@ void main() {
       ),
     );
 
-    for (final label in ['대회', '클럽', 'MY']) {
+    for (final label in ['대회', '클럽']) {
       expect(find.text(label), findsOneWidget);
     }
+    // 마이는 하단 탭에서 빠졌다 — 각 화면 상단 ProfileAction 아이콘으로 들어온다.
     // 룰북은 대회 화면 안에서 연다. '일정'·'모임'은 탭 라벨이 아니다.
+    expect(find.text('MY'), findsNothing);
     expect(find.text('일정'), findsNothing);
     expect(find.text('모임'), findsNothing);
     expect(find.text('룰북'), findsNothing);
     expect(find.text('코치'), findsNothing);
   });
 
-  testWidgets('MY 탭은 세 번째 인덱스를 전달한다', (tester) async {
+  testWidgets('클럽 탭은 두 번째 인덱스를 전달한다', (tester) async {
     int? selectedIndex;
     await tester.pumpWidget(
       MaterialApp(
@@ -38,8 +40,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('MY'));
-    expect(selectedIndex, 2);
+    await tester.tap(find.text('클럽'));
+    expect(selectedIndex, 1);
   });
 
   testWidgets('볼보이 버튼은 탭이 아니라 별도 콜백으로 열린다', (tester) async {
@@ -66,7 +68,7 @@ void main() {
     expect(changedIndex, -1);
   });
 
-  testWidgets('볼보이는 클럽과 MY 사이에 표시된다', (tester) async {
+  testWidgets('볼보이는 클럽 뒤 마지막 슬롯에 표시된다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -81,6 +83,5 @@ void main() {
 
     final ballboyX = tester.getCenter(find.text('볼보이')).dx;
     expect(ballboyX, greaterThan(tester.getCenter(find.text('클럽')).dx));
-    expect(ballboyX, lessThan(tester.getCenter(find.text('MY')).dx));
   });
 }

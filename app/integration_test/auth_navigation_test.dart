@@ -255,7 +255,8 @@ void main() {
     }
   });
 
-  testWidgets('일반 회원의 4탭과 전역 채팅·전체화면 draft를 잇는다', (tester) async {
+  testWidgets('일반 회원의 하단 3탭·상단 마이 진입과 전역 채팅·전체화면 draft를 잇는다',
+      (tester) async {
     await _launchSignedOutApp(tester);
     await _login(tester, email: 'qa-member@allround.invalid');
     await _waitForSignedInLanding(tester, profileComplete: true);
