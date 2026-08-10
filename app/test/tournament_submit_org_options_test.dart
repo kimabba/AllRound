@@ -12,14 +12,21 @@ import 'package:allround/screens/tournaments/tournament_submit_screen.dart';
 // 같은 저장소의 catalog_rebuild_test.dart:74-91 이 router.dart 를 파싱해 규칙을
 // 강제하는 선례를 따른다.
 void main() {
+  test('직접 주소로 연 제보 화면도 저장 후 대회 목록으로 이동할 수 있다', () {
+    final source = File('lib/screens/tournaments/tournament_submit_screen.dart')
+        .readAsStringSync();
+
+    expect(source, contains('if (context.canPop())'));
+    expect(source, contains("context.go('/tournaments')"));
+  });
+
   test('제보 화면에 협회 하드코딩 목록이 없다', () {
     final src = File('lib/screens/tournaments/tournament_submit_screen.dart')
         .readAsStringSync();
     expect(src.contains('_tennisOrgOptions'), isFalse,
         reason: '협회 선택지는 OrgCatalog(tennisOrgs)를 써야 한다');
     // 코드 리터럴을 나열한 별도 목록이 되살아나는 것도 막는다.
-    expect(src.contains("('kta'"), isFalse,
-        reason: '협회 코드를 화면에 나열하지 말 것');
+    expect(src.contains("('kta'"), isFalse, reason: '협회 코드를 화면에 나열하지 말 것');
   });
 
   // JY-135 codex P1-2: 부서가 0개인 협회(kssta/kasta)를 고르면 부서 칩이 하나도
@@ -33,10 +40,8 @@ void main() {
         .readAsStringSync();
     // 설명 주석이 심볼명을 언급해 오탐이 나므로 '줄 전체가 주석' 인 줄만 걷어낸다.
     // 문자열 안의 '//'(예: 'https://...')를 자르지 않도록 줄 끝 주석은 제거하지 않는다.
-    final codeOnly = src
-        .split('\n')
-        .where((l) => !l.trimLeft().startsWith('//'))
-        .join('\n');
+    final codeOnly =
+        src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
     // tennisOrgsWithDivisions 는 허용, 맨 tennisOrgs 는 금지.
     final bareTennisOrgs = RegExp(r'tennisOrgs(?!WithDivisions)');
     expect(bareTennisOrgs.hasMatch(codeOnly), isFalse,

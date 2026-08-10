@@ -144,7 +144,11 @@ class _TournamentSubmitScreenState
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('제보 완료. 관리자 승인 후 노출됩니다.')));
-        context.pop();
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/tournaments');
+        }
       }
     } catch (_) {
       setState(
