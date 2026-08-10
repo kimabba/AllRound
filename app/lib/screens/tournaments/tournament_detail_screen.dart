@@ -17,6 +17,7 @@ import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/tournament_cover_image.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
@@ -115,7 +116,7 @@ class _TournamentDetailScreenState
                   ? AllRoundE2EKeys.tournamentFavoriteSaved
                   : AllRoundE2EKeys.tournamentFavoriteUnsaved,
               icon: Icon(
-                isFav ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                 color: isFav ? cs.primary : null,
               ),
               onPressed: () async {
@@ -294,10 +295,8 @@ class _DetailBody extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),
-              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
-                _TournamentPosterCard(url: t.posterUrl!.trim()),
-                const SizedBox(height: AppSpacing.xl),
-              ],
+              _TournamentPosterCard(tournament: t),
+              const SizedBox(height: AppSpacing.xl),
 
               _DetailFacts(
                 date: _dateText(),
@@ -549,29 +548,21 @@ class _DetailBody extends StatelessWidget {
 }
 
 class _TournamentPosterCard extends StatelessWidget {
-  const _TournamentPosterCard({required this.url});
+  const _TournamentPosterCard({required this.tournament});
 
-  final String url;
+  final Tournament tournament;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return ClipRRect(
       borderRadius: AppRadius.card,
-      child: Image.network(
-        url,
+      child: SizedBox(
         width: double.infinity,
-        fit: BoxFit.fitWidth,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: 240,
-            color: cs.surfaceContainerLow,
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+        height: 240,
+        child: TournamentCoverImage(
+          tournament: tournament,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }

@@ -83,9 +83,9 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
           return const KeyedSubtree(
             key: AllRoundE2EKeys.favoritesReady,
             child: AppEmptyState(
-              icon: Icons.bookmark_border_rounded,
-              title: '스크랩한 대회가 없습니다',
-              description: '대회 목록에서 북마크를 누르면 이곳에 모입니다.',
+              icon: Icons.favorite_border_rounded,
+              title: '관심 대회가 없습니다',
+              description: '대회 목록에서 하트를 누르면 이곳에 모입니다.',
             ),
           );
         }

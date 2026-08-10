@@ -16,6 +16,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
 import '../widgets/tournament_section_bar.dart';
+import '../widgets/tournament_cover_image.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -667,12 +668,17 @@ class _InterestTournamentBand extends StatelessWidget {
     final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
     final info = Row(
       children: [
-        Icon(
-          first == null
-              ? Icons.favorite_border_rounded
-              : Icons.favorite_rounded,
-          color: cs.primary,
-        ),
+        if (first == null)
+          Icon(Icons.favorite_border_rounded, color: cs.primary)
+        else
+          ClipRRect(
+            borderRadius: AppRadius.card,
+            child: SizedBox(
+              width: 76,
+              height: 58,
+              child: TournamentCoverImage(tournament: first),
+            ),
+          ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
@@ -852,25 +858,7 @@ class _TournamentImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = tournament.posterUrl?.trim();
-    final fallback = ColoredBox(
-      color: const Color(0xFF102B62),
-      child: Center(
-        child: Icon(
-          tournament.sport == 'tennis'
-              ? Icons.sports_tennis_rounded
-              : Icons.sports_soccer_rounded,
-          size: 52,
-          color: Colors.white.withValues(alpha: 0.9),
-        ),
-      ),
-    );
-    if (url == null || url.isEmpty) return fallback;
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => fallback,
-    );
+    return TournamentCoverImage(tournament: tournament);
   }
 }
 

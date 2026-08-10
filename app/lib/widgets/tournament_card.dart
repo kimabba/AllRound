@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/tournament.dart';
 import '../models/tournament_card_info.dart';
 import '../theme/tokens.dart';
+import 'tournament_cover_image.dart';
 
 class TournamentCard extends StatelessWidget {
   const TournamentCard({
@@ -35,48 +36,26 @@ class TournamentCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
     final deadlineText = _deadlineText();
-    final date = tournament.startDate;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 86 : 104),
+          constraints: BoxConstraints(minHeight: compact ? 94 : 116),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: cs.outlineVariant)),
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: 54,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '대회',
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      DateFormat('dd').format(date),
-                      style: tt.headlineLarge?.copyWith(
-                        height: 1,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text('${date.month}월', style: tt.labelSmall),
-                  ],
+              ClipRRect(
+                borderRadius: AppRadius.card,
+                child: SizedBox(
+                  width: compact ? 88 : 104,
+                  height: compact ? 72 : 84,
+                  child: TournamentCoverImage(tournament: tournament),
                 ),
               ),
-              Container(width: 1, height: 60, color: cs.outlineVariant),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -151,8 +130,8 @@ class TournamentCard extends StatelessWidget {
                     },
                     icon: Icon(
                       isFavorite
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_outline_rounded,
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                       color: isFavorite ? cs.primary : cs.onSurfaceVariant,
                     ),
                   ),

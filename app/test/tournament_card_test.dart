@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:allround/models/tournament.dart';
 import 'package:allround/widgets/tournament_card.dart';
+import 'package:allround/widgets/tournament_cover_image.dart';
 
 void main() {
   // 카드가 DateFormat('M/d (E)','ko') 를 쓰므로 ko 로케일 데이터를 준비한다.
@@ -32,13 +33,29 @@ void main() {
   }
 
   Widget wrap(Tournament t) => MaterialApp(
-    home: Scaffold(body: TournamentCard(tournament: t)),
-  );
+        home: Scaffold(body: TournamentCard(tournament: t)),
+      );
 
-  testWidgets('대회일 라벨과 날짜를 렌더한다', (tester) async {
+  testWidgets('대회 사진과 제목을 렌더한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament()));
-    expect(find.text('대회'), findsOneWidget);
-    expect(find.textContaining('6/13'), findsWidgets);
+    expect(find.byType(TournamentCoverImage), findsOneWidget);
+    expect(find.text('광주 테니스 오픈'), findsOneWidget);
+  });
+
+  testWidgets('관심 대회 표식은 하트로 렌더한다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentCard(
+            tournament: makeTournament(),
+            isFavorite: true,
+            onFavoriteToggle: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
   });
 
   testWidgets('목록 카드는 신청 마감일을 노출한다', (tester) async {

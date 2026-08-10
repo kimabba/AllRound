@@ -455,7 +455,7 @@ class TournamentRecordsList extends StatelessWidget {
                                   ),
                                   const Spacer(),
                                   Icon(
-                                    Icons.bookmark_rounded,
+                                    Icons.favorite_rounded,
                                     size: 18,
                                     color: cs.primary,
                                   ),

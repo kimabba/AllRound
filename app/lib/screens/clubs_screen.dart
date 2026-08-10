@@ -1076,7 +1076,7 @@ class _MyClubsCarousel extends StatefulWidget {
 }
 
 class _MyClubsCarouselState extends State<_MyClubsCarousel> {
-  late final PageController _controller = PageController(viewportFraction: .9);
+  late final PageController _controller = PageController(viewportFraction: .96);
   int _page = 0;
 
   @override
@@ -1095,124 +1095,143 @@ class _MyClubsCarouselState extends State<_MyClubsCarousel> {
           title: '나의 클럽',
         ),
         const SizedBox(height: AppSpacing.sm),
-        SizedBox(
-          height: 108,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: clubs.length,
-            onPageChanged: (value) => setState(() => _page = value),
-            itemBuilder: (context, index) {
-              final club = clubs[index];
-              final pending = widget.pendingClubs.contains(club);
-              final color = clubCardColor(club.cardColor);
-              return Padding(
-                padding: EdgeInsets.only(
-                  right: index == clubs.length - 1 ? 0 : AppSpacing.sm,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: AppRadius.hero,
-                  clipBehavior: Clip.antiAlias,
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          color,
-                          Color.lerp(color, Colors.black, .18)!,
-                        ],
+        LayoutBuilder(
+          builder: (context, constraints) => Transform.translate(
+            offset: const Offset(-AppSpacing.md, 0),
+            child: OverflowBox(
+              alignment: Alignment.centerLeft,
+              minWidth: constraints.maxWidth + AppSpacing.xxl,
+              maxWidth: constraints.maxWidth + AppSpacing.xxl,
+              child: SizedBox(
+                height: 108,
+                child: PageView.builder(
+                  controller: _controller,
+                  itemCount: clubs.length,
+                  onPageChanged: (value) => setState(() => _page = value),
+                  itemBuilder: (context, index) {
+                    final club = clubs[index];
+                    final pending = widget.pendingClubs.contains(club);
+                    final color = clubCardColor(club.cardColor);
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        right: index == clubs.length - 1 ? 0 : AppSpacing.sm,
                       ),
-                      borderRadius: AppRadius.hero,
-                    ),
-                    child: InkWell(
-                      onTap: () => widget.onOpen(club),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.md,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(AppSpacing.xs),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .94),
-                                shape: BoxShape.circle,
-                              ),
-                              child: SimpleClubAvatar(club: club, size: 48),
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: AppRadius.hero,
+                        clipBehavior: Clip.antiAlias,
+                        child: Ink(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                color,
+                                Color.lerp(color, Colors.black, .18)!,
+                              ],
                             ),
-                            const SizedBox(width: AppSpacing.lg),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            borderRadius: AppRadius.hero,
+                          ),
+                          child: InkWell(
+                            onTap: () => widget.onOpen(club),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg,
+                                vertical: AppSpacing.md,
+                              ),
+                              child: Row(
                                 children: [
-                                  Text(
-                                    club.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w900,
-                                        ),
+                                  Container(
+                                    padding:
+                                        const EdgeInsets.all(AppSpacing.xs),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.white.withValues(alpha: .94),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child:
+                                        SimpleClubAvatar(club: club, size: 48),
                                   ),
-                                  const SizedBox(height: AppSpacing.xs),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.xs,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: .72,
-                                            ),
-                                          ),
-                                          borderRadius: AppRadius.pill,
-                                        ),
-                                        child: Text(
-                                          pending ? '승인 대기' : '멤버',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: Text(
-                                          clubRegionMemberLabel(
-                                            club.region,
-                                            club.memberCount,
-                                          ),
+                                  const SizedBox(width: AppSpacing.lg),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          club.name,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(
-                                              alpha: .88,
-                                            ),
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: AppSpacing.xs),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: AppSpacing.xs,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                  color:
+                                                      Colors.white.withValues(
+                                                    alpha: .72,
+                                                  ),
+                                                ),
+                                                borderRadius: AppRadius.pill,
+                                              ),
+                                              child: Text(
+                                                pending ? '승인 대기' : '멤버',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                                width: AppSpacing.sm),
+                                            Expanded(
+                                              child: Text(
+                                                clubRegionMemberLabel(
+                                                  club.region,
+                                                  club.memberCount,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color:
+                                                      Colors.white.withValues(
+                                                    alpha: .88,
+                                                  ),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
         if (clubs.length > 1) ...[
