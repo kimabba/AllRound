@@ -7,6 +7,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/place_search_result.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_create_draft.dart';
@@ -34,6 +35,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   final _website = TextEditingController();
   final _description = TextEditingController();
   final _monthlyFee = TextEditingController();
+  double? _addressLatitude;
+  double? _addressLongitude;
   Uint8List? _logoBytes;
   String _logoExtension = 'jpg';
   String _logoContentType = 'image/jpeg';
@@ -103,6 +106,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
           _name.text = draft.name;
           _region.text = draft.region;
           _address.text = draft.address;
+          _addressLatitude = draft.latitude;
+          _addressLongitude = draft.longitude;
           _contact.text = draft.contact;
           _website.text = draft.website;
           _description.text = draft.description;
@@ -145,6 +150,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         cardColor: _cardColor,
         step: _step,
         hadSelectedImages: _logoBytes != null || _introImages.isNotEmpty,
+        latitude: _addressLatitude,
+        longitude: _addressLongitude,
       );
 
   void _scheduleDraftSave() {
@@ -179,6 +186,26 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (store != null && userId != null) await store.clear(userId);
   }
 
+  Future<void> _showPlaceSearch() async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<PlaceSearchResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _PlaceSearchSheet(
+        search: ref.read(apiProvider).searchPlaces,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _address.text = selected.displayText;
+      _addressLatitude = selected.latitude;
+      _addressLongitude = selected.longitude;
+    });
+    _scheduleDraftSave();
+  }
+
   Future<void> _confirmReset() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -206,6 +233,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         controller.clear();
       }
       _sport = ref.read(activeSportProvider) ?? 'tennis';
+      _addressLatitude = null;
+      _addressLongitude = null;
       _logoBytes = null;
       _introImages.clear();
       _meetingDays.clear();
@@ -299,7 +328,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       double? latitude;
       double? longitude;
       final address = _address.text.trim();
-      if (address.isNotEmpty) {
+      if (_addressLatitude != null && _addressLongitude != null) {
+        latitude = _addressLatitude;
+        longitude = _addressLongitude;
+      } else if (address.isNotEmpty) {
         try {
           final locations = await Geocoding().locationFromAddress(address);
           if (locations.isNotEmpty) {
@@ -549,6 +581,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     setState(() {
       if (_region.text.trim() != selected.label) {
         _address.clear();
+        _addressLatitude = null;
+        _addressLongitude = null;
       }
       _region.text = selected.label;
     });
@@ -620,6 +654,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                                 _scheduleDraftSave();
                               },
                               onRegionTap: _showRegionPicker,
+                              onAddressTap: _showPlaceSearch,
                               onCardColorChanged: (value) {
                                 setState(() => _cardColor = value);
                                 _scheduleDraftSave();
@@ -806,6 +841,7 @@ class _BasicClubStep extends StatelessWidget {
     required this.onLogoTap,
     required this.onSportChanged,
     required this.onRegionTap,
+    required this.onAddressTap,
     required this.onCardColorChanged,
   });
 
@@ -819,6 +855,7 @@ class _BasicClubStep extends StatelessWidget {
   final VoidCallback onLogoTap;
   final ValueChanged<String> onSportChanged;
   final VoidCallback onRegionTap;
+  final VoidCallback onAddressTap;
   final ValueChanged<String> onCardColorChanged;
 
   @override
@@ -893,12 +930,14 @@ class _BasicClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: address,
+          readOnly: true,
+          onTap: onAddressTap,
           decoration: const InputDecoration(
             labelText: '활동 장소',
-            hintText: '예: 서울 송파구 올림픽로 25 잠실 풋살파크',
+            hintText: '장소명 또는 주소로 검색',
             prefixIcon: Icon(Icons.place_outlined),
+            suffixIcon: Icon(Icons.search_rounded),
           ),
-          textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text('클럽 카드 색상', style: tt.labelLarge),
@@ -1454,3 +1493,162 @@ class _RegionPickerSheet extends StatelessWidget {
 final _regionOptions = [
   for (final code in regionCodes) _RegionOption(regionLabel(code)),
 ];
+
+typedef _PlaceSearchCallback = Future<List<PlaceSearchResult>> Function(
+  String query,
+);
+
+class _PlaceSearchSheet extends StatefulWidget {
+  const _PlaceSearchSheet({required this.search});
+
+  final _PlaceSearchCallback search;
+
+  @override
+  State<_PlaceSearchSheet> createState() => _PlaceSearchSheetState();
+}
+
+class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
+  final _query = TextEditingController();
+  final _focusNode = FocusNode();
+  List<PlaceSearchResult> _results = const [];
+  bool _loading = false;
+  bool _searched = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    final query = _query.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (query.length < 2) {
+      setState(() => _error = '장소명이나 주소를 2자 이상 입력해주세요.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _loading = true;
+      _searched = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.search(query);
+      if (!mounted) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _error = '장소를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return FractionallySizedBox(
+      heightFactor: 0.86,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '활동 장소 검색',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '카카오 장소 검색에서 정확한 주소와 위치를 가져옵니다.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _query,
+              focusNode: _focusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _runSearch(),
+              decoration: InputDecoration(
+                hintText: '예: 잠실 풋살장, 올림픽로 25',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: IconButton(
+                  onPressed: _loading ? null : _runSearch,
+                  tooltip: '검색',
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _error!,
+                style: tt.bodySmall?.copyWith(color: cs.error),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                      ? Center(
+                          child: Text(
+                            _searched ? '검색 결과가 없습니다.' : '장소를 검색해주세요.',
+                            style: tt.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          itemCount: _results.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final place = _results[index];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.xs,
+                              ),
+                              onTap: () => Navigator.pop(context, place),
+                              leading: Icon(
+                                Icons.place_outlined,
+                                color: cs.primary,
+                              ),
+                              title: Text(
+                                place.name,
+                                style: tt.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              subtitle: Text(place.preferredAddress),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

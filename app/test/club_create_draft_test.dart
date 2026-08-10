@@ -17,6 +17,8 @@ void main() {
     cardColor: '#176B63',
     step: 2,
     hadSelectedImages: true,
+    latitude: 37.5,
+    longitude: 127.1,
   );
 
   test('club create draft round-trips typed fields', () {
@@ -30,6 +32,8 @@ void main() {
     expect(restored.cardColor, '#176B63');
     expect(restored.step, 2);
     expect(restored.hadSelectedImages, isTrue);
+    expect(restored.latitude, 37.5);
+    expect(restored.longitude, 127.1);
     expect(restored.hasUserContent, isTrue);
   });
 

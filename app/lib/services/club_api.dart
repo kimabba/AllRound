@@ -9,6 +9,7 @@ import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
+import '../models/place_search_result.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
 import '../utils/grade_labels.dart';
@@ -105,6 +106,25 @@ mixin ClubApi on ApiBase {
     return res
         .whereType<Map>()
         .map((row) => Venue.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<PlaceSearchResult>> searchPlaces(String query) async {
+    final normalized = query.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length < 2) return const [];
+    final res = await httpGet(
+      uri('place-search', {'q': normalized}),
+      headers: await authHeaders(),
+    );
+    check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final places = body['places'];
+    if (places is! List) return const [];
+    return places
+        .whereType<Map>()
+        .map((place) => PlaceSearchResult.fromJson(
+              Map<String, dynamic>.from(place),
+            ))
         .toList(growable: false);
   }
 

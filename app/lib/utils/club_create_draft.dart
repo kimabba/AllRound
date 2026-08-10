@@ -29,6 +29,8 @@ class ClubCreateDraft {
     required this.cardColor,
     required this.step,
     required this.hadSelectedImages,
+    this.latitude,
+    this.longitude,
   });
 
   final String sport;
@@ -44,6 +46,8 @@ class ClubCreateDraft {
   final String cardColor;
   final int step;
   final bool hadSelectedImages;
+  final double? latitude;
+  final double? longitude;
 
   bool get hasUserContent =>
       name.trim().isNotEmpty ||
@@ -73,6 +77,8 @@ class ClubCreateDraft {
         'card_color': cardColor,
         'step': step,
         'had_selected_images': hadSelectedImages,
+        'latitude': latitude,
+        'longitude': longitude,
       });
 
   static ClubCreateDraft? fromJsonString(String source) {
@@ -123,11 +129,20 @@ class ClubCreateDraft {
           : '#3156D8',
       step: step,
       hadSelectedImages: decoded['had_selected_images'] == true,
+      latitude: _doubleValue(decoded['latitude'], min: -90, max: 90),
+      longitude: _doubleValue(decoded['longitude'], min: -180, max: 180),
     );
   }
 }
 
 String _stringValue(Object? value) => value is String ? value : '';
+
+double? _doubleValue(Object? value,
+    {required double min, required double max}) {
+  if (value is! num) return null;
+  final number = value.toDouble();
+  return number.isFinite && number >= min && number <= max ? number : null;
+}
 
 class ClubCreateDraftStore {
   ClubCreateDraftStore(this._preferences);
