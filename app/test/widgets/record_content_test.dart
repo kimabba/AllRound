@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/models/org_ranking.dart';
+import 'package:allround/models/org_ranking_snapshot.dart';
 import 'package:allround/models/player_result.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:allround/widgets/profile/my_record_widgets.dart';
+import 'package:allround/widgets/rankings/rank_trend_sparkline.dart';
 
 // AppTheme.light 는 게터가 아니라 메서드다(app/lib/theme/app_theme.dart:9).
 // 테마를 빼면 안 된다 — 이 프로젝트 테마가 버튼 폭을 무한으로 강제해서,
@@ -38,6 +40,16 @@ OrgRankingRow _rank({required String div, required int rank, required int pts}) 
       'player_name': 'zz선수',
       'rank_points': pts,
       'total_points': pts,
+    });
+
+OrgRankingSnapshot _snap({required String on, required int rank}) =>
+    OrgRankingSnapshot.fromJson({
+      'org_code': 'gj',
+      'division_code': 'gj_m_gold',
+      'org_player_id': 'a',
+      'captured_on': on,
+      'rank': rank,
+      'total_points': 1000,
     });
 
 void main() {
@@ -121,5 +133,53 @@ void main() {
     final textWidget = tester.widget<Text>(textFinder);
     expect(textWidget.overflow, isNot(TextOverflow.ellipsis));
     expect(textWidget.maxLines, isNull);
+  });
+
+  testWidgets('전적이 있으면 이 시즌 기록 카드를 보여준다', (tester) async {
+    await tester.pumpWidget(_wrap(RecordContent(
+      results: [
+        _r(name: '광주시장배', raw: '1', round: 1, points: 1000, on: '2026-05-01'),
+      ],
+      snapshots: [
+        _snap(on: '2026-08-04', rank: 5),
+        _snap(on: '2026-08-05', rank: 3),
+      ],
+    )));
+    final statsCard = find.byKey(const Key('season-stats-card'));
+    expect(statsCard, findsOneWidget);
+    expect(
+      find.descendant(of: statsCard, matching: find.textContaining('1개 대회')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: statsCard, matching: find.textContaining('1회')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: statsCard, matching: find.textContaining('3위')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('전적이 없으면 이 시즌 기록 카드를 안 보여준다', (tester) async {
+    await tester.pumpWidget(_wrap(const RecordContent(results: [])));
+    expect(find.byKey(const Key('season-stats-card')), findsNothing);
+  });
+
+  testWidgets('전적이 없어도 스냅샷이 있으면 추이 그래프는 보여준다', (tester) async {
+    await tester.pumpWidget(_wrap(RecordContent(
+      results: const [],
+      snapshots: [
+        _snap(on: '2026-08-04', rank: 5),
+        _snap(on: '2026-08-05', rank: 3),
+      ],
+    )));
+    expect(
+      find.descendant(
+        of: find.byType(RankTrendSparkline),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -1,61 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-// 경로는 profile_records_widgets.dart 의 import 를 그대로 따른다(실측 확인).
-//   AppCard/AppCardVariant → widgets/app_card.dart
-//   AppSpacing             → theme/tokens.dart
-//   SectionHeader          → profile/profile_settings_widgets.dart
 import '../../models/org_ranking.dart';
+import '../../models/org_ranking_snapshot.dart';
 import '../../models/player_result.dart';
-import '../../state/providers.dart';
+import '../../models/season_stats.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart'; // divisionLabel, tennisOrgShortLabel
 import '../app_card.dart';
-import 'profile_settings_widgets.dart';
-
-/// 프로필의 "내 기록" 섹션.
-///
-/// 연결 승인 전에는 연결 유도를, 승인 후에는 협회 전적을 보여준다.
-/// 순위 관련 블록(라이프베스트·추이)은 스냅샷이 쌓인 뒤 2단계에서 붙인다 —
-/// 지금 빈 그래프를 그리지 않는다.
-class MyRecordSection extends ConsumerWidget {
-  const MyRecordSection({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final link = ref.watch(myConfirmedLinkProvider);
-    final results = ref.watch(myPlayerResultsProvider);
-    final rankings = ref.watch(myCurrentRankingsProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: '내 기록'),
-        const SizedBox(height: AppSpacing.md),
-        link.when(
-          loading: () => const _RecordSkeleton(),
-          error: (_, __) => const _RecordMessage('기록을 불러오지 못했습니다.'),
-          data: (l) => l == null
-              ? const _ConnectPrompt()
-              : results.when(
-                  loading: () => const _RecordSkeleton(),
-                  error: (_, __) => const _RecordMessage('기록을 불러오지 못했습니다.'),
-                  // 순위 조회가 실패해도 전적은 보여준다 — 둘은 독립적이다.
-                  data: (rows) => RecordContent(
-                    results: rows,
-                    rankings: rankings.value ?? const [],
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}
+import '../rankings/rank_trend_sparkline.dart';
 
 /// 연결 전 — 여기서 막히면 기능 전체가 죽는다. 무엇을 얻는지 먼저 말한다.
-class _ConnectPrompt extends StatelessWidget {
-  const _ConnectPrompt();
+class ConnectPrompt extends StatelessWidget {
+  const ConnectPrompt({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -85,27 +42,25 @@ class _ConnectPrompt extends StatelessWidget {
   }
 }
 
-/// 연결 후 본문. 상태를 안 들고 있어 위젯 테스트가 이것만 검증한다.
+/// 연결 후 본문(그리고 다른 선수 상세시트에서도 재사용). 상태를 안 들고
+/// 있어 위젯 테스트가 이것만 검증한다.
 class RecordContent extends StatelessWidget {
   const RecordContent({
     super.key,
     required this.results,
     this.rankings = const [],
+    this.snapshots = const [],
   });
 
   final List<PlayerResult> results;
   final List<OrgRankingRow> rankings;
+  final List<OrgRankingSnapshot> snapshots;
 
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
     // 블록 1 "지금" — 현재 순위. 전적이 없어도 이건 보여준다(연결만 되면 나온다).
-    //
-    // org_player_links.confirmed 는 (org_code, user_id) 별로 각각 있을 수 있어
-    // 한 유저가 광주·전남 두 협회에 동시에 연결되기도 한다. myConfirmedLink() 는
-    // 그중 하나만 돌려주므로 여기 보이는 순위는 "그 협회 한정"이다 — 카드마다
-    // 협회 라벨을 붙여 화면이 전체인 척하지 않게 한다.
     final nowBlock = rankings.isEmpty
         ? const SizedBox.shrink()
         : Column(
@@ -129,22 +84,43 @@ class RecordContent extends StatelessWidget {
             ],
           );
 
+    // 순위 추이는 전적(results)과 독립이다 — 스냅샷은 연결 여부와 무관하게
+    // 전 선수가 매일 자동 적재된다. 전적이 없는 선수도 그래프는 볼 수 있다.
+    final trendBlock = snapshots.isEmpty
+        ? const SizedBox.shrink()
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RankTrendSparkline(snapshots: snapshots),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          );
+
     if (results.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           nowBlock,
-          const _RecordMessage('아직 협회에 등록된 전적이 없습니다.'),
+          trendBlock,
+          const RecordMessage('아직 협회에 등록된 전적이 없습니다.'),
         ],
       );
     }
 
     final best = results.reduce((a, b) => b.points > a.points ? b : a);
+    final seasonStats = SeasonStats.compute(
+      results: results,
+      snapshots: snapshots,
+      currentYear: DateTime.now().year,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         nowBlock,
+        _SeasonStatsBlock(stats: seasonStats),
+        const SizedBox(height: AppSpacing.md),
+        trendBlock,
         AppCard(
           key: const Key('best-moment-card'),
           child: Column(
@@ -163,6 +139,81 @@ class RecordContent extends StatelessWidget {
         ...results.map((r) => _ResultTile(result: r)),
         const SizedBox(height: AppSpacing.sm),
         Text('협회 공표 기준입니다. 앱이 계산한 점수가 아닙니다.', style: tt.bodySmall),
+      ],
+    );
+  }
+}
+
+class _SeasonStatsBlock extends StatelessWidget {
+  const _SeasonStatsBlock({required this.stats});
+
+  final SeasonStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    final distributionEntries = stats.resultDistribution.entries.toList()
+      ..sort((a, b) {
+        if (a.key == null) return 1;
+        if (b.key == null) return -1;
+        return a.key!.compareTo(b.key!);
+      });
+
+    return AppCard(
+      key: const Key('season-stats-card'),
+      variant: AppCardVariant.outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('이 시즌 기록', style: tt.labelLarge),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _StatItem(label: '올해 참가', value: '${stats.tournamentsThisYear}개 대회'),
+              _StatItem(label: '누적 우승', value: '${stats.careerWins}회'),
+              if (stats.allTimeBestRank != null)
+                _StatItem(label: '역대 최고', value: '${stats.allTimeBestRank}위'),
+            ],
+          ),
+          if (distributionEntries.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final e in distributionEntries)
+                  Chip(
+                    label: Text('${seasonDistributionLabel(e.key)} ${e.value}'),
+                    backgroundColor: cs.surfaceContainerHighest,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  const _StatItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        Text(value, style: tt.titleMedium),
       ],
     );
   }
@@ -194,10 +245,6 @@ class _ResultTile extends StatelessWidget {
               ],
             ),
           ),
-          // 정규화 실패 행은 resultLabel 이 협회 원문을 그대로 돌려준다(예: '예선탈락').
-          // "원문을 그대로 보여준다"는 이 화면의 규칙이라 ellipsis 로 잘라내지 않는다 —
-          // Flexible 이 폭을 제한해 줄바꿈만으로 오버플로우를 막는다. 짧은 라벨
-          // ('우승'·'16강')은 한 줄에 그대로라 보기에 달라지지 않는다.
           Flexible(
             child: Text(result.resultLabel, style: tt.bodyLarge),
           ),
@@ -209,8 +256,8 @@ class _ResultTile extends StatelessWidget {
   }
 }
 
-class _RecordMessage extends StatelessWidget {
-  const _RecordMessage(this.text);
+class RecordMessage extends StatelessWidget {
+  const RecordMessage(this.text, {super.key});
 
   final String text;
 
@@ -221,8 +268,8 @@ class _RecordMessage extends StatelessWidget {
       );
 }
 
-class _RecordSkeleton extends StatelessWidget {
-  const _RecordSkeleton();
+class RecordSkeleton extends StatelessWidget {
+  const RecordSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) => const AppCard(
