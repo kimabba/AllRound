@@ -135,7 +135,7 @@ void main() {
     expect(textWidget.maxLines, isNull);
   });
 
-  testWidgets('전적이 있으면 이 시즌 기록 카드를 보여준다', (tester) async {
+  testWidgets('전적이 있으면 기록 요약 카드를 보여준다', (tester) async {
     await tester.pumpWidget(_wrap(RecordContent(
       results: [
         _r(name: '광주시장배', raw: '1', round: 1, points: 1000, on: '2026-05-01'),
@@ -161,7 +161,7 @@ void main() {
     );
   });
 
-  testWidgets('전적이 없으면 이 시즌 기록 카드를 안 보여준다', (tester) async {
+  testWidgets('전적이 없으면 기록 요약 카드를 안 보여준다', (tester) async {
     await tester.pumpWidget(_wrap(const RecordContent(results: [])));
     expect(find.byKey(const Key('season-stats-card')), findsNothing);
   });

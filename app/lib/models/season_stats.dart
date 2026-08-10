@@ -1,7 +1,7 @@
 import 'org_ranking_snapshot.dart';
 import 'player_result.dart';
 
-/// 대회 참가·우승·최고 순위·전적 분포를 하나로 묶은 "이 시즌 기록" 요약.
+/// 대회 참가·우승·최고 순위·전적 분포를 하나로 묶은 "기록 요약" 값.
 /// org_player_results/org_ranking_snapshots 에서 파생된 사실만 담는다 —
 /// 앱이 새 점수·레벨을 만들지 않는다.
 class SeasonStats {

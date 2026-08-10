@@ -167,7 +167,7 @@ class _SeasonStatsBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('이 시즌 기록', style: tt.labelLarge),
+          Text('기록 요약', style: tt.labelLarge),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: AppSpacing.lg,
