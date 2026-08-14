@@ -2,6 +2,7 @@ const publicMediaBuckets = new Set([
   'club-logos',
   'club-intro-images',
   'club-posts',
+  'profile-avatars',
 ]);
 
 export type OwnedPublicObject = {

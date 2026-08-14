@@ -57,7 +57,7 @@ export async function* streamChat(
   opts: GenerateOptions = {},
 ): AsyncGenerator<StreamEvent> {
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse&key=${apiKey()}`;
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
 
   const body: Record<string, unknown> = {
     contents: history,
@@ -75,7 +75,7 @@ export async function* streamChat(
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
     body: JSON.stringify(body),
   });
 
@@ -145,8 +145,7 @@ export async function generateStructured<T>(
   responseSchema: Record<string, unknown>,
   opts: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number } = {},
 ): Promise<T> {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey()}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
@@ -162,7 +161,7 @@ export async function generateStructured<T>(
   }
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);

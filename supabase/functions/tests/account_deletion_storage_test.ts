@@ -14,6 +14,15 @@ Deno.test('account deletion accepts only allowlisted public media inventory', ()
   );
 });
 
+Deno.test('account deletion accepts profile-avatars — regression for the whitelist drift bug', () => {
+  assertEquals(
+    parseOwnedPublicObjects([
+      { bucket_id: 'profile-avatars', object_name: 'opaque.jpg' },
+    ]),
+    [{ bucketId: 'profile-avatars', objectName: 'opaque.jpg' }],
+  );
+});
+
 Deno.test('account deletion rejects private evidence and malformed paths', () => {
   assertThrows(
     () =>

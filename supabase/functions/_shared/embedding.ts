@@ -36,11 +36,10 @@ export async function embedTextWithUsage(
   text: string,
   taskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<{ values: number[]; usage?: EmbedUsage }> {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:embedContent?key=${apiKey()}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:embedContent`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
     body: JSON.stringify({
       model: `models/${MODEL}`,
       content: { parts: [{ text }] },
@@ -69,11 +68,10 @@ export async function embedBatch(
   texts: string[],
   taskType = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[][]> {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:batchEmbedContents?key=${apiKey()}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:batchEmbedContents`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
     body: JSON.stringify({
       requests: texts.map((text) => ({
         model: `models/${MODEL}`,
