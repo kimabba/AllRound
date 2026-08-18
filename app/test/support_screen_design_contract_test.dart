@@ -192,6 +192,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('iPhone 안전영역에서 MY 상단 버튼과 프로필 카드가 겹치지 않는다', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    final theme = AppTheme.light();
+    final sports = [
+      UserSport(sport: 'tennis', grade: 'local_beginner', isPrimary: true),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: theme,
+          home: MediaQuery(
+            data: const MediaQueryData(padding: EdgeInsets.only(top: 47)),
+            child: Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  ProfileHeroSliver(
+                    initial: '올',
+                    title: '올라운드',
+                    subtitle: 'allround@example.com',
+                    infoLine: '만 30세',
+                    sports: AsyncData(sports),
+                    tennisOrgs: const AsyncData([]),
+                    avatarBytes: null,
+                    avatarUrl: null,
+                    onAvatarTap: () {},
+                    onNotificationsTap: () {},
+                    unreadNotificationCount: 1,
+                    onMoreTap: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final notificationButton = find.widgetWithIcon(
+      IconButton,
+      Icons.notifications_none_rounded,
+    );
+    final heroCard = find.byWidgetPredicate((widget) {
+      if (widget is! Container) return false;
+      final decoration = widget.decoration;
+      return decoration is BoxDecoration &&
+          decoration.color == theme.colorScheme.primary &&
+          decoration.borderRadius == AppRadius.hero;
+    });
+
+    expect(notificationButton, findsOneWidget);
+    expect(heroCard, findsOneWidget);
+    expect(
+      tester.getBottomLeft(notificationButton).dy,
+      lessThan(tester.getTopLeft(heroCard).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('대회 달력은 320px 200% 글자에서 48px 조작을 유지한다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     final tournament = Tournament(

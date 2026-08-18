@@ -45,8 +45,11 @@ class ProfileHeroSliver extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final topSafeArea = MediaQuery.paddingOf(context).top;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final expandedHeight = 316.0 + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
+    // 안전영역 아래로 카드를 내린 뒤에도 기본 배율의 카드 내용 높이를 보장한다.
+    final expandedHeight =
+        316.0 + AppSpacing.sm + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
     final primarySport = sports.maybeWhen(
       data: (items) => items.where((item) => item.isPrimary).firstOrNull?.sport,
       orElse: () => null,
@@ -87,9 +90,9 @@ class ProfileHeroSliver extends StatelessWidget {
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.xl,
-            kToolbarHeight + AppSpacing.xxl,
+            topSafeArea + kToolbarHeight + AppSpacing.xxl,
             AppSpacing.xl,
             AppSpacing.lg,
           ),
