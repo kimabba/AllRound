@@ -476,48 +476,34 @@ class _TournamentHomeContent extends StatelessWidget {
       );
     }
 
+    // 히어로는 "지금 신청해야 하는 것"을 맡는다. 마감 임박이 없을 때만
+    // 다가오는 순서로 채운다.
+    final heroItems =
+        (deadlineSoon.isNotEmpty ? deadlineSoon : tournaments).take(5).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (tournaments.isNotEmpty)
-          _TournamentHero(
-            tournaments: tournaments.take(5).toList(),
-            onOpen: onOpen,
-          ),
-        if (tournaments.isNotEmpty) const SizedBox(height: AppSpacing.xl),
+        if (heroItems.isNotEmpty) ...[
+          if (deadlineSoon.isNotEmpty) ...[
+            const _SectionTitle(title: '접수 마감 임박'),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          _TournamentHero(tournaments: heroItems, onOpen: onOpen),
+          const SizedBox(height: AppSpacing.xl),
+        ],
         _InterestTournamentBand(
           tournaments: favorites,
           onOpen: onOpen,
           onBrowse: onBrowse,
           onFavorites: onFavorites,
         ),
-        if (deadlineSoon.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xxl),
-          const _SectionTitle(title: '접수 마감 임박'),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            height: 226,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: deadlineSoon.take(6).length,
-              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, index) {
-                final item = deadlineSoon[index];
-                return _TournamentPosterCard(
-                  tournament: item,
-                  saved: favoriteIds.contains(item.id),
-                  onOpen: () => onOpen(item),
-                  onFavorite: () =>
-                      onFavorite(item, favoriteIds.contains(item.id)),
-                );
-              },
-            ),
-          ),
-        ],
         const SizedBox(height: AppSpacing.xxl),
+        // 마감 임박 가로줄과 지역별 목록을 하나로 합쳤다. 예전에는 같은 대회가
+        // 히어로·가로줄·목록에 최대 세 번 나왔다.
         _SectionTitle(
-          title: '지역별 대회',
-          subtitle: selectedRegion == '전국' ? '전국' : selectedRegion,
+          title: '다가오는 대회',
+          subtitle: selectedRegion,
           onAction: onBrowse,
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -816,117 +802,6 @@ class _InterestTournamentBand extends StatelessWidget {
                     action,
                   ],
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TournamentPosterCard extends StatelessWidget {
-  const _TournamentPosterCard({
-    required this.tournament,
-    required this.saved,
-    required this.onOpen,
-    required this.onFavorite,
-  });
-
-  final Tournament tournament;
-  final bool saved;
-  final VoidCallback onOpen;
-  final VoidCallback onFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final deadline = tournament.applicationDeadline!;
-    final now = DateTime.now();
-    final days =
-        deadline.difference(DateTime(now.year, now.month, now.day)).inDays;
-    return Material(
-      color: cs.surface,
-      borderRadius: AppRadius.card,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Container(
-          width: 210,
-          decoration: BoxDecoration(
-            border: Border.all(color: cs.outlineVariant),
-            borderRadius: AppRadius.card,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  SizedBox(
-                    height: 128,
-                    width: double.infinity,
-                    child: _TournamentImage(tournament: tournament),
-                  ),
-                  Positioned(
-                    left: AppSpacing.sm,
-                    top: AppSpacing.sm,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.error,
-                        borderRadius: AppRadius.pill,
-                      ),
-                      child: Text(
-                        days == 0 ? 'D-day' : 'D-$days',
-                        style: TextStyle(
-                          color: cs.onError,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: AppSpacing.xs,
-                    top: AppSpacing.xs,
-                    child: IconButton.filledTonal(
-                      onPressed: onFavorite,
-                      icon: Icon(
-                        saved
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tournament.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      '${DateFormat('M월 d일').format(tournament.startDate)} · ${tournament.region ?? '지역 미정'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

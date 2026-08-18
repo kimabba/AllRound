@@ -269,6 +269,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // 예전에는 히어로·마감임박 가로줄·지역별 목록이 모두 같은 목록에서 뽑혀
+  // 대회 하나가 한 화면에 세 번까지 나왔다.
+  testWidgets('마감 임박 대회는 히어로와 목록에 한 번씩만 나온다', (tester) async {
+    const title = '2026 마감임박 테스트 대회';
+    await pumpHome(
+      tester,
+      load: () async => [
+        Tournament(
+          id: 'soon-1',
+          sport: 'tennis',
+          title: title,
+          organizer: 'QA',
+          startDate: DateTime.now().add(const Duration(days: 9)),
+          applicationDeadline: DateTime.now().add(const Duration(days: 3)),
+          region: '광주',
+          eligibleGrades: const ['open'],
+          status: 'published',
+        ),
+      ],
+      activeSport: 'tennis',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(title), findsNWidgets(2));
+    expect(find.text('접수 마감 임박'), findsOneWidget);
+    expect(find.text('다가오는 대회'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   group('홈 히어로 카드', () {
     final deadline = DateTime.now().add(const Duration(days: 6));
     final deadlineLine = '~${DateFormat('M월 d일').format(deadline)} 마감';
