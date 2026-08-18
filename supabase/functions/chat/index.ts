@@ -32,6 +32,7 @@ import {
   type Intent,
   INTENT_VALUES,
   type IntentResult,
+  isDateRangeFullyPast,
   resolveRequestedSport,
 } from '../_shared/intent.ts';
 import {
@@ -448,8 +449,21 @@ Deno.serve(withCors(async (req) => {
         ) {
           const scheduleErrorText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
             '잠시 후 다시 시도해 주세요.';
+          const todayKstForSchedule = new Date(Date.now() + 9 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
+          const rawDateRange = intentResult.slots.date_range;
+          // 이 RPC 는 미래 겹침만 보는 구조(내부에서 conflict_date >= 오늘 강제)라, 이미
+          // 지난 범위를 그대로 넘기면 항상 0행이 나와 "겹침 없음"으로 오판된다 — 그럴 땐
+          // 범위를 무시하고 기본 90일 창을 쓴다. isDateRangeFullyPast 참고.
+          const dateRange = rawDateRange && !isDateRangeFullyPast(rawDateRange, todayKstForSchedule)
+            ? rawDateRange
+            : undefined;
+          const scheduleRangeLabel = dateRange
+            ? `${dateRange.from} ~ ${dateRange.to}`
+            : '앞으로 90일';
           const { data: conflictRows, error: conflictErr } = await supabase.rpc(
             'my_schedule_conflicts',
+            { p_date_from: dateRange?.from ?? null, p_date_to: dateRange?.to ?? null },
           );
 
           let scheduleText: string;
@@ -498,7 +512,7 @@ Deno.serve(withCors(async (req) => {
                   : renderScheduleConflictText([]);
               }
             } else {
-              scheduleText = renderScheduleConflictText(typedRows);
+              scheduleText = renderScheduleConflictText(typedRows, scheduleRangeLabel);
             }
           }
 
