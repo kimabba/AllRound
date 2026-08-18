@@ -7,6 +7,7 @@ import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
+import '../utils/kst.dart';
 
 final supabaseProvider = Provider<SupabaseClient>((_) {
   return Supabase.instance.client;
@@ -236,7 +237,7 @@ Future<List<Tournament>> loadHomeTournamentsBySport({
       ),
     ),
   );
-  final today = DateTime(now.year, now.month, now.day);
+  final today = kstTodayDate(now);
   final result = <Tournament>[];
 
   for (var index = 0; index < sports.length; index += 1) {

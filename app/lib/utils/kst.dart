@@ -13,3 +13,17 @@ String kstToday(DateTime now) {
       '${kst.month.toString().padLeft(2, '0')}-'
       '${kst.day.toString().padLeft(2, '0')}';
 }
+
+/// KST 기준 오늘 자정 — `DateTime` 끼리 날짜 차이를 셀 때 쓴다(D-day, 마감 판정).
+///
+/// `DateTime(now.year, now.month, now.day)` 는 **기기 로컬** 자정이라 쓰지 않는다.
+/// 서버가 KST 로 마감을 판정하므로(tournaments_for_user 등 `p_recruiting` 필터),
+/// 기기 시간대를 따라가면 한국 자정 근처에서 앱이 하루 먼저 '마감'을 띄운다.
+///
+/// 반환값은 **KST 벽시계 날짜를 담은 로컬 DateTime** 이다. 시각 성분이 0 이라
+/// `applicationDeadline`(날짜만 있는 값)과의 `difference(...).inDays` 가
+/// 시간대와 무관하게 정확한 일수를 준다.
+DateTime kstTodayDate(DateTime now) {
+  final kst = now.toUtc().add(const Duration(hours: 9));
+  return DateTime(kst.year, kst.month, kst.day);
+}
