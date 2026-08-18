@@ -49,6 +49,18 @@ class TournamentChatCardItem {
   final String? format;
   final List<RegulationField> regulationFields;
 
+  /// 이미 끝난 대회인가. **서버(KST)가 판정한 값**이고, 판정할 수 없었으면 null.
+  ///
+  /// 날짜를 앱에서 계산하지 않는 이유가 둘이다.
+  ///  1) end_date 없는 행이 대다수인데(단일일 대회) 그 null 과, RAG 경로처럼
+  ///     종료일을 조회하지 못한 null 은 뜻이 다르다. 그 구분은 행의 출처를 아는
+  ///     서버만 할 수 있다(_shared/chat_cards.ts).
+  ///  2) 기기 시계를 쓰면 한국 자정 근처에서 서버 판정과 하루 어긋난다.
+  ///
+  /// 필드가 없는 응답(배포 전 서버)이면 null 이라 배지를 띄우지 않는다 — 잘못
+  /// 표시하느니 표시하지 않는다.
+  final bool? finished;
+
   const TournamentChatCardItem({
     required this.id,
     required this.title,
@@ -63,6 +75,7 @@ class TournamentChatCardItem {
     this.entryFee,
     this.format,
     this.regulationFields = const [],
+    this.finished,
   });
 
   /// 필수 필드(id, title, sport, start_date)가 없으면 null 을 반환해 호출자가 건너뛴다.
@@ -93,6 +106,7 @@ class TournamentChatCardItem {
       entryFee: j['entry_fee'] as int?,
       format: j['format'] as String?,
       regulationFields: RegulationField.listFromJson(j['regulation_fields']),
+      finished: j['finished'] as bool?,
     );
   }
 }
