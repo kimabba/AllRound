@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(21);
+select plan(23);
 
 select has_function('public', 'my_schedule_conflicts', 'my_schedule_conflicts 함수 존재');
 select has_function('public', 'my_confirmed_ranking', 'my_confirmed_ranking 함수 존재');
@@ -211,6 +211,52 @@ select results_eq(
     '장기 대회 L | 가을 모임'
   ]::text[],
   '기간을 좁혀 주면 그 구간(장기 대회 L 관련 2건)만 반환된다');
+
+-- 겹침이 요청 기간보다 먼저 시작해 기간 안까지 이어지는 경우 — conflict_date(겹침
+-- 시작일)만 보고 filtering 하면 통째로 빠진다(20260819020000 버그수정 회귀 테스트).
+-- 대회 K(d+60~75)·J(d+65~90) 는 65~75일에 겹치는데, "d+70부터" 조회하면 겹침 시작일
+-- (65)은 그 이전이지만 70~75 구간은 여전히 겹친다 — 시작일만 보면 이 결과가 0건이 된다.
+-- 기존 유저(55555555...)의 집계 테스트(6건/3건 등)를 안 건드리려 별도 유저로 격리.
+-- 시드는 위에서부터 이어진 authenticated 세션 권한으로는 못 쓴다 — 잠깐 되돌린다.
+reset role;
+reset request.jwt.claims;
+delete from public.tournament_favorites where user_id = '77777777-7777-7777-7777-777777777777';
+delete from public.tournaments where id in ('a0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000011');
+
+insert into auth.users (id, email) values
+  ('77777777-7777-7777-7777-777777777777', 'sched-b@test.local')
+on conflict do nothing;
+insert into public.users (id, email, name) values
+  ('77777777-7777-7777-7777-777777777777', 'sched-b@test.local', '겹침구간')
+on conflict (id) do update set name = excluded.name;
+insert into public.tournaments (id, sport, title, region, start_date, end_date, status) values
+  ('a0000000-0000-0000-0000-000000000010', 'tennis', '겹침 대회 K', '광주',
+   current_date + 60, current_date + 75, 'published'),
+  ('a0000000-0000-0000-0000-000000000011', 'tennis', '겹침 대회 J', '광주',
+   current_date + 65, current_date + 90, 'published')
+on conflict (id) do nothing;
+insert into public.tournament_favorites (user_id, tournament_id) values
+  ('77777777-7777-7777-7777-777777777777', 'a0000000-0000-0000-0000-000000000010'),
+  ('77777777-7777-7777-7777-777777777777', 'a0000000-0000-0000-0000-000000000011')
+on conflict do nothing;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"77777777-7777-7777-7777-777777777777","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public.my_schedule_conflicts(current_date + 70, current_date + 100)),
+  1, '겹침 시작(d+65)이 요청 기간(d+70~) 이전이어도, 겹침이 그 안까지 이어지면(d+70~75) 잡힌다');
+
+select is(
+  (select count(*)::int from public.my_schedule_conflicts(current_date + 76, current_date + 100)),
+  0, '겹침(d+65~75)이 요청 기간(d+76~) 시작 전에 완전히 끝났으면 안 잡힌다');
+
+delete from public.tournament_favorites where user_id = '77777777-7777-7777-7777-777777777777';
+delete from public.tournaments where id in ('a0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000011');
+-- 아래 my_confirmed_ranking 테스트는 원래 유저(55555555...) 세션이어야 한다 — 그냥
+-- reset 하면 무권한 세션이 되어 뒤 테스트가 깨진다.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
 
 -- ── my_confirmed_ranking: confirmed 링크된 랭킹만 ──────────────────
 select is(
