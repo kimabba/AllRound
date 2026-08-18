@@ -25,6 +25,10 @@
 --   - enforce_min_signup_age / has_verified_signup_age / before_user_created_allround
 --     만 나이 게이트. 법적 요건이라 별도 검토 후 처리한다.
 --   - replace_org_ranking_division 의 captured_on. 랭킹 스냅샷 날짜.
+--   - close_expired_tournaments (027) 의 `end_date < now()::date`. 같은 UTC 문제이고
+--     cron 이 UTC 18:00 = KST 03:00 에 돌아 하필 어긋나는 시간대에 걸린다. 다만
+--     프로덕션엔 함수도 cron 도 없다(2026-08-18 실측: pg_proc 0건, cron.job 0건) —
+--     로컬/CI 전용이라 실사용 영향이 없어 이번에 건드리지 않는다.
 --
 -- 시그니처가 그대로라 CREATE OR REPLACE 로 교체한다(079 처럼 인자 수가 달라져
 -- 오버로드가 새로 생기는 사고를 피하려면 인자 목록을 손대지 않아야 한다).

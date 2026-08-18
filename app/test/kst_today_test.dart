@@ -1,8 +1,7 @@
-import 'package:allround/models/chat_ui.dart';
 import 'package:allround/utils/kst.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// KST 오늘 날짜. 검수 큐 컷오프와 채팅 카드의 '종료' 판정이 이걸 쓴다.
+/// KST 오늘 날짜. 검수 큐 컷오프가 이걸 쓴다.
 /// 하루라도 어긋나면 오늘 열린 대회가 큐에서 사라지거나 지난 대회가 계속 남는다.
 ///
 /// 서버의 자동 마감(syncTournamentStatus)이 KST 로 판정하므로 여기도 KST 다.
@@ -41,47 +40,5 @@ void main() {
     expect('2026-08-04'.compareTo(cutoff) >= 0, isTrue, reason: '오늘 시작');
     expect('2026-08-05'.compareTo(cutoff) >= 0, isTrue, reason: '내일 시작');
     expect('2026-08-03'.compareTo(cutoff) >= 0, isFalse, reason: '어제 시작');
-  });
-
-  group('채팅 카드 종료 판정', () {
-    // 2026-08-18 12:00 KST == 2026-08-18 03:00 UTC
-    final now = DateTime.utc(2026, 8, 18, 3);
-
-    TournamentChatCardItem card(String start, String? end) =>
-        TournamentChatCardItem(
-          id: 't',
-          title: '대회',
-          sport: 'tennis',
-          startDate: start,
-          endDate: end,
-          eligible: true,
-          eligibleGrades: const [],
-        );
-
-    test('여러 날 대회는 마지막 날이 지나야 종료다', () {
-      // 진행 중(8/14~8/17 는 끝, 8/14~8/18 은 오늘까지)
-      expect(card('2026-08-14', '2026-08-17').isFinished(now), isTrue);
-      expect(card('2026-08-14', '2026-08-18').isFinished(now), isFalse);
-      expect(card('2026-08-21', '2026-08-23').isFinished(now), isFalse);
-    });
-
-    test('종료일이 없으면 시작일로 판정한다', () {
-      expect(card('2026-08-17', null).isFinished(now), isTrue);
-      expect(card('2026-08-18', null).isFinished(now), isFalse, reason: '오늘 시작');
-      expect(card('2026-08-29', null).isFinished(now), isFalse);
-    });
-
-    test('KST 자정 경계 — 기기가 UTC 여도 한국 날짜로 끊는다', () {
-      // 2026-08-18 23:50 KST == 14:50 UTC → 아직 8/18, 8/18 대회는 진행 중
-      expect(
-        card('2026-08-18', null).isFinished(DateTime.utc(2026, 8, 18, 14, 50)),
-        isFalse,
-      );
-      // 2026-08-19 00:10 KST == 8/18 15:10 UTC → 날이 바뀌어 종료
-      expect(
-        card('2026-08-18', null).isFinished(DateTime.utc(2026, 8, 18, 15, 10)),
-        isTrue,
-      );
-    });
   });
 }

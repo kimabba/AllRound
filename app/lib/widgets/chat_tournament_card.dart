@@ -28,7 +28,8 @@ class ChatTournamentCard extends StatelessWidget {
         ? '${item.startDate} ~ ${item.endDate}'
         : item.startDate;
     // 끝난 대회면 '출전 가능' 대신 '종료'. 둘 다 붙이면 모순이라 하나만 고른다.
-    final finished = item.isFinished(DateTime.now());
+    // 판정은 서버(KST)가 한다 — null 이면 모른다는 뜻이라 아무 배지도 띄우지 않는다.
+    final finished = item.finished ?? false;
 
     return GestureDetector(
       onTap: () => context.push('/tournaments/${item.id}'),
