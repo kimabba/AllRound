@@ -448,8 +448,13 @@ Deno.serve(withCors(async (req) => {
         ) {
           const scheduleErrorText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
             '잠시 후 다시 시도해 주세요.';
+          const dateRange = intentResult.slots.date_range;
+          const scheduleRangeLabel = dateRange
+            ? `${dateRange.from} ~ ${dateRange.to}`
+            : '앞으로 90일';
           const { data: conflictRows, error: conflictErr } = await supabase.rpc(
             'my_schedule_conflicts',
+            { p_date_from: dateRange?.from ?? null, p_date_to: dateRange?.to ?? null },
           );
 
           let scheduleText: string;
@@ -498,7 +503,7 @@ Deno.serve(withCors(async (req) => {
                   : renderScheduleConflictText([]);
               }
             } else {
-              scheduleText = renderScheduleConflictText(typedRows);
+              scheduleText = renderScheduleConflictText(typedRows, scheduleRangeLabel);
             }
           }
 
