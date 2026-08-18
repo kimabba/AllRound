@@ -500,6 +500,24 @@ void main() {
       expect(find.text('확인 중입니다'), findsOneWidget);
       expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
     });
+
+    // 단 협회 등록이 0개면 등록 안내가 이긴다. 등록을 지워도 pending 은
+    // 남으므로(org_player_links 는 user_tennis_orgs 와 별개 테이블),
+    // 순서가 반대면 '확인 중입니다'가 등록 안내를 영구히 가린다
+    // (codex 리뷰 2026-08-18).
+    testWidgets('협회 등록을 지운 뒤 pending 이 남아 있어도 등록 안내가 이긴다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: const [],
+      );
+
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+      expect(find.text('확인 중입니다'), findsNothing);
+    });
   });
 
   testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {

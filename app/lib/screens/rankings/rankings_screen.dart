@@ -815,7 +815,16 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     vertical: AppSpacing.md,
                   ),
                   children: [
-                    if (data.candidate != null)
+                    // 협회를 하나도 등록하지 않았으면 이게 최우선이다.
+                    // 등록을 지워도 pending 신청은 남으므로(org_player_links 는
+                    // user_tennis_orgs 와 별개 테이블), 이 분기가 뒤에 있으면
+                    // '확인 중입니다'가 등록 안내를 영구히 가린다
+                    // (codex 리뷰 2026-08-18). 등록이 0개면 후보도 0개다 —
+                    // my_ranking_candidates() 가 user_tennis_orgs 를 조인한다.
+                    if (data.hasNoOrgRegistered &&
+                        data.linkedOrgPlayerId == null)
+                      const _NotMyDivisionNotice(hasNoOrgRegistered: true)
+                    else if (data.candidate != null)
                       RankingClaimPrompt(
                         candidate: data.candidate!,
                         onClaim: () => _claim(data.candidate!),
@@ -857,16 +866,15 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
                     // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
                     //
-                    // 이 안내가 체인의 **맨 뒤**인 것은 의도다. 후보 카드와
-                    // '확인 중입니다'는 부서가 아니라 **협회 단위**로 뜬다 —
-                    // 화면 기본 부서가 gj_m_gold 라, 부서로 좁히면 남자일반부
-                    // 후보를 가진 사람은 탭을 옮기기 전엔 카드를 영영 못 본다.
-                    // 진행 중인 신청이 있으면 그 소식이 먼저다.
+                    // 여기까지 왔으면 "등록은 했는데 다른 부서를 보는 중"이다
+                    // (등록 0개는 위에서 이미 걸렀다). 맨 뒤인 것은 의도다 —
+                    // 후보 카드와 '확인 중입니다'는 부서가 아니라 **협회 단위**로
+                    // 뜬다. 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+                    // 남자일반부 후보를 가진 사람은 탭을 옮기기 전엔 카드를
+                    // 영영 못 본다. 진행 중인 신청이 있으면 그 소식이 먼저다.
                     else if (!data.registeredHere &&
                         data.linkedOrgPlayerId == null)
-                      _NotMyDivisionNotice(
-                        hasNoOrgRegistered: data.hasNoOrgRegistered,
-                      ),
+                      const _NotMyDivisionNotice(hasNoOrgRegistered: false),
                     if (visibleRows.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(AppSpacing.xxl),
