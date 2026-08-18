@@ -147,4 +147,33 @@ void main() {
 
     expect(route, '/clubs/club-1?tab=manage');
   });
+
+  // 랭킹 연결은 같은 사건인데 받는 사람이 갈린다 — 관리자는 승인 큐,
+  // 신청자는 기록장. NotificationEvent 에 type 이 없어 reference_type 두 값으로
+  // 가른다. 값이 어긋나면 관리자가 기록장으로, 신청자가 관리자 화면으로 간다.
+  test('랭킹 연결 신청 알림은 관리자 승인 큐로 간다', () {
+    expect(
+      routeForNotificationEvent(
+        const NotificationEvent(
+          title: '랭킹 본인 연결 신청',
+          body: '',
+          referenceType: 'ranking_claim_request',
+        ),
+      ),
+      '/admin/ranking-claims',
+    );
+  });
+
+  test('랭킹 연결 결과 알림은 개인 기록장으로 간다', () {
+    expect(
+      routeForNotificationEvent(
+        const NotificationEvent(
+          title: '랭킹 본인 연결 완료',
+          body: '',
+          referenceType: 'ranking_claim_result',
+        ),
+      ),
+      '/rankings/me',
+    );
+  });
 }

@@ -50,6 +50,9 @@ class AppNotification {
         'club_comment' => '댓글',
         'club_event_reminder' => '모임 알림',
         'club_attendance_change' => '참석 변경',
+        'ranking_claim_request' => '랭킹 연결 신청',
+        'ranking_claim_approved' => '랭킹 연결 완료',
+        'ranking_claim_rejected' => '랭킹 연결 해제',
         _ => type,
       };
 }
