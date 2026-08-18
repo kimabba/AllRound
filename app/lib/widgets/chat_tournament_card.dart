@@ -27,6 +27,8 @@ class ChatTournamentCard extends StatelessWidget {
     final dateText = item.endDate != null && item.endDate != item.startDate
         ? '${item.startDate} ~ ${item.endDate}'
         : item.startDate;
+    // 끝난 대회면 '출전 가능' 대신 '종료'. 둘 다 붙이면 모순이라 하나만 고른다.
+    final finished = item.isFinished(DateTime.now());
 
     return GestureDetector(
       onTap: () => context.push('/tournaments/${item.id}'),
@@ -53,7 +55,7 @@ class ChatTournamentCard extends StatelessWidget {
                     style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                   ),
                 ),
-                if (item.eligible)
+                if (finished || item.eligible)
                   Container(
                     margin: const EdgeInsets.only(left: AppSpacing.sm),
                     padding: const EdgeInsets.symmetric(
@@ -61,13 +63,17 @@ class ChatTournamentCard extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: cs.primaryContainer,
+                      color: finished
+                          ? cs.surfaceContainerHighest
+                          : cs.primaryContainer,
                       borderRadius: AppRadius.pill,
                     ),
                     child: Text(
-                      '출전 가능',
+                      finished ? '종료' : '출전 가능',
                       style: tt.labelSmall?.copyWith(
-                        color: cs.onPrimaryContainer,
+                        color: finished
+                            ? cs.onSurfaceVariant
+                            : cs.onPrimaryContainer,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

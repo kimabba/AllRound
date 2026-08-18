@@ -1,6 +1,8 @@
 // 채팅 a2ui 카드 모델. 서버 `ui` SSE 이벤트의 blocks 를 타입 안전하게 파싱한다.
 // 파싱 실패는 예외 대신 빈 결과로 흡수해 마크다운 답변이 항상 렌더되도록 한다.
 
+import '../utils/kst.dart';
+
 /// 요강 요약 한 줄 (예: {label: '사용구', value: '헤드 챔피언십'}).
 class RegulationField {
   final String label;
@@ -64,6 +66,14 @@ class TournamentChatCardItem {
     this.format,
     this.regulationFields = const [],
   });
+
+  /// 이미 끝난 대회인가. "8월 대회 뭐가 있어?" 처럼 기간을 명시하면 서버는
+  /// 그 기간 전체를 준다(지난 대회는 뒤로 정렬). 기록 조회 목적이라 빼지 않고,
+  /// 대신 카드에서 끝난 것임을 표시한다.
+  ///
+  /// 기준일은 KST — 서버 판정과 짝을 맞춘다([kstToday] 참고).
+  bool isFinished(DateTime now) =>
+      (endDate ?? startDate).compareTo(kstToday(now)) < 0;
 
   /// 필수 필드(id, title, sport, start_date)가 없으면 null 을 반환해 호출자가 건너뛴다.
   static TournamentChatCardItem? tryFromJson(Map<String, dynamic> j) {
