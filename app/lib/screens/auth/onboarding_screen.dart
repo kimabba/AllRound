@@ -464,6 +464,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   final org = available[i];
                   return ListTile(
                     title: Text(tennisOrgLabel(org)),
+                    // 랭킹 미러가 없는 협회는 등록해도 본인 연결·개인 기록장이
+                    // 열리지 않는다. 고르는 것 자체는 정상이다(대회 자격·등급
+                    // 매칭에 쓰인다) — 막지 않고 알린다.
+                    subtitle: orgHasRankingMirror(org)
+                        ? null
+                        : Text(
+                            '랭킹 연동 없음 · 대회·등급 매칭에만 쓰여요',
+                            style: Theme.of(c).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(c)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
                     onTap: () => Navigator.of(c).pop(org),
                   );
                 },
@@ -1154,6 +1167,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ],
           ),
+          // 선택 시트에서 한 번 봤어도 카드에서 다시 보여준다 — 시트는 스쳐
+          // 지나가고, 나중에 "왜 내 기록이 안 뜨지"로 돌아오는 곳이 여기다.
+          if (!orgHasRankingMirror(draft.org)) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '이 협회는 랭킹 연동이 없어 본인 연결·개인 기록장이 열리지 않아요. '
+              '대회 자격·등급 매칭에는 그대로 쓰입니다.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           Text('내 랭킹 등급 선택', style: tt.labelLarge),
           const SizedBox(height: AppSpacing.xs),

@@ -12,30 +12,6 @@ import '../../widgets/app_card.dart';
 import '../../widgets/rankings/player_detail_sheet.dart';
 import '../../widgets/tournament_section_bar.dart';
 
-/// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
-/// 일치). 부서 카탈로그 전체(rankingGradesForOrg)와 다르다 — 오픈부·베테랑부 등은
-/// 대회 자격에는 쓰이지만 협회가 별도 랭킹표로 공표하지 않는다.
-/// 남자신인부는 2026-08 남자일반부로 통합돼 빠졌다(카탈로그에는 is_active=false 로 남아
-/// 옛 대회 라벨 해석은 계속 된다). 여자신인부는 살아 있다.
-const _kRankingDivisions = <String, List<String>>{
-  'gj': [
-    'gj_m_gold',
-    'gj_m_general',
-    'gj_m_instructor',
-    'gj_w_rookie',
-    'gj_w_gukhwa',
-    'gj_w_geumbae',
-  ],
-  'jn': [
-    'jn_m_gold',
-    'jn_m_general',
-    'jn_m_instructor',
-    'jn_w_rookie',
-    'jn_w_gukhwa',
-    'jn_w_geumbae',
-  ],
-};
-
 // ── 순위표 ────────────────────────────────────────────────────────────────
 
 /// 지금 보는 부서에서 "본인" 신청을 걸 수 있는 선수들.
@@ -370,6 +346,54 @@ class _DisputeNoteDialogState extends State<_DisputeNoteDialog> {
   }
 }
 
+// ── 등록 안 한 부서 안내 ──────────────────────────────────────────────────
+
+/// 지금 보는 협회·부서를 등록하지 않았을 때의 안내.
+///
+/// 등록이 아예 없으면 등록을 권하고 버튼을 준다. 등록은 했는데 다른 부서를
+/// 보고 있으면 **버튼을 주지 않는다** — "등록하러 가라"가 여기서는 틀린 조언이다.
+/// 그 협회 랭커가 아닌 사람이 자기 부서가 아닌 것을 등록하게 만든다.
+class _NotMyDivisionNotice extends StatelessWidget {
+  const _NotMyDivisionNotice({required this.hasNoOrgRegistered});
+
+  final bool hasNoOrgRegistered;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasNoOrgRegistered
+                ? '소속 협회·부서를 등록하면 랭킹표에서 「본인」을 찾을 수 있어요.'
+                : '내가 등록한 부서가 아니라 여기선 본인 연결을 신청할 수 없어요.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (hasNoOrgRegistered)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                // 테마 기본 minimumSize 가 폭 무한이다
+                // (theme-infinite-width-button-landmine).
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.control),
+                ),
+                // 협회·부서 편집 화면은 온보딩이다 — profile_quick_actions 등
+                // 기존 4곳이 쓰는 것과 같은 경로.
+                onPressed: () => context.push('/onboarding'),
+                child: const Text('등록하러 가기'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 출처 표기 ─────────────────────────────────────────────────────────────
 
 /// 개인정보 보호책임자 연락처(privacy-policy.html 7항과 동일해야 한다).
@@ -496,6 +520,7 @@ class _RankingScreenData {
     required this.claimableOrgPlayerIds,
     required this.disputableOrgPlayerIds,
     required this.registeredHere,
+    required this.hasNoOrgRegistered,
   });
 
   final List<OrgRankingRow> rows;
@@ -513,6 +538,13 @@ class _RankingScreenData {
   /// 이 협회·부서를 내 프로필에 등록해 뒀는지. 등록했는데도 신청할 행이
   /// 하나도 없으면 이유(이름 불일치)를 화면이 말해 줘야 한다.
   final bool registeredHere;
+
+  /// 협회를 하나도 등록하지 않았는지. [registeredHere] 가 false 인 이유가
+  /// "아직 아무것도 등록 안 함"인지 "등록했지만 다른 부서"인지 가른다 —
+  /// 안내 문구와 버튼이 달라진다. 등록 0개일 때만 등록을 권한다. 남의 부서를
+  /// 보고 있는 사람에게 "등록하러 가라"고 하면 자기 부서가 아닌 것을 등록하게
+  /// 만든다(실측: gj_m_instructor 를 등록했지만 그 21명 명단에 없는 사례).
+  final bool hasNoOrgRegistered;
 }
 
 /// 협회 랭킹 화면. 협회(광주/전남)와 부서를 고르면 그 부서의 공표 순위표를 보여준다.
@@ -526,7 +558,7 @@ class RankingsScreen extends ConsumerStatefulWidget {
 
 class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   String _orgCode = 'gj';
-  String _divisionCode = _kRankingDivisions['gj']!.first;
+  String _divisionCode = kRankingDivisions['gj']!.first;
   String _query = '';
   bool _claiming = false;
   late Future<_RankingScreenData> _future;
@@ -602,6 +634,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       claimableOrgPlayerIds: claimable,
       disputableOrgPlayerIds: disputable,
       registeredHere: registeredHere,
+      hasNoOrgRegistered: myOrgs.isEmpty,
     );
   }
 
@@ -624,7 +657,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   void _changeOrg(String orgCode) {
     setState(() {
       _orgCode = orgCode;
-      _divisionCode = _kRankingDivisions[orgCode]!.first;
+      _divisionCode = kRankingDivisions[orgCode]!.first;
       _future = _load();
     });
   }
@@ -679,8 +712,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final orgCodes = _kRankingDivisions.keys.toList();
-    final divisions = _kRankingDivisions[_orgCode]!;
+    final orgCodes = kRankingDivisions.keys.toList();
+    final divisions = kRankingDivisions[_orgCode]!;
 
     return Scaffold(
       appBar: AppBar(
@@ -819,6 +852,14 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                                         .onSurfaceVariant,
                                   ),
                         ),
+                      )
+                    // 등록하지 않은 협회·부서를 보는 중. 지금까지는 버튼만 조용히
+                    // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
+                    // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+                    else if (!data.registeredHere &&
+                        data.linkedOrgPlayerId == null)
+                      _NotMyDivisionNotice(
+                        hasNoOrgRegistered: data.hasNoOrgRegistered,
                       ),
                     if (visibleRows.isEmpty)
                       Padding(

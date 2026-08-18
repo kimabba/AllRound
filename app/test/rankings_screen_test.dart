@@ -28,6 +28,16 @@ OrgRankingRow _row({
   );
 }
 
+/// 기본 등록 상태 — 광주협회 남자골드부. 화면 기본 선택과 같아 registeredHere 가 참이다.
+/// UserTennisOrg 는 const 생성자가 아니라 최종 필드로 둔다.
+final _kDefaultMyOrgs = [
+  UserTennisOrg(
+    org: 'gj',
+    division: 'default',
+    divisionCodes: const ['gj_m_gold'],
+  ),
+];
+
 /// 화면 통합용 — _load() 가 실제로 쓰는 네 조회만 갈아끼운다.
 /// (단위 테스트가 판정 함수를 고정해도, 화면이 그 판정을 안 쓰면 소용없다.)
 class _FakeRankingApi extends ApiService {
@@ -36,7 +46,9 @@ class _FakeRankingApi extends ApiService {
     required this.links,
     this.candidates = const [],
     this.myName = '김평화',
-  })  : super(
+    List<UserTennisOrg>? myOrgs,
+  })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
+        super(
           SupabaseClient(
             'http://127.0.0.1:54321',
             'qa-anon-key',
@@ -48,6 +60,7 @@ class _FakeRankingApi extends ApiService {
   final List<Map<String, dynamic>> links;
   final List<OrgRankingRow> candidates;
   final String myName;
+  final List<UserTennisOrg> myOrgs;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -64,13 +77,7 @@ class _FakeRankingApi extends ApiService {
   Future<List<OrgRankingRow>> myRankingCandidates() async => candidates;
 
   @override
-  Future<List<UserTennisOrg>> myTennisOrgs() async => [
-        UserTennisOrg(
-          org: 'gj',
-          division: 'default',
-          divisionCodes: const ['gj_m_gold'],
-        ),
-      ];
+  Future<List<UserTennisOrg>> myTennisOrgs() async => myOrgs;
 
   @override
   Future<UserProfile?> myProfile() async => UserProfile(name: myName);
@@ -87,6 +94,7 @@ Future<void> _pumpScreen(
   required List<Map<String, dynamic>> links,
   List<OrgRankingRow> candidates = const [],
   String myName = '김평화',
+  List<UserTennisOrg>? myOrgs,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -97,6 +105,7 @@ Future<void> _pumpScreen(
             links: links,
             candidates: candidates,
             myName: myName,
+            myOrgs: myOrgs,
           ),
         ),
         currentUserProvider.overrideWithValue(
@@ -418,6 +427,54 @@ void main() {
           isEmpty,
         );
       }
+    });
+  });
+
+  // 본인 연결 진입이 0건인 이유 중 하나 — 등록 안 한 부서를 보면 버튼만
+  // 조용히 사라지고 설명이 없었다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+  group('등록 안 한 부서 안내', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('협회를 하나도 등록 안 했으면 등록을 권하고 버튼을 준다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: const [],
+      );
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+    });
+
+    testWidgets('등록은 했지만 다른 부서를 보는 중이면 버튼을 주지 않는다', (tester) async {
+      // "등록하러 가라"가 틀린 조언인 자리다 — 그 협회 랭커가 아닌 사람이
+      // 자기 부서가 아닌 것을 등록하게 만든다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            // 화면 기본 선택은 gj_m_gold 라 여기는 "내 부서가 아님"이 된다.
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsNothing);
+    });
+
+    testWidgets('등록한 부서를 보는 중이면 이 안내가 안 뜬다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsNothing);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
     });
   });
 
