@@ -38,11 +38,13 @@ class GeminiUsageTab extends ConsumerStatefulWidget {
 
 class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
   late Future<List<Map<String, dynamic>>> _future;
+  late Future<List<Map<String, dynamic>>> _monthlyFuture;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _monthlyFuture = _loadMonthly();
   }
 
   Future<List<Map<String, dynamic>>> _load() {
@@ -52,11 +54,18 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
     return ref.read(apiProvider).geminiUsageStats(since);
   }
 
+  Future<List<Map<String, dynamic>>> _loadMonthly() {
+    if (AppConfig.adminDesignPreview) return Future.value(const []);
+    // month 를 안 주면 서버가 KST 기준 "이번 달"로 판정한다.
+    return ref.read(apiProvider).geminiUsageDailyStats();
+  }
+
   Future<void> _refresh() async {
     setState(() {
       _future = _load();
+      _monthlyFuture = _loadMonthly();
     });
-    await _future;
+    await Future.wait([_future, _monthlyFuture]);
   }
 
   @override
@@ -121,6 +130,8 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
+        _monthlySection(context),
+        const SizedBox(height: AppSpacing.sm),
         if (rows.isEmpty)
           const Padding(
             padding: EdgeInsets.all(48),
@@ -135,6 +146,74 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
         ),
       ],
+    );
+  }
+
+  Widget _monthlySection(BuildContext context) {
+    final theme = Theme.of(context);
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _monthlyFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final days = snap.data ?? const [];
+        final monthReqs = days.fold<int>(
+          0,
+          (a, d) => a + ((d['request_count'] as num?)?.toInt() ?? 0),
+        );
+        final monthTok = days.fold<int>(
+          0,
+          (a, d) => a + ((d['total_tokens'] as num?)?.toInt() ?? 0),
+        );
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('이번 달 누적', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  '요청 ${_comma(monthReqs)}회 · 토큰 ${_comma(monthTok)}',
+                  style: theme.textTheme.headlineSmall,
+                ),
+                if (snap.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text('일별 추이 로드 실패: ${snap.error}'),
+                  )
+                else if (days.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ...days.map((d) => _dailyRow(context, d)),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _dailyRow(BuildContext context, Map<String, dynamic> d) {
+    final theme = Theme.of(context);
+    final date = d['usage_date'] as String? ?? '';
+    final reqs = (d['request_count'] as num?)?.toInt() ?? 0;
+    final tok = (d['total_tokens'] as num?)?.toInt() ?? 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(date, style: theme.textTheme.bodySmall)),
+          Text(
+            '요청 ${_comma(reqs)} · 토큰 ${_comma(tok)}',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+          ),
+        ],
+      ),
     );
   }
 
