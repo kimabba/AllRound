@@ -142,7 +142,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/tournaments',
-            builder: (_, __) => catalogAware(TournamentsScreen.new),
+            builder: (_, state) => catalogAware(
+              () => TournamentsScreen(
+                openSearch: state.uri.queryParameters['search'] == '1',
+              ),
+            ),
           ),
           GoRoute(
             path: '/clubs',
