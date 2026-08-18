@@ -856,6 +856,12 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     // 등록하지 않은 협회·부서를 보는 중. 지금까지는 버튼만 조용히
                     // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
                     // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+                    //
+                    // 이 안내가 체인의 **맨 뒤**인 것은 의도다. 후보 카드와
+                    // '확인 중입니다'는 부서가 아니라 **협회 단위**로 뜬다 —
+                    // 화면 기본 부서가 gj_m_gold 라, 부서로 좁히면 남자일반부
+                    // 후보를 가진 사람은 탭을 옮기기 전엔 카드를 영영 못 본다.
+                    // 진행 중인 신청이 있으면 그 소식이 먼저다.
                     else if (!data.registeredHere &&
                         data.linkedOrgPlayerId == null)
                       _NotMyDivisionNotice(

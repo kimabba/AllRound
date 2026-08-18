@@ -476,6 +476,30 @@ void main() {
       expect(find.textContaining('소속 협회·부서를 등록하면'), findsNothing);
       expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
     });
+
+    // 우선순위 고정(codex 리뷰 2026-08-18). 후보 카드·'확인 중입니다'는 부서가
+    // 아니라 협회 단위로 뜬다 — 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+    // 남자일반부 후보를 가진 사람이 탭을 옮기기 전엔 카드를 못 본다.
+    // 진행 중인 신청 소식이 "여긴 네 부서가 아니야"보다 먼저다.
+    testWidgets('같은 협회에 진행 중인 신청이 있으면 그 소식이 먼저다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.text('확인 중입니다'), findsOneWidget);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
+    });
   });
 
   testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {
