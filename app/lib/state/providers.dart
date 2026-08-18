@@ -182,9 +182,25 @@ String? primarySportFrom(List<UserSport> sports) {
       sports.first.sport;
 }
 
+/// 사용자가 화면에서 고른 종목. null 이면 프로필 주 종목을 따른다.
+/// 앱을 다시 켜면 초기화되는 세션 한정 선택이다.
+class SportOverrideNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? sport) => state = sport;
+}
+
+final sportOverrideProvider =
+    NotifierProvider<SportOverrideNotifier, String?>(SportOverrideNotifier.new);
+
 /// 사용자의 active 종목 — 앱 전체 필터 기준.
-/// 프로필의 주 종목을 사용한다.
+/// 화면에서 고른 종목이 있으면 그것을, 없으면 프로필의 주 종목을 사용한다.
+/// 대회 탭에서 종목을 바꾸면 룰북·전체 대회·클럽·챗봇이 함께 따라오게 하기 위한
+/// 단일 기준점이다(예전에는 대회 탭 안에서만 바뀌어 화면마다 종목이 어긋났다).
 final activeSportProvider = Provider<String?>((ref) {
+  final override = ref.watch(sportOverrideProvider);
+  if (override != null) return override;
   final sports = ref.watch(userSportsProvider).value ?? [];
   return primarySportFrom(sports);
 });

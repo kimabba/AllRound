@@ -31,7 +31,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
-  String? _selectedSport;
   String _selectedRegion = _allRegions;
   String _query = '';
 
@@ -125,8 +124,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final tournaments = ref.watch(homeTournamentsProvider);
     final myTournaments = ref.watch(myTournamentRecordsProvider);
     final cs = Theme.of(context).colorScheme;
-    final activeSport = ref.watch(activeSportProvider) ?? 'futsal';
-    final selectedSport = _selectedSport ?? activeSport;
+    final selectedSport = ref.watch(activeSportProvider) ?? 'futsal';
     final favoriteIds =
         ref.watch(favoriteIdsProvider).value ?? const <String>{};
     final source = AppConfig.userDesignPreview
@@ -140,6 +138,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
+        // 종목을 타이틀로 올려 "지금 무엇을 보고 있는지"를 항상 보이게 하고,
+        // 타이틀 자체가 종목 전환 버튼을 겸한다.
+        title: _SportTitle(
+          sport: selectedSport,
+          onSelected: (value) =>
+              ref.read(sportOverrideProvider.notifier).select(value),
+        ),
+        titleSpacing: AppSpacing.xl,
         bottom: const TournamentSectionBar(
           selected: TournamentSection.overview,
         ),
@@ -164,12 +170,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               sliver: SliverToBoxAdapter(
                 child: _TournamentHomeControls(
-                  selectedSport: selectedSport,
                   selectedRegion: selectedRegion,
                   regionCounts: regionCounts,
                   searchController: _searchController,
-                  onSportSelected: (value) =>
-                      setState(() => _selectedSport = value),
                   onRegionSelected: (value) =>
                       setState(() => _selectedRegion = value),
                   onQueryChanged: (value) =>
@@ -237,84 +240,115 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 class _TournamentHomeControls extends StatelessWidget {
   const _TournamentHomeControls({
-    required this.selectedSport,
     required this.selectedRegion,
     required this.regionCounts,
     required this.searchController,
-    required this.onSportSelected,
     required this.onRegionSelected,
     required this.onQueryChanged,
   });
 
-  final String selectedSport;
   final String selectedRegion;
   final Map<String, int> regionCounts;
   final TextEditingController searchController;
-  final ValueChanged<String> onSportSelected;
   final ValueChanged<String> onRegionSelected;
   final ValueChanged<String> onQueryChanged;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
+    // 종목 버튼이 AppBar 타이틀로 올라가 이 줄에는 지역과 검색만 남는다.
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    final region = _HomeMenuButton(
+      icon: Icons.location_on_outlined,
+      label: selectedRegion,
+      values: {
+        _allRegions: _allRegions,
+        for (final entry in regionCounts.entries)
+          entry.key: '${entry.key} ${entry.value}',
+      },
+      selectedValue: selectedRegion,
+      onSelected: onRegionSelected,
+    );
+    final search = TextField(
+      controller: searchController,
+      textInputAction: TextInputAction.search,
+      onChanged: onQueryChanged,
+      decoration: InputDecoration(
+        hintText: '대회명 또는 지역을 검색해보세요',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: searchController.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '검색어 지우기',
+                onPressed: () {
+                  searchController.clear();
+                  onQueryChanged('');
+                },
+                icon: const Icon(Icons.close_rounded),
+              ),
+        filled: true,
+        fillColor: cs.surfaceContainerLowest,
+      ),
+    );
+    // 큰 글씨에서는 한 줄에 두 요소가 들어가지 않아 세로로 쌓는다.
+    if (largeText) {
+      return Column(
+        children: [
+          region,
+          const SizedBox(height: AppSpacing.md),
+          search,
+        ],
+      );
+    }
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _HomeMenuButton(
-                icon: selectedSport == 'tennis'
-                    ? Icons.sports_tennis_rounded
-                    : Icons.sports_soccer_rounded,
-                label: '내 주종목 ${sportLabelFromString(selectedSport)}',
-                values: {
-                  'futsal': sportLabel(Sport.futsal),
-                  'tennis': sportLabel(Sport.tennis),
-                },
-                selectedValue: selectedSport,
-                onSelected: onSportSelected,
-                emphasized: true,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: _HomeMenuButton(
-                icon: Icons.location_on_outlined,
-                label: selectedRegion,
-                values: {
-                  _allRegions: _allRegions,
-                  for (final entry in regionCounts.entries)
-                    entry.key: '${entry.key} ${entry.value}',
-                },
-                selectedValue: selectedRegion,
-                onSelected: onRegionSelected,
-              ),
-            ),
-          ],
+        SizedBox(width: 132, child: region),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: search),
+      ],
+    );
+  }
+}
+
+/// AppBar 타이틀 겸 종목 전환 버튼. 화살표가 있어야 눌리는 줄 안다.
+class _SportTitle extends StatelessWidget {
+  const _SportTitle({required this.sport, required this.onSelected});
+
+  final String sport;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      initialValue: sport,
+      onSelected: onSelected,
+      tooltip: '종목 바꾸기',
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'tennis',
+          child: Text(sportLabel(Sport.tennis)),
         ),
-        const SizedBox(height: AppSpacing.md),
-        TextField(
-          controller: searchController,
-          textInputAction: TextInputAction.search,
-          onChanged: onQueryChanged,
-          decoration: InputDecoration(
-            hintText: '대회명 또는 지역을 검색해보세요',
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: searchController.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '검색어 지우기',
-                    onPressed: () {
-                      searchController.clear();
-                      onQueryChanged('');
-                    },
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-            filled: true,
-            fillColor: cs.surfaceContainerLowest,
-          ),
+        PopupMenuItem(
+          value: 'futsal',
+          child: Text(sportLabel(Sport.futsal)),
         ),
       ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              '올라운드 ${sportLabelFromString(sport)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+          const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
+        ],
+      ),
     );
   }
 }

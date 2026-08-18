@@ -72,7 +72,7 @@ void main() {
 
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
-    expect(find.textContaining('내 주종목'), findsOneWidget);
+    expect(find.textContaining('올라운드 '), findsOneWidget);
     expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -238,6 +238,35 @@ void main() {
       expect(find.textContaining('jeonnam-1'), findsNothing);
       expect(tester.takeException(), isNull);
     });
+  });
+
+  // 예전에는 종목 선택이 홈 화면 안에서만 살아 있어서, 홈에서 풋살로 바꿔도
+  // 룰북 탭·전체 대회·클럽·챗봇은 프로필 주종목을 계속 봤다.
+  testWidgets('타이틀에서 종목을 바꾸면 앱 전체 기준 종목이 바뀐다', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        homeTournamentsProvider.overrideWith((ref) async => const []),
+        unreadNotificationCountProvider.overrideWith((ref) async => 0),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(theme: AppTheme.light(), home: const HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('올라운드 '));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('테니스'));
+    await tester.pumpAndSettle();
+
+    expect(container.read(activeSportProvider), 'tennis');
+    expect(find.textContaining('올라운드 테니스'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   group('홈 히어로 카드', () {
