@@ -144,6 +144,16 @@ class ClubCreateDraft {
   }
 }
 
+/// 새 작성이면 클럽 화면에서 고른 종목을, 실제 작성 내용이 남아 있으면
+/// 사용자가 작성 중이던 임시저장 종목을 우선한다.
+String resolveClubCreateSport({
+  required String? selectedSport,
+  ClubCreateDraft? draft,
+}) {
+  if (draft != null && draft.hasUserContent) return draft.sport;
+  return _allowedSports.contains(selectedSport) ? selectedSport! : 'tennis';
+}
+
 String _stringValue(Object? value) => value is String ? value : '';
 
 double? _doubleValue(Object? value,

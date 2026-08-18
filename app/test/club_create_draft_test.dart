@@ -58,6 +58,17 @@ void main() {
     );
 
     expect(emptyDraft.hasUserContent, isFalse);
+    expect(
+      resolveClubCreateSport(selectedSport: 'tennis', draft: emptyDraft),
+      'tennis',
+    );
+  });
+
+  test('작성 중인 임시저장이 있으면 임시저장 종목을 유지한다', () {
+    expect(
+      resolveClubCreateSport(selectedSport: 'futsal', draft: draft),
+      'tennis',
+    );
   });
 
   test('a non-default card color is draft content', () {

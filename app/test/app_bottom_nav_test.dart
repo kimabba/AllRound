@@ -97,4 +97,23 @@ void main() {
     expect(ballboyX, greaterThan(tester.getCenter(find.text('클럽')).dx));
     expect(ballboyX, lessThan(tester.getCenter(find.text('MY')).dx));
   });
+
+  testWidgets('현재 탭은 채운 아이콘으로, 볼보이는 중립 아이콘으로 구분한다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: AppBottomNav(
+            currentIndex: 1,
+            onChanged: (_) {},
+            onChatTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.groups_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.emoji_events_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
+  });
 }

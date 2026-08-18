@@ -22,7 +22,11 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
-  const ClubCreateScreen({super.key});
+  const ClubCreateScreen({super.key, this.initialSport});
+
+  /// 클럽 목록에서 사용자가 마지막으로 고른 종목.
+  /// 작성 중인 임시저장이 없다면 새 클럽의 기본 종목으로 사용한다.
+  final String? initialSport;
 
   @override
   ConsumerState<ClubCreateScreen> createState() => _ClubCreateScreenState();
@@ -70,6 +74,9 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   @override
   void initState() {
     super.initState();
+    _sport = resolveClubCreateSport(
+      selectedSport: widget.initialSport ?? ref.read(activeSportProvider),
+    );
     for (final controller in _draftTextControllers) {
       controller.addListener(_scheduleDraftSave);
     }
@@ -105,8 +112,11 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       _draftUserId = userId;
 
       setState(() {
-        if (draft != null) {
-          _sport = draft.sport;
+        _sport = resolveClubCreateSport(
+          selectedSport: _sport,
+          draft: draft,
+        );
+        if (draft != null && draft.hasUserContent) {
           _name.text = draft.name;
           _region.text = draft.region;
           _address.text = draft.address;

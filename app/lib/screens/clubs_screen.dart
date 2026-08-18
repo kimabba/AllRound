@@ -194,9 +194,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   }
 
   Future<void> _openCreate() async {
+    final selectedSport = _clubInterests.length == 1
+        ? _clubInterests.single
+        : ref.read(activeSportProvider);
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const ClubCreateScreen()),
+      MaterialPageRoute(
+        builder: (_) => ClubCreateScreen(initialSport: selectedSport),
+      ),
     );
     if (result == true) {
       ref.invalidate(myClubsProvider);
@@ -419,6 +424,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         _ClubSportSelector(
           selectedSports: _clubInterests,
           onSelected: (sport) {
+            ref.read(sportOverrideProvider.notifier).select(sport);
             setState(() {
               _clubInterests = {sport};
               _showAllClubs = false;
