@@ -398,6 +398,27 @@ void main() {
       ];
       expect(dispute(links, here: false), isEmpty);
     });
+
+    test('로그인 전(myUserId=null)에는 두 함수 다 아무 행도 내지 않는다', () {
+      // 내 링크를 못 알아봐 전부 남의 것으로 취급하게 된다. 서버는 어차피
+      // user_id = auth.uid() 로 거부한다(codex 리뷰 2026-08-18).
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+      ];
+      for (final compute in [computeDisputableIds, computeClaimableIds]) {
+        expect(
+          compute(
+            rows: rows,
+            links: links,
+            myUserId: null,
+            myName: '김평화',
+            registeredHere: true,
+          ),
+          isEmpty,
+        );
+      }
+    });
   });
 
   testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {

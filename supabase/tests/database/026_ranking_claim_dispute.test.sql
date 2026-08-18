@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(9);
+select plan(10);
 
 select has_column('public', 'org_player_links', 'note', '사유 메모 컬럼이 있다');
 
@@ -45,11 +45,12 @@ select lives_ok(
             '어등산클럽 소속입니다. 010-0000-0000')$$,
   '남이 확정한 선수에도 이의신청(pending)을 걸 수 있다');
 
--- 사유는 공백만으로 채울 수 없다.
+-- 사유는 공백·탭·줄바꿈만으로 채울 수 없다.
 select throws_ok(
   $$insert into public.org_player_links (org_code, org_player_id, user_id, status, note)
-    values ('gj', 'vudghk2116', 'aaaaaaa1-0000-0000-0000-000000000002', 'pending', '   ')$$,
-  '23514', null, '공백만 적은 사유는 거부된다');
+    values ('gj', 'vudghk2116', 'aaaaaaa1-0000-0000-0000-000000000002', 'pending',
+            E'  \t\n ')$$,
+  '23514', null, '공백·탭·줄바꿈만 적은 사유는 거부된다');
 
 -- 상한 300자.
 select throws_ok(
@@ -58,6 +59,15 @@ select throws_ok(
       values ('gj', 'vudghk2116', 'aaaaaaa1-0000-0000-0000-000000000002', 'pending', %L)$$,
     repeat('가', 301)),
   '23514', null, '301자 사유는 거부된다');
+
+-- 상한은 저장되는 원문 길이로 잰다. btrim 결과만 재면 앞에 공백을 잔뜩 붙여
+-- 얼마든지 긴 값을 밀어넣을 수 있다(codex 리뷰 2026-08-18).
+select throws_ok(
+  format(
+    $$insert into public.org_player_links (org_code, org_player_id, user_id, status, note)
+      values ('gj', 'vudghk2116', 'aaaaaaa1-0000-0000-0000-000000000002', 'pending', %L)$$,
+    repeat(' ', 5000) || '짧은사유'),
+  '23514', null, '앞뒤 공백으로 부풀린 긴 사유도 거부된다');
 
 reset role;
 reset request.jwt.claims;

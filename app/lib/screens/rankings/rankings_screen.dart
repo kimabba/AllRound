@@ -62,6 +62,9 @@ Set<String> computeClaimableIds({
   required bool registeredHere,
 }) {
   if (!registeredHere) return const {};
+  // 로그인 전에는 어떤 신청도 통과하지 못한다(정책이 user_id = auth.uid()).
+  // 이게 없으면 내 링크를 하나도 못 알아봐 남의 것처럼 취급하고 버튼을 띄운다.
+  if (myUserId == null) return const {};
   // 정책이 users.name 을 글자 그대로 비교하므로 여기서도 trim 하지 않는다 —
   // 앞뒤 여백을 앱만 관대하게 다루면 버튼은 보이는데 서버가 거부한다.
   final name = myName;
@@ -106,6 +109,8 @@ Set<String> computeDisputableIds({
   required bool registeredHere,
 }) {
   if (!registeredHere) return const {};
+  // [computeClaimableIds] 와 같은 이유 — 로그인 전에는 서버가 전부 거부한다.
+  if (myUserId == null) return const {};
   final name = myName;
   if (name == null || name.isEmpty) return const {};
   final othersConfirmed = <String>{};
@@ -295,51 +300,74 @@ class _RankingRow extends StatelessWidget {
 ///
 /// 사유를 필수로 받는 이유: 정책이 `users.name = player_name` 을 요구해 경합하는
 /// 두 사람의 이름은 **반드시 같다**. 관리자가 가릴 재료가 이것뿐이다.
-Future<String?> askDisputeNote(BuildContext context, String playerName) {
-  final controller = TextEditingController();
-  return showDialog<String>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setDialogState) => AlertDialog(
-        title: Text('$playerName — 이의신청'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '이 선수는 이미 다른 계정과 연결돼 있습니다. '
-              '본인이 맞다면 관리자가 확인할 수 있게 소속 클럽과 연락처를 적어주세요.',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              maxLength: 300,
-              decoration: const InputDecoration(
-                hintText: '예) 어등산클럽 소속입니다. 010-1234-5678',
-              ),
-              onChanged: (_) => setDialogState(() {}),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('취소'),
+Future<String?> askDisputeNote(BuildContext context, String playerName) =>
+    showDialog<String>(
+      context: context,
+      builder: (_) => _DisputeNoteDialog(playerName: playerName),
+    );
+
+/// 컨트롤러를 StatefulWidget 이 소유한다. `showDialog(...).whenComplete(dispose)`
+/// 는 pop 시점에 돌아 퇴장 애니메이션·IME 콜백이 아직 살아 있는 동안 컨트롤러를
+/// 버린다 — State.dispose 가 올바른 수명이다.
+class _DisputeNoteDialog extends StatefulWidget {
+  const _DisputeNoteDialog({required this.playerName});
+
+  final String playerName;
+
+  @override
+  State<_DisputeNoteDialog> createState() => _DisputeNoteDialogState();
+}
+
+class _DisputeNoteDialogState extends State<_DisputeNoteDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('${widget.playerName} — 이의신청'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '이 선수는 이미 다른 계정과 연결돼 있습니다. '
+            '본인이 맞다면 관리자가 확인할 수 있게 소속 클럽과 연락처를 적어주세요.',
           ),
-          FilledButton(
-            // 사유 없는 이의신청은 관리자가 판단할 수 없다.
-            onPressed: controller.text.trim().isEmpty
-                ? null
-                : () =>
-                    Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('신청'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLines: 3,
+            // DB CHECK(org_player_links_note_len)와 같은 상한.
+            maxLength: 300,
+            decoration: const InputDecoration(
+              hintText: '예) 어등산클럽 소속입니다. 010-1234-5678',
+            ),
+            onChanged: (_) => setState(() {}),
           ),
         ],
       ),
-    ),
-  ).whenComplete(controller.dispose);
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          // 사유 없는 이의신청은 관리자가 판단할 수 없다.
+          onPressed: _controller.text.trim().isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('신청'),
+        ),
+      ],
+    );
+  }
 }
 
 // ── 출처 표기 ─────────────────────────────────────────────────────────────

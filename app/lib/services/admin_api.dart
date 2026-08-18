@@ -233,10 +233,15 @@ mixin AdminApi on ApiBase {
 
   /// 이의신청 처리용 — 이 선수의 기존 확정 연결을 푼다(status='rejected').
   ///
-  /// 삭제가 아니라 반려로 두는 이유: 누가 갖고 있었는지 기록이 남고, 잘못 푼
-  /// 경우 아래 '반려됨' 목록의 「취소(재검토)」로 되돌릴 수 있다.
+  /// 삭제가 아니라 반려로 두는 이유: 누가 갖고 있었는지 기록이 남는다.
+  /// (되돌리기는 자동이 아니다 — '반려됨'의 「취소(재검토)」는 행을 지울 뿐이고,
+  /// 그 뒤 당사자가 다시 신청해야 한다.)
   /// 이걸 먼저 하지 않으면 이의신청 승인이
   /// org_player_links_confirmed_player_key(23505)에 걸린다.
+  ///
+  /// 다른 관리자가 먼저 처리해 보유자가 바뀌었을 수 있다. status 조건을 걸고
+  /// 갱신 행 수를 확인해, 엉뚱한 행의 decided_* 만 덮어쓰고 성공으로 끝나는
+  /// 경우를 막는다.
   Future<void> releaseConfirmedLink(RankingClaim claim) async {
     final holderId = claim.confirmedHolderId;
     if (holderId == null) {
@@ -244,7 +249,7 @@ mixin AdminApi on ApiBase {
     }
     final adminId = supabase.auth.currentUser?.id;
     if (adminId == null) throw StateError('Not authenticated');
-    await supabase
+    final updated = await supabase
         .from('org_player_links')
         .update({
           'status': 'rejected',
@@ -253,7 +258,12 @@ mixin AdminApi on ApiBase {
         })
         .eq('org_code', claim.orgCode)
         .eq('org_player_id', claim.orgPlayerId)
-        .eq('user_id', holderId);
+        .eq('user_id', holderId)
+        .eq('status', 'confirmed')
+        .select('user_id');
+    if ((updated as List).isEmpty) {
+      throw StateError('이미 다른 관리자가 처리했습니다. 새로고침 후 다시 확인하세요');
+    }
   }
 
   Future<void> _decideRankingClaim(

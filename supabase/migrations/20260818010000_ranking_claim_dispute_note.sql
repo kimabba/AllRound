@@ -15,12 +15,19 @@ begin;
 alter table public.org_player_links
   add column if not exists note text;
 
--- 자유 서술이지만 무제한은 아니다. 공백만 적은 값은 없는 것과 같아 막는다.
+-- 자유 서술이지만 무제한은 아니다. 두 가지를 따로 잰다:
+--   상한은 저장되는 원문 길이로 — btrim 결과만 재면 공백 100만 자 + 'x' 가 통과해
+--   길이 1 로 계산된다(btrim 기본은 공백 하나만 지운다).
+--   하한은 다듬은 뒤로 — 공백·탭·줄바꿈만 적은 값은 없는 것과 같다.
 alter table public.org_player_links
   drop constraint if exists org_player_links_note_len;
 alter table public.org_player_links
   add constraint org_player_links_note_len
-  check (note is null or char_length(btrim(note)) between 1 and 300);
+  check (
+    note is null
+    or (char_length(note) <= 300
+        and char_length(btrim(note, E' \t\n\r')) >= 1)
+  );
 
 comment on column public.org_player_links.note is
   '신청·이의신청 사유(소속·연락처 등). pending 동안만 존재한다 — 승인·반려 시 트리거가 지운다.';

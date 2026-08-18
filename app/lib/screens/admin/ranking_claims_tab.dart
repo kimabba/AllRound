@@ -306,6 +306,10 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
 
   /// 이의신청 처리 1단계 — 기존 확정 연결을 푼다. 되돌리기 어려운 조작이라
   /// (풀린 사람은 개인 기록장 접근을 잃는다) 누구를 푸는지 보여주고 확인받는다.
+  ///
+  /// 해제와 새 신청 승인은 원자적이지 않다. 중간에 멈추면 이 선수는 주인이
+  /// 없는 상태로 남고, 이의신청은 큐에 그대로 있어 다시 승인하면 된다 —
+  /// 관리자에게 보이는 상태라 조용히 깨지지 않는다.
   Future<void> _release(RankingClaim claim) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -314,7 +318,8 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
         content: Text(
           '${claim.playerName} 선수와 ${claim.confirmedHolderName ?? '알 수 없음'}님의 '
           '연결을 풉니다. 그분은 개인 기록장을 볼 수 없게 됩니다.\n\n'
-          '잘못 풀었다면 아래 "반려됨" 목록에서 되돌릴 수 있습니다.',
+          '자동 복구는 안 됩니다. 되돌리려면 아래 "반려됨" 목록에서 '
+          '「취소(재검토)」로 기록을 지운 뒤, 그분이 다시 신청해야 합니다.',
         ),
         actions: [
           TextButton(
