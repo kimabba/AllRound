@@ -53,6 +53,9 @@ class RankingClaim {
     required this.claimantId,
     required this.claimedAt,
     this.clubRaw,
+    this.note,
+    this.confirmedHolderName,
+    this.confirmedHolderId,
   });
 
   final String orgCode;
@@ -64,6 +67,17 @@ class RankingClaim {
   final String claimantId;
   final DateTime claimedAt;
   final String? clubRaw;
+
+  /// 신청자가 적은 사유. 이의신청에서만 채워진다 — 경합하는 두 사람은 정책상
+  /// 이름이 같아서(users.name = player_name) 관리자가 가릴 재료가 이것뿐이다.
+  /// 승인·반려되면 DB 트리거가 지운다.
+  final String? note;
+
+  /// 이 선수를 이미 확정으로 갖고 있는 사람. null 이면 빈 자리다.
+  /// 값이 있으면 이 신청은 이의신청이고, 먼저 이 연결을 풀어야 승인할 수 있다
+  /// (org_player_links_confirmed_player_key 가 승인 시점에 23505 를 낸다).
+  final String? confirmedHolderName;
+  final String? confirmedHolderId;
 }
 
 /// 같은 협회 선수를 놓고 겨루는 신청들의 묶음.
@@ -76,6 +90,8 @@ class ClaimGroup {
     required this.rank,
     required this.claimants,
     this.clubRaw,
+    this.confirmedHolderName,
+    this.confirmedHolderId,
   });
 
   final String orgCode;
@@ -86,6 +102,14 @@ class ClaimGroup {
   final List<RankingClaim> claimants;
   final String? clubRaw;
 
+  /// 이 선수를 이미 확정으로 갖고 있는 사람(있다면).
+  final String? confirmedHolderName;
+  final String? confirmedHolderId;
+
   /// 한 선수에 신청이 둘 이상 — 관리자가 골라야 한다.
   bool get isContested => claimants.length > 1;
+
+  /// 이미 주인이 있는 선수에 들어온 신청 = 이의신청.
+  /// 기존 연결을 풀기 전에는 승인이 DB 에서 막힌다.
+  bool get isDisputed => confirmedHolderId != null;
 }

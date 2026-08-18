@@ -797,6 +797,37 @@ List<String> get tennisOrgs => OrgCatalog.instance.activeCodes;
 List<String> get tennisOrgsWithDivisions =>
     tennisOrgs.where((code) => divisionsForOrg(code).isNotEmpty).toList();
 
+/// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
+/// 일치). 부서 카탈로그 전체([rankingGradesForOrg])와 다르다 — 오픈부·베테랑부
+/// 등은 대회 자격에는 쓰이지만 협회가 별도 랭킹표로 공표하지 않는다.
+/// 남자신인부는 2026-08 남자일반부로 통합돼 빠졌다(카탈로그에는 is_active=false 로
+/// 남아 옛 대회 라벨 해석은 계속 된다). 여자신인부는 살아 있다.
+///
+/// 여기 없는 협회(KTA·KATA·KATO 등)는 **랭킹 미러가 없다** — 등록은 되지만
+/// 본인 연결·개인 기록장이 열리지 않는다. 미러를 늘릴 때 고칠 곳은 여기 하나다
+/// (랭킹 화면의 협회 탭과 온보딩 안내가 같은 목록을 본다).
+const kRankingDivisions = <String, List<String>>{
+  'gj': [
+    'gj_m_gold',
+    'gj_m_general',
+    'gj_m_instructor',
+    'gj_w_rookie',
+    'gj_w_gukhwa',
+    'gj_w_geumbae',
+  ],
+  'jn': [
+    'jn_m_gold',
+    'jn_m_general',
+    'jn_m_instructor',
+    'jn_w_rookie',
+    'jn_w_gukhwa',
+    'jn_w_geumbae',
+  ],
+};
+
+/// 이 협회의 랭킹표를 우리가 미러하는가. false 면 등록해도 본인 연결이 안 열린다.
+bool orgHasRankingMirror(String org) => kRankingDivisions.containsKey(org);
+
 /// 협회 코드 → 완성형 라벨.
 String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
 

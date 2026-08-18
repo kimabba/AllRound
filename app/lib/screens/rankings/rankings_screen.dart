@@ -12,30 +12,6 @@ import '../../widgets/app_card.dart';
 import '../../widgets/rankings/player_detail_sheet.dart';
 import '../../widgets/tournament_section_bar.dart';
 
-/// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
-/// 일치). 부서 카탈로그 전체(rankingGradesForOrg)와 다르다 — 오픈부·베테랑부 등은
-/// 대회 자격에는 쓰이지만 협회가 별도 랭킹표로 공표하지 않는다.
-/// 남자신인부는 2026-08 남자일반부로 통합돼 빠졌다(카탈로그에는 is_active=false 로 남아
-/// 옛 대회 라벨 해석은 계속 된다). 여자신인부는 살아 있다.
-const _kRankingDivisions = <String, List<String>>{
-  'gj': [
-    'gj_m_gold',
-    'gj_m_general',
-    'gj_m_instructor',
-    'gj_w_rookie',
-    'gj_w_gukhwa',
-    'gj_w_geumbae',
-  ],
-  'jn': [
-    'jn_m_gold',
-    'jn_m_general',
-    'jn_m_instructor',
-    'jn_w_rookie',
-    'jn_w_gukhwa',
-    'jn_w_geumbae',
-  ],
-};
-
 // ── 순위표 ────────────────────────────────────────────────────────────────
 
 /// 지금 보는 부서에서 "본인" 신청을 걸 수 있는 선수들.
@@ -62,6 +38,9 @@ Set<String> computeClaimableIds({
   required bool registeredHere,
 }) {
   if (!registeredHere) return const {};
+  // 로그인 전에는 어떤 신청도 통과하지 못한다(정책이 user_id = auth.uid()).
+  // 이게 없으면 내 링크를 하나도 못 알아봐 남의 것처럼 취급하고 버튼을 띄운다.
+  if (myUserId == null) return const {};
   // 정책이 users.name 을 글자 그대로 비교하므로 여기서도 trim 하지 않는다 —
   // 앞뒤 여백을 앱만 관대하게 다루면 버튼은 보이는데 서버가 거부한다.
   final name = myName;
@@ -80,6 +59,53 @@ Set<String> computeClaimableIds({
       if (r.orgPlayerId != null &&
           r.playerName == name &&
           !blocked.contains(r.orgPlayerId))
+        r.orgPlayerId!,
+  };
+}
+
+/// 지금 보는 부서에서 "이의신청"을 걸 수 있는 선수들.
+///
+/// [computeClaimableIds] 의 정확한 여집합이다 — 조건이 전부 같고 마지막 하나만
+/// 뒤집힌다: 그 선수가 **남과 이미 확정 연결**돼 있을 것. 신청 버튼이 사라지는
+/// 자리에 이의신청 버튼이 대신 붙는다.
+///
+/// 서버는 이 INSERT 를 이미 허용한다. `org_player_links_claim` 정책은 대상
+/// 선수가 남과 확정됐는지 보지 않고(20260805010000 주석), confirmed 1:1 은
+/// 승인 시점에 `org_player_links_confirmed_player_key` 가 강제한다. 즉 경합하는
+/// pending 이 쌓이는 것이 설계된 동작이고, 관리자가 큐에서 고른다.
+///
+/// 내 링크가 이미 있는 선수는 뺀다 — unique(org_code, org_player_id, user_id)
+/// 가 상태와 무관해서 재신청이 반드시 실패한다([computeClaimableIds] 와 같은 이유).
+/// 이 협회에 내 확정 연결이 있으면 아무 행도 걸 수 없다(`has_confirmed_org_link`).
+Set<String> computeDisputableIds({
+  required List<OrgRankingRow> rows,
+  required List<Map<String, dynamic>> links,
+  required String? myUserId,
+  required String? myName,
+  required bool registeredHere,
+}) {
+  if (!registeredHere) return const {};
+  // [computeClaimableIds] 와 같은 이유 — 로그인 전에는 서버가 전부 거부한다.
+  if (myUserId == null) return const {};
+  final name = myName;
+  if (name == null || name.isEmpty) return const {};
+  final othersConfirmed = <String>{};
+  final mine = <String>{};
+  for (final link in links) {
+    final orgPlayerId = link['org_player_id'] as String;
+    if (link['user_id'] == myUserId) {
+      if (link['status'] == 'confirmed') return const {};
+      mine.add(orgPlayerId);
+    } else if (link['status'] == 'confirmed') {
+      othersConfirmed.add(orgPlayerId);
+    }
+  }
+  return {
+    for (final r in rows)
+      if (r.orgPlayerId != null &&
+          r.playerName == name &&
+          othersConfirmed.contains(r.orgPlayerId) &&
+          !mine.contains(r.orgPlayerId))
         r.orgPlayerId!,
   };
 }
@@ -105,19 +131,26 @@ List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
 /// [onClaim] 이 있으면 신청 가능한 행에 "본인" 버튼이 붙는다. 어떤 행이 신청
 /// 가능한지는 화면이 판단해 [claimableOrgPlayerIds] 로 준다(자격 강제의 정본은
 /// RLS `org_player_links_claim` 이고, 이건 표시 규칙일 뿐이다).
+///
+/// [onDispute] / [disputableOrgPlayerIds] 는 같은 구조의 이의신청 경로다 —
+/// 이미 남과 연결된 선수 줄에 붙는다. 두 집합은 서로 겹치지 않는다.
 class RankingList extends StatelessWidget {
   const RankingList({
     super.key,
     required this.rows,
     required this.linkedOrgPlayerId,
     this.claimableOrgPlayerIds = const {},
+    this.disputableOrgPlayerIds = const {},
     this.onClaim,
+    this.onDispute,
   });
 
   final List<OrgRankingRow> rows;
   final String? linkedOrgPlayerId;
   final Set<String> claimableOrgPlayerIds;
+  final Set<String> disputableOrgPlayerIds;
   final void Function(OrgRankingRow row)? onClaim;
+  final void Function(OrgRankingRow row)? onDispute;
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +167,11 @@ class RankingList extends StatelessWidget {
                     claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
                 ? () => onClaim!(rows[i])
                 : null,
+            onDispute: onDispute != null &&
+                    rows[i].orgPlayerId != null &&
+                    disputableOrgPlayerIds.contains(rows[i].orgPlayerId)
+                ? () => onDispute!(rows[i])
+                : null,
           ),
           if (i < rows.length - 1) Divider(height: 1, color: cs.outlineVariant),
         ],
@@ -147,11 +185,13 @@ class _RankingRow extends StatelessWidget {
     required this.row,
     required this.isMine,
     this.onClaim,
+    this.onDispute,
   });
 
   final OrgRankingRow row;
   final bool isMine;
   final VoidCallback? onClaim;
+  final VoidCallback? onDispute;
 
   @override
   Widget build(BuildContext context) {
@@ -206,8 +246,149 @@ class _RankingRow extends StatelessWidget {
                 child: const Text('본인'),
               ),
             ],
+            // 신청 버튼이 사라지는 자리(이미 남과 연결된 줄)에 대신 붙는다.
+            // 둘이 같이 뜨는 경우는 없다 — 두 집합이 배타적이다.
+            if (onDispute != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              TextButton(
+                // 테마 기본 minimumSize 가 폭 무한이라 Row 안에서는 명시로
+                // 덮어써야 한다(theme-infinite-width-button-landmine).
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.control),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                ),
+                onPressed: onDispute,
+                child: const Text('이의신청'),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── 이의신청 사유 입력 ────────────────────────────────────────────────────
+
+/// 이의신청 사유를 받는다. 취소하면 null.
+///
+/// 사유를 필수로 받는 이유: 정책이 `users.name = player_name` 을 요구해 경합하는
+/// 두 사람의 이름은 **반드시 같다**. 관리자가 가릴 재료가 이것뿐이다.
+Future<String?> askDisputeNote(BuildContext context, String playerName) =>
+    showDialog<String>(
+      context: context,
+      builder: (_) => _DisputeNoteDialog(playerName: playerName),
+    );
+
+/// 컨트롤러를 StatefulWidget 이 소유한다. `showDialog(...).whenComplete(dispose)`
+/// 는 pop 시점에 돌아 퇴장 애니메이션·IME 콜백이 아직 살아 있는 동안 컨트롤러를
+/// 버린다 — State.dispose 가 올바른 수명이다.
+class _DisputeNoteDialog extends StatefulWidget {
+  const _DisputeNoteDialog({required this.playerName});
+
+  final String playerName;
+
+  @override
+  State<_DisputeNoteDialog> createState() => _DisputeNoteDialogState();
+}
+
+class _DisputeNoteDialogState extends State<_DisputeNoteDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('${widget.playerName} — 이의신청'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '이 선수는 이미 다른 계정과 연결돼 있습니다. '
+            '본인이 맞다면 관리자가 확인할 수 있게 소속 클럽과 연락처를 적어주세요.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLines: 3,
+            // DB CHECK(org_player_links_note_len)와 같은 상한.
+            maxLength: 300,
+            decoration: const InputDecoration(
+              hintText: '예) 어등산클럽 소속입니다. 010-1234-5678',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          // 사유 없는 이의신청은 관리자가 판단할 수 없다.
+          onPressed: _controller.text.trim().isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('신청'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 등록 안 한 부서 안내 ──────────────────────────────────────────────────
+
+/// 지금 보는 협회·부서를 등록하지 않았을 때의 안내.
+///
+/// 등록이 아예 없으면 등록을 권하고 버튼을 준다. 등록은 했는데 다른 부서를
+/// 보고 있으면 **버튼을 주지 않는다** — "등록하러 가라"가 여기서는 틀린 조언이다.
+/// 그 협회 랭커가 아닌 사람이 자기 부서가 아닌 것을 등록하게 만든다.
+class _NotMyDivisionNotice extends StatelessWidget {
+  const _NotMyDivisionNotice({required this.hasNoOrgRegistered});
+
+  final bool hasNoOrgRegistered;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasNoOrgRegistered
+                ? '소속 협회·부서를 등록하면 랭킹표에서 「본인」을 찾을 수 있어요.'
+                : '내가 등록한 부서가 아니라 여기선 본인 연결을 신청할 수 없어요.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (hasNoOrgRegistered)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                // 테마 기본 minimumSize 가 폭 무한이다
+                // (theme-infinite-width-button-landmine).
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.control),
+                ),
+                // 협회·부서 편집 화면은 온보딩이다 — profile_quick_actions 등
+                // 기존 4곳이 쓰는 것과 같은 경로.
+                onPressed: () => context.push('/onboarding'),
+                child: const Text('등록하러 가기'),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -337,7 +518,9 @@ class _RankingScreenData {
     required this.candidate,
     required this.hasPendingClaim,
     required this.claimableOrgPlayerIds,
+    required this.disputableOrgPlayerIds,
     required this.registeredHere,
+    required this.hasNoOrgRegistered,
   });
 
   final List<OrgRankingRow> rows;
@@ -349,9 +532,19 @@ class _RankingScreenData {
   /// 비어 있으면 어느 행에도 버튼이 안 붙는다.
   final Set<String> claimableOrgPlayerIds;
 
+  /// 이미 남과 연결돼 있어 "이의신청"만 걸 수 있는 선수들.
+  final Set<String> disputableOrgPlayerIds;
+
   /// 이 협회·부서를 내 프로필에 등록해 뒀는지. 등록했는데도 신청할 행이
   /// 하나도 없으면 이유(이름 불일치)를 화면이 말해 줘야 한다.
   final bool registeredHere;
+
+  /// 협회를 하나도 등록하지 않았는지. [registeredHere] 가 false 인 이유가
+  /// "아직 아무것도 등록 안 함"인지 "등록했지만 다른 부서"인지 가른다 —
+  /// 안내 문구와 버튼이 달라진다. 등록 0개일 때만 등록을 권한다. 남의 부서를
+  /// 보고 있는 사람에게 "등록하러 가라"고 하면 자기 부서가 아닌 것을 등록하게
+  /// 만든다(실측: gj_m_instructor 를 등록했지만 그 21명 명단에 없는 사례).
+  final bool hasNoOrgRegistered;
 }
 
 /// 협회 랭킹 화면. 협회(광주/전남)와 부서를 고르면 그 부서의 공표 순위표를 보여준다.
@@ -365,7 +558,7 @@ class RankingsScreen extends ConsumerStatefulWidget {
 
 class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   String _orgCode = 'gj';
-  String _divisionCode = _kRankingDivisions['gj']!.first;
+  String _divisionCode = kRankingDivisions['gj']!.first;
   String _query = '';
   bool _claiming = false;
   late Future<_RankingScreenData> _future;
@@ -410,6 +603,13 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       myName: myProfile?.name,
       registeredHere: registeredHere,
     );
+    final disputable = computeDisputableIds(
+      rows: rows,
+      links: links,
+      myUserId: myUserId,
+      myName: myProfile?.name,
+      registeredHere: registeredHere,
+    );
 
     // 후보 카드는 행별 버튼과 별개 경로다. 이 협회에 이미 확정 연결이 있으면
     // my_ranking_candidates() 가 (같은 이름의 다른 선수를) 후보로 낼 수 있는데,
@@ -432,7 +632,9 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       candidate: candidate,
       hasPendingClaim: pendingIds.isNotEmpty,
       claimableOrgPlayerIds: claimable,
+      disputableOrgPlayerIds: disputable,
       registeredHere: registeredHere,
+      hasNoOrgRegistered: myOrgs.isEmpty,
     );
   }
 
@@ -455,7 +657,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   void _changeOrg(String orgCode) {
     setState(() {
       _orgCode = orgCode;
-      _divisionCode = _kRankingDivisions[orgCode]!.first;
+      _divisionCode = kRankingDivisions[orgCode]!.first;
       _future = _load();
     });
   }
@@ -467,16 +669,20 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     });
   }
 
-  Future<void> _claim(OrgRankingRow candidate) async {
+  Future<void> _claim(
+    OrgRankingRow candidate, {
+    String? note,
+    String successMessage = '신청했습니다. 관리자 확인 후 연결됩니다',
+  }) async {
     // 연타 방어. 같은 선수로 INSERT 가 둘 나가면 하나는
     // unique(org_code, org_player_id, user_id) 로 23505 를 받는다.
     if (_claiming) return;
     _claiming = true;
     try {
-      await ref.read(apiProvider).claimRanking(candidate);
+      await ref.read(apiProvider).claimRanking(candidate, note: note);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('신청했습니다. 관리자 확인 후 연결됩니다')),
+          SnackBar(content: Text(successMessage)),
         );
       }
       if (!mounted) return;
@@ -491,10 +697,23 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     }
   }
 
+  /// 이의신청 — 이미 남과 연결된 선수를 두고 "그건 나다"라고 알린다.
+  /// INSERT 는 일반 신청과 완전히 같고(pending), 사유만 함께 넣는다.
+  Future<void> _dispute(OrgRankingRow row) async {
+    if (_claiming) return;
+    final note = await askDisputeNote(context, row.playerName);
+    if (note == null || !mounted) return;
+    await _claim(
+      row,
+      note: note,
+      successMessage: '이의신청했습니다. 관리자가 확인 후 연락드립니다',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final orgCodes = _kRankingDivisions.keys.toList();
-    final divisions = _kRankingDivisions[_orgCode]!;
+    final orgCodes = kRankingDivisions.keys.toList();
+    final divisions = kRankingDivisions[_orgCode]!;
 
     return Scaffold(
       appBar: AppBar(
@@ -596,7 +815,16 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     vertical: AppSpacing.md,
                   ),
                   children: [
-                    if (data.candidate != null)
+                    // 협회를 하나도 등록하지 않았으면 이게 최우선이다.
+                    // 등록을 지워도 pending 신청은 남으므로(org_player_links 는
+                    // user_tennis_orgs 와 별개 테이블), 이 분기가 뒤에 있으면
+                    // '확인 중입니다'가 등록 안내를 영구히 가린다
+                    // (codex 리뷰 2026-08-18). 등록이 0개면 후보도 0개다 —
+                    // my_ranking_candidates() 가 user_tennis_orgs 를 조인한다.
+                    if (data.hasNoOrgRegistered &&
+                        data.linkedOrgPlayerId == null)
+                      const _NotMyDivisionNotice(hasNoOrgRegistered: true)
+                    else if (data.candidate != null)
                       RankingClaimPrompt(
                         candidate: data.candidate!,
                         onClaim: () => _claim(data.candidate!),
@@ -616,6 +844,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     // 가장 흔하고, 이미 신청·연결된 선수도 제외된다)라 단정하지 않는다.
                     else if (data.registeredHere &&
                         data.claimableOrgPlayerIds.isEmpty &&
+                        data.disputableOrgPlayerIds.isEmpty &&
                         data.linkedOrgPlayerId == null)
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -632,7 +861,20 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                                         .onSurfaceVariant,
                                   ),
                         ),
-                      ),
+                      )
+                    // 등록하지 않은 협회·부서를 보는 중. 지금까지는 버튼만 조용히
+                    // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
+                    // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+                    //
+                    // 여기까지 왔으면 "등록은 했는데 다른 부서를 보는 중"이다
+                    // (등록 0개는 위에서 이미 걸렀다). 맨 뒤인 것은 의도다 —
+                    // 후보 카드와 '확인 중입니다'는 부서가 아니라 **협회 단위**로
+                    // 뜬다. 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+                    // 남자일반부 후보를 가진 사람은 탭을 옮기기 전엔 카드를
+                    // 영영 못 본다. 진행 중인 신청이 있으면 그 소식이 먼저다.
+                    else if (!data.registeredHere &&
+                        data.linkedOrgPlayerId == null)
+                      const _NotMyDivisionNotice(hasNoOrgRegistered: false),
                     if (visibleRows.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -649,7 +891,9 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                           rows: visibleRows,
                           linkedOrgPlayerId: data.linkedOrgPlayerId,
                           claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                          disputableOrgPlayerIds: data.disputableOrgPlayerIds,
                           onClaim: _claim,
+                          onDispute: _dispute,
                         ),
                       ),
                   ],

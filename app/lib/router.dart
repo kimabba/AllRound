@@ -39,6 +39,14 @@ import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
 import 'widgets/mini_ballboy_bar.dart';
 
+/// 모바일에서도 열리는 관리자 경로. 나머지 `/admin/*` 는 웹 전용이라 홈으로
+/// 돌아간다 — 알림 딥링크가 가리키는 관리자 화면은 반드시 여기 있어야
+/// 관리자가 휴대폰에서 알림을 눌러 바로 처리할 수 있다.
+const kMobileAdminPaths = {
+  '/admin/clubs',
+  '/admin/ranking-claims',
+};
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: kIsWeb && AppConfig.userDesignPreview
@@ -84,9 +92,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // 앱: 클럽 승인은 관리자가 알림에서 바로 처리할 수 있게
-      // 모바일에서도 해당 경로만 허용한다. 권한 판정은 서버 role이 기준이다.
-      if (loc == '/admin/clubs') {
+      // 앱: 관리자가 알림에서 바로 처리할 수 있어야 하는 승인 큐만 모바일에서도
+      // 허용한다. 권한 판정은 서버 role이 기준이다.
+      // 여기 없는 /admin/* 는 아래에서 홈으로 돌려보내므로, 알림 딥링크를 새로
+      // 만들 때는 이 목록에도 넣어야 한다(랭킹 연결 알림이 그래서 추가됐다).
+      if (kMobileAdminPaths.contains(loc)) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
         return (adminAsync.value ?? false) ? null : '/';
