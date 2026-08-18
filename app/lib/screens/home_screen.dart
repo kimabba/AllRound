@@ -1514,6 +1514,7 @@ class _HomeTournamentSkeleton extends StatelessWidget {
 
 List<Tournament> _previewTournaments() {
   final now = DateTime.now();
+  // device-local-ok: 화면 프리뷰용 더미 대회를 만든다 — 마감 판정이 아니다.
   final today = DateTime(now.year, now.month, now.day);
   return [
     Tournament(
