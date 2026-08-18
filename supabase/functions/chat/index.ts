@@ -59,14 +59,13 @@ import type {
   ChatBody,
   DbCitation,
   IntentClassifyRow,
-  MyRankingRow,
   SemanticRule,
   SemanticTournament,
   UserSport,
   UserTennisOrgRow,
   VenueRow,
 } from './types.ts';
-import { INTENT_KNN_THRESHOLD, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
+import { INTENT_KNN_THRESHOLD, isMyRankingRow, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
 import {
   buildContextPrompt,
   buildProfileContext,
@@ -442,7 +441,10 @@ Deno.serve(withCors(async (req) => {
         );
 
         // ---- match_schedule: 즐겨찾기 대회 + 클럽 모임 일정 겹침 확인 (LLM 미사용, 결정적) ----
-        if (intentResult.intent === 'match_schedule') {
+        if (
+          intentResult.intent === 'match_schedule' &&
+          intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD
+        ) {
           const scheduleErrorText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
             '잠시 후 다시 시도해 주세요.';
           const { data: conflictRows, error: conflictErr } = await supabase.rpc(
@@ -587,38 +589,43 @@ Deno.serve(withCors(async (req) => {
               const score = o.score !== null ? ` (점수 ${o.score})` : '';
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }
-          }
 
-          // 본인 인증 연결(confirmed)된 랭킹만 표시. 대부분 사용자는 아직 연결이
-          // 없어 "조회 불가" 로 나온다 — 알려진 제약(design doc §3 제외 항목).
-          const { data: rankingRows, error: rankingErr } = await supabase.rpc(
-            'my_confirmed_ranking',
-          );
-          profileLines.push('');
-          profileLines.push('[내 랭킹]');
-          if (rankingErr) {
-            console.error(
-              'chat_route',
-              JSON.stringify({
-                event: 'my_confirmed_ranking_rpc_error',
-                reason: rankingErr.message,
-                user_id_hash: hashedUserId,
-                conversation_id: conversationId,
-              }),
+            // 본인 인증 연결(confirmed)된 랭킹만 표시. 대부분 사용자는 아직 연결이
+            // 없어 "조회 불가" 로 나온다 — 알려진 제약(design doc §3 제외 항목).
+            // org_rankings 는 테니스 협회 전용이라 등록 협회가 없으면 항상 0행 →
+            // 아예 조회하지 않고 섹션도 붙이지 않는다([등록 협회] 섹션과 같은 조건).
+            const { data: rankingRows, error: rankingErr } = await supabase.rpc(
+              'my_confirmed_ranking',
             );
-            profileLines.push('- 랭킹 조회 중 오류가 발생해 표시할 수 없음');
-          } else {
-            const typedRanking = (rankingRows ?? []) as MyRankingRow[];
-            if (typedRanking.length === 0) {
-              profileLines.push('- 아직 협회 랭킹 본인 인증 연결이 되어 있지 않아 조회할 수 없음');
+            profileLines.push('');
+            profileLines.push('[내 랭킹]');
+            if (rankingErr) {
+              console.error(
+                'chat_route',
+                JSON.stringify({
+                  event: 'my_confirmed_ranking_rpc_error',
+                  reason: rankingErr.message,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              profileLines.push('- 랭킹 조회 중 오류가 발생해 표시할 수 없음');
             } else {
-              for (const r of typedRanking) {
-                const orgName = TENNIS_ORG_LABELS[r.org_code as keyof typeof TENNIS_ORG_LABELS] ??
-                  r.org_code;
+              const typedRanking = (Array.isArray(rankingRows) ? rankingRows : [])
+                .filter(isMyRankingRow);
+              if (typedRanking.length === 0) {
                 profileLines.push(
-                  `- ${orgName} ${r.division_code}: ${r.rank}위 ` +
-                    `(순위포인트 ${r.rank_points}, 전체포인트 ${r.total_points})`,
+                  '- 아직 협회 랭킹 본인 인증 연결이 되어 있지 않아 조회할 수 없음',
                 );
+              } else {
+                for (const r of typedRanking) {
+                  const orgName = TENNIS_ORG_LABELS[r.org_code as keyof typeof TENNIS_ORG_LABELS] ??
+                    r.org_code;
+                  profileLines.push(
+                    `- ${orgName} ${r.division_code}: ${r.rank}위 ` +
+                      `(순위포인트 ${r.rank_points}, 전체포인트 ${r.total_points})`,
+                  );
+                }
               }
             }
           }

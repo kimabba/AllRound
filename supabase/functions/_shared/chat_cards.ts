@@ -320,7 +320,7 @@ export function isScheduleConflictRow(value: unknown): value is ScheduleConflict
 /// my_schedule_conflicts RPC 결과를 결정론적 텍스트로 렌더(LLM 미사용, club_search/
 /// tournament_search 라우팅과 동일 패턴). rows=[] 는 "비교 대상은 있으나 겹침 없음"
 /// 의미다 — "비교할 대상 자체가 없음"은 호출자(chat/index.ts)가 별도로 안내한다.
-export function renderScheduleConflictText(rows: ScheduleConflictRow[]): string {
+export function renderScheduleConflictText(rows: ScheduleConflictRow[], horizonDays = 90): string {
   if (rows.length === 0) {
     return [
       '겹치는 일정이 없어요.',
@@ -332,7 +332,7 @@ export function renderScheduleConflictText(rows: ScheduleConflictRow[]): string 
     const aRange = r.a_end && r.a_end !== r.a_start ? `${r.a_start} ~ ${r.a_end}` : r.a_start;
     return `- "${r.a_title}"(${aRange})와 ${bLabel} "${r.b_title}"(${r.b_date})가 겹쳐요.`;
   });
-  return [`## 일정 겹침 ${rows.length}건`, '', ...lines].join('\n');
+  return [`## 앞으로 ${horizonDays}일 일정 겹침 ${rows.length}건`, '', ...lines].join('\n');
 }
 
 export type SelectedEntityType = 'tournament' | 'club';
