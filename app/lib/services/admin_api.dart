@@ -472,4 +472,17 @@ mixin AdminApi on ApiBase {
     );
     return List<Map<String, dynamic>>.from(res as List);
   }
+
+  /// [month] 이 속한 달의 일별 Gemini 사용량 집계(요청수 + 토큰 합, 날짜별).
+  /// 서버 RPC(gemini_usage_daily_stats)가 admin 게이트 후 KST 기준 날짜로 group-by.
+  Future<List<Map<String, dynamic>>> geminiUsageDailyStats(DateTime month) async {
+    final p =
+        '${month.year.toString().padLeft(4, '0')}-'
+        '${month.month.toString().padLeft(2, '0')}-01';
+    final res = await supabase.rpc(
+      'gemini_usage_daily_stats',
+      params: {'p_month': p},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
 }
