@@ -586,4 +586,33 @@ void main() {
       expect(tennisOrgsWithDivisions, ['kssta']);
     });
   });
+
+  group('랭킹 미러 보유 협회', () {
+    // 등록은 되지만 본인 연결·개인 기록장이 안 열리는 협회를 가른다.
+    // 온보딩 안내와 랭킹 화면 탭이 같은 목록을 본다 — 미러를 늘릴 때 고칠 곳은
+    // kRankingDivisions 하나뿐이어야 한다.
+    test('미러가 있는 협회는 광주·전남뿐이다', () {
+      expect(kRankingDivisions.keys.toSet(), {'gj', 'jn'});
+      expect(orgHasRankingMirror('gj'), isTrue);
+      expect(orgHasRankingMirror('jn'), isTrue);
+    });
+
+    test('전국 협회·시군클럽은 미러가 없다', () {
+      // 2026-08-18 프로덕션 실측: 유저가 등록한 협회에 kta·kata 가 있는데
+      // org_rankings 에는 gj·jn 행만 있다.
+      for (final org in ['kta', 'kata', 'kato', 'kstf', 'kasta', 'kssta',
+        'local', 'ktfs']) {
+        expect(orgHasRankingMirror(org), isFalse, reason: org);
+      }
+    });
+
+    test('미러 협회의 부서는 전부 그 협회 접두사를 쓴다', () {
+      // 접두사가 어긋나면 랭킹 화면이 빈 표를 띄운다(org_code+division_code 조회).
+      kRankingDivisions.forEach((org, divisions) {
+        for (final d in divisions) {
+          expect(d, startsWith('${org}_'), reason: '$org / $d');
+        }
+      });
+    });
+  });
 }

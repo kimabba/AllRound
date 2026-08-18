@@ -78,6 +78,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       context.push('/admin/clubs');
       return;
     }
+    // 관리자는 승인 큐로, 신청자는 개인 기록장으로
+    // (routeForNotificationEvent 의 푸시 경로와 같은 분기).
+    if (notification.referenceType == 'ranking_claim_request') {
+      context.push('/admin/ranking-claims');
+      return;
+    }
+    if (notification.referenceType == 'ranking_claim_result') {
+      context.push('/rankings/me');
+      return;
+    }
     if (notification.referenceType == 'club_join_request' &&
         clubId != null &&
         clubId.isNotEmpty) {
@@ -384,6 +394,12 @@ IconData _iconFor(String type) {
       return Icons.event_available_rounded;
     case 'tournament_deadline':
       return Icons.timer_rounded;
+    case 'ranking_claim_request':
+      return Icons.how_to_reg_rounded;
+    case 'ranking_claim_approved':
+      return Icons.emoji_events_rounded;
+    case 'ranking_claim_rejected':
+      return Icons.link_off_rounded;
     default:
       return Icons.notifications_outlined;
   }

@@ -46,18 +46,25 @@ mixin RankingApi on ApiBase {
   }
 
   /// 랭킹 후보 신청 — pending 클레임 생성. 관리자 승인 전까지 "확인 중"이다.
-  Future<void> claimRanking(OrgRankingRow candidate) async {
+  ///
+  /// [note] 는 이의신청(이미 남과 확정된 선수를 두고 다투는 경우)에서 쓴다.
+  /// 경합하는 두 사람은 정책상 이름이 반드시 같아서, 관리자가 가릴 재료가
+  /// 이것뿐이다. 승인·반려되면 DB 트리거가 지운다(확정 행은 전체 공개다).
+  Future<void> claimRanking(OrgRankingRow candidate, {String? note}) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
     final orgPlayerId = candidate.orgPlayerId;
     if (orgPlayerId == null) {
       throw ArgumentError('candidate.orgPlayerId is required to claim');
     }
+    final trimmed = note?.trim();
     await supabase.from('org_player_links').insert({
       'org_code': candidate.orgCode,
       'org_player_id': orgPlayerId,
       'user_id': userId,
       'status': 'pending',
+      // 공백만 남으면 CHECK(org_player_links_note_len)에 걸린다 — null 로 보낸다.
+      if (trimmed != null && trimmed.isNotEmpty) 'note': trimmed,
     });
   }
 
