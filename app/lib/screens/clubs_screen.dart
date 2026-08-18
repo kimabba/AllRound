@@ -1576,7 +1576,7 @@ final _previewRecruitingPosts = [
     region: '서울',
     place: '망원 풋살장',
     schedule: '매주 수요일 20:00',
-    grade: '중급',
+    grade: gradeLabel('intermediate'),
     gender: '여성',
     age: '30–50대',
     position: '필드',
