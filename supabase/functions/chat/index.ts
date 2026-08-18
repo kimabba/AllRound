@@ -379,9 +379,10 @@ Deno.serve(withCors(async (req) => {
         // ---- 짧은 후속 질문 이어받기 ----
         // "다음달은?", "광주는?" 처럼 대회 키워드가 없어 분류되지 않은 후속 질문은,
         // 직전 turn 이 대회 검색이었다면 대회 검색으로 이어받아 기간·지역만 갱신한다.
-        // venue/club 등 명확한 다른 의도(ROUTABLE)는 덮지 않는다.
+        // 룰 분류(confidence=1.0)는 어떤 의도든 덮지 않는다 — "오늘 매치 일정" 같은
+        // 확실한 match_schedule 이 직전 대회 검색에 끌려가면 안 된다.
         if (
-          !ROUTABLE_INTENTS.has(intentResult.intent) &&
+          intentResult.method !== 'rule' &&
           (slots.date_range || slots.region)
         ) {
           const priorMsgs = (prior ?? []) as { role: string; content: string }[];
@@ -468,34 +469,27 @@ Deno.serve(withCors(async (req) => {
               .filter(isScheduleConflictRow) as ScheduleConflictRow[];
             if (typedRows.length === 0) {
               // 겹침이 0건인 이유가 "비교할 게 없어서"인지 "겹치는 게 없어서"인지 구분해
-              // 서로 다른 안내를 준다. club_events 존재 자체는 확인하지 않고(비용 대비
-              // 이득이 낮음) 클럽 가입 여부로 근사한다.
-              const [favoriteResult, clubResult] = await Promise.all([
-                supabase
-                  .from('tournament_favorites')
-                  .select('tournament_id', { count: 'exact', head: true })
-                  .eq('user_id', user.id),
-                supabase
-                  .from('club_members')
-                  .select('club_id', { count: 'exact', head: true })
-                  .eq('user_id', user.id)
-                  .eq('status', 'active'),
-              ]);
+              // 서로 다른 안내를 준다. RPC 두 분기 모두 즐겨찾기 대회가 조인 뿌리라서
+              // 즐겨찾기 0건이면 클럽 가입 여부와 무관하게 겹침이 나올 수 없다 —
+              // 판정은 즐겨찾기 수만 본다.
+              const favoriteResult = await supabase
+                .from('tournament_favorites')
+                .select('tournament_id', { count: 'exact', head: true })
+                .eq('user_id', user.id);
               // count는 실패해도 null로 와서 "0건"과 구분되지 않는다. error를 봐야 한다.
-              const countErr = favoriteResult.error ?? clubResult.error;
-              if (countErr) {
+              if (favoriteResult.error) {
                 console.error(
                   'chat_route',
                   JSON.stringify({
                     event: 'schedule_conflicts_count_error',
-                    reason: countErr.message,
+                    reason: favoriteResult.error.message,
                     user_id_hash: hashedUserId,
                     conversation_id: conversationId,
                   }),
                 );
                 scheduleText = scheduleErrorText;
               } else {
-                scheduleText = (favoriteResult.count ?? 0) === 0 && (clubResult.count ?? 0) === 0
+                scheduleText = (favoriteResult.count ?? 0) === 0
                   ? '비교할 즐겨찾기 대회나 클럽 모임이 없어요. ' +
                     '대회를 즐겨찾기하거나 클럽에 가입하면 겹치는 일정을 확인해 드릴게요.'
                   : renderScheduleConflictText([]);

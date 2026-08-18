@@ -29,26 +29,34 @@ stable
 security invoker
 set search_path = public
 as $$
-  select * from (
+  -- conflict_date = "겹침이 실제로 일어나는 날". 정렬·90일 지평선 판정은 전부 이 값으로
+  -- 한다 — self-join 의 t1/t2 는 UUID 크기로 갈리므로 한쪽 start_date 를 기준 삼으면
+  -- 같은 데이터도 UUID 에 따라 결과가 달라진다. 날짜의 "오늘"은 세션 타임존이 아니라
+  -- KST 로 고정한다.
+  select kind, a_id, a_title, a_start, a_end, b_id, b_title, b_date from (
     -- 즐겨찾기한 대회끼리 날짜 겹침. f2.tournament_id > f1.tournament_id 로 (A,B)/(B,A)
     -- 중복과 자기 자신(A,A)을 함께 제거한다.
     select
       'tournament_vs_tournament'::text as kind,
       t1.id as a_id, t1.title as a_title, t1.start_date as a_start, t1.end_date as a_end,
-      t2.id as b_id, t2.title as b_title, t2.start_date as b_date
+      t2.id as b_id, t2.title as b_title, t2.start_date as b_date,
+      -- 두 대회 중 늦게 시작하는 날 = 겹침이 시작되는 날.
+      greatest(t1.start_date, t2.start_date) as conflict_date
     from public.tournament_favorites f1
     join public.tournaments t1 on t1.id = f1.tournament_id
     join public.tournament_favorites f2
       on f2.user_id = f1.user_id and f2.tournament_id > f1.tournament_id
     join public.tournaments t2 on t2.id = f2.tournament_id
     where f1.user_id = (select auth.uid())
+      -- 본인 제보 draft/rejected 는 RLS 로는 보이지만 확정된 대회가 아니다 —
+      -- chat/index.ts 의 대회 노출 기준과 동일하게 published/closed 만.
+      and t1.status in ('published', 'closed')
+      and t2.status in ('published', 'closed')
       and t1.start_date <= coalesce(t2.end_date, t2.start_date)
       and t2.start_date <= coalesce(t1.end_date, t1.start_date)
-      -- t1/t2 는 UUID 크기로 갈리므로 날짜 조건을 t1 한쪽에만 걸면 안 된다(같은 데이터도
-      -- UUID 가 뒤바뀌면 결과가 달라짐). "둘 다 아직 안 끝났고, 한쪽이라도 기간 안에 시작"으로 건다.
-      and coalesce(t1.end_date, t1.start_date) >= current_date
-      and coalesce(t2.end_date, t2.start_date) >= current_date
-      and least(t1.start_date, t2.start_date) <= current_date + p_horizon_days
+      -- 둘 다 아직 안 끝난 대회만(진행 중 포함).
+      and coalesce(t1.end_date, t1.start_date) >= (now() at time zone 'Asia/Seoul')::date
+      and coalesce(t2.end_date, t2.start_date) >= (now() at time zone 'Asia/Seoul')::date
 
     union all
 
@@ -58,19 +66,24 @@ as $$
     select
       'tournament_vs_club_event'::text as kind,
       t.id as a_id, t.title as a_title, t.start_date as a_start, t.end_date as a_end,
-      e.id as b_id, e.title as b_title, (e.starts_at at time zone 'Asia/Seoul')::date as b_date
+      e.id as b_id, e.title as b_title, (e.starts_at at time zone 'Asia/Seoul')::date as b_date,
+      -- 겹침이 일어나는 날 = 모임 당일(KST).
+      (e.starts_at at time zone 'Asia/Seoul')::date as conflict_date
     from public.tournament_favorites f
     join public.tournaments t on t.id = f.tournament_id
     join public.club_members m on m.user_id = f.user_id and m.status = 'active'
     join public.club_events e on e.club_id = m.club_id
     where f.user_id = (select auth.uid())
+      and t.status in ('published', 'closed')
       and (e.starts_at at time zone 'Asia/Seoul')::date
         between t.start_date and coalesce(t.end_date, t.start_date)
-      -- 이미 시작했지만 안 끝난 대회도 포함(start_date >= current_date 면 빠진다).
-      and coalesce(t.end_date, t.start_date) >= current_date
-      and t.start_date <= current_date + p_horizon_days
+      -- 이미 시작했지만 안 끝난 대회도 포함(start_date >= 오늘 이면 빠진다).
+      and coalesce(t.end_date, t.start_date) >= (now() at time zone 'Asia/Seoul')::date
   ) conflicts
-  order by a_start, kind, a_id, b_id
+  -- 지평선 판정도 conflict_date 로 — least()/한쪽 start_date 기준이면 겹침 자체는
+  -- 90일 밖인데 이른 쪽 대회가 90일 안이라는 이유로 통과해 LIMIT 10 을 잠식한다.
+  where conflict_date <= (now() at time zone 'Asia/Seoul')::date + p_horizon_days
+  order by conflict_date, kind, a_id, b_id
   limit 10
 $$;
 
