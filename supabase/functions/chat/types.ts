@@ -99,6 +99,16 @@ export interface IntentClassifyRow {
   similarity: number;
 }
 
+export interface MyRankingRow {
+  org_code: string;
+  division_code: string;
+  org_player_id: string;
+  rank: number;
+  rank_points: number;
+  total_points: number;
+  fetched_at: string;
+}
+
 // Semantic cache settings
 export const QA_CACHE_THRESHOLD = 0.92;
 export const QA_CACHE_TTL_HOURS = 24;

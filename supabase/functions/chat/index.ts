@@ -59,6 +59,7 @@ import type {
   ChatBody,
   DbCitation,
   IntentClassifyRow,
+  MyRankingRow,
   SemanticRule,
   SemanticTournament,
   UserSport,
@@ -587,6 +588,41 @@ Deno.serve(withCors(async (req) => {
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }
           }
+
+          // 본인 인증 연결(confirmed)된 랭킹만 표시. 대부분 사용자는 아직 연결이
+          // 없어 "조회 불가" 로 나온다 — 알려진 제약(design doc §3 제외 항목).
+          const { data: rankingRows, error: rankingErr } = await supabase.rpc(
+            'my_confirmed_ranking',
+          );
+          profileLines.push('');
+          profileLines.push('[내 랭킹]');
+          if (rankingErr) {
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'my_confirmed_ranking_rpc_error',
+                reason: rankingErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+            profileLines.push('- 랭킹 조회 중 오류가 발생해 표시할 수 없음');
+          } else {
+            const typedRanking = (rankingRows ?? []) as MyRankingRow[];
+            if (typedRanking.length === 0) {
+              profileLines.push('- 아직 협회 랭킹 본인 인증 연결이 되어 있지 않아 조회할 수 없음');
+            } else {
+              for (const r of typedRanking) {
+                const orgName = TENNIS_ORG_LABELS[r.org_code as keyof typeof TENNIS_ORG_LABELS] ??
+                  r.org_code;
+                profileLines.push(
+                  `- ${orgName} ${r.division_code}: ${r.rank}위 ` +
+                    `(순위포인트 ${r.rank_points}, 전체포인트 ${r.total_points})`,
+                );
+              }
+            }
+          }
+
           const profileContext = profileLines.join('\n');
 
           const profileHistory: ChatTurn[] = [];
