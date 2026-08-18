@@ -181,6 +181,31 @@ async function tournamentsSearch(
   };
 }
 
+// chat/index.ts 의 SSE 텍스트를 intent + 답변 + 에러여부로 파싱. fetch 없이 테스트 가능하게 순수 함수로 분리.
+export function parseChatSse(text: string): { intent: string; answer: string; error: boolean } {
+  let intent = '';
+  let answer = '';
+  let sseError = false;
+  for (const block of text.split('\n\n')) {
+    const ev = block.match(/^event: (\w+)/)?.[1];
+    const dataLine = block.match(/\ndata: (.*)$/s)?.[1] ?? block.match(/data: (.*)$/s)?.[1];
+    if (!ev || !dataLine) continue;
+    try {
+      const data = JSON.parse(dataLine);
+      if (ev === 'intent') intent = data.intent ?? '';
+      if (ev === 'delta' && typeof data.text === 'string') answer += data.text;
+      // 서버가 처리 중 예외를 만나면 done 없이 이 이벤트만 보내고 스트림을 닫는다
+      // (chat/index.ts send('error', ...)) — 놓치면 빈 답변을 "정상"으로 오판한다.
+      if (ev === 'error') {
+        sseError = true;
+        answer += `[SSE error] ${data.message ?? ''}`;
+      }
+    } catch { /* skip */ }
+  }
+  const error = sseError || answer.includes('일시적인 시스템 오류');
+  return { intent, answer: answer.trim(), error };
+}
+
 // 채팅 SSE 파싱 → intent + 답변 텍스트 + 에러여부
 async function chatOnce(
   token: string,
@@ -196,20 +221,7 @@ async function chatOnce(
     return { intent: '', answer: '', error: true, status: res.status };
   }
   const text = await new Response(res.body).text();
-  let intent = '';
-  let answer = '';
-  for (const block of text.split('\n\n')) {
-    const ev = block.match(/^event: (\w+)/)?.[1];
-    const dataLine = block.match(/\ndata: (.*)$/s)?.[1] ?? block.match(/data: (.*)$/s)?.[1];
-    if (!ev || !dataLine) continue;
-    try {
-      const data = JSON.parse(dataLine);
-      if (ev === 'intent') intent = data.intent ?? '';
-      if (ev === 'delta' && typeof data.text === 'string') answer += data.text;
-    } catch { /* skip */ }
-  }
-  const error = answer.includes('일시적인 시스템 오류');
-  return { intent, answer: answer.trim(), error, status: res.status };
+  return { ...parseChatSse(text), status: res.status };
 }
 
 // Gemini 무료 티어 RPM(429·일시오류) 대비 재시도+백오프
@@ -269,17 +281,19 @@ async function journey(p: Persona) {
   console.log(JSON.stringify({ persona: p.nickname, sport: p.sport, steps: s.steps, chats }, null, 2));
 }
 
-// ── CLI ──
-const [cmd, ...argv] = Deno.args;
-if (cmd === 'journey') {
-  await journey(JSON.parse(argv[0]) as Persona);
-} else if (cmd === 'setup') {
-  const s = await setupPersona(JSON.parse(argv[0]) as Persona);
-  console.log(JSON.stringify(s));
-} else if (cmd === 'chat') {
-  const [token, message, sport] = argv;
-  console.log(JSON.stringify(await chat(token, message, sport), null, 2));
-} else {
-  console.error('usage: sim.ts journey|setup <persona-json> | chat <token> <message> [sport]');
-  Deno.exit(1);
+// ── CLI ── (import.meta.main 가드: sim_test.ts 가 parseChatSse 만 import 할 때 안 돌게)
+if (import.meta.main) {
+  const [cmd, ...argv] = Deno.args;
+  if (cmd === 'journey') {
+    await journey(JSON.parse(argv[0]) as Persona);
+  } else if (cmd === 'setup') {
+    const s = await setupPersona(JSON.parse(argv[0]) as Persona);
+    console.log(JSON.stringify(s));
+  } else if (cmd === 'chat') {
+    const [token, message, sport] = argv;
+    console.log(JSON.stringify(await chat(token, message, sport), null, 2));
+  } else {
+    console.error('usage: sim.ts journey|setup <persona-json> | chat <token> <message> [sport]');
+    Deno.exit(1);
+  }
 }
