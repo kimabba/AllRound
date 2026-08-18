@@ -14,6 +14,7 @@ import '../../utils/recent_tournaments.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
+import '../../utils/kst.dart';
 import '../../widgets/tournament_card.dart';
 import '../../widgets/notification_inbox_action.dart';
 import '../../widgets/tournament_section_bar.dart';
@@ -58,10 +59,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   late DateTime _focusedMonth;
   String? _lastSearchedSport;
 
-  DateTime get _today {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
-  }
+  /// 기준일은 KST — 한국 대회 캘린더라 '오늘'도 한국 날짜여야 한다(utils/kst.dart).
+  DateTime get _today => kstTodayDate(DateTime.now());
 
   bool get _isTennis => ref.read(activeSportProvider) == 'tennis';
 
@@ -819,7 +818,7 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final leadingEmptyCells = firstDay.weekday % 7;
     final totalCells = leadingEmptyCells + daysInMonth;
     final rowCount = (totalCells / 7).ceil();
-    final today = _dateOnly(DateTime.now());
+    final today = kstTodayDate(DateTime.now());
 
     return Container(
       padding: const EdgeInsets.fromLTRB(

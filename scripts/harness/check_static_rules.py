@@ -630,6 +630,65 @@ def check_sport_grade_label_hardcode() -> None:
     print(f"✓ 종목·등급 라벨이 정본 파일에서만 정의된다 (금지 라벨 {len(labels)}개, 자가검증 통과)")
 
 
+# 기기 로컬 자정을 만드는 패턴. 서버가 KST 로 대회 마감·종료를 판정하므로
+# (20260819030000_tournament_dates_use_kst.sql) 앱이 이걸 쓰면 한국 자정 근처에서
+# 두 쪽이 하루 어긋난다. app/lib/utils/kst.dart 의 kstTodayDate() 를 쓸 것.
+#
+# "오늘"을 만드는 것만 잡는다 — 인자로 받은 임의 날짜의 시각을 떼는 정규화
+# (dateOnly(d), DateTime(dueDate.year, ...))는 정당하므로 걸리면 안 된다.
+NOW_VAR_RE = re.compile(r"(?:final|var|late)?\s*(\w+)\s*=\s*DateTime\.now\(\)")
+DATE_ONLY_NOW_RE = re.compile(r"_?dateOnly\(\s*DateTime\.now\(\)\s*\)")
+
+# 날짜 판정이 아니라서 기기 로컬이 맞는 곳. 새로 추가할 땐 이유를 함께 적을 것.
+LOCAL_MIDNIGHT_ALLOWED = {
+    # 화면 프리뷰용 더미 대회를 만든다 — 판정이 아니다.
+    "app/lib/screens/home_screen.dart",
+    "app/lib/screens/tournaments/tournament_detail_screen.dart",
+    # 생년월일 피커 초기값 — 서버 판정과 짝이 아니다.
+    "app/lib/screens/auth/onboarding_screen.dart",
+    # 관리자 사용량 탭. 관리자가 보는 자기 기준 '오늘'이라 로컬이 의도다.
+    "app/lib/screens/admin/gemini_usage_tab.dart",
+    # 내 일정 화면의 오늘 포커스 — 대회 마감 판정이 아니다.
+    "app/lib/screens/friend_schedule_screen.dart",
+    # 규칙 본문에 패턴을 인용한다.
+    "app/lib/utils/kst.dart",
+}
+
+
+def check_no_device_local_today() -> None:
+    """대회 날짜 판정에 기기 로컬 자정을 쓰지 못하게 막는다."""
+    violations: list[str] = []
+    for path in sorted((ROOT / "app" / "lib").rglob("*.dart")):
+        relative = path.relative_to(ROOT).as_posix()
+        if relative in LOCAL_MIDNIGHT_ALLOWED:
+            continue
+        source = path.read_text(encoding="utf-8")
+        now_vars = {m.group(1) for m in NOW_VAR_RE.finditer(source)}
+        for name in now_vars:
+            pattern = re.compile(
+                r"DateTime\(\s*%s\.year\s*,\s*%s\.month\s*,\s*%s\.day\s*\)"
+                % (re.escape(name), re.escape(name), re.escape(name))
+            )
+            for match in pattern.finditer(source):
+                line_number = source.count("\n", 0, match.start()) + 1
+                violations.append(f"{relative}:{line_number}: {match.group(0)}")
+        for match in DATE_ONLY_NOW_RE.finditer(source):
+            line_number = source.count("\n", 0, match.start()) + 1
+            violations.append(f"{relative}:{line_number}: {match.group(0)}")
+    if violations:
+        fail(
+            "기기 로컬 자정(KST 정합): DateTime.now() 로 만든 '오늘'을 그대로 썼다.\n"
+            "서버는 KST 로 대회 마감·종료를 판정한다 — 기기 시계를 쓰면 한국 자정\n"
+            "근처에서 앱만 하루 먼저/늦게 '마감'을 띄운다.\n"
+            "app/lib/utils/kst.dart 의 kstTodayDate(DateTime.now()) 를 쓸 것.\n"
+            "판정이 아니어서 로컬이 맞으면 LOCAL_MIDNIGHT_ALLOWED 에 이유와 함께 추가한다.\n"
+            + "\n".join(sorted(violations))
+        )
+    print(
+        "✓ 대회 날짜 판정이 기기 로컬 자정을 쓰지 않는다 "
+        f"(예외 {len(LOCAL_MIDNIGHT_ALLOWED)}개)"
+    )
+
 def main() -> int:
     check_root_file_lengths()
     check_required_rule_docs()
@@ -640,6 +699,7 @@ def main() -> int:
     check_ai_disclosure_present()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
+    check_no_device_local_today()
     print("✅ static repository rules passed")
     return 0
 
