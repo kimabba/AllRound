@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -833,6 +834,24 @@ mixin ClubApi on ApiBase {
         .map((row) => ClubChatMessage.fromJson(Map<String, dynamic>.from(row)))
         .toList(growable: false);
     return messages.reversed.toList(growable: false);
+  }
+
+  Stream<List<ClubChatMessage>> watchClubChatMessages(String threadId) {
+    return supabase
+        .from('club_chat_messages')
+        .stream(primaryKey: ['id'])
+        .eq('thread_id', threadId)
+        .order('created_at', ascending: false)
+        .limit(300)
+        .map((rows) {
+          final messages =
+              rows.map(ClubChatMessage.fromJson).toList(growable: false);
+          messages.sort((a, b) {
+            final createdAtOrder = a.createdAt.compareTo(b.createdAt);
+            return createdAtOrder != 0 ? createdAtOrder : a.id.compareTo(b.id);
+          });
+          return messages;
+        });
   }
 
   Future<void> sendClubChatMessage({

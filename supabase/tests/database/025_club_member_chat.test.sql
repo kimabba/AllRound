@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(24);
+select plan(28);
 
 select has_table('public', 'club_chat_threads', '모임 채팅방 테이블 존재');
 select has_table('public', 'club_chat_participants', '1:1 참여자 테이블 존재');
@@ -31,12 +31,23 @@ select has_function(
   'public', 'open_club_chat', array['uuid', 'uuid'],
   '채팅방 열기 함수 존재'
 );
+select has_function(
+  'public', 'enforce_club_chat_message_rate_limit', array[]::text[],
+  '채팅 연속 전송 제한 함수 존재'
+);
+select has_trigger(
+  'public', 'club_chat_messages', 'club_chat_messages_rate_limit',
+  '채팅 연속 전송 제한 트리거 존재'
+);
 
 select ok(
   not has_function_privilege('anon', 'public.can_access_club_chat(uuid)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.open_club_chat(uuid,uuid)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.touch_club_chat_thread()', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.notify_club_chat_message()', 'EXECUTE'),
+  and not has_function_privilege('anon', 'public.notify_club_chat_message()', 'EXECUTE')
+  and not has_function_privilege(
+    'anon', 'public.enforce_club_chat_message_rate_limit()', 'EXECUTE'
+  ),
   '비로그인 사용자는 채팅 SECURITY DEFINER 함수를 실행할 수 없다'
 );
 select ok(
@@ -46,14 +57,20 @@ select ok(
 );
 select ok(
   not has_function_privilege('authenticated', 'public.touch_club_chat_thread()', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.notify_club_chat_message()', 'EXECUTE'),
+  and not has_function_privilege('authenticated', 'public.notify_club_chat_message()', 'EXECUTE')
+  and not has_function_privilege(
+    'authenticated', 'public.enforce_club_chat_message_rate_limit()', 'EXECUTE'
+  ),
   '로그인 사용자는 채팅 트리거 함수를 직접 실행할 수 없다'
 );
 select ok(
   has_function_privilege('service_role', 'public.can_access_club_chat(uuid)', 'EXECUTE')
   and has_function_privilege('service_role', 'public.open_club_chat(uuid,uuid)', 'EXECUTE')
   and has_function_privilege('service_role', 'public.touch_club_chat_thread()', 'EXECUTE')
-  and has_function_privilege('service_role', 'public.notify_club_chat_message()', 'EXECUTE'),
+  and has_function_privilege('service_role', 'public.notify_club_chat_message()', 'EXECUTE')
+  and has_function_privilege(
+    'service_role', 'public.enforce_club_chat_message_rate_limit()', 'EXECUTE'
+  ),
   'service_role 은 모든 채팅 함수를 실행할 수 있다'
 );
 
@@ -88,6 +105,20 @@ select ok(
 select ok(
   to_regclass('public.club_chat_messages_sender_idx') is not null,
   '메시지 작성자 외래키 인덱스가 있다'
+);
+select ok(
+  to_regclass('public.club_chat_messages_sender_created_idx') is not null,
+  '채팅 전송 제한 조회용 인덱스가 있다'
+);
+select ok(
+  exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'club_chat_messages'
+  ),
+  '채팅 메시지는 실시간 변경 발행 대상이다'
 );
 
 select ok(
