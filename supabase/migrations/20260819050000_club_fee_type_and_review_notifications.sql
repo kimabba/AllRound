@@ -1,5 +1,5 @@
--- 클럽 생성 시 회비를 월회비와 1회 참가비로 구분하고,
--- 생성 요청 거절 알림 유형을 통합 알림함에 추가한다.
+-- 클럽 생성 시 회비를 월회비와 1회 참가비로 구분한다.
+-- 생성 요청 거절 알림 유형도 통합 알림함에 추가한다.
 
 alter table public.clubs
   add column if not exists fee_type text not null default 'monthly';
