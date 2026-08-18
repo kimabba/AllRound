@@ -29,11 +29,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _marketingConsent = false;
   String? _error;
   String? _info;
-  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void dispose() {
-    _authSubscription?.cancel();
     _email.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
@@ -252,24 +250,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
-      final supa = ref.read(supabaseProvider);
-      final consent = _marketingConsent;
-      _authSubscription?.cancel();
-      _authSubscription = supa.auth.onAuthStateChange.listen((data) async {
-        if (data.event == AuthChangeEvent.signedIn) {
-          _authSubscription?.cancel();
-          _authSubscription = null;
-          await supa.auth.updateUser(
-            UserAttributes(data: {
-              'marketing_consent': consent,
-              if (consent)
-                'marketing_consent_at':
-                    DateTime.now().toUtc().toIso8601String(),
-            }),
-          );
-        }
-      });
-      await supa.auth.signInWithOAuth(
+      // 마케팅 수신 동의는 회원가입 시트에서만 받는다. 예전엔 여기서 로그인
+      // 성공을 듣고 updateUser 로 동의값을 썼는데, Google 은 기존 회원 전용
+      // 경로라 재로그인할 때마다 예전 동의가 체크박스 기본값(false)으로
+      // 덮어써졌다. 서버에 보정 로직이 없어 동의 이력이 조용히 사라졌다.
+      await ref.read(supabaseProvider).auth.signInWithOAuth(
         OAuthProvider.google,
         // 모바일은 딥링크 스킴으로 복귀. 웹(admin/웹빌드)에서는 모바일 스킴을 쓰면
         // 브라우저로 못 돌아오므로 redirectTo 를 비워 현재 origin 으로 복귀시킨다 (JY-132).
@@ -279,8 +264,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         queryParams: const {'prompt': 'select_account'},
       );
     } catch (_) {
-      _authSubscription?.cancel();
-      _authSubscription = null;
       setState(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -438,6 +421,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     onChanged: refreshSheet,
                                   ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        // 선택 동의라 계정을 만드는 이 자리에서만 묻는다.
+                        // 로그인하는 기존 회원에게는 물을 이유가 없다.
+                        _MarketingConsentRow(
+                          value: _marketingConsent,
+                          onChanged: (value) {
+                            setState(() => _marketingConsent = value ?? false);
+                            refreshSheet();
+                          },
+                        ),
                       ],
                       // 비밀번호 재설정은 kr.allround.app:// 딥링크로 앱을 여는
                       // 흐름이라 모바일 전용. 웹(admin)에선 링크가 앱을 못 열고
@@ -553,145 +546,106 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return Center(
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.xl,
-                ),
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.xl,
+              ),
+              // Center 는 스크롤뷰 "안"에 있어야 한다. 밖에 두면 스크롤뷰가
+              // 자식에게 가로 tight 제약을 줘 maxWidth 480 이 화면 폭으로
+              // 되돌아간다(웹·태블릿에서 캡이 안 먹던 원인).
+              child: Center(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - (AppSpacing.xl * 2),
+                    // 스크롤뷰 안이라 Spacer/Expanded 는 못 쓴다(높이 무한).
+                    // 대신 minHeight 로 Column 을 화면 높이만큼 늘리고 남는
+                    // 공간을 spaceBetween 이 나눠 갖게 한다. 콘텐츠가 더 길면
+                    // 남는 공간이 0 이 되고 평소처럼 스크롤된다.
+                    // 상한을 두면 안 된다. Center 는 스크롤뷰 안이라 높이가
+                    // 무한이고, 내용이 상한만큼 줄면 뷰포트 위쪽에 붙어 아래가
+                    // 통째로 빈다(태블릿·큰 폰에서 재현).
+                    minHeight: (constraints.maxHeight - (AppSpacing.xl * 2))
+                        .clamp(0.0, double.infinity),
                     maxWidth: 480,
                   ),
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const _LoginHeader(),
-                      const SizedBox(height: AppSpacing.xxl),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.xxl),
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(AppRadius.xxl),
+                      Text(
+                        '올라운드',
+                        style: tt.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.8,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (adminMode)
-                              _SportBubble(
-                                icon: Icons.admin_panel_settings_rounded,
-                                backgroundColor: cs.primary,
-                                foregroundColor: cs.onPrimary,
-                              )
-                            else
-                              const _AllRoundMascot(),
-                            const SizedBox(height: AppSpacing.xxl),
-                            Text(
-                              adminMode ? '관리자 로그인' : '운동 친구를\n만나러 가볼까요?',
-                              textAlign: TextAlign.center,
-                              style: tt.headlineLarge?.copyWith(
-                                color: cs.onPrimaryContainer,
-                                fontWeight: FontWeight.w800,
-                                height: 1.12,
-                                letterSpacing: -1,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.xxl,
+                        ),
+                        child: _IntroCarousel(adminMode: adminMode),
+                      ),
+                      // 하단 묶음. 한 겹으로 싸야 spaceBetween 이 "헤더 /
+                      // 히어로 / 버튼" 세 덩어리로만 공간을 나눈다.
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer,
+                                border: Border.all(color: cs.error),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.sm),
                               ),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              adminMode
-                                  ? '관리자 계정으로 안전하게 로그인하세요.'
-                                  : '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
-                              textAlign: TextAlign.center,
-                              style: tt.bodyMedium?.copyWith(
-                                // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
-                                // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
-                                color: cs.onPrimaryContainer.withValues(
-                                  alpha: 0.8,
+                              child: Text(
+                                _error!,
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.onErrorContainer,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                                height: 1.55,
                               ),
                             ),
-                            if (!adminMode) ...[
-                              const SizedBox(height: AppSpacing.xl),
-                              const Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  _FeaturePill(
-                                    emoji: '👥',
-                                    label: '내 주변 클럽',
-                                  ),
-                                  _FeaturePill(
-                                    emoji: '🏆',
-                                    label: '대회 일정',
-                                  ),
-                                ],
-                              ),
-                            ],
+                            const SizedBox(height: AppSpacing.lg),
                           ],
-                        ),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: cs.errorContainer,
-                            border: Border.all(color: cs.error),
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                          ),
-                          child: Text(
-                            _error!,
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onErrorContainer,
-                              fontWeight: FontWeight.w700,
+                          if (showGoogleLogin) ...[
+                            _SocialButton(
+                              key: AllRoundE2EKeys.googleExistingLoginButton,
+                              onPressed:
+                                  _busy ? null : _openGoogleExistingLogin,
+                              icon: Icons.account_circle_outlined,
+                              label: 'Google 기존 회원 로그인',
                             ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.xl),
-                      if (showGoogleLogin) ...[
-                        _SocialButton(
-                          key: AllRoundE2EKeys.googleExistingLoginButton,
-                          onPressed: _busy ? null : _openGoogleExistingLogin,
-                          icon: Icons.account_circle_outlined,
-                          label: 'Google 기존 회원 로그인',
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
-                      FilledButton(
-                        key: AllRoundE2EKeys.emailFlowButton,
-                        onPressed: _busy ? null : _showEmailAuthSheet,
-                        style: FilledButton.styleFrom(
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(AppRadius.xxl),
+                            const SizedBox(height: AppSpacing.sm),
+                          ],
+                          FilledButton(
+                            key: AllRoundE2EKeys.emailFlowButton,
+                            onPressed: _busy ? null : _showEmailAuthSheet,
+                            style: FilledButton.styleFrom(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(AppRadius.xxl),
+                                ),
+                              ),
                             ),
+                            child: const Text('이메일로 계속하기'),
                           ),
-                        ),
-                        child: const Text('이메일로 계속하기'),
+                          if (!adminMode) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Text(
+                              '계속하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
+                              textAlign: TextAlign.center,
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (!adminMode) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          '계속하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        _MarketingConsentRow(
-                          value: _marketingConsent,
-                          onChanged: (value) => setState(
-                            () => _marketingConsent = value ?? false,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -700,31 +654,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           },
         ),
       ),
-    );
-  }
-}
-
-class _SportBubble extends StatelessWidget {
-  const _SportBubble({
-    required this.icon,
-    required this.backgroundColor,
-    required this.foregroundColor,
-  });
-
-  final IconData icon;
-  final Color backgroundColor;
-  final Color foregroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: AppSizes.touchTarget,
-      height: AppSizes.touchTarget,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: foregroundColor, size: 23),
     );
   }
 }
@@ -786,74 +715,308 @@ class _AllRoundMascot extends StatelessWidget {
   }
 }
 
-class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({
-    required this.emoji,
-    required this.label,
+/// 로그인 전에 "여기서 뭘 할 수 있는지"를 넘겨 보는 카드.
+/// 첫 장은 인사, 나머지는 하단 탭의 동선(대회·클럽·볼보이)과 1:1 로 맞춘다.
+class _IntroCarousel extends StatefulWidget {
+  const _IntroCarousel({required this.adminMode});
+
+  final bool adminMode;
+
+  @override
+  State<_IntroCarousel> createState() => _IntroCarouselState();
+}
+
+class _IntroCarouselState extends State<_IntroCarousel> {
+  static const _adminCards = <_IntroCardData>[
+    _IntroCardData(
+      icon: Icons.admin_panel_settings_rounded,
+      title: '관리자 로그인',
+      body: '관리자 계정으로 안전하게 로그인하세요.',
+    ),
+  ];
+
+  static const _cards = <_IntroCardData>[
+    _IntroCardData(
+      title: '운동 친구를\n만나러 가볼까요?',
+      body: '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.emoji_events_rounded,
+      title: '열리는 대회를\n한눈에',
+      body: '지역별로 모아 보고, 신청 마감일까지\n한 번에 확인하세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.groups_rounded,
+      title: '가까운 클럽과\n모임 찾기',
+      body: '동네 클럽을 둘러보고\n같이 칠 사람을 구해 보세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.chat_bubble_rounded,
+      title: '궁금한 건\n볼보이에게',
+      body: '대회 규정이나 일정을 물어보면\n채팅으로 바로 찾아 줍니다.',
+    ),
+  ];
+
+  final _controller = PageController();
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoPlay();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startAutoPlay() {
+    if (widget.adminMode) return;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_controller.hasClients) return;
+      // 모션 최소화를 켠 사용자에게 화면이 저절로 움직이면 안 된다.
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _timer?.cancel();
+        return;
+      }
+      _controller.animateToPage(
+        (_page + 1) % _cards.length,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  /// 이 카드가 화면 중앙에서 몇 장만큼 떨어져 있는지. 0 이면 정중앙,
+  /// 0.5 면 절반쯤 넘어간 상태다. 넘기는 중에는 소수로 계속 바뀐다.
+  double _offsetOf(int index) {
+    if (!_controller.hasClients || !_controller.position.haveDimensions) {
+      return (_page - index).toDouble();
+    }
+    return (_controller.page ?? _page.toDouble()) - index;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final cards = widget.adminMode ? _adminCards : _cards;
+    // 카드 높이는 고정이라 글자 배율만큼 같이 키운다. 그래도 모자라면
+    // 카드 안이 스크롤되므로(_IntroCard) 넘침으로 깨지지는 않는다.
+    final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final height = (320.0 * scale).clamp(320.0, 480.0);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: height,
+          // 사용자가 한 번 손으로 넘기면 자동 넘김을 멈춘다. 저절로 움직이는
+          // 화면을 멈출 방법이 있어야 한다(WCAG 2.2.2). depth 0 만 보는 것은
+          // 카드 안쪽 스크롤(큰 글자)이 올려보내는 알림과 구분하기 위함이다.
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification &&
+                  notification.depth == 0 &&
+                  notification.dragDetails != null) {
+                _timer?.cancel();
+              }
+              return false;
+            },
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: cards.length,
+              onPageChanged: (value) => setState(() => _page = value),
+              // 넘기는 동안 카드 안이 살짝 어긋나 움직이도록 스크롤 위치를
+              // 그대로 카드에 넘긴다. 통째로 미끄러지기만 하면 밋밋하다.
+              itemBuilder: (context, index) => AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => _IntroCard(
+                  data: cards[index],
+                  offset: _offsetOf(index),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (cards.length > 1) ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < cards.length; index++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == _page ? 18 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: index == _page ? cs.primary : cs.outlineVariant,
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _IntroCardData {
+  const _IntroCardData({
+    this.icon,
+    required this.title,
+    required this.body,
   });
 
-  final String emoji;
-  final String label;
+  /// null 이면 마스코트를 쓴다(첫 인사 카드).
+  final IconData? icon;
+  final String title;
+  final String body;
+}
+
+class _IntroCard extends StatelessWidget {
+  const _IntroCard({required this.data, this.offset = 0});
+
+  final _IntroCardData data;
+
+  /// 화면 중앙에서 떨어진 정도. 0 이 정중앙, ±1 이 한 장 옆.
+  final double offset;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: cs.onPrimaryContainer.withValues(alpha: 0.08),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: tt.bodyMedium),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            // pill 배경이 onPrimaryContainer 계열이므로 전경도 같은 role 을 쓴다.
-            // cs.primary 는 다크에서 4.04:1 로 AA 미달이었다(교체 후 라이트 7.66 / 다크 6.53).
-            style: tt.labelMedium?.copyWith(
-              color: cs.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
+    final t = offset.clamp(-1.0, 1.0);
+    final away = t.abs();
+    // 아이콘이 글자보다 더 크게 밀리면서 겹이 생긴다(패럴랙스).
+    // 중앙에 서 있는 동안은 계산값이 모두 0 이라 아무 비용도 들지 않는다.
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Transform.translate(
+          offset: Offset(t * 44, 0),
+          child: data.icon == null
+              ? const _AllRoundMascot()
+              // 마스코트와 같은 크기·모양이어야 장을 넘겨도 무게가 흔들리지 않는다.
+              : Container(
+                  width: AppSizes.touchTarget * 2,
+                  height: AppSizes.touchTarget * 2,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.xxl * 2),
+                  ),
+                  child: Icon(
+                    data.icon,
+                    color: cs.onPrimary,
+                    size: AppSizes.touchTarget,
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Transform.translate(
+          offset: Offset(t * 18, 0),
+          child: Column(
+            children: [
+              Text(
+                data.title,
+                textAlign: TextAlign.center,
+                style: tt.headlineLarge?.copyWith(
+                  color: cs.onPrimaryContainer,
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
+                  letterSpacing: -1,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                data.body,
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(
+                  // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
+                  // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
+                  color: cs.onPrimaryContainer.withValues(alpha: 0.8),
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return Transform.scale(
+      // 옆으로 밀린 카드는 살짝 뒤로 물러난다.
+      scale: 1 - away * 0.05,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            // 대비 계약(design_system_contract_test)은 단색 primaryContainer
+            // 기준이다. 그라데이션의 반대쪽 끝은 surface 를 섞어 글자와의
+            // 대비가 더 벌어지는 방향이라 그 계약이 최악값으로 남는다.
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.primaryContainer,
+                Color.alphaBlend(
+                  cs.surface.withValues(alpha: 0.5),
+                  cs.primaryContainer,
+                ),
+              ],
             ),
           ),
-        ],
+          child: CustomPaint(
+            painter: _CourtMotifPainter(
+              color: cs.onPrimaryContainer.withValues(alpha: 0.06),
+            ),
+            // 글자 배율이 커도 카드 높이를 넘치지 않게 카드 안에서 스크롤한다.
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.xxl),
+              child: away == 0
+                  ? content
+                  // 완전히 중앙일 때는 Opacity 를 씌우지 않는다. 이 위젯은
+                  // 레이어를 하나 더 떠서 정지 화면에서까지 낼 비용이 아니다.
+                  : Opacity(
+                      opacity: (1 - away * 1.1).clamp(0.0, 1.0),
+                      child: content,
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _LoginHeader extends StatelessWidget {
-  const _LoginHeader();
+/// 카드 바탕에 공이 튄 자리처럼 번지는 동심원. 그림 파일(SVG) 없이
+/// 그때그때 그리므로 해상도가 달라져도 깨지지 않는다.
+class _CourtMotifPainter extends CustomPainter {
+  const _CourtMotifPainter({required this.color});
+
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Text(
-          '올라운드',
-          style: tt.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.8,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          '로그인',
-          style: tt.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = color;
+    // 글자를 가로지르지 않도록 오른쪽 아래 구석에만 모아 둔다.
+    final center = Offset(size.width * 0.94, size.height * 0.97);
+    for (var ring = 1; ring <= 3; ring++) {
+      canvas.drawCircle(center, size.width * 0.11 * ring, paint);
+    }
   }
+
+  @override
+  bool shouldRepaint(_CourtMotifPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _MarketingConsentRow extends StatelessWidget {
@@ -874,7 +1037,6 @@ class _MarketingConsentRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Checkbox(
               value: value,
