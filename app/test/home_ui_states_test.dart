@@ -298,6 +298,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
+  // 이제는 서버가 전수 검색하는 전체 대회 화면의 입구다.
+  testWidgets('홈 검색창을 누르면 전체 대회 검색으로 넘어간다', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+        GoRoute(
+          path: '/tournaments',
+          builder: (_, state) => Scaffold(
+            body: Text('검색 열림=${state.uri.queryParameters['search']}'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        retry: (_, __) => null,
+        overrides: [
+          homeTournamentsProvider.overrideWith((ref) async => const []),
+          myTournamentRecordsProvider.overrideWith((ref) async => const []),
+          unreadNotificationCountProvider.overrideWith((ref) async => 0),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('대회명 또는 지역을 검색해보세요'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('검색 열림=1'), findsOneWidget);
+  });
+
   group('홈 히어로 카드', () {
     final deadline = DateTime.now().add(const Duration(days: 6));
     final deadlineLine = '~${DateFormat('M월 d일').format(deadline)} 마감';

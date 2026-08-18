@@ -19,10 +19,18 @@ import '../../widgets/notification_inbox_action.dart';
 import '../../widgets/tournament_section_bar.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
-  const TournamentsScreen({super.key, this.previewTournaments});
+  const TournamentsScreen({
+    super.key,
+    this.previewTournaments,
+    this.openSearch = false,
+  });
 
   /// Deterministic data hook for responsive widget tests only.
   final List<Tournament>? previewTournaments;
+
+  /// 홈의 검색창을 눌러 들어온 경우 상세검색 시트를 바로 연다.
+  /// 홈은 구경, 검색은 이 화면 한 곳으로 모으기 위한 진입 경로다.
+  final bool openSearch;
 
   @override
   ConsumerState<TournamentsScreen> createState() => _TournamentsScreenState();
@@ -187,7 +195,12 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   void initState() {
     super.initState();
     _focusedMonth = DateTime(_today.year, _today.month);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _search());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _search();
+      if (widget.openSearch && mounted) {
+        _openSearchSheet(Theme.of(context).colorScheme);
+      }
+    });
   }
 
   @override
@@ -1770,7 +1783,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       TextField(
                         controller: _queryCtrl,
                         decoration: InputDecoration(
-                          hintText: '대회명·주최·설명 검색',
+                          hintText: '대회명·지역·장소 검색',
                           prefixIcon: const Icon(Icons.search_rounded),
                           filled: true,
                           fillColor: cs.surface,

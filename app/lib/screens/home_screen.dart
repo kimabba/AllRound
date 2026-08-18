@@ -30,15 +30,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _searchController = TextEditingController();
   String _selectedRegion = _allRegions;
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   Future<void> _refresh() async {
     ref.invalidate(homeTournamentsProvider);
@@ -63,11 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               item.sport == selectedSport &&
               !item.startDate.isBefore(today) &&
               !item.isRegistrationClosed &&
-              _matchesRegion(item, selectedRegion) &&
-              (_query.isEmpty ||
-                  item.title.toLowerCase().contains(_query.toLowerCase()) ||
-                  (item.region ?? '').contains(_query) ||
-                  (item.location ?? '').contains(_query)),
+              _matchesRegion(item, selectedRegion),
         )
         .toList(growable: false);
     return upcoming;
@@ -172,11 +160,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _TournamentHomeControls(
                   selectedRegion: selectedRegion,
                   regionCounts: regionCounts,
-                  searchController: _searchController,
                   onRegionSelected: (value) =>
                       setState(() => _selectedRegion = value),
-                  onQueryChanged: (value) =>
-                      setState(() => _query = value.trim()),
+                  onSearch: () => context.push('/tournaments?search=1'),
                 ),
               ),
             ),
@@ -218,7 +204,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       favoriteIds: favoriteIds,
                       selectedSport: selectedSport,
                       selectedRegion: selectedRegion,
-                      searching: _query.isNotEmpty,
                       onOpen: (item) => context.push('/tournaments/${item.id}'),
                       onFavorite: _toggleFavorite,
                       onBrowse: () => context.push('/tournaments'),
@@ -242,16 +227,14 @@ class _TournamentHomeControls extends StatelessWidget {
   const _TournamentHomeControls({
     required this.selectedRegion,
     required this.regionCounts,
-    required this.searchController,
     required this.onRegionSelected,
-    required this.onQueryChanged,
+    required this.onSearch,
   });
 
   final String selectedRegion;
   final Map<String, int> regionCounts;
-  final TextEditingController searchController;
   final ValueChanged<String> onRegionSelected;
-  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -269,23 +252,14 @@ class _TournamentHomeControls extends StatelessWidget {
       selectedValue: selectedRegion,
       onSelected: onRegionSelected,
     );
+    // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
+    // 입력창이 아니라 서버가 전수 검색하는 전체 대회 화면의 입구로 쓴다.
     final search = TextField(
-      controller: searchController,
-      textInputAction: TextInputAction.search,
-      onChanged: onQueryChanged,
+      readOnly: true,
+      onTap: onSearch,
       decoration: InputDecoration(
         hintText: '대회명 또는 지역을 검색해보세요',
         prefixIcon: const Icon(Icons.search_rounded),
-        suffixIcon: searchController.text.isEmpty
-            ? null
-            : IconButton(
-                tooltip: '검색어 지우기',
-                onPressed: () {
-                  searchController.clear();
-                  onQueryChanged('');
-                },
-                icon: const Icon(Icons.close_rounded),
-              ),
         filled: true,
         fillColor: cs.surfaceContainerLowest,
       ),
@@ -419,7 +393,6 @@ class _TournamentHomeContent extends StatelessWidget {
     required this.favoriteIds,
     required this.selectedSport,
     required this.selectedRegion,
-    required this.searching,
     required this.onOpen,
     required this.onFavorite,
     required this.onBrowse,
@@ -432,7 +405,6 @@ class _TournamentHomeContent extends StatelessWidget {
   final Set<String> favoriteIds;
   final String selectedSport;
   final String selectedRegion;
-  final bool searching;
   final ValueChanged<Tournament> onOpen;
   final Future<void> Function(Tournament, bool) onFavorite;
   final VoidCallback onBrowse;
@@ -449,32 +421,6 @@ class _TournamentHomeContent extends StatelessWidget {
       final days = deadline.difference(today).inDays;
       return days >= 0 && days <= 7;
     }).toList();
-
-    if (searching) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(title: '검색 결과', count: tournaments.length),
-          const SizedBox(height: AppSpacing.sm),
-          if (tournaments.isEmpty)
-            const AppEmptyState(
-              key: AllRoundE2EKeys.homeEmptyState,
-              icon: Icons.search_off_rounded,
-              title: '검색 결과가 없습니다',
-              description: '대회명이나 지역을 짧게 입력해보세요.',
-            )
-          else
-            for (final item in tournaments.take(12))
-              _TournamentListCard(
-                tournament: item,
-                saved: favoriteIds.contains(item.id),
-                onOpen: () => onOpen(item),
-                onFavorite: () =>
-                    onFavorite(item, favoriteIds.contains(item.id)),
-              ),
-        ],
-      );
-    }
 
     // 히어로는 "지금 신청해야 하는 것"을 맡는다. 마감 임박이 없을 때만
     // 다가오는 순서로 채운다.
