@@ -32,4 +32,28 @@ void main() {
 
     expect(place.preferredAddress, '서울 강남구 역삼동 1');
   });
+
+  test('지도에서 조정한 핀 좌표만 반영한다', () {
+    const place = PlaceSearchResult(
+      id: '123',
+      name: '잠실 풋살장',
+      address: '서울 송파구 잠실동 1',
+      roadAddress: '서울 송파구 올림픽로 1',
+      latitude: 37.5,
+      longitude: 127.1,
+      category: '스포츠 > 풋살장',
+      phone: '02-1234-5678',
+    );
+
+    final adjusted = place.withCoordinates(
+      latitude: 37.5005,
+      longitude: 127.1007,
+    );
+
+    expect(adjusted.latitude, 37.5005);
+    expect(adjusted.longitude, 127.1007);
+    expect(adjusted.id, place.id);
+    expect(adjusted.displayText, place.displayText);
+    expect(adjusted.phone, place.phone);
+  });
 }

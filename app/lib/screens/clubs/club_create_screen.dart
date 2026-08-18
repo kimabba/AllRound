@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/place_search_result.dart';
 import '../../state/providers.dart';
@@ -1551,10 +1554,14 @@ class _PlaceSearchSheet extends StatefulWidget {
 class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
   final _query = TextEditingController();
   final _focusNode = FocusNode();
+  Timer? _searchDebounce;
+  int _searchRequest = 0;
   List<PlaceSearchResult> _results = const [];
   bool _loading = false;
   bool _searched = false;
   String? _error;
+  PlaceSearchResult? _selectedPlace;
+  LatLng? _pinCenter;
 
   @override
   void initState() {
@@ -1566,18 +1573,39 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _query.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _runSearch() async {
+  void _onQueryChanged(String value) {
+    _searchDebounce?.cancel();
+    final query = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (query.length < 2) {
+      _searchRequest++;
+      setState(() {
+        _loading = false;
+        _searched = false;
+        _results = const [];
+        _error = null;
+      });
+      return;
+    }
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _runSearch(keepKeyboardOpen: true),
+    );
+  }
+
+  Future<void> _runSearch({bool keepKeyboardOpen = false}) async {
     final query = _query.text.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (query.length < 2) {
       setState(() => _error = '장소명이나 주소를 2자 이상 입력해주세요.');
       return;
     }
-    FocusScope.of(context).unfocus();
+    if (!keepKeyboardOpen) FocusScope.of(context).unfocus();
+    final request = ++_searchRequest;
     setState(() {
       _loading = true;
       _searched = true;
@@ -1585,23 +1613,57 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     });
     try {
       final results = await widget.search(query);
-      if (!mounted) return;
+      if (!mounted || request != _searchRequest) return;
       setState(() => _results = results);
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || request != _searchRequest) return;
       setState(() {
         _results = const [];
         _error = '장소를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && request == _searchRequest) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  void _showOnMap(PlaceSearchResult place) {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _selectedPlace = place;
+      _pinCenter = LatLng(place.latitude, place.longitude);
+    });
+  }
+
+  void _backToResults() {
+    setState(() {
+      _selectedPlace = null;
+      _pinCenter = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _confirmLocation() {
+    final place = _selectedPlace;
+    final pin = _pinCenter;
+    if (place == null || pin == null) return;
+    Navigator.pop(
+      context,
+      place.withCoordinates(
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final selectedPlace = _selectedPlace;
     return FractionallySizedBox(
       heightFactor: 0.86,
       child: Padding(
@@ -1614,79 +1676,234 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '활동 장소 검색',
-              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '도로명주소 검색에서 정확한 주소와 위치를 가져옵니다.',
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _query,
-              focusNode: _focusNode,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _runSearch(),
-              decoration: InputDecoration(
-                hintText: '예: 잠실 풋살장, 올림픽로 25',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: IconButton(
-                  onPressed: _loading ? null : _runSearch,
-                  tooltip: '검색',
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                ),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.sm),
+            if (selectedPlace == null) ...[
               Text(
-                _error!,
-                style: tt.bodySmall?.copyWith(color: cs.error),
+                '활동 장소 검색',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _results.isEmpty
-                      ? Center(
-                          child: Text(
-                            _searched ? '검색 결과가 없습니다.' : '장소를 검색해주세요.',
-                            style: tt.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '장소명이나 주소를 입력하면 바로 검색해드려요.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _query,
+                focusNode: _focusNode,
+                textInputAction: TextInputAction.search,
+                onChanged: _onQueryChanged,
+                onSubmitted: (_) => _runSearch(),
+                decoration: InputDecoration(
+                  hintText: '예: 잠실 풋살장, 올림픽로 25',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
-                      : ListView.separated(
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          itemCount: _results.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final place = _results[index];
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.xs,
+                      : _query.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _query.clear();
+                                _onQueryChanged('');
+                                _focusNode.requestFocus();
+                              },
+                              tooltip: '검색어 지우기',
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  _error!,
+                  style: tt.bodySmall?.copyWith(color: cs.error),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: _results.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searched
+                              ? '검색 결과가 없습니다.'
+                              : '두 글자 이상 입력하면 검색 결과가 나타납니다.',
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final place = _results[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.xs,
+                            ),
+                            onTap: () => _showOnMap(place),
+                            leading: Icon(
+                              Icons.place_outlined,
+                              color: cs.primary,
+                            ),
+                            title: Text(
+                              place.name,
+                              style: tt.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
                               ),
-                              onTap: () => Navigator.pop(context, place),
-                              leading: Icon(
-                                Icons.place_outlined,
-                                color: cs.primary,
-                              ),
-                              title: Text(
-                                place.name,
-                                style: tt.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              subtitle: Text(place.preferredAddress),
-                              trailing: const Icon(Icons.chevron_right_rounded),
-                            );
+                            ),
+                            subtitle: Text(place.preferredAddress),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                          );
+                        },
+                      ),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _backToResults,
+                    tooltip: '검색 결과로 돌아가기',
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '정확한 위치 지정',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedPlace.name,
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      selectedPlace.preferredAddress,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      FlutterMap(
+                        options: MapOptions(
+                          initialCenter: _pinCenter!,
+                          initialZoom: 17,
+                          minZoom: 6,
+                          maxZoom: 19,
+                          onPositionChanged: (camera, hasGesture) {
+                            if (hasGesture) _pinCenter = camera.center;
                           },
                         ),
-            ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'kr.jyoung.allround',
+                          ),
+                          SimpleAttributionWidget(
+                            source: const Text('OpenStreetMap contributors'),
+                            onTap: () => launchUrl(
+                              Uri.parse(
+                                  'https://www.openstreetmap.org/copyright'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            backgroundColor: cs.surface.withValues(alpha: 0.85),
+                          ),
+                        ],
+                      ),
+                      IgnorePointer(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 36),
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 52,
+                            color: cs.primary,
+                            shadows: const [
+                              Shadow(
+                                blurRadius: 8,
+                                color: Colors.black38,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: AppSpacing.sm,
+                        left: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: cs.surface.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              boxShadow: const [
+                                BoxShadow(
+                                  blurRadius: 10,
+                                  color: Colors.black12,
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
+                              child: Text(
+                                '지도를 움직여 정확한 입구나 운동장 위치에 핀을 맞춰주세요.',
+                                style: tt.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              FilledButton.icon(
+                onPressed: _confirmLocation,
+                icon: const Icon(Icons.check_rounded),
+                label: const Text('이 위치로 선택'),
+              ),
+            ],
           ],
         ),
       ),

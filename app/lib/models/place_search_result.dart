@@ -22,6 +22,22 @@ class PlaceSearchResult {
   String get preferredAddress => roadAddress.isNotEmpty ? roadAddress : address;
   String get displayText => '$name · $preferredAddress';
 
+  PlaceSearchResult withCoordinates({
+    required double latitude,
+    required double longitude,
+  }) {
+    return PlaceSearchResult(
+      id: id,
+      name: name,
+      address: address,
+      roadAddress: roadAddress,
+      latitude: latitude,
+      longitude: longitude,
+      category: category,
+      phone: phone,
+    );
+  }
+
   factory PlaceSearchResult.fromJson(Map<String, dynamic> json) {
     return PlaceSearchResult(
       id: json['id'] as String,
