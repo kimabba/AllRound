@@ -41,15 +41,18 @@ import {
   type ClubCardRow,
   type ClubDetailRow,
   isGradeRegisteredForSport,
+  isScheduleConflictRow,
   isTournamentCardRow,
   parseSelectedEntity,
   parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderScheduleConflictText,
   renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
+  type ScheduleConflictRow,
 } from '../_shared/chat_cards.ts';
 
 import type {
@@ -437,13 +440,52 @@ Deno.serve(withCors(async (req) => {
           }),
         );
 
-        // ---- match_schedule: 개인 매치 일정 데이터 미비 → 결정적 안내 fallback ----
-        // RAG 로 흘리면 무관한 대회/룰을 긁어오므로 안내로 종료한다.
+        // ---- match_schedule: 즐겨찾기 대회 + 클럽 모임 일정 겹침 확인 (LLM 미사용, 결정적) ----
         if (intentResult.intent === 'match_schedule') {
-          const dr = intentResult.slots.date_range;
-          const scheduleText = '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
-            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
-            (dr ? '\n이 기간의 대회가 궁금하면 "이 기간 대회 알려줘"라고 말씀해 주세요.' : '');
+          const { data: conflictRows, error: conflictErr } = await supabase.rpc(
+            'my_schedule_conflicts',
+          );
+
+          let scheduleText: string;
+          if (conflictErr) {
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'schedule_conflicts_rpc_error',
+                reason: conflictErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+            scheduleText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
+              '잠시 후 다시 시도해 주세요.';
+          } else {
+            const typedRows = (Array.isArray(conflictRows) ? conflictRows : [])
+              .filter(isScheduleConflictRow) as ScheduleConflictRow[];
+            if (typedRows.length === 0) {
+              // 겹침이 0건인 이유가 "비교할 게 없어서"인지 "겹치는 게 없어서"인지 구분해
+              // 서로 다른 안내를 준다. club_events 존재 자체는 확인하지 않고(비용 대비
+              // 이득이 낮음) 클럽 가입 여부로 근사한다.
+              const [{ count: favoriteCount }, { count: activeClubCount }] = await Promise.all([
+                supabase
+                  .from('tournament_favorites')
+                  .select('tournament_id', { count: 'exact', head: true })
+                  .eq('user_id', user.id),
+                supabase
+                  .from('club_members')
+                  .select('club_id', { count: 'exact', head: true })
+                  .eq('user_id', user.id)
+                  .eq('status', 'active'),
+              ]);
+              scheduleText = (favoriteCount ?? 0) === 0 && (activeClubCount ?? 0) === 0
+                ? '비교할 즐겨찾기 대회나 클럽 모임이 없어요. ' +
+                  '대회를 즐겨찾기하거나 클럽에 가입하면 겹치는 일정을 확인해 드릴게요.'
+                : renderScheduleConflictText([]);
+            } else {
+              scheduleText = renderScheduleConflictText(typedRows);
+            }
+          }
+
           send('context', { tournaments: [], rules: [] });
           send('delta', { text: scheduleText });
           await chatWriter.from('chat_messages').insert({
