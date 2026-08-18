@@ -80,14 +80,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final counts = <String, int>{};
+    var nationwide = 0;
+    var total = 0;
     for (final item in source) {
       if (item.sport != selectedSport) continue;
       if (item.startDate.isBefore(today)) continue;
       if (item.isRegistrationClosed) continue;
-      // 전국대회는 모든 지역에 함께 나오므로 별도 항목으로 만들지 않는다.
-      for (final part in (item.region ?? '').split('·')) {
-        final name = part.trim();
-        if (name.isEmpty) continue;
+      total += 1;
+      final names = (item.region ?? '')
+          .split('·')
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty);
+      // 전국대회는 지역 항목을 만들지 않고, 모든 지역의 개수에 더해진다.
+      if (names.isEmpty) {
+        nationwide += 1;
+        continue;
+      }
+      for (final name in names) {
         counts[name] = (counts[name] ?? 0) + 1;
       }
     }
@@ -96,7 +105,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final byCount = counts[b]!.compareTo(counts[a]!);
         return byCount != 0 ? byCount : a.compareTo(b);
       });
-    return {for (final name in names) name: counts[name]!};
+    // 지역을 골라도 전국대회는 함께 보이므로 개수에 포함한다. 포함하지 않으면
+    // "광주 7"을 눌렀는데 목록에 21개가 나오는 어긋남이 생긴다.
+    return {
+      _allRegions: total,
+      for (final name in names) name: counts[name]! + nationwide,
+    };
   }
 
   Future<void> _toggleFavorite(Tournament tournament, bool saved) async {
@@ -254,14 +268,27 @@ class _TournamentHomeControls extends StatelessWidget {
     );
     // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
     // 입력창이 아니라 서버가 전수 검색하는 전체 대회 화면의 입구로 쓴다.
-    final search = TextField(
-      readOnly: true,
+    // 겉모습은 입력창이지만 동작은 버튼이므로, 화면낭독기에도 버튼으로 알린다
+    // (입력창으로 읽히면 타이핑을 시도하다 아무것도 안 되는 상태가 된다).
+    final search = Semantics(
+      button: true,
+      textField: false,
+      label: '대회 검색',
+      hint: '전체 대회 검색을 엽니다',
+      // 버튼이라고 알리는 것만으로는 부족하다. excludeSemantics 가 자식의 액션까지
+      // 버리므로 여기서 탭 액션을 직접 등록해야 화면낭독기로 실제 실행된다.
       onTap: onSearch,
-      decoration: InputDecoration(
-        hintText: '대회명 또는 지역을 검색해보세요',
-        prefixIcon: const Icon(Icons.search_rounded),
-        filled: true,
-        fillColor: cs.surfaceContainerLowest,
+      excludeSemantics: true,
+      child: TextField(
+        readOnly: true,
+        canRequestFocus: false,
+        onTap: onSearch,
+        decoration: InputDecoration(
+          hintText: '대회명 또는 지역을 검색해보세요',
+          prefixIcon: const Icon(Icons.search_rounded),
+          filled: true,
+          fillColor: cs.surfaceContainerLowest,
+        ),
       ),
     );
     // 큰 글씨에서는 한 줄에 두 요소가 들어가지 않아 세로로 쌓는다.

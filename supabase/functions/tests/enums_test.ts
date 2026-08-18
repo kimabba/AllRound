@@ -234,6 +234,13 @@ Deno.test('resolveRegionCode: 명시 코드가 있으면 그대로 쓴다', () =
   assertEquals(resolveRegionCode('seoul', '부산'), 'seoul');
 });
 
+// 빈 문자열이 그대로 통과하면 유도도 막히고 FK 위반으로 500 이 난다.
+Deno.test('resolveRegionCode: 빈 명시 코드는 무시하고 지역명에서 유도한다', () => {
+  assertEquals(resolveRegionCode('' as never, '부산'), 'busan');
+  assertEquals(resolveRegionCode('   ' as never, '부산'), 'busan');
+  assertEquals(resolveRegionCode('' as never, undefined), undefined);
+});
+
 Deno.test('resolveRegionCode: 판정할 수 없으면 undefined', () => {
   // '경기·인천' 같은 복합 표기는 한쪽으로 단정하지 않는다.
   assertEquals(resolveRegionCode(undefined, '경기·인천'), undefined);
