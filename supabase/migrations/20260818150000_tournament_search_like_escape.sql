@@ -1,25 +1,14 @@
 -- 검색어의 LIKE 메타문자(%, _, \)를 리터럴로 취급한다.
 --
--- 배경: 038 에서 한 번 넣었던 이스케이프가 이후 함수 재생성(075/076/enum→text)
--- 과정에서 빠진 채로 남아 있었다. 실측 — 검색창에 '%' 한 글자만 넣으면 전체
--- 대회가 나온다. SQL 인젝션은 아니지만(파라미터 바인딩), 사용자가 친 글자가
--- 글자로 취급되지 않아 검색 결과가 어긋난다.
+-- 배경: 038 에서 넣었던 이스케이프가 이후 함수 재생성(075/076/enum→text) 과정에서
+-- 빠진 채로 남아 있었다. 실측 — 검색창에 '%' 한 글자만 넣으면 전체 대회가 나온다.
+-- SQL 인젝션은 아니지만(파라미터 바인딩), 사용자가 친 글자가 글자로 취급되지 않아
+-- 검색 결과가 어긋난다. 홈 검색을 전체 대회 화면으로 일원화(#426)하면서 이 경로를
+-- 쓰는 빈도가 올라갔으므로 함께 정리한다.
 --
--- 홈 검색을 전체 대회 화면으로 일원화(#426)하면서 이 경로를 쓰는 빈도가
--- 올라갔으므로 함께 정리한다. 이스케이프 규칙은 038 과 동일하다.
-
--- 같은 replace 3중첩을 다섯 군데에 복사하지 않도록 작은 헬퍼로 둔다.
-CREATE OR REPLACE FUNCTION public.like_escape(p_term text)
-RETURNS text
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-SET search_path TO 'public'
-AS $$
-  SELECT replace(replace(replace(coalesce(p_term, ''), '\', '\\'), '%', '\%'), '_', '\_');
-$$;
-
-GRANT EXECUTE ON FUNCTION public.like_escape(text) TO anon, authenticated, service_role;
+-- 별도 헬퍼 함수를 두지 않고 038 과 같이 쿼리 안에서 한 번만 계산한다.
+-- public 에 새 함수를 만들면 anon 실행 권한을 함께 열어야 하고(SECURITY INVOKER 라
+-- 호출자 권한으로 내부 함수를 부른다), 그만큼 공개 표면이 늘어난다.
 
 CREATE OR REPLACE FUNCTION public.tournaments_for_user(
   p_user_id uuid,
@@ -65,6 +54,12 @@ AS $function$
   FROM public.tournaments t
   LEFT JOIN public.tennis_tournament_details tt ON tt.tournament_id = t.id
   LEFT JOIN public.futsal_tournament_details ft ON ft.tournament_id = t.id
+  -- 검색어의 LIKE 메타문자를 리터럴로 바꿔 한 번만 계산한다(038 과 같은 규칙).
+  CROSS JOIN LATERAL (
+    SELECT replace(replace(replace(
+             coalesce(p_query, ''), '\', '\\'), '%', '\%'), '_', '\_'
+           ) AS term
+  ) q
   WHERE t.status = 'published'
     AND (p_sport IS NULL OR t.sport::text = p_sport)
     AND (p_region IS NULL OR t.region = p_region)
@@ -80,11 +75,11 @@ AS $function$
     )
     AND (
       p_query IS NULL
-      OR t.title ILIKE '%' || public.like_escape(p_query) || '%' ESCAPE '\'
-      OR COALESCE(t.organizer, '') ILIKE '%' || public.like_escape(p_query) || '%' ESCAPE '\'
-      OR COALESCE(t.description, '') ILIKE '%' || public.like_escape(p_query) || '%' ESCAPE '\'
-      OR COALESCE(t.region, '') ILIKE '%' || public.like_escape(p_query) || '%' ESCAPE '\'
-      OR COALESCE(t.location, '') ILIKE '%' || public.like_escape(p_query) || '%' ESCAPE '\'
+      OR t.title ILIKE '%' || q.term || '%' ESCAPE '\'
+      OR COALESCE(t.organizer, '') ILIKE '%' || q.term || '%' ESCAPE '\'
+      OR COALESCE(t.description, '') ILIKE '%' || q.term || '%' ESCAPE '\'
+      OR COALESCE(t.region, '') ILIKE '%' || q.term || '%' ESCAPE '\'
+      OR COALESCE(t.location, '') ILIKE '%' || q.term || '%' ESCAPE '\'
     )
     AND (
       NOT p_only_my_grade
