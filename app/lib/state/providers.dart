@@ -186,7 +186,16 @@ String? primarySportFrom(List<UserSport> sports) {
 /// 앱을 다시 켜면 초기화되는 세션 한정 선택이다.
 class SportOverrideNotifier extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    // 로그아웃 시 반드시 비운다. 안 그러면 다음 로그인 계정이 이전 계정이 고른
+    // 종목으로 등급·추천·룰북·클럽 필터를 보게 된다(RecoveryModeNotifier 와 동일 원칙).
+    ref.listen(authStateProvider, (_, next) {
+      if (next.value?.event == AuthChangeEvent.signedOut) {
+        state = null;
+      }
+    });
+    return null;
+  }
 
   void select(String? sport) => state = sport;
 }
