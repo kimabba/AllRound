@@ -220,6 +220,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // 대회가 하나도 없을 때 "전국 0" 은 세는 대상이 없다는 뜻인데 0건짜리
+    // 지역처럼 읽힌다. 숫자 없이 "전국"만 남긴다.
+    testWidgets('보여줄 대회가 없으면 지역 메뉴에 숫자를 붙이지 않는다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => const [],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.location_on_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('전국'), findsWidgets);
+      expect(find.text('전국 0'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     // 메뉴 숫자와 실제 목록이 어긋나면 "광주 7"을 눌렀는데 21개가 나온다.
     testWidgets('지역 메뉴 숫자는 선택 후 목록 개수와 일치한다', (tester) async {
       await pumpHome(

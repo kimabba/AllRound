@@ -105,6 +105,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final byCount = counts[b]!.compareTo(counts[a]!);
         return byCount != 0 ? byCount : a.compareTo(b);
       });
+    // 보여줄 대회가 없으면 "전국 0" 대신 숫자 없는 "전국"만 남긴다.
+    if (total == 0) return const {};
     // 지역을 골라도 전국대회는 함께 보이므로 개수에 포함한다. 포함하지 않으면
     // "광주 7"을 눌렀는데 목록에 21개가 나오는 어긋남이 생긴다.
     return {
