@@ -118,6 +118,24 @@ export async function saveRawDocument(
 }
 
 /**
+ * 이번 크롤의 목록 페이지에서 실제로 본 source_url 전체를 last_seen_at=now() 로
+ * 찍는다. 목록이탈 만료(tournament_status.ts)의 "봤다"는 상세 파싱 성공이 아니라
+ * 목록 등장이 기준이어야 한다 — ended 필터·CAP slice·상세 fetch 실패로 상세를
+ * 안 가는 항목도 목록에는 있으므로, upsertTournament(상세 파싱 성공시에만 호출)에만
+ * last_seen_at 을 맡기면 그런 항목이 실제로 살아있는데도 이탈로 오판된다. 파서는
+ * listing 파싱 직후, ended 필터/CAP 적용 전 전체 url 로 이 함수를 호출해야 한다.
+ */
+export async function markListingSeen(audit: AuditHandle, urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  const { error } = await audit.supabase
+    .from('tournaments')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('source', audit.source)
+    .in('source_url', urls);
+  if (error) console.error(`markListingSeen: ${error.message}`);
+}
+
+/**
  * source_url 기준 upsert. 신규는 status='draft' 로 들어가 관리자 승인 대기.
  *  (사이트 셀렉터가 깨지거나 등급/날짜 추출이 잘못된 false positive 가
  *   바로 사용자에게 노출되지 않도록 하는 안전 장치)
@@ -136,7 +154,7 @@ export async function upsertTournament(
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash',
+      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash, status, delisted_at',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -148,6 +166,13 @@ export async function upsertTournament(
       title: t.title,
       organizer: t.organizer ?? null,
     };
+    // 목록이탈로 닫혔던 대회가 상세까지 다시 파싱됐다 = 재등장. 날짜-close 는 여기서
+    // 건드리지 않는다(그건 tournament_status.ts 의 날짜 동기화 담당) — delisted_at 이
+    // 있을 때만 되살린다.
+    if (existing.status === 'closed' && existing.delisted_at) {
+      updatePayload.status = 'published';
+    }
+    updatePayload.delisted_at = null;
     if (t.description !== undefined && !existing.manual_description) {
       updatePayload.description = t.description ?? null;
     }

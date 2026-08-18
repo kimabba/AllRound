@@ -19,7 +19,7 @@
 //   - org 는 crawl_sources.org_code('kato'), 추론 금지. 상세 fetch 30건 cap.
 
 import { DOMParser } from 'deno-dom';
-import { type CrawlerTournament, upsertTournament } from '../../crawler.ts';
+import { type CrawlerTournament, markListingSeen, upsertTournament } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 import { parseKatoRegulation } from './kato_regulation.ts';
@@ -274,6 +274,10 @@ export const katoOpenListParser: ParserFn = async (
   } catch (e) {
     return { ...empty, status: 'error', error: (e as Error).message };
   }
+
+  // 목록이탈 만료 판정 기준 — "목록에 있음"을 상세 파싱 성공이 아니라 여기서
+  // 확정한다(ended 필터·CAP·상세 실패로 상세를 안 가는 항목도 목록엔 있다).
+  await markListingSeen(ctx.audit, items.map((it) => it.url));
 
   // 3) content-hash 변경 감지 (서버 ETag 없을 때)
   const computedHash = await listingContentHash(items);
