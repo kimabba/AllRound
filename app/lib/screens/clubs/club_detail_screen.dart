@@ -1047,7 +1047,10 @@ class _IntroTab extends StatelessWidget {
                     if (monthlyFee != null)
                       _InfoChip(
                         icon: Icons.payments_outlined,
-                        label: clubMonthlyFeeLabel(monthlyFee!),
+                        label: clubFeeLabel(
+                          monthlyFee!,
+                          feeType: club.feeType,
+                        ),
                       ),
                   ],
                 ),
@@ -1831,8 +1834,10 @@ class _ClubManagementTab extends ConsumerWidget {
           monthlyFee: monthlyFee,
           onChanged: onMonthlyFeeChanged,
         ),
-        const SizedBox(height: AppSpacing.md),
-        _ClubDuesLedgerCard(club: club),
+        if (club.feeType == 'monthly') ...[
+          const SizedBox(height: AppSpacing.md),
+          _ClubDuesLedgerCard(club: club),
+        ],
         const SizedBox(height: AppSpacing.md),
         _JoinRequestManageCard(
           club: club,
@@ -2599,8 +2604,8 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
           TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: '월회비',
+            decoration: InputDecoration(
+              labelText: widget.club.feeType == 'per_event' ? '1회 참가비' : '월회비',
               hintText: '예: 40000',
               suffixText: '원',
             ),

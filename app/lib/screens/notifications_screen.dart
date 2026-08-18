@@ -396,6 +396,7 @@ IconData _iconFor(String type) {
     case 'club_join_approved':
       return Icons.verified_rounded;
     case 'club_join_rejected':
+    case 'club_creation_rejected':
       return Icons.block_rounded;
     case 'club_notice':
       return Icons.push_pin_outlined;

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _allowedSports = {'tennis', 'futsal'};
 const _allowedMeetingDays = {'월', '화', '수', '목', '금', '토', '일'};
 const _allowedGenderPreferences = {'mixed', 'male', 'female'};
+const _allowedFeeTypes = {'monthly', 'per_event'};
 const _allowedCardColors = {
   '#18376D',
   '#3156D8',
@@ -24,6 +25,7 @@ class ClubCreateDraft {
     required this.website,
     required this.description,
     required this.monthlyFee,
+    required this.feeType,
     required this.meetingDays,
     required this.genderPreference,
     required this.cardColor,
@@ -41,6 +43,7 @@ class ClubCreateDraft {
   final String website;
   final String description;
   final String monthlyFee;
+  final String feeType;
   final List<String> meetingDays;
   final String? genderPreference;
   final String cardColor;
@@ -57,8 +60,9 @@ class ClubCreateDraft {
       website.trim().isNotEmpty ||
       description.trim().isNotEmpty ||
       monthlyFee.trim().isNotEmpty ||
+      feeType != 'monthly' ||
       meetingDays.isNotEmpty ||
-      genderPreference != null ||
+      (genderPreference != null && genderPreference != 'mixed') ||
       cardColor != '#3156D8' ||
       hadSelectedImages;
 
@@ -72,6 +76,7 @@ class ClubCreateDraft {
         'website': website,
         'description': description,
         'monthly_fee': monthlyFee,
+        'fee_type': feeType,
         'meeting_days': meetingDays,
         'gender_preference': genderPreference,
         'card_color': cardColor,
@@ -121,6 +126,10 @@ class ClubCreateDraft {
       website: _stringValue(decoded['website']),
       description: _stringValue(decoded['description']),
       monthlyFee: _stringValue(decoded['monthly_fee']),
+      feeType: decoded['fee_type'] is String &&
+              _allowedFeeTypes.contains(decoded['fee_type'])
+          ? decoded['fee_type']! as String
+          : 'monthly',
       meetingDays: meetingDays,
       genderPreference: genderPreference,
       cardColor: decoded['card_color'] is String &&

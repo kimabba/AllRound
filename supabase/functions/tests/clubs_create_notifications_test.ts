@@ -1,7 +1,11 @@
 import { assertEquals } from 'std/assert/mod.ts';
 
 import { selectNotificationTargets } from '../_shared/notifications.ts';
-import { adminIdsFromRows, buildClubApprovalNotification } from '../clubs-create/notifications.ts';
+import {
+  adminIdsFromRows,
+  buildClubApprovalNotification,
+  buildClubRejectionNotification,
+} from '../clubs-create/notifications.ts';
 
 Deno.test('clubs-create extracts unique valid administrator ids', () => {
   assertEquals(
@@ -38,9 +42,40 @@ Deno.test('clubs-create builds a deduplicated admin approval notification', () =
     {
       userId: 'admin-1',
       type: 'club_approval_request',
-      title: '새 모임 승인 요청',
-      body: '“주말 푸살 클럽” 모임이 승인을 기다리고 있습니다.',
+      title: '새 클럽 승인 요청',
+      body: '“주말 푸살 클럽” 클럽이 승인을 기다리고 있습니다.',
       referenceType: 'club_approval_request',
+      referenceId: 'club-1',
+      clubId: 'club-1',
+      delivery: 'latest_device',
+    },
+  );
+});
+
+Deno.test('club resubmission tells administrators that the club was edited', () => {
+  const notification = buildClubApprovalNotification(
+    'admin-1',
+    { clubId: 'club-1', clubName: '주말 풋살 클럽' },
+    'resubmission',
+  );
+  assertEquals(notification.title, '클럽 재검수 요청');
+  assertEquals(notification.body, '“주말 풋살 클럽” 클럽이 수정 후 재검수를 요청했습니다.');
+});
+
+Deno.test('club rejection notification includes the administrator reason', () => {
+  assertEquals(
+    buildClubRejectionNotification({
+      clubId: 'club-1',
+      clubName: '주말 풋살 클럽',
+      ownerId: 'owner-1',
+      reason: '활동 장소를 더 정확히 입력해주세요.',
+    }),
+    {
+      userId: 'owner-1',
+      type: 'club_creation_rejected',
+      title: '클럽 생성 요청이 거절되었습니다',
+      body: '“주말 풋살 클럽” 거절 사유: 활동 장소를 더 정확히 입력해주세요.',
+      referenceType: 'club_creation_review',
       referenceId: 'club-1',
       clubId: 'club-1',
       delivery: 'latest_device',

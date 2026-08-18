@@ -35,6 +35,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   final _website = TextEditingController();
   final _description = TextEditingController();
   final _monthlyFee = TextEditingController();
+  String _feeType = 'monthly';
   double? _addressLatitude;
   double? _addressLongitude;
   Uint8List? _logoBytes;
@@ -42,7 +43,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   String _logoContentType = 'image/jpeg';
   final List<_PendingIntroImage> _introImages = [];
   final Set<String> _meetingDays = {};
-  String? _genderPreference;
+  String _genderPreference = 'mixed';
   String _cardColor = defaultClubCardColor;
   int _step = 0;
   bool _submitting = false;
@@ -112,10 +113,11 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
           _website.text = draft.website;
           _description.text = draft.description;
           _monthlyFee.text = draft.monthlyFee;
+          _feeType = draft.feeType;
           _meetingDays
             ..clear()
             ..addAll(draft.meetingDays);
-          _genderPreference = draft.genderPreference;
+          _genderPreference = draft.genderPreference ?? 'mixed';
           _cardColor = draft.cardColor;
           _step = draft.step;
         }
@@ -145,6 +147,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         website: _website.text,
         description: _description.text,
         monthlyFee: _monthlyFee.text,
+        feeType: _feeType,
         meetingDays: _meetingDays.toList(growable: false),
         genderPreference: _genderPreference,
         cardColor: _cardColor,
@@ -238,7 +241,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       _logoBytes = null;
       _introImages.clear();
       _meetingDays.clear();
-      _genderPreference = null;
+      _feeType = 'monthly';
+      _genderPreference = 'mixed';
       _step = 0;
     });
     try {
@@ -267,6 +271,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     }
     if (!_validateOperationStep()) {
       setState(() => _step = 1);
+      return;
+    }
+    if (!_validateIntroStep()) {
+      setState(() => _step = 2);
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
@@ -354,6 +362,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             introImageUrls: introImageUrls,
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
+            feeType: _feeType,
             genderPreference: _genderPreference,
             cardColor: _cardColor,
             latitude: latitude,
@@ -408,6 +417,16 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   bool _validateOperationStep() {
     final error = clubWebsiteInputError(_website.text) ??
         clubMonthlyFeeInputError(_monthlyFee.text);
+    if (error == null) return true;
+    _formKey.currentState?.validate();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error)),
+    );
+    return false;
+  }
+
+  bool _validateIntroStep() {
+    final error = clubDescriptionInputError(_description.text);
     if (error == null) return true;
     _formKey.currentState?.validate();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -665,6 +684,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               contact: _contact,
                               website: _website,
                               monthlyFee: _monthlyFee,
+                              feeType: _feeType,
                               meetingDays: _meetingDays,
                               genderPreference: _genderPreference,
                               onMeetingDayChanged: (day, selected) =>
@@ -678,6 +698,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               }),
                               onGenderChanged: (value) {
                                 setState(() => _genderPreference = value);
+                                _scheduleDraftSave();
+                              },
+                              onFeeTypeChanged: (value) {
+                                setState(() => _feeType = value);
                                 _scheduleDraftSave();
                               },
                             )
@@ -906,9 +930,9 @@ class _BasicClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         TextFormField(
           controller: name,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '클럽명 *',
-            hintText: '예: 광주 테니스 클럽',
+            hintText: clubNameHintForSport(sport),
           ),
           validator: (value) =>
               (value == null || value.trim().isEmpty) ? '클럽명은 필수입니다' : null,
@@ -991,19 +1015,23 @@ class _OperationClubStep extends StatelessWidget {
     required this.contact,
     required this.website,
     required this.monthlyFee,
+    required this.feeType,
     required this.meetingDays,
     required this.genderPreference,
     required this.onMeetingDayChanged,
     required this.onGenderChanged,
+    required this.onFeeTypeChanged,
   });
 
   final TextEditingController contact;
   final TextEditingController website;
   final TextEditingController monthlyFee;
+  final String feeType;
   final Set<String> meetingDays;
-  final String? genderPreference;
+  final String genderPreference;
   final void Function(String day, bool selected) onMeetingDayChanged;
-  final ValueChanged<String?> onGenderChanged;
+  final ValueChanged<String> onGenderChanged;
+  final ValueChanged<String> onFeeTypeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1047,12 +1075,23 @@ class _OperationClubStep extends StatelessWidget {
               )
               .toList(),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('회비 방식', style: tt.labelLarge),
+        const SizedBox(height: AppSpacing.sm),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'monthly', label: Text('월회비')),
+            ButtonSegment(value: 'per_event', label: Text('1회 참가비')),
+          ],
+          selected: {feeType},
+          onSelectionChanged: (selected) => onFeeTypeChanged(selected.first),
+        ),
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: monthlyFee,
           validator: clubMonthlyFeeInputError,
-          decoration: const InputDecoration(
-            labelText: '월 회비 (원)',
+          decoration: InputDecoration(
+            labelText: feeType == 'per_event' ? '1회 참가비 (원)' : '월회비 (원)',
             hintText: '예: 30000',
           ),
           keyboardType: TextInputType.number,
@@ -1061,9 +1100,8 @@ class _OperationClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text('성별 선호', style: tt.labelLarge),
         const SizedBox(height: AppSpacing.sm),
-        SegmentedButton<String?>(
+        SegmentedButton<String>(
           segments: const [
-            ButtonSegment(value: null, label: Text('무관')),
             ButtonSegment(value: 'mixed', label: Text('혼성')),
             ButtonSegment(value: 'male', label: Text('남성')),
             ButtonSegment(value: 'female', label: Text('여성')),
@@ -1095,11 +1133,14 @@ class _IntroClubStep extends StatelessWidget {
       children: [
         TextFormField(
           controller: description,
+          validator: clubDescriptionInputError,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           decoration: const InputDecoration(
             labelText: '클럽 소개',
-            hintText: '클럽 소개, 활동 내용, 가입 조건 등',
+            hintText: '활동 내용과 가입 조건을 30자 이상 적어주세요',
             alignLabelWithHint: true,
           ),
+          maxLength: 2000,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           minLines: 5,
@@ -1579,7 +1620,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '카카오 장소 검색에서 정확한 주소와 위치를 가져옵니다.',
+              '도로명주소 검색에서 정확한 주소와 위치를 가져옵니다.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.md),

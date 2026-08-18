@@ -13,6 +13,7 @@ import { requireUser, requireVerifiedAge } from '../_shared/auth.ts';
 import { createNotification } from '../_shared/notifications.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { ugcAccessError } from '../_shared/ugc.ts';
+import { notifyAdminsOfPendingClub } from '../clubs-create/notifications.ts';
 import { canListClubMembers } from './member_visibility.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -614,6 +615,9 @@ Deno.serve(withCors(async (req) => {
     let introImageUrls: string[];
     try {
       description = optionalText(body.description, 2000);
+      if (description !== null && description.length < 30) {
+        throw new Error('description must be at least 30 characters');
+      }
       introImageUrls = optionalUrlArray(body.intro_image_urls);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid intro payload';
@@ -643,7 +647,7 @@ Deno.serve(withCors(async (req) => {
 
     const { data: club, error: clubError } = await supa
       .from('clubs')
-      .select('status,status_reason')
+      .select('status,status_reason,name,description')
       .eq('id', clubId)
       .maybeSingle();
     if (clubError) return errorResponse(clubError.message, 500);
@@ -653,6 +657,9 @@ Deno.serve(withCors(async (req) => {
     }
     if (club.status_reason === 'deleted_by_owner') {
       return errorResponse('Deleted clubs cannot be resubmitted', 409);
+    }
+    if (typeof club.description !== 'string' || club.description.trim().length < 30) {
+      return errorResponse('Club description must be at least 30 characters', 400);
     }
 
     const { data: updatedClub, error: updateError } = await supa
@@ -669,6 +676,18 @@ Deno.serve(withCors(async (req) => {
       .maybeSingle();
     if (updateError) return errorResponse(updateError.message, 500);
     if (!updatedClub) return errorResponse('Club review status changed', 409);
+
+    try {
+      await notifyAdminsOfPendingClub(supa, {
+        clubId,
+        clubName: typeof club.name === 'string' ? club.name : '클럽',
+      }, 'resubmission');
+    } catch (error) {
+      console.error(
+        'Failed to create club resubmission notifications:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+    }
 
     return jsonResponse({ ok: true, action: 'review_resubmitted' });
   }

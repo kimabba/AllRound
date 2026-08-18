@@ -42,6 +42,7 @@ class AppNotification {
         'club_join_approved' => '가입 승인',
         'club_join_rejected' => '가입 거절',
         'club_approval_request' => '클럽 승인 요청',
+        'club_creation_rejected' => '클럽 생성 거절',
         'club_inquiry_received' => '새 클럽 문의',
         'club_inquiry_reply' => '문의 답변',
         'club_chat_message' => '새 채팅',

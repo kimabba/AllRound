@@ -140,6 +140,7 @@ mixin ClubApi on ApiBase {
     List<String> introImageUrls = const [],
     List<String>? meetingDays,
     int? monthlyFee,
+    String feeType = 'monthly',
     String? genderPreference,
     String cardColor = '#3156D8',
     double? latitude,
@@ -162,6 +163,7 @@ mixin ClubApi on ApiBase {
         if (meetingDays != null && meetingDays.isNotEmpty)
           'meeting_days': meetingDays,
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
+        'fee_type': feeType,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
         'card_color': cardColor,

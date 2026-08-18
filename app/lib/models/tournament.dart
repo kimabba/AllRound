@@ -345,6 +345,7 @@ class Club {
   final String? createdBy;
   final List<String> meetingDays;
   final int? monthlyFee;
+  final String feeType;
   final String? genderPreference;
   final String cardColor;
   final bool inquiryLinksEnabled;
@@ -373,6 +374,7 @@ class Club {
     this.createdBy,
     this.meetingDays = const [],
     this.monthlyFee,
+    this.feeType = 'monthly',
     this.genderPreference,
     this.cardColor = '#3156D8',
     this.inquiryLinksEnabled = true,
@@ -421,6 +423,7 @@ class Club {
       createdBy: j['created_by'] as String?,
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
+      feeType: (j['fee_type'] as String?) ?? 'monthly',
       genderPreference: j['gender_preference'] as String?,
       cardColor: (j['card_color'] as String?) ?? '#3156D8',
       inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,

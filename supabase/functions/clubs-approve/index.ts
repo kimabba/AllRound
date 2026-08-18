@@ -4,6 +4,7 @@
 import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireAdmin } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { notifyClubCreatorOfRejection } from '../clubs-create/notifications.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -67,7 +68,7 @@ Deno.serve(withCors(async (req) => {
     })
     .in('id', clubIds)
     .eq('status', 'pending')
-    .select('id');
+    .select('id, name, created_by, status_reason');
 
   if (error) return errorResponse(error.message, 500);
   if (!data || data.length === 0) {
@@ -79,6 +80,28 @@ Deno.serve(withCors(async (req) => {
       error: '이미 다른 관리자가 처리한 요청입니다.',
       clubs: current ?? [],
     }, { status: 409 });
+  }
+  if (action === 'reject') {
+    const notificationResults = await Promise.allSettled(
+      data.map((club) => {
+        const ownerId = typeof club.created_by === 'string' ? club.created_by : '';
+        const clubName = typeof club.name === 'string' ? club.name : '클럽';
+        const rejectionReason = typeof club.status_reason === 'string'
+          ? club.status_reason
+          : reason;
+        if (ownerId.length === 0) return Promise.resolve();
+        return notifyClubCreatorOfRejection(supa, {
+          clubId: club.id,
+          clubName,
+          ownerId,
+          reason: rejectionReason,
+        });
+      }),
+    );
+    const failedCount = notificationResults.filter((result) => result.status === 'rejected').length;
+    if (failedCount > 0) {
+      console.error(`Failed to create ${failedCount} club rejection notifications`);
+    }
   }
   return jsonResponse({
     ok: true,
