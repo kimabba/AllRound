@@ -56,7 +56,8 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
 
   Future<List<Map<String, dynamic>>> _loadMonthly() {
     if (AppConfig.adminDesignPreview) return Future.value(const []);
-    return ref.read(apiProvider).geminiUsageDailyStats(DateTime.now());
+    // month 를 안 주면 서버가 KST 기준 "이번 달"로 판정한다.
+    return ref.read(apiProvider).geminiUsageDailyStats();
   }
 
   Future<void> _refresh() async {

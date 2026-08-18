@@ -21,6 +21,12 @@ declare
     'month',
     coalesce(p_month, (now() at time zone 'Asia/Seoul')::date)
   )::date;
+  -- KST 월 경계를 timestamptz 로 미리 계산 — g.created_at(timestamptz) 을 직접
+  -- 비교해야 gemini_usage_created_at_idx 를 range scan 으로 탈 수 있다. 매 행마다
+  -- (created_at at time zone ...)::date 로 캐스팅해 비교하면(옛 버전) 인덱스를
+  -- 못 타 seq scan 이 된다.
+  v_from timestamptz := v_month::timestamp at time zone 'Asia/Seoul';
+  v_to timestamptz := (v_month + interval '1 month')::timestamp at time zone 'Asia/Seoul';
 begin
   if not public.is_admin() then
     raise exception 'forbidden: admin only';
@@ -33,8 +39,8 @@ begin
       coalesce(sum(g.output_tokens), 0)::bigint as output_tokens,
       coalesce(sum(g.total_tokens), 0)::bigint as total_tokens
     from public.gemini_usage g
-    where (g.created_at at time zone 'Asia/Seoul')::date >= v_month
-      and (g.created_at at time zone 'Asia/Seoul')::date < v_month + interval '1 month'
+    where g.created_at >= v_from
+      and g.created_at < v_to
     group by usage_date
     order by usage_date;
 end;

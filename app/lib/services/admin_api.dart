@@ -475,10 +475,14 @@ mixin AdminApi on ApiBase {
 
   /// [month] 이 속한 달의 일별 Gemini 사용량 집계(요청수 + 토큰 합, 날짜별).
   /// 서버 RPC(gemini_usage_daily_stats)가 admin 게이트 후 KST 기준 날짜로 group-by.
-  Future<List<Map<String, dynamic>>> geminiUsageDailyStats(DateTime month) async {
-    final p =
-        '${month.year.toString().padLeft(4, '0')}-'
-        '${month.month.toString().padLeft(2, '0')}-01';
+  /// [month] 를 안 주면 서버가 KST 기준 이번 달로 판정한다 — 기기 로컬 시간대가
+  /// KST 와 다르면(예: UTC) 클라이언트가 계산한 "이번 달"이 월 경계 근처에서
+  /// 서버 판정과 어긋날 수 있어, 굳이 계산해 보내지 않는다.
+  Future<List<Map<String, dynamic>>> geminiUsageDailyStats([DateTime? month]) async {
+    final p = month == null
+        ? null
+        : '${month.year.toString().padLeft(4, '0')}-'
+              '${month.month.toString().padLeft(2, '0')}-01';
     final res = await supabase.rpc(
       'gemini_usage_daily_stats',
       params: {'p_month': p},
