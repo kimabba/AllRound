@@ -8,6 +8,7 @@ import {
   isValidGrade,
   isValidRegionCode,
   RegionCode,
+  resolveRegionCode,
   Sport,
   TennisOrg,
 } from '../_shared/enums.ts';
@@ -180,7 +181,13 @@ function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
       format: format.value,
       source_url: sourceUrl.value,
       poster_url: posterUrl.value,
-      region_code: regionCode.value as RegionCode | undefined,
+      // 앱은 지역을 자유 입력으로만 보내고 region_code 는 보내지 않는다. 코드가 없으면
+      // 지역 필터(region_code 정확매칭)에서 영원히 빠지므로 라벨에서 유도해 채운다.
+      // 크롤러는 2026-06 에 같은 처리를 했지만 제보 경로가 빠져 있었다(#32).
+      region_code: resolveRegionCode(
+        regionCode.value as RegionCode | undefined,
+        region.value,
+      ),
       host_associations: hostAssociations.value,
       host_orgs: hostOrgs.value as TennisOrg[] | undefined,
       division_label_local: divisionLabelLocal.value,
