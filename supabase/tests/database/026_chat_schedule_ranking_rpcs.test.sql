@@ -1,7 +1,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(18);
+select plan(19);
 
 select has_function('public', 'my_schedule_conflicts', 'my_schedule_conflicts 함수 존재');
 select has_function('public', 'my_confirmed_ranking', 'my_confirmed_ranking 함수 존재');
@@ -107,7 +107,10 @@ insert into public.club_events (club_id, created_by, title, starts_at) values
    '진행 중 모임', (current_date + 1)::timestamptz + interval '10 hour'),
   -- 장기 대회 L 기간 안(다른 대회 기간 밖)의 모임 — 정렬 검증용.
   ('b0000000-0000-0000-0000-000000000001', '55555555-5555-5555-5555-555555555555',
-   '가을 모임', (current_date + 45)::timestamptz + interval '10 hour')
+   '가을 모임', (current_date + 45)::timestamptz + interval '10 hour'),
+  -- 진행 중 대회 D(d-3~d+2) 기간 안이지만 이미 지난(d-1) 모임 — 과거 모임 제외 검증용.
+  ('b0000000-0000-0000-0000-000000000001', '55555555-5555-5555-5555-555555555555',
+   '지난 모임', (current_date - 1)::timestamptz + interval '10 hour')
 on conflict do nothing;
 
 -- 랭킹: confirmed 링크가 있는 협회만 조회되어야 함
@@ -182,6 +185,13 @@ select is(
     where kind = 'tournament_vs_club_event'
       and a_id = 'a0000000-0000-0000-0000-000000000004'),
   1, '진행 중 대회 D 기간의 클럽 모임도 겹침으로 잡힌다');
+
+-- 진행 중 대회 D 기간 안이라도 이미 지난 모임은 살아있는 겹침이 아니다 —
+-- 과거 모임 하한이 없으면 '지난 모임'(d-1)이 D 와의 겹침으로 잡힌다.
+select is(
+  (select count(*)::int from public.my_schedule_conflicts()
+    where b_title = '지난 모임'),
+  0, '진행 중 대회 기간 안이라도 이미 지난 클럽 모임은 겹침 결과에서 제외된다');
 
 -- ── my_confirmed_ranking: confirmed 링크된 랭킹만 ──────────────────
 select is(

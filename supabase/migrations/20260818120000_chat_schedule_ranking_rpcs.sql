@@ -79,6 +79,8 @@ as $$
         between t.start_date and coalesce(t.end_date, t.start_date)
       -- 이미 시작했지만 안 끝난 대회도 포함(start_date >= 오늘 이면 빠진다).
       and coalesce(t.end_date, t.start_date) >= (now() at time zone 'Asia/Seoul')::date
+      -- 이미 지나간 모임은 경고 대상이 아니다 — 진행 중 대회 기간 안이라도 과거 모임 제외.
+      and (e.starts_at at time zone 'Asia/Seoul')::date >= (now() at time zone 'Asia/Seoul')::date
   ) conflicts
   -- 지평선 판정도 conflict_date 로 — least()/한쪽 start_date 기준이면 겹침 자체는
   -- 90일 밖인데 이른 쪽 대회가 90일 안이라는 이유로 통과해 LIMIT 10 을 잠식한다.

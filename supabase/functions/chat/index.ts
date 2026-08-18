@@ -382,7 +382,7 @@ Deno.serve(withCors(async (req) => {
         // 룰 분류(confidence=1.0)는 어떤 의도든 덮지 않는다 — "오늘 매치 일정" 같은
         // 확실한 match_schedule 이 직전 대회 검색에 끌려가면 안 된다.
         if (
-          intentResult.method !== 'rule' &&
+          !(intentResult.method === 'rule' || ROUTABLE_INTENTS.has(intentResult.intent)) &&
           (slots.date_range || slots.region)
         ) {
           const priorMsgs = (prior ?? []) as { role: string; content: string }[];
@@ -472,10 +472,13 @@ Deno.serve(withCors(async (req) => {
               // 서로 다른 안내를 준다. RPC 두 분기 모두 즐겨찾기 대회가 조인 뿌리라서
               // 즐겨찾기 0건이면 클럽 가입 여부와 무관하게 겹침이 나올 수 없다 —
               // 판정은 즐겨찾기 수만 본다.
+              // RPC가 published/closed 대회만 비교하므로 개수도 같은 기준으로 센다 —
+              // draft/rejected 즐겨찾기만 있으면 "비교할 게 없음" 안내가 맞다.
               const favoriteResult = await supabase
                 .from('tournament_favorites')
-                .select('tournament_id', { count: 'exact', head: true })
-                .eq('user_id', user.id);
+                .select('tournament_id, tournaments!inner(status)', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .in('tournaments.status', ['published', 'closed']);
               // count는 실패해도 null로 와서 "0건"과 구분되지 않는다. error를 봐야 한다.
               if (favoriteResult.error) {
                 console.error(
