@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:allround/router.dart' show kMobileAdminPaths;
 import 'package:allround/services/notification_events.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -175,5 +176,20 @@ void main() {
       ),
       '/rankings/me',
     );
+  });
+
+  // 라우터가 /admin/* 를 모바일에서 홈으로 돌려보낸다(웹 전용). 알림이 가리키는
+  // 관리자 화면이 예외 목록에 없으면, 관리자가 휴대폰에서 알림을 눌러도 홈만
+  // 뜨고 아무 일도 안 일어난다 — 조용히 깨지는 종류라 목록으로 못 박는다
+  // (codex 리뷰 2026-08-18).
+  test('알림이 가리키는 관리자 경로는 모바일에서도 열려야 한다', () {
+    const adminReferenceTypes = ['club_approval_request', 'ranking_claim_request'];
+    for (final referenceType in adminReferenceTypes) {
+      final route = routeForNotificationEvent(
+        NotificationEvent(title: '', body: '', referenceType: referenceType),
+      );
+      expect(route, startsWith('/admin'), reason: referenceType);
+      expect(kMobileAdminPaths, contains(route), reason: '$referenceType → $route');
+    }
   });
 }
