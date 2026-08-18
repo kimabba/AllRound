@@ -25,6 +25,7 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractVenue,
+  markListingSeen,
   saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
@@ -539,6 +540,10 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
       error: (e as Error).message,
     };
   }
+
+  // 목록이탈 만료 판정 기준 — "목록에 있음"을 상세 파싱 성공이 아니라 여기서
+  // 확정한다(CAP·상세 실패로 상세를 안 가는 항목도 목록엔 있다).
+  await markListingSeen(ctx.audit, items.map((it) => it.url));
 
   if (items.length === 0) {
     const hash = await listingContentHash(items);
