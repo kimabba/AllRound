@@ -492,7 +492,10 @@ class SimpleClubAvatar extends StatelessWidget {
     super.key,
     required this.club,
     required this.size,
+    this.circular = false,
   });
+
+  final bool circular;
 
   @override
   Widget build(BuildContext context) {
@@ -504,13 +507,15 @@ class SimpleClubAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: spec.background,
-        borderRadius: BorderRadius.circular(size * 0.22),
+        shape: circular ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circular ? null : BorderRadius.circular(size * 0.22),
       ),
       child: _ClubAvatarImage(
         logoUrl: club.logoUrl,
         fallbackIcon: spec.icon,
         fallbackColor: spec.foreground,
         iconSize: size * 0.48,
+        fit: circular ? BoxFit.cover : BoxFit.contain,
       ),
     );
   }
@@ -536,12 +541,14 @@ class _ClubAvatarImage extends StatelessWidget {
   final IconData fallbackIcon;
   final Color fallbackColor;
   final double iconSize;
+  final BoxFit fit;
 
   const _ClubAvatarImage({
     required this.logoUrl,
     required this.fallbackIcon,
     required this.fallbackColor,
     required this.iconSize,
+    required this.fit,
   });
 
   @override
@@ -557,8 +564,7 @@ class _ClubAvatarImage extends StatelessWidget {
 
     return Image.network(
       url,
-      // 로고 전체가 정사각형 프레임 안에 보여야 하므로 가장자리를 자르지 않는다.
-      fit: BoxFit.contain,
+      fit: fit,
       errorBuilder: (_, __, ___) => fallback,
     );
   }

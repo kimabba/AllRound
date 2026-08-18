@@ -121,8 +121,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         : tournaments;
     final regionCounts = _regionCounts(source.value ?? const [], selectedSport);
     // 종목을 바꾸면 이전 종목에만 있던 지역이 남을 수 있어 전국으로 되돌린다.
-    final selectedRegion =
-        regionCounts.containsKey(_selectedRegion) ? _selectedRegion : _allRegions;
+    final selectedRegion = regionCounts.containsKey(_selectedRegion)
+        ? _selectedRegion
+        : _allRegions;
 
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
@@ -135,8 +136,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ref.read(sportOverrideProvider.notifier).select(value),
         ),
         titleSpacing: AppSpacing.xl,
-        bottom: const TournamentSectionBar(
+        bottom: TournamentSectionBar(
           selected: TournamentSection.overview,
+          showRankings: selectedSport == 'tennis',
         ),
         actions: [
           const NotificationInboxAction(),

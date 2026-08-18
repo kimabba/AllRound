@@ -206,6 +206,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
+    final activeSport = ref.watch(activeSportProvider);
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
     // 등급·협회 등록이 없으면 홈 목록 = 전체 대회이므로 "내 등급" 배지가 거짓이 된다.
@@ -222,8 +223,9 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
         title: const Text('대회'),
-        bottom: const TournamentSectionBar(
+        bottom: TournamentSectionBar(
           selected: TournamentSection.overview,
+          showRankings: activeSport == 'tennis',
         ),
         actions: [
           const NotificationInboxAction(),
@@ -255,7 +257,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           // 재검색(기존 결과 유지) 중에만 상단 바. 최초 로드는 아래 스켈레톤이 담당.
           if (_loading && _results != null)
             LinearProgressIndicator(color: cs.primary),
-          if (_usingPreviewData) const _PreviewDataBanner(),
+          if (_usingPreviewData && !AppConfig.appStoreScreenshot)
+            const _PreviewDataBanner(),
           Expanded(
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)

@@ -45,6 +45,13 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// App Store 스크린샷 자동 캡처에서 개발용 안내 문구만 숨긴다.
+  /// 사용자 프리뷰와 함께 쓰는 로컬 전용 플래그이며 릴리스 빌드에서는 금지한다.
+  static const appStoreScreenshot = bool.fromEnvironment(
+    'APP_STORE_SCREENSHOT',
+    defaultValue: false,
+  );
+
   /// 로컬 관리자 모드 (`make admin` → `--dart-define=ADMIN_MODE=true`).
   /// 로그인 화면을 관리자용으로 보여준다(컨슈머 카카오·마케팅·온보딩 카피 숨김,
   /// 이메일·구글 로그인만). 실제 관리자 권한은 서버 RLS/Edge(`users.role='admin'`)가
@@ -79,7 +86,10 @@ class AppConfig {
   /// 개발용 프리뷰/관리자 우회 플래그 중 하나라도 켜져 있는지.
   /// 릴리스 빌드 차단(assertConfigured) 및 회귀 테스트에서 사용.
   static bool get hasDevOverrideFlags =>
-      adminDesignPreview || userDesignPreview || adminMode;
+      adminDesignPreview ||
+      userDesignPreview ||
+      appStoreScreenshot ||
+      adminMode;
 
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
@@ -94,7 +104,8 @@ class AppConfig {
     if (kReleaseMode && hasDevOverrideFlags) {
       throw StateError(
         'release build 에 개발용 플래그가 켜져 있습니다 '
-        '(ADMIN_DESIGN_PREVIEW / USER_DESIGN_PREVIEW / ADMIN_MODE). '
+        '(ADMIN_DESIGN_PREVIEW / USER_DESIGN_PREVIEW / '
+        'APP_STORE_SCREENSHOT / ADMIN_MODE). '
         '프로덕션 빌드에서는 제거하세요.',
       );
     }

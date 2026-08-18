@@ -253,7 +253,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             .where((club) => _clubInterests.contains(club.sport))
             .take(4)
             .toList();
-        _nearbyNotice = '디자인 미리보기용 주변 클럽입니다.';
+        _nearbyNotice =
+            AppConfig.appStoreScreenshot ? null : '디자인 미리보기용 주변 클럽입니다.';
         _loadingNearby = false;
       });
       return;
@@ -1170,8 +1171,11 @@ class _MyClubsCarouselState extends State<_MyClubsCarousel> {
                                           Colors.white.withValues(alpha: .94),
                                       shape: BoxShape.circle,
                                     ),
-                                    child:
-                                        SimpleClubAvatar(club: club, size: 48),
+                                    child: SimpleClubAvatar(
+                                      club: club,
+                                      size: 48,
+                                      circular: true,
+                                    ),
                                   ),
                                   const SizedBox(width: AppSpacing.lg),
                                   Expanded(

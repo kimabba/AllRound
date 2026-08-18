@@ -245,7 +245,10 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
   Widget _withTournamentSectionBar(Widget child) {
     return Column(
       children: [
-        const TournamentSectionBar(selected: TournamentSection.rules),
+        TournamentSectionBar(
+          selected: TournamentSection.rules,
+          showRankings: ref.watch(activeSportProvider) == 'tennis',
+        ),
         Expanded(child: child),
       ],
     );
@@ -284,7 +287,7 @@ class _RuleBookBody extends StatelessWidget {
         ),
         children: [
           _RuleSearchCard(controller: searchController, sport: sport),
-          if (usingPreviewData) ...[
+          if (usingPreviewData && !AppConfig.appStoreScreenshot) ...[
             const SizedBox(height: AppSpacing.sm),
             const _PreviewRulesBanner(),
           ],
@@ -312,7 +315,7 @@ class _RuleBookBody extends StatelessWidget {
       ),
       children: [
         _RuleSearchCard(controller: searchController, sport: sport),
-        if (usingPreviewData) ...[
+        if (usingPreviewData && !AppConfig.appStoreScreenshot) ...[
           const SizedBox(height: AppSpacing.sm),
           const _PreviewRulesBanner(),
         ],

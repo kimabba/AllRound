@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_schedule.dart';
@@ -253,7 +254,7 @@ class _DetailBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isPreview) ...[
+              if (isPreview && !AppConfig.appStoreScreenshot) ...[
                 _DetailPreviewBanner(adminPreview: adminPreview),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -569,16 +570,27 @@ class _TournamentPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: AppRadius.card,
-      child: SizedBox(
-        width: double.infinity,
-        height: 240,
-        child: TournamentCoverImage(
-          tournament: tournament,
-          fit: BoxFit.cover,
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final posterHeight = (constraints.maxWidth * 0.75).clamp(
+          360.0,
+          640.0,
+        );
+        return ClipRRect(
+          borderRadius: AppRadius.card,
+          child: SizedBox(
+            width: double.infinity,
+            height: posterHeight,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerLowest,
+              child: TournamentCoverImage(
+                tournament: tournament,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

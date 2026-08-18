@@ -221,6 +221,29 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     unawaited(_refreshClub());
   }
 
+  Future<void> _openMemberGroupChat() async {
+    try {
+      final members =
+          await (_membersF ?? ref.read(apiProvider).clubMembers(club.id));
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClubMemberChatScreen(
+            clubId: club.id,
+            title: '${club.name} 단체 채팅',
+            members: members,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('대화방을 불러오지 못했습니다. 다시 시도해주세요.')),
+      );
+    }
+  }
+
   Future<void> _toggleFavorite(bool isFavorite) async {
     if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
@@ -480,6 +503,12 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
         leading: const AppBackButton(fallbackLocation: '/clubs'),
         title: Text(widget.adminPreview ? '사용자 화면 미리보기' : club.name),
         actions: [
+          if (isMember && !widget.adminPreview)
+            IconButton(
+              tooltip: '멤버 단체 채팅',
+              onPressed: _openMemberGroupChat,
+              icon: const Icon(Icons.forum_outlined),
+            ),
           if (!widget.adminPreview)
             IconButton(
               key: isFavorite
@@ -3958,7 +3987,7 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   List<ClubPost>? _posts;
   final _authorSearch = TextEditingController();
   bool _loading = true;
-  String? _activeTag;
+  String _activeTag = 'free';
   bool get _canPinPosts => widget.club.isOwner || widget.club.isManager;
   bool get _canPostNotice => widget.club.canPostNotice;
 
@@ -4007,14 +4036,6 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
               vertical: AppSpacing.sm,
             ),
             children: [
-              _TagChip(
-                label: '전체',
-                selected: _activeTag == null,
-                onTap: () {
-                  _activeTag = null;
-                  _load();
-                },
-              ),
               _TagChip(
                 label: '공지',
                 selected: _activeTag == 'notice',
@@ -4869,6 +4890,15 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
                 children: [
+                  if (widget.canPostNotice)
+                    _PostTagChoice(
+                      label: '공지',
+                      selected: _tag == 'notice',
+                      onTap: () => setState(() {
+                        _tag = 'notice';
+                        _images.clear();
+                      }),
+                    ),
                   _PostTagChoice(
                     label: '자유',
                     selected: _tag == 'free',
@@ -4904,15 +4934,6 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                       _images.clear();
                     }),
                   ),
-                  if (widget.canPostNotice)
-                    _PostTagChoice(
-                      label: '중요 공지',
-                      selected: _tag == 'notice',
-                      onTap: () => setState(() {
-                        _tag = 'notice';
-                        _images.clear();
-                      }),
-                    ),
                 ],
               ),
               if (widget.canPinPosts) ...[
