@@ -50,6 +50,7 @@ class _GeminiUsageTabState extends ConsumerState<GeminiUsageTab> {
   Future<List<Map<String, dynamic>>> _load() {
     if (AppConfig.adminDesignPreview) return Future.value(const []);
     final now = DateTime.now();
+    // device-local-ok: 관리자가 보는 자기 기준 '오늘'이라 로컬이 의도다.
     final since = DateTime(now.year, now.month, now.day); // 오늘 로컬 자정
     return ref.read(apiProvider).geminiUsageStats(since);
   }

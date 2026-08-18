@@ -16,6 +16,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
 import '../widgets/tournament_section_bar.dart';
+import '../utils/kst.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -47,8 +48,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final sorted = [...source]
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final upcoming = sorted
         .where(
           (item) =>
@@ -77,8 +77,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<Tournament> source,
     String selectedSport,
   ) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final counts = <String, int>{};
     var nationwide = 0;
     var total = 0;
@@ -445,8 +444,7 @@ class _TournamentHomeContent extends StatelessWidget {
     final deadlineSoon = tournaments.where((item) {
       final deadline = item.applicationDeadline;
       if (deadline == null) return false;
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final today = kstTodayDate(DateTime.now());
       final days = deadline.difference(today).inDays;
       return days >= 0 && days <= 7;
     }).toList();
@@ -1099,8 +1097,7 @@ class _HomePersonalSchedule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final upcoming = tournaments
         .where((item) => !item.startDate.isBefore(today))
         .toList(growable: false)
@@ -1387,8 +1384,7 @@ class _HomeTournamentRow extends StatelessWidget {
     if (deadline == null) {
       return tournament.isRegistrationClosed ? '접수 마감' : '접수 중';
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final days = deadline.difference(today).inDays;
     if (days < 0 || tournament.isRegistrationClosed) return '접수 마감';
     if (days == 0) return '오늘 마감';
@@ -1518,6 +1514,7 @@ class _HomeTournamentSkeleton extends StatelessWidget {
 
 List<Tournament> _previewTournaments() {
   final now = DateTime.now();
+  // device-local-ok: 화면 프리뷰용 더미 대회를 만든다 — 마감 판정이 아니다.
   final today = DateTime(now.year, now.month, now.day);
   return [
     Tournament(
