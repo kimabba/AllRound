@@ -1,20 +1,20 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(19);
+select plan(21);
 
 select has_function('public', 'my_schedule_conflicts', 'my_schedule_conflicts 함수 존재');
 select has_function('public', 'my_confirmed_ranking', 'my_confirmed_ranking 함수 존재');
 
 -- ── 실행 권한 가드 ──────────────────────────────────────────────
 select is(
-  has_function_privilege('anon', 'public.my_schedule_conflicts(int)', 'EXECUTE'),
+  has_function_privilege('anon', 'public.my_schedule_conflicts(date, date)', 'EXECUTE'),
   false, 'anon 은 일정겹침 RPC 를 실행할 수 없다');
 select is(
-  has_function_privilege('authenticated', 'public.my_schedule_conflicts(int)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'public.my_schedule_conflicts(date, date)', 'EXECUTE'),
   true, 'authenticated 는 일정겹침 RPC 를 실행할 수 있다');
 select is(
-  has_function_privilege('service_role', 'public.my_schedule_conflicts(int)', 'EXECUTE'),
+  has_function_privilege('service_role', 'public.my_schedule_conflicts(date, date)', 'EXECUTE'),
   true, 'service_role 는 일정겹침 RPC 를 실행할 수 있다');
 select is(
   has_function_privilege('anon', 'public.my_confirmed_ranking()', 'EXECUTE'),
@@ -192,6 +192,25 @@ select is(
   (select count(*)::int from public.my_schedule_conflicts()
     where b_title = '지난 모임'),
   0, '진행 중 대회 기간 안이라도 이미 지난 클럽 모임은 겹침 결과에서 제외된다');
+
+-- p_date_to 를 명시하면 기본 90일 상한을 넘길 수 있다 — G-H(conflict_date d+95)는
+-- 무인자 호출에선 90일 밖이라 제외됐지만, p_date_to=today+100 이면 포함돼야 한다.
+select is(
+  (select count(*)::int from public.my_schedule_conflicts(null, current_date + 100)),
+  7, 'p_date_to 를 늘리면 90일 밖이던 G-H 쌍도 포함된다');
+
+-- p_date_from/p_date_to 를 좁게 주면(장기 대회 L 구간만) 그 구간의 겹침만 나온다 —
+-- "다음주 일정만 봐줘" 같은 좁은 질의를 흉내낸 것.
+select results_eq(
+  $q$
+    select a_title || ' | ' || b_title
+    from public.my_schedule_conflicts(current_date + 35, current_date + 46)
+  $q$,
+  array[
+    '가을 대회 C | 장기 대회 L',
+    '장기 대회 L | 가을 모임'
+  ]::text[],
+  '기간을 좁혀 주면 그 구간(장기 대회 L 관련 2건)만 반환된다');
 
 -- ── my_confirmed_ranking: confirmed 링크된 랭킹만 ──────────────────
 select is(

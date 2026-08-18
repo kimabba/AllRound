@@ -54,6 +54,15 @@ export interface DateRange {
   to: string;
 }
 
+/**
+ * range.to 가 todayKst(YYYY-MM-DD) 보다 이전인지 — "5월"/"3월 10일" 처럼 연도를 안 넘기는
+ * 파싱 결과가 이미 지난 올해 날짜일 수 있다(의도된 동작, 과거 조회 지원). 미래만 의미 있는
+ * 소비처(예: match_schedule)는 이 값으로 걸러 그대로 넘기지 않아야 한다.
+ */
+export function isDateRangeFullyPast(range: DateRange, todayKst: string): boolean {
+  return range.to < todayKst;
+}
+
 export interface Slots {
   region?: RegionCode;
   sport?: Sport;
