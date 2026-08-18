@@ -290,6 +290,51 @@ export function renderClubDetailText(club: ClubDetailRow): string {
   return lines.join('\n');
 }
 
+// ==========================================================================
+// Schedule conflicts (match_schedule 라우팅 — my_schedule_conflicts RPC 결과 렌더)
+// ==========================================================================
+
+export interface ScheduleConflictRow {
+  kind: 'tournament_vs_tournament' | 'tournament_vs_club_event';
+  a_id: string;
+  a_title: string;
+  a_start: string;
+  a_end: string | null;
+  b_id: string;
+  b_title: string;
+  b_date: string;
+}
+
+export function isScheduleConflictRow(value: unknown): value is ScheduleConflictRow {
+  if (!isRecord(value)) return false;
+  return (value.kind === 'tournament_vs_tournament' || value.kind === 'tournament_vs_club_event') &&
+    typeof value.a_id === 'string' &&
+    typeof value.a_title === 'string' &&
+    typeof value.a_start === 'string' &&
+    (typeof value.a_end === 'string' || value.a_end === null) &&
+    typeof value.b_id === 'string' &&
+    typeof value.b_title === 'string' &&
+    typeof value.b_date === 'string';
+}
+
+/// my_schedule_conflicts RPC 결과를 결정론적 텍스트로 렌더(LLM 미사용, club_search/
+/// tournament_search 라우팅과 동일 패턴). rows=[] 는 "비교 대상은 있으나 겹침 없음"
+/// 의미다 — "비교할 대상 자체가 없음"은 호출자(chat/index.ts)가 별도로 안내한다.
+export function renderScheduleConflictText(rows: ScheduleConflictRow[], horizonDays = 90): string {
+  if (rows.length === 0) {
+    return [
+      '겹치는 일정이 없어요.',
+      '즐겨찾기한 대회와 클럽 모임 일정을 확인했지만 날짜가 겹치는 항목은 없습니다.',
+    ].join('\n');
+  }
+  const lines = rows.map((r) => {
+    const bLabel = r.kind === 'tournament_vs_tournament' ? '대회' : '클럽 모임';
+    const aRange = r.a_end && r.a_end !== r.a_start ? `${r.a_start} ~ ${r.a_end}` : r.a_start;
+    return `- "${r.a_title}"(${aRange})와 ${bLabel} "${r.b_title}"(${r.b_date})가 겹쳐요.`;
+  });
+  return [`## 앞으로 ${horizonDays}일 일정 겹침 ${rows.length}건`, '', ...lines].join('\n');
+}
+
 export type SelectedEntityType = 'tournament' | 'club';
 
 export interface SelectedEntity {

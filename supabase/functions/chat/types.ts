@@ -99,6 +99,30 @@ export interface IntentClassifyRow {
   similarity: number;
 }
 
+export interface MyRankingRow {
+  org_code: string;
+  division_code: string;
+  org_player_id: string;
+  rank: number;
+  rank_points: number;
+  total_points: number;
+  fetched_at: string;
+}
+
+/// RPC 응답은 런타임에 검증한다 — 캐스트만 하면 형태가 어긋난 행이 그대로
+/// 프롬프트로 들어가 "undefined" 가 답변에 섞인다(일정겹침 쪽 isScheduleConflictRow 와 같은 이유).
+export function isMyRankingRow(value: unknown): value is MyRankingRow {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.org_code === 'string' &&
+    typeof v.division_code === 'string' &&
+    typeof v.org_player_id === 'string' &&
+    typeof v.rank === 'number' &&
+    typeof v.rank_points === 'number' &&
+    typeof v.total_points === 'number' &&
+    typeof v.fetched_at === 'string';
+}
+
 // Semantic cache settings
 export const QA_CACHE_THRESHOLD = 0.92;
 export const QA_CACHE_TTL_HOURS = 24;

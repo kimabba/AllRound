@@ -99,6 +99,12 @@ const CASES: RuleCase[] = [
     intent: 'my_profile',
     slots: {},
   },
+  // my_profile — '내 랭킹' (회귀: Task 4 match_schedule 룰이 my_profile을 건드렸을 때 감지)
+  {
+    msg: '내 랭킹 몇 점이야',
+    intent: 'my_profile',
+    slots: {},
+  },
   // match_schedule — '매치' + '일정/오늘' 동반
   {
     msg: '오늘 매치 일정 알려줘',

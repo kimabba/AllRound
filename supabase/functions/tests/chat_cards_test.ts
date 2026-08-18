@@ -6,15 +6,18 @@ import {
   type ClubCardRow,
   type ClubDetailRow,
   isGradeRegisteredForSport,
+  isScheduleConflictRow,
   isTournamentCardRow,
   parseSelectedEntity,
   parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderScheduleConflictText,
   renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
+  type ScheduleConflictRow,
   type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
 
@@ -418,4 +421,66 @@ Deno.test('parseTournamentRefine: 정상 ISO 날짜 범위는 유지', () => {
     assertEquals(r.value.date_from, '2026-07-01');
     assertEquals(r.value.date_to, '2026-07-31');
   }
+});
+
+// ==========================================================================
+// Schedule conflicts (match_schedule 라우팅 — my_schedule_conflicts RPC 결과 렌더)
+// ==========================================================================
+
+Deno.test('renderScheduleConflictText - 겹침 없으면 안내 문구', () => {
+  const text = renderScheduleConflictText([]);
+  assert(text.includes('겹치는 일정이 없어요'));
+});
+
+Deno.test('renderScheduleConflictText - 대회끼리 겹침을 나열', () => {
+  const rows: ScheduleConflictRow[] = [
+    {
+      kind: 'tournament_vs_tournament',
+      a_id: 'a1',
+      a_title: '광주 오픈',
+      a_start: '2026-09-10',
+      a_end: '2026-09-11',
+      b_id: 'a2',
+      b_title: '전남 챔피언십',
+      b_date: '2026-09-11',
+    },
+  ];
+  const text = renderScheduleConflictText(rows);
+  assert(text.includes('광주 오픈'));
+  assert(text.includes('전남 챔피언십'));
+  assert(text.includes('대회'));
+});
+
+Deno.test('renderScheduleConflictText - 대회-클럽모임 겹침은 라벨을 클럽 모임으로 표기', () => {
+  const rows: ScheduleConflictRow[] = [
+    {
+      kind: 'tournament_vs_club_event',
+      a_id: 'a1',
+      a_title: '광주 오픈',
+      a_start: '2026-09-10',
+      a_end: '2026-09-11',
+      b_id: 'e1',
+      b_title: '정기 모임',
+      b_date: '2026-09-10',
+    },
+  ];
+  const text = renderScheduleConflictText(rows);
+  assert(text.includes('클럽 모임'));
+  assert(text.includes('정기 모임'));
+});
+
+Deno.test('isScheduleConflictRow - 필수 필드 누락이면 거부', () => {
+  assert(!isScheduleConflictRow({ kind: 'tournament_vs_tournament' }));
+  assert(
+    isScheduleConflictRow({
+      kind: 'tournament_vs_tournament',
+      a_id: 'a1',
+      a_title: 't',
+      a_start: '2026-09-10',
+      a_end: null,
+      b_id: 'a2',
+      b_title: 't2',
+      b_date: '2026-09-11',
+    }),
+  );
 });
