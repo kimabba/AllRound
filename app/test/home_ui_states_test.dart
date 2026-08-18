@@ -7,6 +7,7 @@ import 'package:allround/state/providers.dart';
 import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -339,6 +340,12 @@ void main() {
     final node = tester.getSemantics(find.bySemanticsLabel('대회 검색'));
     expect(node.flagsCollection.isButton, isTrue);
     expect(node.flagsCollection.isTextField, isFalse);
+    // 버튼으로 읽히는 것만으로는 부족하다 — 실제로 실행돼야 한다.
+    expect(
+      node.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+      reason: '탭 액션이 없으면 화면낭독기에서 눌러도 아무 일도 일어나지 않는다',
+    );
     expect(tester.takeException(), isNull);
     handle.dispose();
   });

@@ -275,6 +275,9 @@ class _TournamentHomeControls extends StatelessWidget {
       textField: false,
       label: '대회 검색',
       hint: '전체 대회 검색을 엽니다',
+      // 버튼이라고 알리는 것만으로는 부족하다. excludeSemantics 가 자식의 액션까지
+      // 버리므로 여기서 탭 액션을 직접 등록해야 화면낭독기로 실제 실행된다.
+      onTap: onSearch,
       excludeSemantics: true,
       child: TextField(
         readOnly: true,
