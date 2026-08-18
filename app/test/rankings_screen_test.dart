@@ -307,6 +307,120 @@ void main() {
     });
   });
 
+  group('이의신청 가능한 행 계산', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+    const me = 'me-uuid';
+
+    Set<String> dispute(
+      List<Map<String, dynamic>> links, {
+      bool here = true,
+      String myName = '김평화',
+    }) =>
+        computeDisputableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: myName,
+          registeredHere: here,
+        );
+
+    Set<String> claim(List<Map<String, dynamic>> links) => computeClaimableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: '김평화',
+          registeredHere: true,
+        );
+
+    test('남이 확정한 선수에만 붙는다 — 신청 버튼이 사라지는 자리다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), {'a'});
+      // 두 집합은 겹치지 않는다 — 한 줄에 버튼이 둘 뜨면 안 된다.
+      expect(claim(links), isEmpty);
+    });
+
+    test('빈 자리(주인 없음)에는 붙지 않는다 — 그건 일반 신청이다', () {
+      expect(dispute(const []), isEmpty);
+      expect(claim(const []), {'a'});
+    });
+
+    test('남이 신청 중(pending)일 뿐이면 붙지 않는다', () {
+      // 아직 주인이 없다 — 일반 신청으로 경합하면 된다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'pending', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+      expect(claim(links), {'a'});
+    });
+
+    test('내가 이미 그 선수에 신청·반려 이력이 있으면 빠진다', () {
+      // unique(org_code, org_player_id, user_id) 가 상태를 안 가려서 재신청이
+      // 반드시 실패한다 — 버튼이 뜨면 이유 모를 에러만 본다.
+      for (final mineStatus in ['pending', 'rejected']) {
+        final links = [
+          {
+            'org_player_id': 'a',
+            'status': 'confirmed',
+            'user_id': 'other-uuid',
+          },
+          {'org_player_id': 'a', 'status': mineStatus, 'user_id': me},
+        ];
+        expect(dispute(links), isEmpty, reason: mineStatus);
+      }
+    });
+
+    test('이 협회에 내 확정 연결이 있으면 아무 행도 다툴 수 없다', () {
+      // has_confirmed_org_link() 가 INSERT 를 거부한다.
+      final links = [
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+    });
+
+    test('이름이 다르면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, myName: '없는사람'), isEmpty);
+      // 정책이 글자 그대로 비교한다 — 앞뒤 여백도 불일치다.
+      expect(dispute(links, myName: ' 김평화 '), isEmpty);
+    });
+
+    test('등록한 부서가 아니면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, here: false), isEmpty);
+    });
+  });
+
+  testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {
+    OrgRankingRow? disputed;
+    await _pump(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+        ],
+        linkedOrgPlayerId: null,
+        disputableOrgPlayerIds: const {'a'},
+        onDispute: (row) => disputed = row,
+      ),
+    );
+
+    expect(find.text('이의신청'), findsOneWidget);
+    expect(find.text('본인'), findsNothing);
+    await tester.tap(find.text('이의신청'));
+    expect(disputed?.orgPlayerId, 'a');
+  });
+
   testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {
     OrgRankingRow? claimed;
     await _pump(

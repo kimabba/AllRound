@@ -23,6 +23,9 @@ List<ClaimGroup> groupClaimsByPlayer(List<RankingClaim> claims) {
       divisionCode: first.divisionCode,
       rank: first.rank,
       clubRaw: first.clubRaw,
+      // 선수 단위 정보라 묶음 안에서 전부 같다 — 대표값 하나만 올린다.
+      confirmedHolderName: first.confirmedHolderName,
+      confirmedHolderId: first.confirmedHolderId,
       claimants: group,
     );
   }).toList();
@@ -42,11 +45,15 @@ class ClaimGroupCard extends StatelessWidget {
     required this.group,
     required this.onApprove,
     required this.onReject,
+    required this.onRelease,
   });
 
   final ClaimGroup group;
   final void Function(RankingClaim claim) onApprove;
   final void Function(RankingClaim claim) onReject;
+
+  /// 기존 확정 연결 해제. 이의신청 묶음에서만 쓰인다.
+  final void Function(RankingClaim claim) onRelease;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +97,41 @@ class ClaimGroupCard extends StatelessWidget {
               '${group.clubRaw != null && group.clubRaw!.isNotEmpty ? ' · ${group.clubRaw}' : ''}',
               style: tagStyle,
             ),
+            // 이미 주인이 있는 선수 — 풀기 전에는 승인이 DB 에서 막힌다.
+            // 관리자가 먼저 알아야 "승인 실패"만 보고 끝나지 않는다.
+            if (group.isDisputed) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '이의신청 — 지금은 ${group.confirmedHolderName ?? '알 수 없음'}님과 연결돼 있습니다',
+                      style: tagStyle?.copyWith(color: Colors.deepOrange),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '기존 연결을 먼저 풀어야 아래 승인이 됩니다.',
+                      style: tagStyle?.copyWith(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 4),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                      ),
+                      onPressed: () => onRelease(group.claimants.first),
+                      child: const Text('기존 연결 해제'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const Divider(height: 20),
             for (final claimant in group.claimants) ...[
               Row(
@@ -107,6 +149,12 @@ class ClaimGroupCard extends StatelessWidget {
                           '신청: ${_fmtTs(claimant.claimedAt)}',
                           style: tagStyle?.copyWith(color: Colors.grey),
                         ),
+                        // 이의신청 사유. 이름이 같은 두 사람을 가릴 유일한 재료다.
+                        if (claimant.note != null &&
+                            claimant.note!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(claimant.note!, style: tagStyle),
+                        ],
                       ],
                     ),
                   ),
@@ -114,7 +162,10 @@ class ClaimGroupCard extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 36),
                     ),
-                    onPressed: () => onApprove(claimant),
+                    // 기존 확정이 살아 있으면 승인은 23505 로 실패한다 —
+                    // 눌리게 두면 관리자가 원인 모를 에러만 본다.
+                    onPressed:
+                        group.isDisputed ? null : () => onApprove(claimant),
                     child: const Text('승인'),
                   ),
                   const SizedBox(width: 8),
@@ -253,6 +304,42 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
     }
   }
 
+  /// 이의신청 처리 1단계 — 기존 확정 연결을 푼다. 되돌리기 어려운 조작이라
+  /// (풀린 사람은 개인 기록장 접근을 잃는다) 누구를 푸는지 보여주고 확인받는다.
+  Future<void> _release(RankingClaim claim) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('기존 연결 해제'),
+        content: Text(
+          '${claim.playerName} 선수와 ${claim.confirmedHolderName ?? '알 수 없음'}님의 '
+          '연결을 풉니다. 그분은 개인 기록장을 볼 수 없게 됩니다.\n\n'
+          '잘못 풀었다면 아래 "반려됨" 목록에서 되돌릴 수 있습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('해제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(apiProvider).releaseConfirmedLink(claim);
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('해제 실패: $e')));
+    }
+  }
+
   Future<void> _undo(RankingClaim claim) async {
     try {
       await ref.read(apiProvider).undoRejectedRankingClaim(claim);
@@ -300,7 +387,12 @@ class _RankingClaimsTabState extends ConsumerState<RankingClaimsTab> {
             padding: const EdgeInsets.all(12),
             children: [
               for (final g in data.groups) ...[
-                ClaimGroupCard(group: g, onApprove: _approve, onReject: _reject),
+                ClaimGroupCard(
+                  group: g,
+                  onApprove: _approve,
+                  onReject: _reject,
+                  onRelease: _release,
+                ),
                 const SizedBox(height: 8),
               ],
               if (data.rejected.isNotEmpty) ...[

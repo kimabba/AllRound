@@ -153,7 +153,7 @@ mixin AdminApi on ApiBase {
         // 임베드하면 PGRST201(관계 모호)로 죽는다. 이 레포의 기존 관례(club_api.dart
         // 의 users!author_id 등)를 따라 컬럼명으로 명시한다.
         .select(
-          'org_code, org_player_id, user_id, claimed_at, users!user_id(name)',
+          'org_code, org_player_id, user_id, claimed_at, note, users!user_id(name)',
         )
         .eq('status', status)
         .order('claimed_at');
@@ -164,6 +164,20 @@ mixin AdminApi on ApiBase {
         linkRows.map((r) => r['org_code'] as String).toSet().toList();
     final playerIds =
         linkRows.map((r) => r['org_player_id'] as String).toSet().toList();
+
+    // 이 선수를 이미 확정으로 가진 사람. 있으면 이 신청은 이의신청이고, 관리자가
+    // 기존 연결을 먼저 풀어야 승인할 수 있다(안 그러면 승인이 23505 로 죽는다).
+    final confirmedRows = await supabase
+        .from('org_player_links')
+        .select('org_code, org_player_id, user_id, users!user_id(name)')
+        .eq('status', 'confirmed')
+        .inFilter('org_code', orgCodes)
+        .inFilter('org_player_id', playerIds);
+    final holderByKey = <String, Map<String, dynamic>>{};
+    for (final r in List<Map<String, dynamic>>.from(confirmedRows as List)) {
+      holderByKey['${r['org_code']}/${r['org_player_id']}'] = r;
+    }
+
     final rankingRows = await supabase
         .from('org_rankings')
         .select(
@@ -187,6 +201,8 @@ mixin AdminApi on ApiBase {
       // 경합 판정의 대조 축은 실명이다(협회 데이터도 실명) — 닉네임이면 관리자가
       // "같은 김평화인지" 비교할 수 없다. users.name 은 NOT NULL, 폴백 불필요.
       final claimantName = userRow?['name'] as String;
+      final holder = holderByKey[key];
+      final holderUser = holder?['users'] as Map<String, dynamic>?;
       return RankingClaim(
         orgCode: link['org_code'] as String,
         orgPlayerId: link['org_player_id'] as String,
@@ -197,6 +213,9 @@ mixin AdminApi on ApiBase {
         claimantName: claimantName,
         claimantId: link['user_id'] as String,
         claimedAt: DateTime.parse(link['claimed_at'] as String),
+        note: link['note'] as String?,
+        confirmedHolderName: holderUser?['name'] as String?,
+        confirmedHolderId: holder?['user_id'] as String?,
       );
     }).toList();
   }
@@ -210,6 +229,31 @@ mixin AdminApi on ApiBase {
 
   Future<void> rejectRankingClaim(RankingClaim claim) async {
     await _decideRankingClaim(claim, status: 'rejected');
+  }
+
+  /// 이의신청 처리용 — 이 선수의 기존 확정 연결을 푼다(status='rejected').
+  ///
+  /// 삭제가 아니라 반려로 두는 이유: 누가 갖고 있었는지 기록이 남고, 잘못 푼
+  /// 경우 아래 '반려됨' 목록의 「취소(재검토)」로 되돌릴 수 있다.
+  /// 이걸 먼저 하지 않으면 이의신청 승인이
+  /// org_player_links_confirmed_player_key(23505)에 걸린다.
+  Future<void> releaseConfirmedLink(RankingClaim claim) async {
+    final holderId = claim.confirmedHolderId;
+    if (holderId == null) {
+      throw StateError('확정 연결이 없는 신청입니다');
+    }
+    final adminId = supabase.auth.currentUser?.id;
+    if (adminId == null) throw StateError('Not authenticated');
+    await supabase
+        .from('org_player_links')
+        .update({
+          'status': 'rejected',
+          'decided_at': DateTime.now().toUtc().toIso8601String(),
+          'decided_by': adminId,
+        })
+        .eq('org_code', claim.orgCode)
+        .eq('org_player_id', claim.orgPlayerId)
+        .eq('user_id', holderId);
   }
 
   Future<void> _decideRankingClaim(
