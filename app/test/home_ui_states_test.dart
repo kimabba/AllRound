@@ -22,6 +22,7 @@ void main() {
     required Future<List<Tournament>> Function() load,
     ThemeData? theme,
     double textScale = 1,
+    String? activeSport,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -30,6 +31,8 @@ void main() {
         overrides: [
           homeTournamentsProvider.overrideWith((ref) => load()),
           unreadNotificationCountProvider.overrideWith((ref) async => 0),
+          if (activeSport != null)
+            activeSportProvider.overrideWith((ref) => activeSport),
         ],
         child: MaterialApp(
           theme: theme ?? AppTheme.light(),
@@ -174,6 +177,66 @@ void main() {
 
     expect(find.byKey(AllRoundE2EKeys.homeTournamentList), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  group('홈 지역 필터', () {
+    Tournament tennisAt(String id, String? region, int days) => Tournament(
+          id: id,
+          sport: 'tennis',
+          title: '$id 대회',
+          organizer: 'QA',
+          startDate: DateTime.now().add(Duration(days: days)),
+          region: region,
+          eligibleGrades: const ['open'],
+          status: 'published',
+        );
+
+    // 지역 값이 실제 데이터에서 나오는지 확인한다. 하드코딩하던 시절에는
+    // 대회가 가장 많은 전남이 목록에서 빠지고 0건인 서울이 남아 있었다.
+    testWidgets('지역 메뉴는 대회가 있는 지역만 건수와 함께 보여준다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => [
+          tennisAt('jeonnam-1', '전남', 3),
+          tennisAt('jeonnam-2', '전남', 5),
+          tennisAt('gwangju-1', '광주', 7),
+          tennisAt('national-1', null, 9),
+        ],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.location_on_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('전남 2'), findsOneWidget);
+      expect(find.text('광주 1'), findsOneWidget);
+      expect(find.text('서울'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 광주를 고른 사용자에게 광주에서 열리는 전국대회가 사라지면 안 된다.
+    testWidgets('지역을 골라도 전국대회는 함께 남는다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => [
+          tennisAt('gwangju-1', '광주', 3),
+          tennisAt('national-1', null, 5),
+          tennisAt('jeonnam-1', '전남', 7),
+        ],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.location_on_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('광주 1'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('national-1'), findsWidgets);
+      expect(find.textContaining('jeonnam-1'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('permission-denied screen remains readable at 200% text',

@@ -18,6 +18,9 @@ import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
+/// 지역 필터의 "전체" 항목. 지역 이름과 같은 자리에서 쓰이므로 상수로 둔다.
+const String _allRegions = '전국';
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -28,7 +31,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
   String? _selectedSport;
-  String _selectedRegion = '전국';
+  String _selectedRegion = _allRegions;
   String _query = '';
 
   @override
@@ -48,6 +51,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<Tournament> _visibleTournaments(
     List<Tournament> source,
     String selectedSport,
+    String selectedRegion,
   ) {
     final sorted = [...source]
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
@@ -59,8 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               item.sport == selectedSport &&
               !item.startDate.isBefore(today) &&
               !item.isRegistrationClosed &&
-              (_selectedRegion == '전국' ||
-                  (item.region ?? '').contains(_selectedRegion)) &&
+              _matchesRegion(item, selectedRegion) &&
               (_query.isEmpty ||
                   item.title.toLowerCase().contains(_query.toLowerCase()) ||
                   (item.region ?? '').contains(_query) ||
@@ -68,6 +71,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         )
         .toList(growable: false);
     return upcoming;
+  }
+
+  /// 지역을 골라도 전국대회(지역 값이 비어 있는 대회)는 함께 보여준다.
+  /// 광주를 고른 사용자에게 광주에서 열리는 전국대회가 사라지면 안 된다.
+  bool _matchesRegion(Tournament item, String selectedRegion) {
+    if (selectedRegion == _allRegions) return true;
+    final region = (item.region ?? '').trim();
+    if (region.isEmpty) return true;
+    return region.contains(selectedRegion);
+  }
+
+  /// 지역 선택지는 실제로 불러온 대회에서 뽑는다.
+  /// 하드코딩하면 대회가 없는 지역이 남고(서울 0건) 대회가 가장 많은 지역이
+  /// 빠지는(전남 15건) 어긋남이 반복된다.
+  Map<String, int> _regionCounts(
+    List<Tournament> source,
+    String selectedSport,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final counts = <String, int>{};
+    for (final item in source) {
+      if (item.sport != selectedSport) continue;
+      if (item.startDate.isBefore(today)) continue;
+      if (item.isRegistrationClosed) continue;
+      // 전국대회는 모든 지역에 함께 나오므로 별도 항목으로 만들지 않는다.
+      for (final part in (item.region ?? '').split('·')) {
+        final name = part.trim();
+        if (name.isEmpty) continue;
+        counts[name] = (counts[name] ?? 0) + 1;
+      }
+    }
+    final names = counts.keys.toList()
+      ..sort((a, b) {
+        final byCount = counts[b]!.compareTo(counts[a]!);
+        return byCount != 0 ? byCount : a.compareTo(b);
+      });
+    return {for (final name in names) name: counts[name]!};
   }
 
   Future<void> _toggleFavorite(Tournament tournament, bool saved) async {
@@ -90,6 +131,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final source = AppConfig.userDesignPreview
         ? AsyncValue.data(_previewTournaments())
         : tournaments;
+    final regionCounts = _regionCounts(source.value ?? const [], selectedSport);
+    // 종목을 바꾸면 이전 종목에만 있던 지역이 남을 수 있어 전국으로 되돌린다.
+    final selectedRegion =
+        regionCounts.containsKey(_selectedRegion) ? _selectedRegion : _allRegions;
 
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
@@ -119,7 +164,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               sliver: SliverToBoxAdapter(
                 child: _TournamentHomeControls(
                   selectedSport: selectedSport,
-                  selectedRegion: _selectedRegion,
+                  selectedRegion: selectedRegion,
+                  regionCounts: regionCounts,
                   searchController: _searchController,
                   onSportSelected: (value) =>
                       setState(() => _selectedSport = value),
@@ -148,7 +194,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               data: (items) {
-                final visible = _visibleTournaments(items, selectedSport);
+                final visible =
+                    _visibleTournaments(items, selectedSport, selectedRegion);
                 return SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.xl,
@@ -166,7 +213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           const [],
                       favoriteIds: favoriteIds,
                       selectedSport: selectedSport,
-                      selectedRegion: _selectedRegion,
+                      selectedRegion: selectedRegion,
                       searching: _query.isNotEmpty,
                       onOpen: (item) => context.push('/tournaments/${item.id}'),
                       onFavorite: _toggleFavorite,
@@ -191,6 +238,7 @@ class _TournamentHomeControls extends StatelessWidget {
   const _TournamentHomeControls({
     required this.selectedSport,
     required this.selectedRegion,
+    required this.regionCounts,
     required this.searchController,
     required this.onSportSelected,
     required this.onRegionSelected,
@@ -199,6 +247,7 @@ class _TournamentHomeControls extends StatelessWidget {
 
   final String selectedSport;
   final String selectedRegion;
+  final Map<String, int> regionCounts;
   final TextEditingController searchController;
   final ValueChanged<String> onSportSelected;
   final ValueChanged<String> onRegionSelected;
@@ -231,13 +280,10 @@ class _TournamentHomeControls extends StatelessWidget {
               child: _HomeMenuButton(
                 icon: Icons.location_on_outlined,
                 label: selectedRegion,
-                values: const {
-                  '전국': '전국',
-                  '서울': '서울',
-                  '경기': '경기',
-                  '인천': '인천',
-                  '부산': '부산',
-                  '광주': '광주',
+                values: {
+                  _allRegions: _allRegions,
+                  for (final entry in regionCounts.entries)
+                    entry.key: '${entry.key} ${entry.value}',
                 },
                 selectedValue: selectedRegion,
                 onSelected: onRegionSelected,
