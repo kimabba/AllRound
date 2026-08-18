@@ -5,23 +5,8 @@ import '../models/crawl_source.dart';
 import '../models/format_review.dart';
 import '../models/org_ranking.dart';
 import '../models/tournament.dart';
+import '../utils/kst.dart';
 import 'api_base.dart';
-
-/// 검수 큐에 남길 최소 시작일 — KST 기준 오늘, 'YYYY-MM-DD'.
-///
-/// 오늘 시작하는 대회는 남긴다(당일 접수가 열려 있을 수 있다). `start_date` 는
-/// date 컬럼이라 시각 없이 날짜만 비교한다.
-///
-/// **기기 로컬이 아니라 KST 로 고정한다** — 서버의 자동 마감
-/// (`_shared/tournament_status.ts` `syncTournamentStatus`)이 KST 로 판정하므로,
-/// 기기 시간대를 쓰면 KST 보다 앞선 곳(예: 시드니)에서 한국 자정 전에 오늘자
-/// 대회가 큐에서 먼저 사라진다.
-String reviewQueueCutoff(DateTime now) {
-  final kst = now.toUtc().add(const Duration(hours: 9));
-  return '${kst.year.toString().padLeft(4, '0')}-'
-      '${kst.month.toString().padLeft(2, '0')}-'
-      '${kst.day.toString().padLeft(2, '0')}';
-}
 
 /// 어드민 전용: 심사 큐·크롤 소스·클럽 승인 API.
 mixin AdminApi on ApiBase {
@@ -39,7 +24,9 @@ mixin AdminApi on ApiBase {
   /// 긁을 원본이 없다. 날짜 오타 하나로 큐에서 사라지면 그 사람은 자기 제보가
   /// 왜 처리되지 않는지 알 방법이 없다 — 반려도 승인도 못 받는다.
   Future<List<Map<String, dynamic>>> tournamentReviewQueue() async {
-    final cutoff = reviewQueueCutoff(DateTime.now());
+    // 오늘 시작하는 대회는 남긴다(당일 접수가 열려 있을 수 있다). start_date 는
+    // date 컬럼이라 시각 없이 날짜만 비교한다.
+    final cutoff = kstToday(DateTime.now());
     final rows = await supabase
         .from('tournaments')
         .select(
@@ -506,6 +493,23 @@ mixin AdminApi on ApiBase {
     final res = await supabase.rpc(
       'gemini_usage_stats',
       params: {'p_since': since.toUtc().toIso8601String()},
+    );
+    return List<Map<String, dynamic>>.from(res as List);
+  }
+
+  /// [month] 이 속한 달의 일별 Gemini 사용량 집계(요청수 + 토큰 합, 날짜별).
+  /// 서버 RPC(gemini_usage_daily_stats)가 admin 게이트 후 KST 기준 날짜로 group-by.
+  /// [month] 를 안 주면 서버가 KST 기준 이번 달로 판정한다 — 기기 로컬 시간대가
+  /// KST 와 다르면(예: UTC) 클라이언트가 계산한 "이번 달"이 월 경계 근처에서
+  /// 서버 판정과 어긋날 수 있어, 굳이 계산해 보내지 않는다.
+  Future<List<Map<String, dynamic>>> geminiUsageDailyStats([DateTime? month]) async {
+    final p = month == null
+        ? null
+        : '${month.year.toString().padLeft(4, '0')}-'
+              '${month.month.toString().padLeft(2, '0')}-01';
+    final res = await supabase.rpc(
+      'gemini_usage_daily_stats',
+      params: {'p_month': p},
     );
     return List<Map<String, dynamic>>.from(res as List);
   }

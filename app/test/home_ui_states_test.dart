@@ -7,6 +7,7 @@ import 'package:allround/state/providers.dart';
 import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -224,9 +225,57 @@ void main() {
       await tester.tap(find.byIcon(Icons.location_on_outlined));
       await tester.pumpAndSettle();
 
-      expect(find.text('전남 2'), findsOneWidget);
-      expect(find.text('광주 1'), findsOneWidget);
+      // 숫자는 그 지역을 골랐을 때 실제로 보일 개수여야 한다.
+      // 전국대회 1건이 모든 지역에 함께 나오므로 지역 건수에 더해진다.
+      expect(find.text('전남 3'), findsOneWidget);
+      expect(find.text('광주 2'), findsOneWidget);
+      expect(find.text('전국 4'), findsOneWidget);
       expect(find.text('서울'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 대회가 하나도 없을 때 "전국 0" 은 세는 대상이 없다는 뜻인데 0건짜리
+    // 지역처럼 읽힌다. 숫자 없이 "전국"만 남긴다.
+    testWidgets('보여줄 대회가 없으면 지역 메뉴에 숫자를 붙이지 않는다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => const [],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.location_on_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('전국'), findsWidgets);
+      expect(find.text('전국 0'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 메뉴 숫자와 실제 목록이 어긋나면 "광주 7"을 눌렀는데 21개가 나온다.
+    testWidgets('지역 메뉴 숫자는 선택 후 목록 개수와 일치한다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => [
+          tennisAt('gwangju-1', '광주', 3),
+          tennisAt('national-1', null, 5),
+          tennisAt('national-2', null, 7),
+        ],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.location_on_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('광주 3'), findsOneWidget);
+
+      await tester.tap(find.text('광주 3'));
+      await tester.pumpAndSettle();
+
+      // 광주 1건 + 전국대회 2건 = 3건이 목록에 나온다.
+      for (final id in ['gwangju-1', 'national-1', 'national-2']) {
+        expect(find.textContaining(id), findsWidgets, reason: id);
+      }
       expect(tester.takeException(), isNull);
     });
 
@@ -245,7 +294,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.location_on_outlined));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('광주 1'));
+      await tester.tap(find.text('광주 2'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('national-1'), findsWidgets);
@@ -310,6 +359,27 @@ void main() {
     expect(find.text('접수 마감 임박'), findsOneWidget);
     expect(find.text('다가오는 대회'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  // 겉모습만 입력창이고 실제로는 화면을 여는 버튼이다. 입력창으로 읽히면
+  // 화면낭독기 사용자는 타이핑을 시도하다 아무것도 안 되는 상태에 갇힌다.
+  testWidgets('홈 검색창은 화면낭독기에 버튼으로 읽힌다', (tester) async {
+    final handle = tester.ensureSemantics();
+
+    await pumpHome(tester, load: () async => const []);
+    await tester.pumpAndSettle();
+
+    final node = tester.getSemantics(find.bySemanticsLabel('대회 검색'));
+    expect(node.flagsCollection.isButton, isTrue);
+    expect(node.flagsCollection.isTextField, isFalse);
+    // 버튼으로 읽히는 것만으로는 부족하다 — 실제로 실행돼야 한다.
+    expect(
+      node.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+      reason: '탭 액션이 없으면 화면낭독기에서 눌러도 아무 일도 일어나지 않는다',
+    );
+    expect(tester.takeException(), isNull);
+    handle.dispose();
   });
 
   // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.

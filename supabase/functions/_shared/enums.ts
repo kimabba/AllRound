@@ -121,7 +121,11 @@ export function resolveRegionCode(
   explicit: RegionCode | null | undefined,
   label: string | null | undefined,
 ): RegionCode | undefined {
-  return explicit ?? regionCodeFromLabel(label) ?? undefined;
+  // 빈 문자열은 "코드 없음"으로 본다. ?? 만 쓰면 '' 가 그대로 통과해
+  // 유도도 막히고 FK 위반으로 500 이 난다.
+  const trimmed = explicit?.trim();
+  if (trimmed) return trimmed as RegionCode;
+  return regionCodeFromLabel(label) ?? undefined;
 }
 
 // =========================

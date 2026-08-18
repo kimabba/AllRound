@@ -191,6 +191,10 @@ Deno.serve(withCors(async (req) => {
 
     try {
       const audit = await startAudit(row.slug);
+      // 목록이탈 만료 판정 기준(runStartedAt): 파서 시작 "전" 시각을 써야, 이번
+      // run 에서 markListingSeen 이 찍는 last_seen_at 이 항상 이 값보다 뒤가 되어
+      // "이 소스는 이 시각 이후로 최소 한 번 목록을 훑었다"는 하한을 안전하게 보장한다.
+      const runStartedAt = new Date().toISOString();
       let result: CrawlResult;
       try {
         // force=true 이면 etag/lastModified 를 null 로 전달해 파서 내 content-hash 체크도 우회
@@ -251,6 +255,13 @@ Deno.serve(withCors(async (req) => {
           // Phase 4 확장: undefined 면 컬럼 유지 (null 로 덮어쓰지 않음)
           ...(result.etag !== undefined ? { last_etag: result.etag } : {}),
           ...(result.last_modified !== undefined ? { last_modified: result.last_modified } : {}),
+          // 목록이탈 만료(closeDelistedTournaments)의 하한선. no_change/error 는 실제로
+          // 목록을 다시 안 훑은 것이므로 여기서 안 찍는다 — 셀렉터가 깨져 빈 목록을
+          // 반환한 날(fetched_count=0)도 마찬가지로 시계를 안 전진시켜, "정말 안 보인
+          // 것"과 "크롤 자체가 조용히 실패한 것"을 섞지 않는다.
+          ...(result.status === 'ok' && result.fetched_count > 0
+            ? { last_listing_parsed_at: runStartedAt }
+            : {}),
         })
         .eq('id', row.id);
 
@@ -289,6 +300,7 @@ Deno.serve(withCors(async (req) => {
     errors,
     auto_closed: statusSync.closed,
     auto_reopened: statusSync.reopened,
+    auto_delisted: statusSync.delisted,
     requested: { slug: body.slug ?? null, force: body.force === true },
   });
 }));

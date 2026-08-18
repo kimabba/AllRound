@@ -108,10 +108,12 @@ SELECT set_config(
 
 SELECT is((SELECT count(*) FROM public.users WHERE email LIKE 'qa-%@allround.invalid'), 8::bigint,
   '관리자는 전체 QA 사용자 행을 조회한다');
+-- 관리자도 남의 알림함은 못 본다. 신고 대응은 ugc_reports(아래 검사)로 하고
+-- 알림 테이블은 개인 수신함이라 전체 열람 권한이 필요 없다.
 SELECT is((SELECT count(*) FROM public.notifications WHERE id IN (
   '00000000-0000-4000-8000-000000000401',
   '00000000-0000-4000-8000-000000000402'
-)), 2::bigint, '관리자는 신고 대응에 필요한 알림을 조회한다');
+)), 0::bigint, '관리자도 다른 사용자의 알림은 조회하지 못한다');
 SELECT is((SELECT count(*) FROM public.chat_messages WHERE id IN (
   '00000000-0000-4000-8000-000000000501',
   '00000000-0000-4000-8000-000000000502'

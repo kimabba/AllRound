@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/tournament.dart';
 import '../models/tournament_card_info.dart';
 import '../theme/tokens.dart';
+import '../utils/kst.dart';
 import 'tournament_cover_image.dart';
 
 class TournamentCard extends StatelessWidget {
@@ -155,8 +156,8 @@ class TournamentCard extends StatelessWidget {
     if (tournament.status == 'closed' || tournament.status == 'cancelled') {
       return '$date · 마감';
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    // 기준일은 KST — 서버 마감 판정과 짝을 맞춘다(utils/kst.dart).
+    final today = kstTodayDate(DateTime.now());
     final daysLeft = d.difference(today).inDays;
     if (daysLeft < 0) return '$date · 마감';
     if (daysLeft == 0) return '$date · D-day';
@@ -177,10 +178,7 @@ class TournamentCard extends StatelessWidget {
     }
     final deadline = tournament.applicationDeadline;
     if (deadline != null) {
-      final today = DateTime.now();
-      final daysLeft = deadline
-          .difference(DateTime(today.year, today.month, today.day))
-          .inDays;
+      final daysLeft = deadline.difference(kstTodayDate(DateTime.now())).inDays;
       if (daysLeft < 0) {
         return _StatusBadgeData(
           label: '마감',
@@ -195,10 +193,8 @@ class TournamentCard extends StatelessWidget {
       }
     }
     // deadline이 없어도 start_date가 지났으면 마감 처리
-    final today = DateTime.now();
-    final startPassed = tournament.startDate.isBefore(
-      DateTime(today.year, today.month, today.day),
-    );
+    final startPassed =
+        tournament.startDate.isBefore(kstTodayDate(DateTime.now()));
     if (startPassed && tournament.status == 'published') {
       return _StatusBadgeData(
         label: '마감',

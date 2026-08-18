@@ -19,10 +19,9 @@ void main() {
   //
   // 한계 — 이 테스트는 색 '조합'을 검사할 뿐 위젯이 그 조합을 쓰는지는 보지 않는다.
   // 토큰 색이나 alpha 가 바뀌면 잡히지만, 위젯이 다른 색으로 갈아타면 못 잡는다.
-  // 값은 login_screen.dart 의 _FeaturePill / 히어로 본문과 짝을 맞춰 유지할 것.
+  // 값은 login_screen.dart 의 _IntroCard 본문과 짝을 맞춰 유지할 것.
   test('로그인 히어로 색 조합이 WCAG AA(4.5:1) 를 만족한다', () {
-    const bodyAlpha = 0.8; // 히어로 본문 텍스트
-    const pillBackgroundAlpha = 0.08; // _FeaturePill 배경
+    const bodyAlpha = 0.8; // 소개 카드 본문 텍스트
 
     for (final entry in {
       '라이트': appLightScheme,
@@ -41,21 +40,18 @@ void main() {
         reason: '${entry.key}: 히어로 본문 대비가 AA 기준에 미달합니다.',
       );
 
-      final pillBackground = Color.alphaBlend(
-        scheme.onPrimaryContainer.withValues(alpha: pillBackgroundAlpha),
-        container,
-      );
+      // 카드 안 아이콘 배지(primary 원 위의 onPrimary 아이콘).
       expect(
-        _contrastRatio(scheme.onPrimaryContainer, pillBackground),
+        _contrastRatio(scheme.onPrimary, scheme.primary),
         greaterThanOrEqualTo(4.5),
-        reason: '${entry.key}: pill 텍스트 대비가 AA 기준에 미달합니다.',
+        reason: '${entry.key}: 카드 아이콘 배지 대비가 AA 기준에 미달합니다.',
       );
 
-      // 헤더의 보조 라벨('로그인'). 11sp 라 완화 기준이 적용되지 않는다.
+      // 버튼 아래 약관 고지(bodySmall). 작은 글씨라 완화 기준이 적용되지 않는다.
       expect(
         _contrastRatio(scheme.onSurfaceVariant, scheme.surface),
         greaterThanOrEqualTo(4.5),
-        reason: '${entry.key}: 헤더 보조 라벨 대비가 AA 기준에 미달합니다.',
+        reason: '${entry.key}: 약관 고지 대비가 AA 기준에 미달합니다.',
       );
     }
   });

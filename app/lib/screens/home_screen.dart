@@ -12,11 +12,12 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
+import '../utils/kst.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/notification_inbox_action.dart';
-import '../widgets/tournament_section_bar.dart';
 import '../widgets/tournament_cover_image.dart';
+import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
@@ -48,8 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final sorted = [...source]
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final upcoming = sorted
         .where(
           (item) =>
@@ -78,17 +78,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<Tournament> source,
     String selectedSport,
   ) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final counts = <String, int>{};
+    var nationwide = 0;
+    var total = 0;
     for (final item in source) {
       if (item.sport != selectedSport) continue;
       if (item.startDate.isBefore(today)) continue;
       if (item.isRegistrationClosed) continue;
-      // 전국대회는 모든 지역에 함께 나오므로 별도 항목으로 만들지 않는다.
-      for (final part in (item.region ?? '').split('·')) {
-        final name = part.trim();
-        if (name.isEmpty) continue;
+      total += 1;
+      final names = (item.region ?? '')
+          .split('·')
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty);
+      // 전국대회는 지역 항목을 만들지 않고, 모든 지역의 개수에 더해진다.
+      if (names.isEmpty) {
+        nationwide += 1;
+        continue;
+      }
+      for (final name in names) {
         counts[name] = (counts[name] ?? 0) + 1;
       }
     }
@@ -97,7 +105,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final byCount = counts[b]!.compareTo(counts[a]!);
         return byCount != 0 ? byCount : a.compareTo(b);
       });
-    return {for (final name in names) name: counts[name]!};
+    // 보여줄 대회가 없으면 "전국 0" 대신 숫자 없는 "전국"만 남긴다.
+    if (total == 0) return const {};
+    // 지역을 골라도 전국대회는 함께 보이므로 개수에 포함한다. 포함하지 않으면
+    // "광주 7"을 눌렀는데 목록에 21개가 나오는 어긋남이 생긴다.
+    return {
+      _allRegions: total,
+      for (final name in names) name: counts[name]! + nationwide,
+    };
   }
 
   Future<void> _toggleFavorite(Tournament tournament, bool saved) async {
@@ -257,14 +272,27 @@ class _TournamentHomeControls extends StatelessWidget {
     );
     // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
     // 입력창이 아니라 서버가 전수 검색하는 전체 대회 화면의 입구로 쓴다.
-    final search = TextField(
-      readOnly: true,
+    // 겉모습은 입력창이지만 동작은 버튼이므로, 화면낭독기에도 버튼으로 알린다
+    // (입력창으로 읽히면 타이핑을 시도하다 아무것도 안 되는 상태가 된다).
+    final search = Semantics(
+      button: true,
+      textField: false,
+      label: '대회 검색',
+      hint: '전체 대회 검색을 엽니다',
+      // 버튼이라고 알리는 것만으로는 부족하다. excludeSemantics 가 자식의 액션까지
+      // 버리므로 여기서 탭 액션을 직접 등록해야 화면낭독기로 실제 실행된다.
       onTap: onSearch,
-      decoration: InputDecoration(
-        hintText: '대회명 또는 지역을 검색해보세요',
-        prefixIcon: const Icon(Icons.search_rounded),
-        filled: true,
-        fillColor: cs.surfaceContainerLowest,
+      excludeSemantics: true,
+      child: TextField(
+        readOnly: true,
+        canRequestFocus: false,
+        onTap: onSearch,
+        decoration: InputDecoration(
+          hintText: '대회명 또는 지역을 검색해보세요',
+          prefixIcon: const Icon(Icons.search_rounded),
+          filled: true,
+          fillColor: cs.surfaceContainerLowest,
+        ),
       ),
     );
     // 큰 글씨에서는 한 줄에 두 요소가 들어가지 않아 세로로 쌓는다.
@@ -419,8 +447,7 @@ class _TournamentHomeContent extends StatelessWidget {
     final deadlineSoon = tournaments.where((item) {
       final deadline = item.applicationDeadline;
       if (deadline == null) return false;
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final today = kstTodayDate(DateTime.now());
       final days = deadline.difference(today).inDays;
       return days >= 0 && days <= 7;
     }).toList();
@@ -1060,8 +1087,7 @@ class _HomePersonalSchedule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final upcoming = tournaments
         .where((item) => !item.startDate.isBefore(today))
         .toList(growable: false)
@@ -1348,8 +1374,7 @@ class _HomeTournamentRow extends StatelessWidget {
     if (deadline == null) {
       return tournament.isRegistrationClosed ? '접수 마감' : '접수 중';
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(DateTime.now());
     final days = deadline.difference(today).inDays;
     if (days < 0 || tournament.isRegistrationClosed) return '접수 마감';
     if (days == 0) return '오늘 마감';
@@ -1479,6 +1504,7 @@ class _HomeTournamentSkeleton extends StatelessWidget {
 
 List<Tournament> _previewTournaments() {
   final now = DateTime.now();
+  // device-local-ok: 화면 프리뷰용 더미 대회를 만든다 — 마감 판정이 아니다.
   final today = DateTime(now.year, now.month, now.day);
   return [
     Tournament(
