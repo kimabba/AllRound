@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
 void main() {
   setUpAll(() async {
@@ -235,6 +236,52 @@ void main() {
 
       expect(find.textContaining('national-1'), findsWidgets);
       expect(find.textContaining('jeonnam-1'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('홈 히어로 카드', () {
+    final deadline = DateTime.now().add(const Duration(days: 6));
+    final deadlineLine = '~${DateFormat('M월 d일').format(deadline)} 마감';
+
+    Tournament heroItem({String? posterUrl}) => Tournament(
+          id: 'hero-1',
+          sport: 'tennis',
+          title: '2026 빛고을배 전국대회 및 광주생활체육대회',
+          organizer: 'QA',
+          startDate: DateTime.now().add(const Duration(days: 10)),
+          applicationDeadline: deadline,
+          region: '광주',
+          eligibleGrades: const ['open'],
+          status: 'published',
+          posterUrl: posterUrl,
+        );
+
+    // 테니스는 포스터가 거의 올라오지 않아 사진 자리가 빈 색면이 된다.
+    // 그 자리를 없애고 마감일 정보로 대체하는 것이 이 분기의 목적.
+    testWidgets('포스터가 없으면 사진 자리 대신 마감일을 보여준다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => [heroItem()],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(deadlineLine), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('포스터가 있으면 사진을 그리고 마감일 줄은 넣지 않는다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async =>
+            [heroItem(posterUrl: 'https://example.test/poster.jpg')],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Image), findsWidgets);
+      expect(find.text(deadlineLine), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

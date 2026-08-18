@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../config.dart';
 import '../models/tournament.dart';
+import '../models/tournament_card_info.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
@@ -525,10 +526,16 @@ class _TournamentHeroState extends State<_TournamentHero> {
 
   @override
   Widget build(BuildContext context) {
+    // 포스터가 한 장도 없으면(테니스 대부분) 사진 자리를 통째로 없애고
+    // 카드 높이도 줄인다. 빈 색면이 첫 화면을 차지하지 않게 하기 위함.
+    final hasPoster = widget.tournaments
+        .any((item) => (item.posterUrl ?? '').trim().isNotEmpty);
+    final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final height = hasPoster ? 284.0 : (168.0 * scale).clamp(168.0, 284.0);
     return Column(
       children: [
         SizedBox(
-          height: 284,
+          height: height,
           child: PageView.builder(
             itemCount: widget.tournaments.length,
             onPageChanged: (value) => setState(() => _page = value),
@@ -540,6 +547,7 @@ class _TournamentHeroState extends State<_TournamentHero> {
                 ),
                 child: _HeroTournamentCard(
                   tournament: item,
+                  showImage: hasPoster,
                   onOpen: () => widget.onOpen(item),
                 ),
               );
@@ -573,14 +581,25 @@ class _TournamentHeroState extends State<_TournamentHero> {
 }
 
 class _HeroTournamentCard extends StatelessWidget {
-  const _HeroTournamentCard({required this.tournament, required this.onOpen});
+  const _HeroTournamentCard({
+    required this.tournament,
+    required this.onOpen,
+    this.showImage = true,
+  });
 
   final Tournament tournament;
   final VoidCallback onOpen;
 
+  /// 사진 자리를 그릴지. 캐러셀 전체가 하나로 움직이도록 상위에서 정한다.
+  final bool showImage;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final deadline = applicationDeadlineText(
+      tournament.applicationDeadline,
+      DateFormat('M월 d일').format,
+    );
     return Material(
       color: const Color(0xFF071B45),
       borderRadius: AppRadius.hero,
@@ -590,7 +609,10 @@ class _HeroTournamentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _TournamentImage(tournament: tournament)),
+            if (showImage)
+              Expanded(child: _TournamentImage(tournament: tournament))
+            else
+              const Spacer(),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Row(
@@ -599,9 +621,26 @@ class _HeroTournamentCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 사진을 뺀 자리는 비워두지 않고 마감일로 채운다.
+                        if (!showImage && deadline.isNotEmpty) ...[
+                          Text(
+                            deadline,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
                         Text(
                           tournament.title,
-                          maxLines: 1,
+                          // 사진이 없으면 세로 여유가 생기므로 제목을 덜 자른다.
+                          maxLines: showImage ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
