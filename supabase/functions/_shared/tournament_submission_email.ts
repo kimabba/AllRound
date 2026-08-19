@@ -1,4 +1,4 @@
-import type { Sport } from './enums.ts';
+import { type Sport, SPORT_LABELS } from './enums.ts';
 
 const resendEndpoint = 'https://api.resend.com/emails';
 
@@ -43,10 +43,6 @@ export function recipientEnvKeyForSport(sport: Sport): string {
     : 'TOURNAMENT_SUBMISSION_FUTSAL_EMAIL';
 }
 
-function sportLabel(sport: Sport): string {
-  return sport === 'tennis' ? '테니스' : '풋살';
-}
-
 function oneLine(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim();
 }
@@ -60,7 +56,7 @@ export function buildTournamentSubmissionEmail(
   input: TournamentSubmissionEmailInput,
   recipient: string,
 ): TournamentSubmissionEmailMessage {
-  const label = sportLabel(input.sport);
+  const label = SPORT_LABELS[input.sport];
   const safeTitle = oneLine(input.title);
   return {
     recipient,
