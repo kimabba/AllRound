@@ -1,5 +1,5 @@
 import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
-import { requireVerifiedUser } from '../_shared/auth.ts';
+import { requireEligibleMember } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
 import {
@@ -224,7 +224,7 @@ async function handler(req: Request): Promise<Response> {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
 
-  const auth = await requireVerifiedUser(req);
+  const auth = await requireEligibleMember(req);
   if ('error' in auth) return auth.error;
   const { supabase, user } = auth;
 

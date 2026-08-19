@@ -15,7 +15,7 @@
  */
 
 import { corsHeaders, errorResponse, preflight, withCors } from '../_shared/cors.ts';
-import { requireVerifiedUser } from '../_shared/auth.ts';
+import { requireEligibleMember } from '../_shared/auth.ts';
 import { EMBEDDING_MODEL, embedTextWithUsage, toVectorLiteral } from '../_shared/embedding.ts';
 import { type ChatTurn, GEMINI_MODEL } from '../_shared/gemini.ts';
 import { recordGeminiUsage } from '../_shared/usage.ts';
@@ -95,7 +95,7 @@ Deno.serve(withCors(async (req) => {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);
 
-  const auth = await requireVerifiedUser(req);
+  const auth = await requireEligibleMember(req);
   if ('error' in auth) return auth.error;
   const { supabase, user } = auth;
   const chatWriter = serviceClient();

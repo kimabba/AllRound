@@ -4,6 +4,7 @@ import 'chat_api.dart';
 import 'club_api.dart';
 import 'notification_api.dart';
 import 'moderation_api.dart';
+import 'phone_api.dart';
 import 'ranking_api.dart';
 import 'rules_api.dart';
 import 'tournament_api.dart';
@@ -26,6 +27,7 @@ class ApiService extends ApiBase
         RulesApi,
         NotificationApi,
         ModerationApi,
+        PhoneApi,
         AdminApi,
         RankingApi,
         ChatApi {
