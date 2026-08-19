@@ -214,6 +214,9 @@ export async function upsertTournament(
     // 소스가 명시한 권역은 항상 반영하고, 텍스트에서 유도한 추측은 빈 칸만 채운다.
     // 추측으로 덮으면 (1) 유도 실패 시 기존 지역이 지워지고 (2) 유도가 틀렸을 때
     // 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌린다 — 고칠 방법이 없어진다.
+    // 한계: 빈 요강(location='.')이라 제목으로 추측해 넣은 값은, 나중에 협회가 장소를
+    // 채워 더 나은 추측이 가능해져도 그대로 남는다. 추측끼리 우열을 가리려면 출처 컬럼이
+    // 필요하다 — 드문 경우라 지금은 두고, 검수에서 바로잡는다.
     if (labelCode) updatePayload.region_code = labelCode;
     else if (guessedCode && !existing.region_code) updatePayload.region_code = guessedCode;
     // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
