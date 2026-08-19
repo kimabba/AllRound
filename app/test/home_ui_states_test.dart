@@ -74,7 +74,9 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.textContaining('올라운드 '), findsOneWidget);
-    expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
+    // 지역·검색은 목록 바로 위로 내려갔다. 목록이 아직 없는 로딩 중에는
+    // 조작할 대상도 없으므로 함께 나오지 않는다.
+    expect(find.text('대회명 또는 지역을 검색해보세요'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
+import '../utils/legal_urls.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -64,9 +65,7 @@ class MoreScreen extends ConsumerWidget {
         label: '이용약관',
         subtitle: '서비스 이용 조건',
         onTap: () => launchUrl(
-          Uri.parse(
-            'https://kimabba.github.io/AllRound/legal/terms-of-service.html',
-          ),
+          Uri.parse(kTermsOfServiceUrl),
           mode: LaunchMode.externalApplication,
         ),
       ),
@@ -75,9 +74,7 @@ class MoreScreen extends ConsumerWidget {
         label: '개인정보 처리방침',
         subtitle: '개인정보 수집 및 이용 안내',
         onTap: () => launchUrl(
-          Uri.parse(
-            'https://kimabba.github.io/AllRound/legal/privacy-policy.html',
-          ),
+          Uri.parse(kPrivacyPolicyUrl),
           mode: LaunchMode.externalApplication,
         ),
       ),
