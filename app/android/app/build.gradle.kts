@@ -31,7 +31,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "kr.allround.app"
+        // Play 콘솔 패키지명. namespace(코드 패키지)·딥링크 스킴 kr.allround.app 과 별개다.
+        applicationId = "kr.allround.android"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode

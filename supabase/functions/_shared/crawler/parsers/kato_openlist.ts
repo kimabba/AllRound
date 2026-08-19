@@ -33,7 +33,9 @@ const COMMON_HEADERS: Record<string, string> = {
 const DETAIL_CAP = 30;
 // 파서 결과 의미가 바뀌면 revision을 올린다. 원문 목록이 그대로여도 새 파서로
 // 상세를 한 번 다시 읽게 해 기존 대회의 누락 데이터를 복구한다.
-const KATO_PARSER_REVISION = '2026-07-regulation-v2';
+// 2026-08: 장소·제목에서 region_code 유도(region_text.ts). 기존 18건이 region_code=null
+// 이라 재파싱이 필요하다 — revision 을 올려 SQL 백필 없이 다음 크롤에서 복구한다.
+const KATO_PARSER_REVISION = '2026-08-region-from-venue';
 
 // deno-dom 요소를 최소 인터페이스로 좁혀 쓰기 위한 캐스트 헬퍼.
 type El = {

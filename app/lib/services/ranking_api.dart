@@ -146,6 +146,25 @@ mixin RankingApi on ApiBase {
     return list.isEmpty ? null : list.first;
   }
 
+  /// 부서 순위표에서 [rank] 위 한 줄(없으면 null). "TOP 10 까지 남은 점수"처럼
+  /// 커트라인 한 줄만 필요할 때 쓴다 — orgRankings 를 쓰면 홈 화면이 열릴 때마다
+  /// 부서 순위표 전체(수백 행)를 받게 된다.
+  Future<OrgRankingRow?> divisionRankRow({
+    required String orgCode,
+    required String divisionCode,
+    required int rank,
+  }) async {
+    final rows = await supabase
+        .from('org_rankings')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('division_code', divisionCode)
+        .eq('rank', rank)
+        .limit(1);
+    final list = List<Map<String, dynamic>>.from(rows);
+    return list.isEmpty ? null : OrgRankingRow.fromJson(list.first);
+  }
+
   /// 연결된 내 현재 순위(부서별). 스펙 §7.2 블록 1 "지금".
   /// 한 선수가 여러 부서 랭킹에 오를 수 있어 목록으로 돌려준다.
   Future<List<OrgRankingRow>> myCurrentRankings() async {

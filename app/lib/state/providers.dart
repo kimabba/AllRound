@@ -7,6 +7,7 @@ import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
+import '../utils/grade_labels.dart';
 import '../utils/kst.dart';
 
 final supabaseProvider = Provider<SupabaseClient>((_) {
@@ -160,6 +161,45 @@ final myRankingHistoryProvider =
     divisionCode: primary.divisionCode,
     orgPlayerId: orgPlayerId,
   );
+});
+
+/// 홈 "내 등급 카드" 한 장에 필요한 값. 협회가 공표한 사실만 담는다.
+/// [top10Points] 는 그 부서 10위의 점수(그 부서에 10명이 안 되면 null).
+typedef MyGradeSummary = ({OrgRankingRow ranking, int? top10Points});
+
+/// 여러 부서에 이름이 오른 사람의 대표 부서 한 줄. 협회가 랭킹표를 공표하는
+/// 순서([kRankingDivisions])가 곧 상위→하위라 그 자리를 그대로 쓴다.
+/// 목록에 없는 부서(미러 밖 협회)는 뒤로 민다.
+OrgRankingRow? topDivisionRanking(List<OrgRankingRow> rows) {
+  if (rows.isEmpty) return null;
+  int tier(OrgRankingRow row) {
+    final order = kRankingDivisions[row.orgCode];
+    // 협회 자체가 목록에 없으면(미러 확장 과도기) 맨 뒤로 보낸다. order.length(0)를
+    // 쓰면 목록에 있는 협회의 1순위 부서(tier 0)와 값이 같아져 잘못 앞서 뽑힌다.
+    if (order == null) return 1 << 30;
+    final index = order.indexOf(row.divisionCode);
+    return index < 0 ? order.length : index;
+  }
+
+  final sorted = [...rows]..sort((a, b) {
+      final byTier = tier(a).compareTo(tier(b));
+      if (byTier != 0) return byTier;
+      return a.divisionCode.compareTo(b.divisionCode);
+    });
+  return sorted.first;
+}
+
+/// 홈 최상단 등급 카드. 협회 연결이 없으면 null 이고 카드 자체가 안 뜬다.
+final myGradeSummaryProvider = FutureProvider<MyGradeSummary?>((ref) async {
+  ref.watch(authStateProvider);
+  final top = topDivisionRanking(await ref.watch(myCurrentRankingsProvider.future));
+  if (top == null) return null;
+  final cutoff = await ref.watch(apiProvider).divisionRankRow(
+        orgCode: top.orgCode,
+        divisionCode: top.divisionCode,
+        rank: 10,
+      );
+  return (ranking: top, top10Points: cutoff?.totalPoints);
 });
 
 /// 관심 화면용 스크랩 대회

@@ -215,6 +215,8 @@ Deno.test('upsert: 재크롤로 content_hash 바뀌면 format_status=pending 재
   assertEquals(p.format_status, 'pending');
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
+  // 큐 조건이 format_attempts < 3 이라, 리셋하지 않으면 pending 인 채로 영영 안 집힌다.
+  assertEquals(p.format_attempts, 0);
 });
 
 Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정형화 대기', async () => {
@@ -239,4 +241,48 @@ Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정�
   assertEquals(p.format_status, 'pending');
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
+});
+
+Deno.test('UPDATE: 소스에 권역이 없어도 장소의 시군구로 region_code 를 채운다', async () => {
+  // KATO 전국 소스는 crawl_sources.region 이 비어 있다 → 장소에서 유도해야 지역 필터에 뜬다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '안성시립테니스코트 외',
+  });
+  assertEquals(captured[0].payload.region_code, 'gyeonggi');
+});
+
+Deno.test('UPDATE: 지역 유도에 실패하면 region_code 를 덮어쓰지 않는다', async () => {
+  // 관리자가 손으로 고쳐둔 지역이 재크롤 때마다 null 로 지워지면 안 된다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '광주 양벌테니스 돔구장및 보조경기장', // 광주광역시/경기 광주시 중의 → 유도 불가
+  });
+  assert(!('region_code' in captured[0].payload), 'region_code 는 payload 에서 빠져야 한다');
+});
+
+Deno.test('UPDATE: 이미 지역이 있으면 추측으로 덮어쓰지 않는다', async () => {
+  // 유도가 틀렸을 때 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌리면 고칠 길이 없다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, region: null, region_code: 'daejeon' });
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '충남 어딘가 테니스장', // 유도하면 chungnam 이지만 사람이 daejeon 으로 고쳐둔 상태
+  });
+  assert(!('region_code' in captured[0].payload), '사람이 넣은 값이 추측보다 우선해야 한다');
+});
+
+Deno.test('UPDATE: 소스가 명시한 권역은 기존 값이 있어도 반영한다', async () => {
+  // crawl_sources.region 은 추측이 아니라 사실이다 — 소스 설정을 고치면 반영돼야 한다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, region_code: 'gwangju' });
+  await upsertTournament(audit, 'tennis', { ...BASE_TOURNAMENT, region: '전남' });
+  assertEquals(captured[0].payload.region_code, 'jeonnam');
 });

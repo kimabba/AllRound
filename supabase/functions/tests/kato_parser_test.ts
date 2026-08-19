@@ -195,6 +195,21 @@ Deno.test('KATO 0299 회귀: 11개 부서 일정·장소와 5개 계좌·시상�
   assert(regulation.notes.some((note) => note.includes('80팀 미만')));
 });
 
+Deno.test('KATO 라벨 셀이 합쳐져 있어도 접수·환불을 찾는다', () => {
+  // 공고마다 라벨 표기가 다르다. "환불마감" 단독인 곳도 있고 "접수개시 및<br>환불마감"
+  // 인 곳도 있다(kato.kr/openGame/0307 실측). 정확매칭만 하면 값이 표에 있는데도
+  // "빠진 섹션"으로 판정돼 요강 전체가 검수로 튕겨 정형화가 아예 안 된다.
+  const merged = KATO_0299_HTML.replace(
+    '<tr><td>환불마감</td>',
+    '<tr><td>접수개시 및<br>환불마감</td>',
+  );
+  const regulation = parseKatoRegulation(merged);
+  assert(regulation);
+  assertEquals(regulation.coverage.missingSections, []);
+  const refund = regulation.fields.find((field) => field.label === '접수·환불');
+  assert(refund?.value.includes('7월 30일 15시'), '합쳐진 라벨에서도 값을 뽑아야 한다');
+});
+
 Deno.test('parseKatoDetail: 장소 값이 ▣로 시작해도 장소를 빈 값으로 버리지 않음', () => {
   const detail = parseKatoDetail(
     '<div class="group-title">테스트 대회</div><div id="tab1"><table>' +
