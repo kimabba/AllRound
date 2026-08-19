@@ -52,6 +52,9 @@ backend:
 	$(SUPABASE) functions serve --env-file ./supabase/functions/.env --project-ref $(PROJECT_REF)
 
 # 터미널 2: Flutter 앱 — 일반 사용자 (모바일 레이아웃)
+# .env.local 은 **로컬 Supabase**(supabase start)를 가리켜야 한다. 프로덕션 값을
+# 넣으면 개발 중 만든 데이터가 실사용자 DB 에 그대로 들어간다. 릴리스 빌드는
+# .env.production 을 쓴다(아래 release-* 타깃).
 app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	cd app && flutter run -d $(DEVICE_ID) --dart-define-from-file=.env.local
@@ -77,22 +80,26 @@ admin:
 # 전제(모두 gitignore — 빌드하는 사람 로컬에만 존재):
 #   · app/android/key.properties + 서명 .jks  (Play 업로드용 서명)
 #   · app/android/app/google-services.json     (구글 로그인/FCM)
-#   · app/.env.local 에 프로덕션 SUPABASE_URL / SUPABASE_ANON_KEY / API_BASE_URL
+#   · app/.env.production 에 프로덕션 SUPABASE_URL / SUPABASE_ANON_KEY / API_BASE_URL
 #     (구글 로그인은 signInWithOAuth 라 앱 클라이언트 ID 불필요 — Supabase 설정 사용)
+#
+# **개발용 .env.local 과 파일이 다르다.** 예전엔 둘 다 .env.local 을 썼는데,
+# 릴리스용 프로덕션 값을 거기 넣은 뒤로 `make app`(개발 실행)도 프로덕션 DB 에
+# 붙었다. 실사용자가 쓰는 DB 라 개발 중 만든 계정·클럽·제보가 그대로 섞인다.
 # --release → kReleaseMode=true 라 config.dart 의 개발용 우회 플래그
 #   (ADMIN_MODE / *_DESIGN_PREVIEW) 가드가 활성화된다 (JY-6). 프로덕션 빌드에
 #   dev 플래그가 새면 앱이 시작 즉시 실패하므로 dart-define 에 절대 넣지 않는다.
 
 release-android:
-	@test -f app/.env.local || (echo "❌ app/.env.local 없음" && exit 1)
+	@test -f app/.env.production || (echo "❌ app/.env.production 없음 — app/.env.production.example 참고 (개발용 .env.local 과 다른 파일)" && exit 1)
 	@test -f app/android/key.properties || (echo "❌ app/android/key.properties 없음 — 없이 빌드하면 debug 서명이라 Play 업로드 불가" && exit 1)
-	cd app && flutter build appbundle --release --dart-define-from-file=.env.local
+	cd app && flutter build appbundle --release --dart-define-from-file=.env.production
 	@echo "✅ .aab 생성: app/build/app/outputs/bundle/release/app-release.aab → Play Console 업로드"
 
 release-ios:
-	@test -f app/.env.local || (echo "❌ app/.env.local 없음" && exit 1)
+	@test -f app/.env.production || (echo "❌ app/.env.production 없음 — app/.env.production.example 참고 (개발용 .env.local 과 다른 파일)" && exit 1)
 	@test -f app/ios/ExportOptions.plist || (echo "❌ app/ios/ExportOptions.plist 없음 — Apple 서명/배포 설정 필요 (Apple Developer 조직 계정 승인 후 생성)" && exit 1)
-	cd app && flutter build ipa --release --dart-define-from-file=.env.local --export-options-plist=ios/ExportOptions.plist
+	cd app && flutter build ipa --release --dart-define-from-file=.env.production --export-options-plist=ios/ExportOptions.plist
 	@echo "✅ .ipa 생성: app/build/ios/ipa/ → Transporter/Xcode 로 App Store Connect 업로드"
 
 # ────────────────────────────────────────────────────

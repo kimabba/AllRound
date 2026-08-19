@@ -1,0 +1,16 @@
+# 새 워크트리로 자동 복사할 gitignore 파일 (Claude Code `--worktree`·EnterWorktree).
+# 워크트리는 새 체크아웃이라 이 파일들이 없으면 앱이 실행 전에 죽고(dart-define
+# 누락) Edge 도 못 띄운다. 매번 손으로 복사하던 것을 여기 등록해 없앤다.
+# 문법은 .gitignore 와 같고, **gitignore 된 파일만** 복사된다.
+# 근거: https://code.claude.com/docs/en/worktrees ("Copy gitignored files into worktrees")
+
+# Flutter 앱 — 개발용(로컬 Supabase)과 릴리스용(프로덕션)은 다른 파일이다.
+app/.env.local
+app/.env.production
+
+# Edge Function 로컬 실행 시크릿 (GEMINI_API_KEY 등)
+supabase/functions/.env
+
+# supabase CLI 링크 정보 — 없으면 워크트리에서 db push·functions deploy 가 안 붙는다.
+supabase/.temp/project-ref
+supabase/.temp/pooler-url
