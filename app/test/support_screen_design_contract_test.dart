@@ -15,8 +15,13 @@ import 'package:allround/widgets/profile/profile_quick_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('ko');
+  });
+
   testWidgets('친구 일정은 작은 화면과 큰 글자에서 48px 월 이동을 유지한다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     await tester.pumpWidget(

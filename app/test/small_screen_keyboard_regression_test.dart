@@ -8,6 +8,7 @@ import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _FakeModerationApi extends ApiService {
@@ -27,6 +28,10 @@ class _FakeModerationApi extends ApiService {
 }
 
 void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('ko');
+  });
+
   testWidgets('대회 상세검색은 작은 화면의 키보드 위에서 필터 선택 후 키보드를 닫는다', (tester) async {
     _useSmallPhone(tester);
 
