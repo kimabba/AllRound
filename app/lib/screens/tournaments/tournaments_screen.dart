@@ -675,6 +675,10 @@ class _TournamentCalendarListView extends StatelessWidget {
     required this.onFavoriteToggle,
   });
 
+  // 선택 날짜 없이 이 개수 이하로 결과가 나오면 캘린더 그리드를 생략한다 —
+  // 그리드가 화면 대부분을 차지해서 바로 아래 카드가 "결과 없음"처럼 보이는 걸 방지.
+  static const int _calendarCollapseThreshold = 3;
+
   @override
   Widget build(BuildContext context) {
     final selected = selectedDate;
@@ -684,6 +688,9 @@ class _TournamentCalendarListView extends StatelessWidget {
         : _tournamentsOnDate(tournaments, selected);
     final nextDate =
         selected == null ? null : _nextTournamentDate(tournaments, selected);
+    final collapseCalendar = selected == null &&
+        monthTournaments.isNotEmpty &&
+        monthTournaments.length <= _calendarCollapseThreshold;
 
     Widget card(Tournament tournament, int seq) {
       final isFavorite = favoriteIds.contains(tournament.id);
@@ -708,13 +715,18 @@ class _TournamentCalendarListView extends StatelessWidget {
         if (i == 0) {
           return Column(
             children: [
-              _TournamentMonthCalendar(
-                focusedMonth: focusedMonth,
-                selectedDate: selectedDate,
-                tournaments: tournaments,
-                onMonthChanged: onMonthChanged,
-                onDateSelected: onDateSelected,
-              ),
+              collapseCalendar
+                  ? _MonthNavRow(
+                      focusedMonth: focusedMonth,
+                      onMonthChanged: onMonthChanged,
+                    )
+                  : _TournamentMonthCalendar(
+                      focusedMonth: focusedMonth,
+                      selectedDate: selectedDate,
+                      tournaments: tournaments,
+                      onMonthChanged: onMonthChanged,
+                      onDateSelected: onDateSelected,
+                    ),
               const SizedBox(height: AppSpacing.md),
               _ListHeader(
                 focusedMonth: focusedMonth,
@@ -790,6 +802,50 @@ class _ListHeader extends StatelessWidget {
   }
 }
 
+/// 월 이동 헤더(◀ 2026년 8월 ▶). 캘린더 그리드와 별개로, 결과가 적어
+/// 그리드를 생략한 경우에도 월은 넘길 수 있도록 단독으로도 쓰인다.
+class _MonthNavRow extends StatelessWidget {
+  final DateTime focusedMonth;
+  final ValueChanged<DateTime> onMonthChanged;
+
+  const _MonthNavRow({required this.focusedMonth, required this.onMonthChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        _CalendarMonthButton(
+          tooltip: '이전 달',
+          onPressed: () => onMonthChanged(
+            DateTime(focusedMonth.year, focusedMonth.month - 1),
+          ),
+          icon: const Icon(Icons.chevron_left_rounded),
+        ),
+        Expanded(
+          child: Center(
+            child: Text(
+              '${focusedMonth.year}년 ${focusedMonth.month}월',
+              style: tt.titleMedium?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        _CalendarMonthButton(
+          tooltip: '다음 달',
+          onPressed: () => onMonthChanged(
+            DateTime(focusedMonth.year, focusedMonth.month + 1),
+          ),
+          icon: const Icon(Icons.chevron_right_rounded),
+        ),
+      ],
+    );
+  }
+}
+
 class _TournamentMonthCalendar extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime? selectedDate;
@@ -835,34 +891,9 @@ class _TournamentMonthCalendar extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              _CalendarMonthButton(
-                tooltip: '이전 달',
-                onPressed: () => onMonthChanged(
-                  DateTime(focusedMonth.year, focusedMonth.month - 1),
-                ),
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    '${focusedMonth.year}년 ${focusedMonth.month}월',
-                    style: tt.titleMedium?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              _CalendarMonthButton(
-                tooltip: '다음 달',
-                onPressed: () => onMonthChanged(
-                  DateTime(focusedMonth.year, focusedMonth.month + 1),
-                ),
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-            ],
+          _MonthNavRow(
+            focusedMonth: focusedMonth,
+            onMonthChanged: onMonthChanged,
           ),
           const SizedBox(height: AppSpacing.md),
           LayoutBuilder(
@@ -1767,9 +1798,22 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '상세검색',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '상세검색',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '상세검색 닫기',
+                    onPressed: () => Navigator.maybePop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               Flexible(
