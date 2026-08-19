@@ -13,6 +13,7 @@ begin;
 -- 기존 풋살 글에서 확인된 두 오류를 먼저 바로잡는다.
 update public.rule_articles
 set
+  title = '풋살 백패스 규칙',
   body = $body$풋살에서 자주 헷갈리는 골키퍼 재터치 제한을 정리합니다.
 
 ## 자기 진영 4초 제한
@@ -29,7 +30,10 @@ set
   embedding = null,
   embedding_updated_at = null
 where sport = 'futsal'
-  and title = '풋살 백패스 규칙';
+  and title in (
+    '풋살 백패스 규칙',
+    '3. 풋살 백패스 규칙: 이렇게 쉽게 알려드릴게요!'
+  );
 
 update public.rule_articles
 set

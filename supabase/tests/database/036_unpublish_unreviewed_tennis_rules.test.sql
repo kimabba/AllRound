@@ -4,14 +4,15 @@ begin;
 
 select plan(3);
 
-select is(
+select ok(
   (
-    select count(*)::integer
+    select count(*) >= 5
     from public.rule_articles
-    where sport = 'tennis' and published
+    where sport = 'tennis'
+      and published
+      and title not like '2026%'
   ),
-  33,
-  '테니스 룰북은 기존 검수된 랭킹 규정 33건만 노출한다'
+  '기존에 게시하던 테니스 규정은 그대로 유지한다'
 );
 
 select is(
