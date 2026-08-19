@@ -10,6 +10,7 @@ class AllRoundE2EKeys {
   static const passwordField = Key('e2e-password-field');
   static const passwordConfirmField = Key('e2e-password-confirm-field');
   static const signupBirthDate = Key('e2e-signup-birth-date');
+  static const signupTermsConsent = Key('e2e-signup-terms-consent');
   static const authSubmitButton = Key('e2e-auth-submit-button');
   static const authModeToggle = Key('e2e-auth-mode-toggle');
   static const googleExistingLoginButton =

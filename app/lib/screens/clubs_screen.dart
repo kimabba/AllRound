@@ -15,13 +15,13 @@ import '../utils/club_labels.dart';
 import '../utils/club_card_colors.dart';
 import '../utils/club_sections.dart';
 import '../utils/club_sort.dart';
-import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
 import '../widgets/clubs/club_section_widgets.dart';
 import '../widgets/clubs/club_tiles.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/sport_title.dart';
 import 'clubs/club_create_screen.dart';
 import 'clubs/club_detail_screen.dart';
 
@@ -414,17 +414,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ClubSportSelector(
-          selectedSports: _clubInterests,
-          onSelected: (sport) {
-            setState(() {
-              _clubInterests = {sport};
-              _showAllClubs = false;
-            });
-            _load();
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
+        // 종목 전환은 AppBar 타이틀(SportTitle)이 맡는다. 본문에도 같은
+        // 스위치가 있으면 어느 쪽이 진짜인지 알 수 없다.
         TextField(
           controller: _clubNameQueryController,
           textInputAction: TextInputAction.search,
@@ -798,7 +789,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text('클럽'),
+        // 홈과 같은 위젯이라 여기서 종목을 바꿔도 앱 전체 기준이 함께 바뀐다.
+        title: const SportTitle(),
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -1085,72 +1077,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       .where((post) => !post.isClosed)
       .map((post) => post.clubId)
       .toSet();
-}
-
-class _ClubSportSelector extends StatelessWidget {
-  const _ClubSportSelector({
-    required this.selectedSports,
-    required this.onSelected,
-  });
-
-  final Set<String> selectedSports;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = selectedSports.contains('tennis') ? 'tennis' : 'futsal';
-    final label = sportLabelFromString(selected);
-    final icon = selected == 'tennis'
-        ? Icons.sports_tennis_rounded
-        : Icons.sports_soccer_rounded;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '내 주종목',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w900),
-          ),
-        ),
-        PopupMenuButton<String>(
-          tooltip: '주종목 선택',
-          initialValue: selected,
-          onSelected: onSelected,
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'futsal',
-              child: Text(sportLabel(Sport.futsal)),
-            ),
-            PopupMenuItem(
-              value: 'tennis',
-              child: Text(sportLabel(Sport.tennis)),
-            ),
-          ],
-          child: Container(
-            constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).colorScheme.primary),
-              borderRadius: AppRadius.pill,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 19),
-                const SizedBox(width: AppSpacing.sm),
-                Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _MyClubsCarousel extends StatelessWidget {
