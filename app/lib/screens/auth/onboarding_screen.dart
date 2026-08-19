@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../config.dart';
 import '../../models/tournament.dart';
@@ -20,6 +21,7 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_chip.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 // 지역 선택지는 grade_labels.dart 의 regionCodes(표준 17개 광역시도) 정본을 그대로 쓴다.
 // code=label 1:1 이므로 별도 choices 목록이나 displayLabel 이중 상태가 필요 없다.
@@ -607,9 +609,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ref.invalidate(userTennisOrgsProvider);
       if (mounted) context.go('/');
     } catch (e) {
-      final msg = e.toString().contains('MINOR_NOT_ALLOWED')
-          ? '만 $kMinSignupAge세 이상만 가입할 수 있습니다.'
-          : '프로필을 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+      const fallback = '프로필을 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+      final String msg;
+      if (e.toString().contains('MINOR_NOT_ALLOWED')) {
+        msg = '만 $kMinSignupAge세 이상만 가입할 수 있습니다.';
+      } else if (e is PostgrestException && e.code == '23514') {
+        if (e.message.contains('users_name_length')) {
+          msg = '이름은 1자 이상 30자 이하로 입력해 주세요.';
+        } else if (e.message.contains('users_nickname_length')) {
+          msg = '닉네임은 1자 이상 20자 이하로 입력해 주세요.';
+        } else {
+          msg = fallback;
+        }
+      } else {
+        msg = ugcActionErrorMessage(e, fallback: fallback);
+      }
       setState(() => _error = msg);
     } finally {
       if (mounted) setState(() => _busy = false);

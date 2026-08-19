@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path TO public, extensions;
 
-SELECT plan(9);
+SELECT plan(10);
 
 -- ═══ 1) name/nickname 길이 CHECK ═══
 SELECT throws_ok(
@@ -24,6 +24,15 @@ SELECT throws_ok(
   '23514',
   NULL,
   '빈 닉네임은 CHECK로 막힌다'
+);
+-- btrim(name)만 쟀다면 앞뒤 공백을 채워 저장 길이를 무제한으로 늘릴 수 있었다
+-- (트림된 길이는 1이라 통과하지만 실제로는 5001자가 저장됨) — 회귀 방지.
+SELECT throws_ok(
+  $$UPDATE public.users SET nickname = repeat(' ', 5000) || '닉'
+    WHERE id = '00000000-0000-4000-8000-000000000005'::uuid$$,
+  '23514',
+  NULL,
+  '앞뒤 공백으로 채운 닉네임은 트림된 길이가 아니라 저장 길이로 막힌다'
 );
 
 -- ═══ 2) avatar_url 도메인 화이트리스트 ═══

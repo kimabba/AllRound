@@ -14,7 +14,34 @@ BEGIN;
 
 -- ═══════════════════════════════════════════════════════════════
 -- 0) 가입 경로 name 클램프 (CHECK 추가 전에 먼저 — 순서 중요)
+--    handle_new_user/ensure_profile 두 경로가 같은 클램프 규칙을 쓰므로
+--    한 곳(clamp_display_name)에만 두고 공유한다 — 나중에 30자 상한이나
+--    폴백 순서가 바뀔 때 한쪽만 고치고 넘어가면 이 마이그레이션이 막으려던
+--    바로 그 버그(가입 경로가 CHECK보다 긴 name을 넣어 가입 자체가 막힘)가
+--    재발한다(/code-review 지적).
 -- ═══════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.clamp_display_name(p_display_name text, p_email text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT left(
+    coalesce(
+      nullif(btrim(p_display_name), ''),
+      nullif(btrim(split_part(p_email, '@', 1)), ''),
+      '사용자'
+    ),
+    30
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.clamp_display_name(text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.clamp_display_name(text, text)
+  TO service_role;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
@@ -28,13 +55,9 @@ DECLARE
     ''
   );
   parsed_birth_date date;
-  clamped_name text := left(
-    coalesce(
-      nullif(btrim(new.raw_user_meta_data ->> 'display_name'), ''),
-      nullif(btrim(split_part(new.email, '@', 1)), ''),
-      '사용자'
-    ),
-    30
+  clamped_name text := public.clamp_display_name(
+    new.raw_user_meta_data ->> 'display_name',
+    new.email
   );
 BEGIN
   IF raw_birth_date IS NOT NULL THEN
@@ -74,14 +97,7 @@ BEGIN
   SELECT
     auth.uid(),
     email,
-    left(
-      coalesce(
-        nullif(btrim(raw_user_meta_data ->> 'display_name'), ''),
-        nullif(btrim(split_part(email, '@', 1)), ''),
-        '사용자'
-      ),
-      30
-    )
+    public.clamp_display_name(raw_user_meta_data ->> 'display_name', email)
   FROM auth.users
   WHERE id = auth.uid()
   ON CONFLICT (id) DO UPDATE
@@ -94,15 +110,19 @@ $$;
 -- ═══════════════════════════════════════════════════════════════
 -- 1) CHECK 제약: 실명/닉네임 길이, 아바타 URL 도메인 화이트리스트
 --    (프로덕션 실측 2026-08-19: 30행 전원 통과, NOT VALID 불필요)
+--    길이는 btrim(name)이 아니라 저장되는 값 그대로(name)를 잰다 — btrim된
+--    길이만 재면 앞뒤 공백을 잔뜩 채워 실제 저장 길이를 무제한으로 늘릴 수
+--    있다(예: 공백 5000자 + 글자 1개 → btrim 길이는 1이라 통과하지만 저장은
+--    5001자, /code-review 지적).
 -- ═══════════════════════════════════════════════════════════════
 
 ALTER TABLE public.users
   ADD CONSTRAINT users_name_length
-  CHECK (char_length(btrim(name)) BETWEEN 1 AND 30);
+  CHECK (char_length(name) BETWEEN 1 AND 30);
 
 ALTER TABLE public.users
   ADD CONSTRAINT users_nickname_length
-  CHECK (nickname IS NULL OR char_length(btrim(nickname)) BETWEEN 1 AND 20);
+  CHECK (nickname IS NULL OR char_length(nickname) BETWEEN 1 AND 20);
 
 CREATE OR REPLACE FUNCTION public.user_avatar_url_is_app_storage(p_url text)
 RETURNS boolean
