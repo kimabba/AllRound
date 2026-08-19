@@ -47,11 +47,11 @@ void main() {
         reason: '${entry.key}: 카드 아이콘 배지 대비가 AA 기준에 미달합니다.',
       );
 
-      // 버튼 아래 약관 고지(bodySmall). 작은 글씨라 완화 기준이 적용되지 않는다.
+      // 보조 문구(bodySmall/labelSmall). 작은 글씨라 완화 기준이 적용되지 않는다.
       expect(
         _contrastRatio(scheme.onSurfaceVariant, scheme.surface),
         greaterThanOrEqualTo(4.5),
-        reason: '${entry.key}: 약관 고지 대비가 AA 기준에 미달합니다.',
+        reason: '${entry.key}: 보조 문구 대비가 AA 기준에 미달합니다.',
       );
     }
   });
