@@ -71,7 +71,13 @@ class TournamentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      _locationText().isEmpty ? _dateText() : _locationText(),
+                      // 커버 이미지가 예전 날짜 컬럼(일/월 큰 글씨)을 대체하면서
+                      // 날짜를 보여줄 자리가 이 줄뿐이다. 장소가 있으면 날짜가
+                      // 통째로 가려지지 않도록 날짜를 앞에 두고 이어붙인다.
+                      [
+                        _dateText(),
+                        _locationText(),
+                      ].where((s) => s.isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tt.bodySmall?.copyWith(

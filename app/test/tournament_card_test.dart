@@ -70,12 +70,19 @@ void main() {
     await tester.pumpWidget(
       wrap(makeTournament(location: '진월국제테니스장', region: '광주')),
     );
-    expect(find.text('진월국제테니스장 · 광주'), findsOneWidget);
+    expect(find.text('6/13 (토) · 진월국제테니스장 · 광주'), findsOneWidget);
   });
 
   testWidgets('location 이 null 이면 region 으로 폴백한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament(location: null, region: '전남')));
-    expect(find.text('전남'), findsOneWidget);
+    expect(find.text('6/13 (토) · 전남'), findsOneWidget);
+  });
+
+  // 커버 이미지가 예전 날짜 컬럼을 대체하면서, 장소가 있으면 날짜가 카드
+  // 어디에도 안 보이던 회귀(#423 리뷰)를 막는다.
+  testWidgets('장소가 있어도 날짜가 계속 보인다', (tester) async {
+    await tester.pumpWidget(wrap(makeTournament(location: '진월국제테니스장')));
+    expect(find.textContaining('6/13'), findsWidgets);
   });
 
   testWidgets('마감 미정이면 신청 줄을 그리지 않는다', (tester) async {
