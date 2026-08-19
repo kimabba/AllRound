@@ -118,7 +118,7 @@ DB-driven 크롤러 소스 정의
 - `notifications_log` — 알림 이력 (중복 방지 unique key)
 - `crawl_audit` — 크롤 실행 감사 로그
 - `regions` — 권역 (8개 시드)
-- `rule_articles` — 스포츠 룰북 컨텐츠
+- `rule_articles` — 스포츠 룰북 콘텐츠. 2026-08-19 기준 게시 글은 테니스 33건(기존 랭킹 규정), 풋살 30건(FIFA 현행 풋살 법칙 기준)이다. 검수 전인 ITF 2026 테니스 요약 18건은 준모의 도메인 검토 전까지 비게시 상태로 보존한다. 풋살은 경기 규칙·운영·장비·포지션 중심으로 노출하며 홍보·훈련·건강 가이드는 게시 해제했다. 보강 글 본문에는 공식 출처 URL을 남긴다.
 - `rule_article_clicks` — 룰북 유효 클릭 기록(사용자·규칙별 최근 24시간 중복 제거, 인기 카드 집계용)
 - `intent_examples` — 챗봇 의도 분류 예시
 - `qa_cache` — 챗봇 응답 캐시
@@ -138,3 +138,8 @@ DB-driven 크롤러 소스 정의
 - 029: division_codes_reset_eligible_grades
 - 030: invoke_edge_function_internal_cron_jwt
 - 031: club_management (clubs status + club_members + club_join_requests + RLS)
+- 20260819080000: 최근 24시간 룰북 클릭 집계와 종목별 인기 규칙 RPC 추가
+- 20260819090000: ITF 2026 테니스 규칙 보강, FIFA 현행 풋살 누락 규칙 추가 및 골키퍼·카드 설명 오류 수정
+- 20260819100000: 풋살 룰북을 경기 규정 중심 30건으로 정리
+- 20260819110000: 풋살 경기장 글을 실제 규격 수치 중심으로 보완
+- 20260819120000: 준모 검수 전 ITF 2026 테니스 요약 18건을 비게시 보관
