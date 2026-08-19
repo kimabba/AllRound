@@ -1046,7 +1046,11 @@ class _TournamentListCard extends StatelessWidget {
   /// 배지에 넣을 지역 한 단어. 여러 지역 공동개최는 첫 지역만, 지역이 없는
   /// 대회(전국대회)는 '전국'으로 읽는다.
   String get _regionBadge {
-    final region = (tournament.region ?? '').split('·').first.trim();
+    // _regionCounts 와 같은 규칙: 빈 조각(선행 구분자 등)은 건너뛴다.
+    final region = (tournament.region ?? '')
+        .split('·')
+        .map((part) => part.trim())
+        .firstWhere((part) => part.isNotEmpty, orElse: () => '');
     return region.isEmpty ? '전국' : region;
   }
 

@@ -173,7 +173,10 @@ typedef MyGradeSummary = ({OrgRankingRow ranking, int? top10Points});
 OrgRankingRow? topDivisionRanking(List<OrgRankingRow> rows) {
   if (rows.isEmpty) return null;
   int tier(OrgRankingRow row) {
-    final order = kRankingDivisions[row.orgCode] ?? const <String>[];
+    final order = kRankingDivisions[row.orgCode];
+    // 협회 자체가 목록에 없으면(미러 확장 과도기) 맨 뒤로 보낸다. order.length(0)를
+    // 쓰면 목록에 있는 협회의 1순위 부서(tier 0)와 값이 같아져 잘못 앞서 뽑힌다.
+    if (order == null) return 1 << 30;
     final index = order.indexOf(row.divisionCode);
     return index < 0 ? order.length : index;
   }

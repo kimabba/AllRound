@@ -10,11 +10,12 @@ import 'package:intl/date_symbol_data_local.dart';
 
 OrgRankingRow _row({
   required String divisionCode,
+  String orgCode = 'gj',
   int rank = 12,
   int totalPoints = 800,
 }) =>
     OrgRankingRow(
-      orgCode: 'gj',
+      orgCode: orgCode,
       divisionCode: divisionCode,
       rank: rank,
       playerName: '홍길동',
@@ -74,6 +75,16 @@ void main() {
 
     test('빈 목록이면 null 이라 카드가 뜨지 않는다', () {
       expect(topDivisionRanking(const []), isNull);
+    });
+
+    // kRankingDivisions 에 협회 자체가 없으면(미러 확장 과도기) 목록에 있는
+    // 협회의 1순위 부서와 우연히 같은 tier(0)로 묶여 잘못 앞서 뽑히면 안 된다.
+    test('협회 자체가 미러 목록에 없으면 목록에 있는 협회 뒤로 밀린다', () {
+      final picked = topDivisionRanking([
+        _row(orgCode: 'kata', divisionCode: 'kata_1'),
+        _row(orgCode: 'gj', divisionCode: 'gj_m_general'),
+      ]);
+      expect(picked?.orgCode, 'gj');
     });
   });
 
