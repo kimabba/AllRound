@@ -6,6 +6,22 @@ PROJECT_REF ?= bsjdgwmveokanclqwtvx
 # 실기기는 --release 필수 (debug 는 iOS 26 ProMotion 크래시 flutter#183900)
 DEVICE_ID ?= macos
 
+# `flutter run -d chrome` 은 크로미움 계열 브라우저가 있어야 그 디바이스를 만든다.
+# Google Chrome 이 없으면 목록에 chrome 이 아예 안 나와 "No supported devices
+# found with name or id matching 'chrome'" 로 죽는다. Flutter 공식 방식대로
+# CHROME_EXECUTABLE 로 대체 브라우저를 알려준다 — Brave·Edge·Chromium 은 같은
+# 엔진이라 핫리로드·DevTools 가 Chrome 과 동일하게 동작한다.
+# 이미 export 해 둔 값이 있으면 그것을 존중한다(?=).
+CHROME_BIN ?= $(shell for p in \
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
+  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+  "/Applications/Chromium.app/Contents/MacOS/Chromium" \
+  "$$(command -v google-chrome 2>/dev/null)" \
+  "$$(command -v chromium 2>/dev/null)"; do \
+    [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p" && break; \
+  done)
+
 .PHONY: setup backend app admin web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
@@ -69,7 +85,9 @@ web:
 # 터미널 4: 웹 어드민 대시보드 (Chrome)
 admin:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
-	cd app && flutter run -d chrome --web-port=3000 --dart-define-from-file=.env.local --dart-define=ADMIN_MODE=true
+	@test -n "$(CHROME_BIN)" || (echo "❌ 크로미움 계열 브라우저를 못 찾았습니다 (Chrome·Brave·Edge·Chromium)." && echo "   설치하거나 CHROME_EXECUTABLE 에 실행 파일 경로를 지정하세요." && exit 1)
+	@echo "🌐 브라우저: $(CHROME_BIN)"
+	cd app && CHROME_EXECUTABLE="$(CHROME_BIN)" flutter run -d chrome --web-port=3000 --dart-define-from-file=.env.local --dart-define=ADMIN_MODE=true
 
 # ────────────────────────────────────────────────────
 # 프로덕션 릴리스 빌드 (스토어 제출용)
