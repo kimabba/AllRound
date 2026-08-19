@@ -728,6 +728,10 @@ class _MessageBubble extends StatelessWidget {
                                   color: cs.onSurface,
                                   height: 1.5,
                                 ),
+                                h2: tt.titleMedium?.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 h3: tt.titleSmall?.copyWith(
                                   color: cs.onSurface,
                                   fontWeight: FontWeight.bold,
