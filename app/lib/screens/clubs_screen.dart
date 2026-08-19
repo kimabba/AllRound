@@ -141,7 +141,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       const sports = <String>['tennis', 'futsal'];
       final results = await Future.wait(
         sports.map(
-          (sport) => api.searchClubs(sport: sport),
+          (sport) => api.searchClubs(sport: sport, region: _clubFilters.region),
         ),
       );
       final seen = <String>{};
