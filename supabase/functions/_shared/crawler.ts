@@ -219,6 +219,10 @@ export async function upsertTournament(
         updatePayload.format_status = 'pending';
         updatePayload.format_claim_token = null;
         updatePayload.claimed_at = null;
+        // 시도 횟수도 되돌린다. 큐 조건이 format_attempts < 3 이라, 실패 이력을 물려받으면
+        // pending 인 채로 영영 안 집힌다 — 원문이 바뀌었는데도 재시도조차 못 한다.
+        // (2026-08 프로덕션 KATO 15건이 attempts=3·pending 으로 굳어 정형화 0회였다.)
+        updatePayload.format_attempts = 0;
       }
     }
     const { error } = await audit.supabase
