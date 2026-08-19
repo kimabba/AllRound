@@ -21,11 +21,13 @@ alter table public.tournament_submission_contacts enable row level security;
 create policy tournament_submission_contacts_read_own
   on public.tournament_submission_contacts
   for select
+  to authenticated
   using ((select auth.uid()) = submitted_by);
 
 create policy tournament_submission_contacts_read_admin
   on public.tournament_submission_contacts
   for select
+  to authenticated
   using (public.is_admin());
 
 revoke all on public.tournament_submission_contacts from anon, authenticated;
