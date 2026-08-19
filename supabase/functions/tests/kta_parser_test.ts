@@ -107,7 +107,8 @@ Deno.test('buildTournament: dict 매칭 시 eligible_grades/division_label_local
     endDate: null,
     applicationDeadline: null,
     location: '서울 테니스경기장',
-    url: 'https://join.kortennis.or.kr/sportsForAll/sportsForAllRellyInfo.do?cmptEvntCd=202600203&dtlSt=Tab1',
+    url:
+      'https://join.kortennis.or.kr/sportsForAll/sportsForAllRellyInfo.do?cmptEvntCd=202600203&dtlSt=Tab1',
   };
   const dict = [
     { code: 'kta_masters', synonyms: ['마스터스부', '마스터스'], label_ko: '마스터스부' },
