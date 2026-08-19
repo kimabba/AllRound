@@ -20,6 +20,17 @@ import { REGION_LABELS, type RegionCode } from './enums.ts';
 //    붙여 오탐을 막는다. "완주"(다 뜀)·"영광"(榮光)·"고령"(高齡) 같은 말이 대회명에 흔하다.
 //  - 두 시도에 같은 이름이 있으면 넣지 않는다 → AMBIGUOUS_NAMES.
 export const SIGUNGU_TO_REGION: Readonly<Record<string, RegionCode>> = {
+  // 이름과 소재지가 다른 대학 — 코트를 대회 장소로 자주 빌린다. 시도 라벨보다 길어서
+  // 같은 위치에서 이긴다(예: "충남대학교"의 '충남대' > '충남').
+  충남대: 'daejeon',
+  전남대: 'gwangju',
+  경북대: 'daegu',
+  대구대: 'gyeongbuk', // 경산 소재
+  세종대: 'seoul',
+  // 중의적인 짧은 이름을 살리는 긴 표기. "광주광역시…"는 경기도 광주시와 헷갈릴 일이 없다.
+  광주광역시: 'gwangju',
+  경기도: 'gyeonggi',
+
   // 서울 (자치구 25 중 중구·강서구는 타 광역시와 중복이라 제외)
   종로구: 'seoul',
   용산구: 'seoul',
@@ -60,7 +71,7 @@ export const SIGUNGU_TO_REGION: Readonly<Record<string, RegionCode>> = {
   // 대구 (군위군은 2023-07 경북에서 편입)
   수성구: 'daegu',
   달서구: 'daegu',
-  달성: 'daegu',
+  달성군: 'daegu', // '달성'은 "목표 달성"과 겹친다
   군위: 'daegu',
 
   // 인천
@@ -69,8 +80,13 @@ export const SIGUNGU_TO_REGION: Readonly<Record<string, RegionCode>> = {
   남동구: 'incheon',
   부평구: 'incheon',
   계양구: 'incheon',
-  강화: 'incheon',
+  강화군: 'incheon', // '강화'는 "전력 강화"와 겹친다
   옹진: 'incheon',
+  // 2026-07-01 인천 행정구역 개편(중·동·서구 폐지 → 제물포·영종·서해·검단구)
+  제물포구: 'incheon',
+  영종구: 'incheon',
+  서해구: 'incheon',
+  검단구: 'incheon',
 
   // 광주 (동·서·남·북구는 중복이라 광산구만 남는다)
   광산구: 'gwangju',

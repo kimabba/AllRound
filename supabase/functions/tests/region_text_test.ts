@@ -57,7 +57,20 @@ Deno.test('regionCodeFromText: 자치구는 구 접미사와 함께 매칭한다
 });
 
 Deno.test('regionCodeFromText: 긴 이름이 짧은 이름을 이긴다', () => {
+  // 위치가 다를 때: '남양주'(0) 가 '양주'(1) 를 이긴다.
   assertEquals(regionCodeFromText('남양주시립테니스장'), 'gyeonggi');
+  // 위치가 같을 때: 대학 이름이 시도 라벨을 이겨야 한다. 이름과 소재지가 다르다.
+  assertEquals(regionCodeFromText('충남대학교 테니스장'), 'daejeon');
+  assertEquals(regionCodeFromText('전남대학교 스포츠센터 코트'), 'gwangju');
+  assertEquals(regionCodeFromText('경북대학교 테니스장'), 'daegu');
+  assertEquals(regionCodeFromText('세종대학교 코트'), 'seoul');
+  assertEquals(regionCodeFromText('대구대학교 테니스장'), 'gyeongbuk');
+});
+
+Deno.test('regionCodeFromText: 긴 표기로 쓰면 중의적인 이름도 살린다', () => {
+  // '광주' 단독은 중의라 못 쓰지만 "광주광역시"는 확정이다.
+  assertEquals(regionCodeFromText('광주광역시 광산구 소촌테니스장'), 'gwangju');
+  assertEquals(regionCodeFromText('경기도 화성시 봉담읍 협성대학교 풋살구장'), 'gyeonggi');
 });
 
 Deno.test('regionCodeFromText: 빈 입력은 null', () => {
@@ -93,6 +106,8 @@ Deno.test('지명이 아닌 흔한 문구에는 걸리지 않는다', () => {
     '테니스코트 외 3곳',
     '참가비 30,000원',
     '남녀 혼합복식 국화부',
+    '목표 달성 기념 대회', // '달성'(대구 달성군)
+    '전력 강화 훈련 대회', // '강화'(인천 강화군)
   ];
   for (const text of NOT_PLACES) {
     assertEquals(regionCodeFromText(text), null, `"${text}" 에서 지역이 유도되면 안 된다`);

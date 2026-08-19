@@ -150,16 +150,18 @@ export async function upsertTournament(
   rawHtml?: string,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
-  // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
-  // 소스에 권역이 없는 전국 대회(KATO)는 장소·제목의 시군구로 유도한다. 주최자는 쓰지
-  // 않는다 — "㈜유성" 같은 상호가 지역으로 오탐된다.
-  const regionCode = regionCodeFromLabel(t.region) ??
+  // region_code 는 서버사이드 지역 필터(정확매칭)의 키다. 두 출처를 구분해서 다룬다.
+  //  - labelCode: 소스가 명시한 권역(crawl_sources.region) — 사실이므로 항상 반영한다.
+  //  - guessedCode: 장소·제목의 시군구에서 유도한 추측 — 비어 있는 칸만 채운다.
+  // 주최자는 쓰지 않는다: "㈜유성" 같은 상호가 지역으로 오탐된다.
+  const labelCode = regionCodeFromLabel(t.region);
+  const guessedCode = labelCode ??
     regionCodeFromText(t.location) ??
     regionCodeFromText(t.title);
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash, status, delisted_at',
+      'id, title, start_date, application_deadline, eligible_grades, region, region_code, location, manual_description, format_source_hash, status, delisted_at',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -209,9 +211,11 @@ export async function upsertTournament(
     // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
     if (t.prize !== undefined) updatePayload.prize = t.prize;
     if (t.format !== undefined) updatePayload.format = t.format;
-    // region_code 도 같은 취지로 보존한다. 유도 실패(null)로 덮으면 관리자가 손으로
-    // 고쳐둔 지역이 재크롤 때마다 지워지고, 그 대회는 지역 필터에서 사라진다.
-    if (regionCode) updatePayload.region_code = regionCode;
+    // 소스가 명시한 권역은 항상 반영하고, 텍스트에서 유도한 추측은 빈 칸만 채운다.
+    // 추측으로 덮으면 (1) 유도 실패 시 기존 지역이 지워지고 (2) 유도가 틀렸을 때
+    // 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌린다 — 고칠 방법이 없어진다.
+    if (labelCode) updatePayload.region_code = labelCode;
+    else if (guessedCode && !existing.region_code) updatePayload.region_code = guessedCode;
     // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
     // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
     // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
@@ -258,7 +262,7 @@ export async function upsertTournament(
       end_date: t.end_date ?? null,
       application_deadline: t.application_deadline ?? null,
       region: t.region ?? null,
-      region_code: regionCode,
+      region_code: guessedCode,
       location: t.location ?? null,
       eligible_grades: t.eligible_grades,
       division_label_local: t.division_label_local ?? null,

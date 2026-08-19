@@ -264,3 +264,23 @@ Deno.test('UPDATE: 지역 유도에 실패하면 region_code 를 덮어쓰지 �
   });
   assert(!('region_code' in captured[0].payload), 'region_code 는 payload 에서 빠져야 한다');
 });
+
+Deno.test('UPDATE: 이미 지역이 있으면 추측으로 덮어쓰지 않는다', async () => {
+  // 유도가 틀렸을 때 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌리면 고칠 길이 없다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, region: null, region_code: 'daejeon' });
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '충남 어딘가 테니스장', // 유도하면 chungnam 이지만 사람이 daejeon 으로 고쳐둔 상태
+  });
+  assert(!('region_code' in captured[0].payload), '사람이 넣은 값이 추측보다 우선해야 한다');
+});
+
+Deno.test('UPDATE: 소스가 명시한 권역은 기존 값이 있어도 반영한다', async () => {
+  // crawl_sources.region 은 추측이 아니라 사실이다 — 소스 설정을 고치면 반영돼야 한다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured, { ...EXISTING_ROW, region_code: 'gwangju' });
+  await upsertTournament(audit, 'tennis', { ...BASE_TOURNAMENT, region: '전남' });
+  assertEquals(captured[0].payload.region_code, 'jeonnam');
+});
