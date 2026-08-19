@@ -240,3 +240,27 @@ Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정�
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
 });
+
+Deno.test('UPDATE: 소스에 권역이 없어도 장소의 시군구로 region_code 를 채운다', async () => {
+  // KATO 전국 소스는 crawl_sources.region 이 비어 있다 → 장소에서 유도해야 지역 필터에 뜬다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '안성시립테니스코트 외',
+  });
+  assertEquals(captured[0].payload.region_code, 'gyeonggi');
+});
+
+Deno.test('UPDATE: 지역 유도에 실패하면 region_code 를 덮어쓰지 않는다', async () => {
+  // 관리자가 손으로 고쳐둔 지역이 재크롤 때마다 null 로 지워지면 안 된다.
+  const captured: CapturedUpdate[] = [];
+  const audit = makeAudit(captured);
+  await upsertTournament(audit, 'tennis', {
+    ...BASE_TOURNAMENT,
+    region: undefined,
+    location: '광주 양벌테니스 돔구장및 보조경기장', // 광주광역시/경기 광주시 중의 → 유도 불가
+  });
+  assert(!('region_code' in captured[0].payload), 'region_code 는 payload 에서 빠져야 한다');
+});

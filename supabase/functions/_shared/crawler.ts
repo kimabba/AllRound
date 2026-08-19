@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from './supabase.ts';
 import { regionCodeFromLabel, type Sport } from './enums.ts';
+import { regionCodeFromText } from './region_text.ts';
 
 export interface CrawlerTournament {
   title: string;
@@ -150,7 +151,11 @@ export async function upsertTournament(
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
   // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
-  const regionCode = regionCodeFromLabel(t.region);
+  // 소스에 권역이 없는 전국 대회(KATO)는 장소·제목의 시군구로 유도한다. 주최자는 쓰지
+  // 않는다 — "㈜유성" 같은 상호가 지역으로 오탐된다.
+  const regionCode = regionCodeFromLabel(t.region) ??
+    regionCodeFromText(t.location) ??
+    regionCodeFromText(t.title);
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
@@ -204,6 +209,9 @@ export async function upsertTournament(
     // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
     if (t.prize !== undefined) updatePayload.prize = t.prize;
     if (t.format !== undefined) updatePayload.format = t.format;
+    // region_code 도 같은 취지로 보존한다. 유도 실패(null)로 덮으면 관리자가 손으로
+    // 고쳐둔 지역이 재크롤 때마다 지워지고, 그 대회는 지역 필터에서 사라진다.
+    if (regionCode) updatePayload.region_code = regionCode;
     // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
     // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
     // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
@@ -229,7 +237,6 @@ export async function upsertTournament(
         end_date: t.end_date ?? null,
         application_deadline: t.application_deadline ?? null,
         region: t.region ?? null,
-        region_code: regionCode,
         location: t.location ?? null,
         entry_fee: t.entry_fee ?? null,
       })
