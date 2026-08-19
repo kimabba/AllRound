@@ -20,6 +20,17 @@ void main() {
     expect(source, contains("context.go('/tournaments')"));
   });
 
+  test('대회 제보는 담당자 이름과 연락처를 비공개 제출값으로 보낸다', () {
+    final source = File('lib/screens/tournaments/tournament_submit_screen.dart')
+        .readAsStringSync();
+
+    expect(source, contains("'contact_name': _contactName.text.trim()"));
+    expect(source, contains("'contact_value': _contactValue.text.trim()"));
+    expect(source, contains("_inputDeco('담당자 이름 *')"));
+    expect(source, contains("_inputDeco('전화번호 또는 이메일 *')"));
+    expect(source, contains('공개 대회 화면에는 표시되지 않습니다.'));
+  });
+
   test('제보 화면에 협회 하드코딩 목록이 없다', () {
     final src = File('lib/screens/tournaments/tournament_submit_screen.dart')
         .readAsStringSync();

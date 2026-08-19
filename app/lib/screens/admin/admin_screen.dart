@@ -878,6 +878,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final source = t['source'] as String? ?? '';
           final kind = t['submission_kind'] as String? ?? 'crawler';
           final submitterEmail = t['submitted_by_email'] as String?;
+          final contactName = t['contact_name'] as String? ?? '';
+          final contactValue = t['contact_value'] as String? ?? '';
           final sourceLabel = kind == 'user'
               ? (submitterEmail != null
                   ? submitterEmail.split('@').first
@@ -952,6 +954,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                             Text(
                               '포스터: $posterUrl',
                               style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (contactName.isNotEmpty ||
+                              contactValue.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '담당자: ${[
+                                if (contactName.isNotEmpty) contactName,
+                                if (contactValue.isNotEmpty) contactValue,
+                              ].join(' · ')}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],

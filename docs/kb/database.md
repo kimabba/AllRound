@@ -11,11 +11,11 @@ Project ref: `bsjdgwmveokanclqwtvx`
 | email | text | |
 | display_name | text? | |
 | role | user_role | 'user' \| 'admin' |
-| birth_date | date? | 이메일 가입 시 Auth Hook 검증 후 트리거가 즉시 저장 |
+| birth_date | date? | 이메일 가입은 Auth Hook 검증 후 즉시 저장, Google 신규 가입은 온보딩에서 저장 |
 
 ### 가입 전 Auth 경계
 - `before_user_created_allround(event jsonb)` — 이메일 생년월일 누락·형식 오류·만 14세 미만을 `auth.users` INSERT 전에 거부
-- 신규 Google identity는 검증된 생년월일 전달 경로가 마련될 때까지 거부하며 기존 Google identity 로그인은 유지
+- 신규 Google identity는 빈 profile 생성을 허용하고, 온보딩 저장 전에는 `has_verified_signup_age()` 기반 RLS·Edge guard로 핵심 쓰기를 차단
 - 함수 실행권한은 `supabase_auth_admin`에만 부여하고 앱의 `anon`/`authenticated` 역할에는 부여하지 않음
 
 ### user_sports
@@ -57,6 +57,16 @@ Project ref: `bsjdgwmveokanclqwtvx`
 | regulation_schema_version | smallint? | 요강 문서 계약 버전. 문서가 없으면 NULL |
 | regulation_fields, regulation_notes, regulation_body | jsonb/text[]/text? | 구버전 앱·검색 호환용 파생 요강 |
 | 풋살 전용 | | entry_fee_unit, player_count, venue_type, surface_type 등 |
+
+### tournament_submission_contacts
+사용자가 제보한 대회의 담당자 개인정보를 공개 대회 행과 분리해 보관한다.
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| tournament_id | uuid PK | tournaments FK, 대회 삭제 시 함께 삭제 |
+| submitted_by | uuid | 제보자 users FK, 계정 삭제 시 함께 삭제 |
+| contact_name | text | 담당자 이름 |
+| contact_value | text | 관리자 확인용 전화번호 또는 이메일 |
+| created_at | timestamptz | 저장 시각 |
 
 ### clubs
 | 컬럼 | 타입 | 설명 |
@@ -109,6 +119,7 @@ DB-driven 크롤러 소스 정의
 - `crawl_audit` — 크롤 실행 감사 로그
 - `regions` — 권역 (8개 시드)
 - `rule_articles` — 스포츠 룰북 컨텐츠
+- `rule_article_clicks` — 룰북 유효 클릭 기록(사용자·규칙별 최근 24시간 중복 제거, 인기 카드 집계용)
 - `intent_examples` — 챗봇 의도 분류 예시
 - `qa_cache` — 챗봇 응답 캐시
 
@@ -117,6 +128,7 @@ DB-driven 크롤러 소스 정의
 
 ## RLS 정책 요약
 - tournaments: published만 일반 공개, admin은 전체
+- tournament_submission_contacts: 제보자 본인과 admin만 조회, 쓰기는 Edge Function의 service role만 허용
 - clubs: approved만 일반 공개, admin은 전체
 - club_members: 본인 + 같은 클럽 멤버만 조회
 - club_join_requests: 본인 + 해당 클럽 owner/manager만 조회

@@ -192,6 +192,121 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('기본 MY 프로필 카드는 불필요한 상단 공백을 줄인다', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    final theme = AppTheme.light();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: CustomScrollView(
+              slivers: [
+                ProfileHeroSliver(
+                  initial: '올',
+                  title: '올라운드',
+                  subtitle: 'allround@example.com',
+                  infoLine: null,
+                  sports: const AsyncData([]),
+                  tennisOrgs: const AsyncData([]),
+                  avatarBytes: null,
+                  avatarUrl: null,
+                  onAvatarTap: () {},
+                  onNotificationsTap: () {},
+                  unreadNotificationCount: 0,
+                  onMoreTap: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final heroCard = find.byWidgetPredicate((widget) {
+      if (widget is! Container) return false;
+      final decoration = widget.decoration;
+      return decoration is BoxDecoration &&
+          decoration.color == theme.colorScheme.primary &&
+          decoration.borderRadius == AppRadius.hero;
+    });
+
+    expect(heroCard, findsOneWidget);
+    expect(tester.getSize(heroCard).height, lessThanOrEqualTo(204));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('MY 프로필 헤더는 본문과 함께 스크롤되어 화면을 덮지 않는다', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: CustomScrollView(
+              slivers: [
+                ProfileHeroSliver(
+                  initial: '올',
+                  title: '올라운드',
+                  subtitle: 'allround@example.com',
+                  infoLine: null,
+                  sports: const AsyncData([]),
+                  tennisOrgs: const AsyncData([]),
+                  avatarBytes: null,
+                  avatarUrl: null,
+                  onAvatarTap: () {},
+                  onNotificationsTap: () {},
+                  unreadNotificationCount: 0,
+                  onMoreTap: () {},
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 1400)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MY'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('MY 도움말은 고객센터와 대회 등록 문의만 제공한다', (tester) async {
+    var customerSupportTapped = false;
+    var tournamentInquiryTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ProfileServiceSection(
+            onCustomerSupportTap: () => customerSupportTapped = true,
+            onTournamentInquiryTap: () => tournamentInquiryTapped = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('도움말'), findsOneWidget);
+    expect(find.text('고객센터'), findsOneWidget);
+    expect(find.text('대회 등록 문의'), findsOneWidget);
+    expect(find.text('룰북'), findsNothing);
+
+    await tester.tap(find.text('고객센터'));
+    await tester.tap(find.text('대회 등록 문의'));
+
+    expect(customerSupportTapped, isTrue);
+    expect(tournamentInquiryTapped, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('iPhone 안전영역에서 MY 상단 버튼과 프로필 카드가 겹치지 않는다', (tester) async {
     _setViewport(tester, const Size(390, 844));
     final theme = AppTheme.light();
@@ -325,6 +440,13 @@ void main() {
       greaterThanOrEqualTo(AppSizes.touchTarget),
     );
     expect(tester.getBottomRight(submitButton).dy, lessThanOrEqualTo(568));
+
+    await tester.scrollUntilVisible(
+      find.text('담당자 정보'),
+      360,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('담당자 정보'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -41,14 +41,34 @@ mixin AdminApi on ApiBase {
           'start_date.gte.$cutoff',
         )
         .order('created_at', ascending: false);
-    return (rows as List).map((r) {
-      final m = Map<String, dynamic>.from(r as Map);
+    final reviewRows = (rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    final tournamentIds = reviewRows
+        .map((row) => row['id'])
+        .whereType<String>()
+        .toList(growable: false);
+    final contactsByTournament = <String, Map<String, dynamic>>{};
+    if (tournamentIds.isNotEmpty) {
+      final contactRows = await supabase
+          .from('tournament_submission_contacts')
+          .select('tournament_id, contact_name, contact_value')
+          .inFilter('tournament_id', tournamentIds);
+      for (final row in List<Map<String, dynamic>>.from(contactRows as List)) {
+        final tournamentId = row['tournament_id'];
+        if (tournamentId is String) contactsByTournament[tournamentId] = row;
+      }
+    }
+    return reviewRows.map((m) {
       final src = m['source'] as String? ?? '';
       final submittedBy = m['submitted_by'];
       m['submission_kind'] = (src == 'user_submission' || submittedBy != null)
           ? 'user'
           : 'crawler';
       m['submitted_by_email'] = null;
+      final contact = contactsByTournament[m['id']];
+      m['contact_name'] = contact?['contact_name'];
+      m['contact_value'] = contact?['contact_value'];
       return m;
     }).toList();
   }
@@ -502,11 +522,12 @@ mixin AdminApi on ApiBase {
   /// [month] 를 안 주면 서버가 KST 기준 이번 달로 판정한다 — 기기 로컬 시간대가
   /// KST 와 다르면(예: UTC) 클라이언트가 계산한 "이번 달"이 월 경계 근처에서
   /// 서버 판정과 어긋날 수 있어, 굳이 계산해 보내지 않는다.
-  Future<List<Map<String, dynamic>>> geminiUsageDailyStats([DateTime? month]) async {
+  Future<List<Map<String, dynamic>>> geminiUsageDailyStats(
+      [DateTime? month]) async {
     final p = month == null
         ? null
         : '${month.year.toString().padLeft(4, '0')}-'
-              '${month.month.toString().padLeft(2, '0')}-01';
+            '${month.month.toString().padLeft(2, '0')}-01';
     final res = await supabase.rpc(
       'gemini_usage_daily_stats',
       params: {'p_month': p},
