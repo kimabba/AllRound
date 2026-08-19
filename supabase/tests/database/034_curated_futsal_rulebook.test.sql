@@ -4,15 +4,17 @@ begin;
 
 select plan(7);
 
+with published_count as (
+  select count(*)::integer as value
+  from public.rule_articles
+  where sport = 'futsal' and published
+)
 select is(
-  (
-    select count(*)::integer
-    from public.rule_articles
-    where sport = 'futsal' and published
-  ),
+  value,
   30,
-  '풋살 룰북은 경기 관련 게시 글 30건만 노출한다'
-);
+  format('풋살 룰북은 경기 관련 게시 글 30건만 노출한다 (실제 %s건)', value)
+)
+from published_count;
 
 select is(
   (
