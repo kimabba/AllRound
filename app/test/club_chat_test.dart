@@ -56,7 +56,7 @@ void main() {
 
   test('실시간 DB 공개와 채팅 도배 제한이 마이그레이션에 포함된다', () {
     final migration = File(
-      '../supabase/migrations/20260819040000_enable_realtime_club_chat.sql',
+      '../supabase/migrations/20260819100000_enable_realtime_club_chat.sql',
     ).readAsStringSync();
 
     expect(migration, contains('add table public.club_chat_messages'));
