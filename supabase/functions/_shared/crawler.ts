@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from './supabase.ts';
 import { regionCodeFromLabel, type Sport } from './enums.ts';
+import { regionCodeFromText } from './region_text.ts';
 
 export interface CrawlerTournament {
   title: string;
@@ -149,12 +150,18 @@ export async function upsertTournament(
   rawHtml?: string,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
-  // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
-  const regionCode = regionCodeFromLabel(t.region);
+  // region_code 는 서버사이드 지역 필터(정확매칭)의 키다. 두 출처를 구분해서 다룬다.
+  //  - labelCode: 소스가 명시한 권역(crawl_sources.region) — 사실이므로 항상 반영한다.
+  //  - guessedCode: 장소·제목의 시군구에서 유도한 추측 — 비어 있는 칸만 채운다.
+  // 주최자는 쓰지 않는다: "㈜유성" 같은 상호가 지역으로 오탐된다.
+  const labelCode = regionCodeFromLabel(t.region);
+  const guessedCode = labelCode ??
+    regionCodeFromText(t.location) ??
+    regionCodeFromText(t.title);
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash, status, delisted_at',
+      'id, title, start_date, application_deadline, eligible_grades, region, region_code, location, manual_description, format_source_hash, status, delisted_at',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -204,6 +211,14 @@ export async function upsertTournament(
     // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
     if (t.prize !== undefined) updatePayload.prize = t.prize;
     if (t.format !== undefined) updatePayload.format = t.format;
+    // 소스가 명시한 권역은 항상 반영하고, 텍스트에서 유도한 추측은 빈 칸만 채운다.
+    // 추측으로 덮으면 (1) 유도 실패 시 기존 지역이 지워지고 (2) 유도가 틀렸을 때
+    // 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌린다 — 고칠 방법이 없어진다.
+    // 한계: 빈 요강(location='.')이라 제목으로 추측해 넣은 값은, 나중에 협회가 장소를
+    // 채워 더 나은 추측이 가능해져도 그대로 남는다. 추측끼리 우열을 가리려면 출처 컬럼이
+    // 필요하다 — 드문 경우라 지금은 두고, 검수에서 바로잡는다.
+    if (labelCode) updatePayload.region_code = labelCode;
+    else if (guessedCode && !existing.region_code) updatePayload.region_code = guessedCode;
     // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
     // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
     // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
@@ -233,7 +248,6 @@ export async function upsertTournament(
         end_date: t.end_date ?? null,
         application_deadline: t.application_deadline ?? null,
         region: t.region ?? null,
-        region_code: regionCode,
         location: t.location ?? null,
         entry_fee: t.entry_fee ?? null,
       })
@@ -255,7 +269,7 @@ export async function upsertTournament(
       end_date: t.end_date ?? null,
       application_deadline: t.application_deadline ?? null,
       region: t.region ?? null,
-      region_code: regionCode,
+      region_code: guessedCode,
       location: t.location ?? null,
       eligible_grades: t.eligible_grades,
       division_label_local: t.division_label_local ?? null,
