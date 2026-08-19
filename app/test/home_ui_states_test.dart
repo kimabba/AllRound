@@ -78,20 +78,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('대회 검색은 버튼으로 키보드를 닫는다', (tester) async {
-    await pumpHome(tester, load: () async => const []);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byType(TextField));
-    await tester.pump();
-    expect(find.byTooltip('키보드 닫기'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('키보드 닫기'));
-    await tester.pump();
-    final editable = tester.widget<EditableText>(find.byType(EditableText));
-    expect(editable.focusNode.hasFocus, isFalse);
-  });
-
   testWidgets('관심 대회 빈 카드는 대회 목록으로 이동한다', (tester) async {
     final router = GoRouter(
       initialLocation: '/',

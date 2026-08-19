@@ -23,5 +23,6 @@ alter table public.notifications
     'club_join_request', 'club_join_approved', 'club_join_rejected',
     'club_approval_request', 'club_creation_rejected',
     'club_inquiry_received', 'club_inquiry_reply',
-    'club_dues_reminder', 'club_chat_message'
+    'club_dues_reminder', 'club_chat_message',
+    'ranking_claim_request', 'ranking_claim_approved', 'ranking_claim_rejected'
   ));
