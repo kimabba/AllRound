@@ -232,6 +232,21 @@ function splitApplicationInfo(value: string | undefined): {
   };
 }
 
+/**
+ * 라벨 셀이 합쳐진 공고도 잡는다. 같은 항목을 공고마다 다르게 적는다 —
+ * "환불마감" 인 곳도 있고 "접수개시 및<br>환불마감"(→ '접수개시및환불마감') 인 곳도 있다.
+ * 정확매칭만 하면 값이 표에 뻔히 있는데도 "빠진 섹션"으로 판정돼 요강 전체가 검수로
+ * 튕긴다(2026-08 프로덕션 KATO 15건이 이 상태로 정형화 0회).
+ */
+function findValue(values: Map<string, string>, needle: string): string | undefined {
+  const exact = values.get(needle);
+  if (exact) return exact;
+  for (const [label, value] of values) {
+    if (label.includes(needle)) return value;
+  }
+  return undefined;
+}
+
 function addField(fields: RegulationField[], label: string, value: string | undefined): void {
   if (meaningful(value)) fields.push({ label, value });
 }
@@ -255,7 +270,8 @@ export function parseKatoRegulation(html: string): KatoRegulationResult | null {
   const main = parseMainTable(root);
   const applicationSchedules = parseApplicationSchedules(root);
   const schedules = mergeSchedules(main.schedules, applicationSchedules);
-  const accountInfo = splitApplicationInfo(main.values.get('신청안내및입금계좌'));
+  const accountInfo = splitApplicationInfo(findValue(main.values, '입금계좌'));
+  const refundValue = findValue(main.values, '환불마감');
   const fields: RegulationField[] = [];
 
   if (schedules.length > 0) {
@@ -276,7 +292,7 @@ export function parseKatoRegulation(html: string): KatoRegulationResult | null {
     ['후원', '후원', main.values.get('후원')],
     ['협찬', '협찬', main.values.get('협찬')],
     ['사용구', '사용구', main.values.get('사용구')],
-    ['환불마감', '접수·환불', main.values.get('환불마감')],
+    ['환불마감', '접수·환불', refundValue],
   ];
   for (const [, label, value] of directFields) addField(fields, label, value);
 
@@ -285,7 +301,7 @@ export function parseKatoRegulation(html: string): KatoRegulationResult | null {
   addField(fields, '참가비', main.values.get('참가비'));
   addField(fields, '참가상품', main.values.get('참가상품'));
   addField(fields, '시상', main.values.get('시상'));
-  addField(fields, '문의처', main.values.get('감독관및문의처'));
+  addField(fields, '문의처', findValue(main.values, '문의처'));
   addField(fields, '시드 기준', main.values.get('시드기준'));
   addField(fields, '출전 규정', main.values.get('출전규정'));
   addField(fields, '예외부서 규정', main.values.get('예외부서규정'));
@@ -306,7 +322,7 @@ export function parseKatoRegulation(html: string): KatoRegulationResult | null {
   }
   if (accountInfo.accounts.length === 0) missingSections.push('입금계좌');
   if (!meaningful(main.values.get('참가비'))) missingSections.push('참가비');
-  if (!meaningful(main.values.get('환불마감'))) missingSections.push('접수·환불');
+  if (!meaningful(refundValue)) missingSections.push('접수·환불');
   if (!meaningful(prize)) missingSections.push('시상');
 
   return {

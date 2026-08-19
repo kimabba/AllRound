@@ -215,6 +215,8 @@ Deno.test('upsert: 재크롤로 content_hash 바뀌면 format_status=pending 재
   assertEquals(p.format_status, 'pending');
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
+  // 큐 조건이 format_attempts < 3 이라, 리셋하지 않으면 pending 인 채로 영영 안 집힌다.
+  assertEquals(p.format_attempts, 0);
 });
 
 Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정형화 대기', async () => {

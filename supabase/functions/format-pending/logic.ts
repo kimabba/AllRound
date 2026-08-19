@@ -88,3 +88,117 @@ export function verifyAgainstSource(
   }
   return { ok: flags.length === 0, flags };
 }
+
+// Gemini 는 response_schema 의 enum 값을 문자열로만 받는다. 숫자를 넣으면 호출 자체가
+// 400 INVALID_ARGUMENT 로 거부된다("Invalid value at ...enum[0] (TYPE_STRING), 1").
+// schema_version 은 프롬프트가 "반드시 1" 이라고 지시하고 required 에도 들어 있으므로
+// enum 없이 type 만으로 충분하다. 값 검증은 normalizeRegulationDocument 가 한 번 더 한다.
+export const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    regulation_document: {
+      type: 'object',
+      properties: {
+        schema_version: { type: 'integer' },
+        summary: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                enum: [
+                  'eligibility',
+                  'schedule_venue',
+                  'registration_payment',
+                  'match_operations',
+                  'awards',
+                  'refund_changes',
+                  'notices_contact',
+                  'other',
+                ],
+              },
+              availability: {
+                type: 'string',
+                enum: ['present', 'not_announced', 'not_applicable'],
+              },
+              blocks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: {
+                      type: 'string',
+                      enum: [
+                        'paragraph',
+                        'subheading',
+                        'bullets',
+                        'key_values',
+                        'table',
+                        'notice',
+                        'division_schedule',
+                      ],
+                    },
+                    text: { type: 'string' },
+                    items: { type: 'array', items: { type: 'string' } },
+                    entries: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: { label: { type: 'string' }, value: { type: 'string' } },
+                        required: ['label', 'value'],
+                      },
+                    },
+                    columns: { type: 'array', items: { type: 'string' } },
+                    rows: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          cells: { type: 'array', items: { type: 'string' } },
+                        },
+                        required: ['cells'],
+                      },
+                    },
+                    divisions: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          name: { type: 'string' },
+                          date: { type: 'string' },
+                          venue: { type: 'string' },
+                          fee: { type: 'string' },
+                          account: { type: 'string' },
+                          capacity: { type: 'string' },
+                        },
+                        required: ['name'],
+                      },
+                    },
+                  },
+                  required: ['type'],
+                },
+              },
+            },
+            required: ['code', 'availability', 'blocks'],
+          },
+        },
+      },
+      required: ['schema_version', 'sections'],
+    },
+    prize: { type: 'string' },
+    format: { type: 'string' },
+    description: { type: 'string' },
+    confidence: { type: 'number' },
+    unusual: { type: 'boolean' },
+  },
+  required: [
+    'regulation_document',
+    'prize',
+    'format',
+    'description',
+    'confidence',
+    'unusual',
+  ],
+};
