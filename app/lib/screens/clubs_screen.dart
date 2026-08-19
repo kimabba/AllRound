@@ -23,6 +23,7 @@ import '../widgets/clubs/club_tiles.dart';
 import '../widgets/clubs/team_recruiting_widgets.dart';
 import '../widgets/notification_inbox_action.dart';
 import '../widgets/sport_title.dart';
+import 'clubs/club_browse_screen.dart';
 import 'clubs/club_create_screen.dart';
 import 'clubs/club_detail_screen.dart';
 
@@ -54,15 +55,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   late final FocusNode _clubNameQueryFocusNode;
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
-  bool _showAllClubs = false;
   ClubSortOrder _clubSortOrder = ClubSortOrder.recommended;
   List<RecruitingPostPreview> _recruitingPosts = const [];
   bool _loadingRecruiting = false;
-
-  /// 모집글 조회 상한. 상한에 닿으면 "전체 보기"가 전부가 아니므로
-  /// 화면 하단에 그 사실을 표시한다(_recruitingCapped).
-  static const int _recruitingFetchLimit = 200;
   bool _recruitingCapped = false;
+
+  /// 팀원 모집 전체 화면과 홈 미리보기가 공유하는 조회 상한.
+  static const int _recruitingFetchLimit = 200;
 
   @override
   void initState() {
@@ -139,12 +138,10 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     }
     try {
       final api = ref.read(apiProvider);
-      final sports = _clubInterests.isEmpty
-          ? const <String>['tennis', 'futsal']
-          : _clubInterests.toList();
+      const sports = <String>['tennis', 'futsal'];
       final results = await Future.wait(
         sports.map(
-          (sport) => api.searchClubs(sport: sport, region: _clubFilters.region),
+          (sport) => api.searchClubs(sport: sport),
         ),
       );
       final seen = <String>{};
@@ -166,6 +163,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     if (AppConfig.userDesignPreview) {
       setState(() {
         _recruitingPosts = _previewRecruitingPosts;
+        _recruitingCapped = false;
         _loadingRecruiting = false;
       });
       return;
@@ -252,9 +250,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             .where((club) => _clubInterests.contains(club.sport))
             .take(4)
             .toList();
-        _nearbyNotice = AppConfig.appStoreScreenshot
-            ? null
-            : '디자인 미리보기용 주변 클럽입니다.';
+        _nearbyNotice =
+            AppConfig.appStoreScreenshot ? null : '디자인 미리보기용 주변 클럽입니다.';
         _loadingNearby = false;
       });
       return;
@@ -422,8 +419,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 종목 전환은 AppBar 타이틀(SportTitle)이 맡는다. 본문에도 같은
-        // 스위치가 있으면 어느 쪽이 진짜인지 알 수 없다.
         TextField(
           controller: _clubNameQueryController,
           focusNode: _clubNameQueryFocusNode,
@@ -495,21 +490,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ClubHomeSectionHeader(
-          title: hasClubNameQuery
-              ? '검색 결과 ${recommendedClubs.length}'
-              : '추천 클럽',
-          trailingLabel: hasClubNameQuery ? null : '전체보기',
-          onTrailingTap: hasClubNameQuery
-              ? null
-              : () {
-                  setState(() {
-                    _showAllClubs = !_showAllClubs;
-                    if (_showAllClubs) {
-                      _clubInterests = {'tennis', 'futsal'};
-                    }
-                  });
-                  if (_showAllClubs) _load();
-                },
+          title:
+              hasClubNameQuery ? '검색 결과 ${recommendedClubs.length}' : '추천 클럽',
         ),
         const SizedBox(height: AppSpacing.sm),
         if (_loading || _loadingMy) const LinearProgressIndicator(),
@@ -587,21 +569,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     }
   }
 
-  Future<void> _openNearbyNewClubsSheet(List<Club> clubs) async {
-    final favoriteIds =
-        ref.read(clubFavoriteIdsProvider).value ?? const <String>{};
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => NearbyNewClubsSheet(
-        clubs: clubs,
-        favoriteIds: favoriteIds,
-        onFavoriteToggle: _toggleClubFavorite,
-      ),
-    );
-  }
-
   Future<void> _toggleClubFavorite(Club club, bool isFavorite) async {
     if (AppConfig.userDesignPreview) return;
     await ref.read(apiProvider).toggleClubFavorite(club.id, !isFavorite);
@@ -641,19 +608,27 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     );
   }
 
-  Future<void> _openAllRecruitingPosts(
-    List<RecruitingPostPreview> posts,
-    Set<String> managedClubIds,
-  ) {
+  Future<void> _openClubBrowse({
+    required List<Club> clubs,
+    required List<RecruitingPostPreview> posts,
+    required Set<String> favoriteClubIds,
+    required Set<String> managedClubIds,
+  }) {
     return Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => TeamRecruitingListScreen(
-          posts: posts,
+        builder: (_) => ClubBrowseScreen(
+          clubs: clubs,
+          recruitingPosts: posts,
+          recruitingCapped: _recruitingCapped,
+          initialSports: _clubInterests,
+          favoriteClubIds: favoriteClubIds,
           managedClubIds: managedClubIds,
-          capped: _recruitingCapped,
-          onClosePost: _closeRecruitingPost,
+          openRecruitingClubIds: _openRecruitingClubIds,
+          onOpenClub: _openClub,
+          onFavoriteToggle: _toggleClubFavorite,
           onOpenPost: _openRecruitingDetail,
+          onClosePost: _closeRecruitingPost,
         ),
       ),
     );
@@ -703,11 +678,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   Widget build(BuildContext context) {
     ref.listen<String?>(activeSportProvider, (previous, next) {
       if (next == null || next == previous) return;
+      final shouldRefreshNearby =
+          AppConfig.userDesignPreview || _nearbyClubs != null;
       setState(() {
         _clubInterests = {next};
-        _showAllClubs = false;
       });
       _load();
+      if (shouldRefreshNearby) _findNearbyClubs();
     });
     final cs = Theme.of(context).colorScheme;
     final favoriteClubIds =
@@ -727,16 +704,14 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
         ? _recommendedClubs(visibleClubs)
         : sortClubs(visibleClubs, _clubSortOrder);
-    final displayedRecommendationClubs = hasClubNameQuery || _showAllClubs
-        ? recommendedClubs
-        : recommendedClubs.take(3).toList();
+    final displayedRecommendationClubs =
+        hasClubNameQuery ? recommendedClubs : recommendedClubs.take(5).toList();
     final myMembershipClubs = (_myClubs ?? const <Club>[])
         .where((club) => club.isMember)
         .where((club) => _clubInterests.contains(club.sport))
         .toList();
-    final joinedClubs = myMembershipClubs
-        .where((club) => club.isApproved)
-        .toList();
+    final joinedClubs =
+        myMembershipClubs.where((club) => club.isApproved).toList();
     // 승인 대기 카드 = 내가 만든 승인 대기 클럽(JY-150) + 내가 낸 가입신청.
     final pendingClubs = pendingClubCards(
       myClubs: myMembershipClubs,
@@ -751,8 +726,8 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        // 홈과 같은 위젯이라 여기서 종목을 바꿔도 앱 전체 기준이 함께 바뀐다.
         title: const SportTitle(),
+        titleSpacing: AppSpacing.xl,
         actions: [
           const NotificationInboxAction(),
           const ProfileAction(),
@@ -812,15 +787,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                     TeamRecruitingBoard(
                       posts: visibleRecruitingPosts,
                       isLoading: _loadingRecruiting,
-                      managedClubIds: managedClubs
-                          .map((club) => club.id)
-                          .toSet(),
+                      managedClubIds:
+                          managedClubs.map((club) => club.id).toSet(),
                       onClosePost: _closeRecruitingPost,
                       onOpenPost: _openRecruitingDetail,
-                      onViewAll: () => _openAllRecruitingPosts(
-                        visibleRecruitingPosts,
-                        managedClubs.map((club) => club.id).toSet(),
-                      ),
+                      clubForPost: _clubForRecruitingPost,
                     ),
                     const SizedBox(height: AppSpacing.xl),
                   ],
@@ -831,6 +802,21 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                       displayedClubs: displayedRecommendationClubs,
                       favoriteClubIds: favoriteClubIds,
                     ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openClubBrowse(
+                        clubs: effectiveClubs,
+                        posts: _recruitingPosts,
+                        favoriteClubIds: favoriteClubIds,
+                        managedClubIds:
+                            managedClubs.map((club) => club.id).toSet(),
+                      ),
+                      icon: const Icon(Icons.grid_view_rounded),
+                      label: const Text('전체보기'),
+                    ),
+                  ),
                   if (!hasClubNameQuery) ...[
                     const SizedBox(height: AppSpacing.lg),
                     OutlinedButton.icon(
@@ -857,10 +843,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       children: [
         _ClubHomeSectionHeader(
           title: '내 주변 클럽',
-          trailingLabel: nearby.isEmpty ? null : '전체보기',
-          onTrailingTap: nearby.isEmpty
-              ? null
-              : () => _openNearbyNewClubsSheet(nearby),
         ),
         if (_loadingNearby) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -887,7 +869,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
             height: 196,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: nearby.take(6).length,
+              itemCount: nearby.take(5).length,
               separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final club = nearby[index];
@@ -977,8 +959,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       for (final club in source)
         (
           club: club,
-          score:
-              (_clubFilters.region != null &&
+          score: (_clubFilters.region != null &&
                       clubRegionMatches(club.region, _clubFilters.region!)
                   ? 4
                   : 0) +
@@ -1124,9 +1105,9 @@ class _MyClubsCarouselState extends State<_MyClubsCarousel> {
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: AppSpacing.xs,
-                                                    vertical: 2,
-                                                  ),
+                                                horizontal: AppSpacing.xs,
+                                                vertical: 2,
+                                              ),
                                               decoration: BoxDecoration(
                                                 border: Border.all(
                                                   color: Colors.white
@@ -1231,7 +1212,7 @@ class _ClubDiscoveryCard extends StatelessWidget {
       child: InkWell(
         onTap: onOpen,
         child: Container(
-          width: 172,
+          width: 156,
           decoration: BoxDecoration(
             border: Border.all(color: cs.outlineVariant),
             borderRadius: AppRadius.card,
@@ -1251,10 +1232,10 @@ class _ClubDiscoveryCard extends StatelessWidget {
                               child: SimpleClubAvatar(club: club, size: 70),
                             ),
                           )
-                        : Image.network(
-                            imageUrl,
+                        : ClubMediaImage(
+                            source: imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => ColoredBox(
+                            fallback: ColoredBox(
                               color: cs.primaryContainer,
                               child: Center(
                                 child: SimpleClubAvatar(club: club, size: 70),
@@ -1294,8 +1275,8 @@ class _ClubDiscoveryCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -1307,8 +1288,8 @@ class _ClubDiscoveryCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                            color: cs.onSurfaceVariant,
+                          ),
                     ),
                   ],
                 ),
@@ -1322,36 +1303,17 @@ class _ClubDiscoveryCard extends StatelessWidget {
 }
 
 class _ClubHomeSectionHeader extends StatelessWidget {
-  const _ClubHomeSectionHeader({
-    required this.title,
-    this.trailingLabel,
-    this.onTrailingTap,
-  });
+  const _ClubHomeSectionHeader({required this.title});
 
   final String title;
-  final String? trailingLabel;
-  final VoidCallback? onTrailingTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-          ),
-        ),
-        if (trailingLabel != null)
-          TextButton.icon(
-            onPressed: onTrailingTap,
-            label: Text(trailingLabel!),
-            iconAlignment: IconAlignment.end,
-            icon: const Icon(Icons.chevron_right_rounded, size: 18),
-          ),
-      ],
+    return Text(
+      title,
+      style: Theme.of(
+        context,
+      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
     );
   }
 }
@@ -1388,14 +1350,14 @@ class _ClubSearchResultRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     Text(
                       clubRegionMemberLabel(club.region, club.memberCount),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                            color: cs.onSurfaceVariant,
+                          ),
                     ),
                   ],
                 ),
@@ -1415,83 +1377,369 @@ class _NearbyLocationException implements Exception {
   const _NearbyLocationException(this.message);
 }
 
-final _previewClubs = [
-  Club(
-    id: 'preview-club-futsal',
-    sport: 'futsal',
-    name: '서울 풋살 러너스',
-    region: '서울',
-    address: '서울 송파구 잠실동',
-    description: '주말 저녁, 꾸준히 함께 뛰는 생활체육 풋살 클럽입니다.',
-    memberCount: 24,
-    meetingDays: const ['토', '일'],
-    monthlyFee: 30000,
+const _tennisLogoAsset = 'asset://assets/images/clubs/tennis-logo.png';
+const _tennisCourtAsset = 'asset://assets/images/clubs/tennis-court.png';
+const _futsalLogoAsset = 'asset://assets/images/clubs/futsal-logo.png';
+const _futsalCourtAsset = 'asset://assets/images/clubs/futsal-court.png';
+
+Club _previewShowcaseClub({
+  required String id,
+  required String sport,
+  required String name,
+  required String region,
+  required String address,
+  required String description,
+  required int memberCount,
+  required List<String> meetingDays,
+  required int monthlyFee,
+  required double distanceKm,
+  String cardColor = '#3156D8',
+  String? myRole,
+}) {
+  final isTennis = sport == 'tennis';
+  return Club(
+    id: id,
+    sport: sport,
+    name: name,
+    region: region,
+    address: address,
+    logoUrl: isTennis ? _tennisLogoAsset : _futsalLogoAsset,
+    description: description,
+    introImageUrls: [isTennis ? _tennisCourtAsset : _futsalCourtAsset],
+    memberCount: memberCount,
+    meetingDays: meetingDays,
+    monthlyFee: monthlyFee,
     genderPreference: 'mixed',
-    contact: '오픈채팅 문의',
-    createdAt: DateTime(2026, 7, 10),
+    cardColor: cardColor,
+    distanceKm: distanceKm,
+    createdAt: DateTime(2026, 8, 1),
+    myRole: myRole,
+  );
+}
+
+final _previewClubs = [
+  _previewShowcaseClub(
+    id: 'preview-tennis-01',
+    sport: 'tennis',
+    name: '강남 올코트 테니스',
+    region: '서울 강남구',
+    address: '서울 강남구 대치동',
+    description: '평일 저녁 복식과 주말 친선 경기를 함께합니다.',
+    memberCount: 32,
+    meetingDays: const ['화', '목'],
+    monthlyFee: 30000,
+    distanceKm: 1.7,
   ),
-  Club(
-    id: 'preview-club-futsal-2',
+  _previewShowcaseClub(
+    id: 'preview-tennis-02',
+    sport: 'tennis',
+    name: '서초 라켓 메이트',
+    region: '서울 서초구',
+    address: '서울 서초구 반포동',
+    description: '초급자도 편하게 참여하는 주말 테니스 모임입니다.',
+    memberCount: 21,
+    meetingDays: const ['토'],
+    monthlyFee: 25000,
+    distanceKm: 2.1,
+    cardColor: '#176B63',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-03',
+    sport: 'tennis',
+    name: '분당 베이스라인',
+    region: '경기 성남시',
+    address: '경기 성남시 분당구',
+    description: '분당권 직장인이 모여 주 2회 정기 운동을 합니다.',
+    memberCount: 28,
+    meetingDays: const ['수', '일'],
+    monthlyFee: 30000,
+    distanceKm: 3.4,
+    cardColor: '#6941C6',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-04',
+    sport: 'tennis',
+    name: '송도 에이스 클럽',
+    region: '인천 연수구',
+    address: '인천 연수구 송도동',
+    description: '실력보다 매너를 우선하는 혼성 복식 클럽입니다.',
+    memberCount: 18,
+    meetingDays: const ['금', '일'],
+    monthlyFee: 25000,
+    distanceKm: 4.2,
+    cardColor: '#18376D',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-05',
+    sport: 'tennis',
+    name: '대전 스매시 크루',
+    region: '대전 유성구',
+    address: '대전 유성구 전민동',
+    description: '초중급 중심의 평일 야간 테니스 크루입니다.',
+    memberCount: 24,
+    meetingDays: const ['월', '목'],
+    monthlyFee: 20000,
+    distanceKm: 4.8,
+    cardColor: '#A15C08',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-06',
+    sport: 'tennis',
+    name: '광주 챔피언 테니스',
+    region: '광주 서구',
+    address: '광주 서구 풍암동',
+    description: '광주 생활체육 대회와 정기 복식에 참여합니다.',
+    memberCount: 38,
+    meetingDays: const ['화', '토'],
+    monthlyFee: 20000,
+    distanceKm: 5.1,
+    cardColor: '#C2413B',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-07',
+    sport: 'tennis',
+    name: '순천 그린코트',
+    region: '전남 순천시',
+    address: '전남 순천시 연향동',
+    description: '토요일 오전 누구나 참여할 수 있는 친선 모임입니다.',
+    memberCount: 26,
+    meetingDays: const ['토'],
+    monthlyFee: 15000,
+    distanceKm: 5.7,
+    cardColor: '#176B63',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-08',
+    sport: 'tennis',
+    name: '부산 오션 라켓',
+    region: '부산 해운대구',
+    address: '부산 해운대구 좌동',
+    description: '해운대권 직장인과 주말 복식을 즐기는 클럽입니다.',
+    memberCount: 30,
+    meetingDays: const ['수', '일'],
+    monthlyFee: 30000,
+    distanceKm: 6.3,
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-09',
+    sport: 'tennis',
+    name: '대구 탑스핀',
+    region: '대구 수성구',
+    address: '대구 수성구 범어동',
+    description: '기초 레슨과 게임을 함께 운영하는 테니스 모임입니다.',
+    memberCount: 22,
+    meetingDays: const ['목', '토'],
+    monthlyFee: 25000,
+    distanceKm: 7.0,
+    cardColor: '#6941C6',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-tennis-10',
+    sport: 'tennis',
+    name: '제주 선샤인 테니스',
+    region: '제주 제주시',
+    address: '제주 제주시 연동',
+    description: '제주에서 아침 운동과 월 1회 교류전을 엽니다.',
+    memberCount: 19,
+    meetingDays: const ['토', '일'],
+    monthlyFee: 20000,
+    distanceKm: 8.4,
+    cardColor: '#A15C08',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-01',
     sport: 'futsal',
-    name: '한강 풋살 유나이티드',
-    region: '서울',
+    name: '잠실 풋살 러너스',
+    region: '서울 송파구',
+    address: '서울 송파구 잠실동',
+    description: '주말 저녁 꾸준히 함께 뛰는 생활체육 풋살팀입니다.',
+    memberCount: 27,
+    meetingDays: const ['토'],
+    monthlyFee: 30000,
+    distanceKm: 1.4,
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-02',
+    sport: 'futsal',
+    name: '마포 시티 파이브',
+    region: '서울 마포구',
     address: '서울 마포구 망원동',
     description: '초중급 중심으로 매주 수요일 저녁에 운동합니다.',
-    memberCount: 18,
+    memberCount: 20,
     meetingDays: const ['수'],
     monthlyFee: 25000,
-    genderPreference: 'mixed',
-    createdAt: DateTime(2026, 6, 22),
+    distanceKm: 2.0,
+    cardColor: '#C2413B',
   ),
-  Club(
-    id: 'preview-club-tennis',
-    sport: 'tennis',
-    name: '광주 테니스 크루',
-    region: '광주',
-    address: '광주 서구 풍암동',
-    description: '초중급 복식 위주로 함께 치는 테니스 클럽입니다.',
-    memberCount: 38,
-    meetingDays: const ['화', '목'],
+  _previewShowcaseClub(
+    id: 'preview-futsal-03',
+    sport: 'futsal',
+    name: '수원 블루킥',
+    region: '경기 수원시',
+    address: '경기 수원시 영통구',
+    description: '매너 있는 경기와 체력 향상을 목표로 합니다.',
+    memberCount: 24,
+    meetingDays: const ['화', '금'],
+    monthlyFee: 30000,
+    distanceKm: 3.1,
+    cardColor: '#18376D',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-04',
+    sport: 'futsal',
+    name: '송도 유나이티드',
+    region: '인천 연수구',
+    address: '인천 연수구 송도동',
+    description: '남녀 모두 참여하는 금요일 야간 풋살팀입니다.',
+    memberCount: 18,
+    meetingDays: const ['금'],
+    monthlyFee: 25000,
+    distanceKm: 3.9,
+    cardColor: '#176B63',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-05',
+    sport: 'futsal',
+    name: '대전 레드폭스 FC',
+    region: '대전 유성구',
+    address: '대전 유성구 관평동',
+    description: '초급자와 복귀자를 환영하는 주말 풋살팀입니다.',
+    memberCount: 21,
+    meetingDays: const ['일'],
     monthlyFee: 20000,
-    genderPreference: 'mixed',
-    createdAt: DateTime(2026, 5, 8),
+    distanceKm: 4.5,
+    cardColor: '#C2413B',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-06',
+    sport: 'futsal',
+    name: '광주 풋살 라이온즈',
+    region: '광주 북구',
+    address: '광주 북구 용봉동',
+    description: '광주권 친선 경기와 월간 교류전을 운영합니다.',
+    memberCount: 31,
+    meetingDays: const ['목', '일'],
+    monthlyFee: 30000,
+    distanceKm: 5.0,
+    cardColor: '#A15C08',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-07',
+    sport: 'futsal',
+    name: '순천 프렌즈 FC',
+    region: '전남 순천시',
+    address: '전남 순천시 조례동',
+    description: '즐겁고 안전한 경기를 우선하는 혼성 풋살팀입니다.',
+    memberCount: 16,
+    meetingDays: const ['토'],
+    monthlyFee: 15000,
+    distanceKm: 5.6,
+    cardColor: '#176B63',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-08',
+    sport: 'futsal',
+    name: '부산 웨이브 풋살',
+    region: '부산 해운대구',
+    address: '부산 해운대구 우동',
+    description: '해운대 야간 리그에 함께 참가할 팀원을 찾습니다.',
+    memberCount: 29,
+    meetingDays: const ['수', '토'],
+    monthlyFee: 30000,
+    distanceKm: 6.1,
+    cardColor: '#3156D8',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-09',
+    sport: 'futsal',
+    name: '대구 골메이커스',
+    region: '대구 수성구',
+    address: '대구 수성구 만촌동',
+    description: '포지션 상관없이 즐겁게 뛰는 직장인 팀입니다.',
+    memberCount: 23,
+    meetingDays: const ['월', '목'],
+    monthlyFee: 25000,
+    distanceKm: 6.9,
+    cardColor: '#6941C6',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-10',
+    sport: 'futsal',
+    name: '제주 오렌지 FC',
+    region: '제주 제주시',
+    address: '제주 제주시 노형동',
+    description: '제주 생활체육 풋살과 주말 친선전을 함께합니다.',
+    memberCount: 17,
+    meetingDays: const ['일'],
+    monthlyFee: 20000,
+    distanceKm: 8.1,
+    cardColor: '#A15C08',
   ),
 ];
 
 final _previewMyClubs = [
-  Club(
-    id: 'preview-club-my',
-    sport: 'futsal',
-    name: '성수 풋살 메이트',
-    region: '서울',
-    address: '서울 성동구 성수동',
-    description: '평일 퇴근 후 가볍게 뛰는 직장인 풋살 클럽입니다.',
-    memberCount: 16,
-    meetingDays: const ['목'],
-    monthlyFee: 20000,
+  _previewShowcaseClub(
+    id: 'preview-tennis-01',
+    sport: 'tennis',
+    name: '강남 올코트 테니스',
+    region: '서울 강남구',
+    address: '서울 강남구 대치동',
+    description: '평일 저녁 복식과 주말 친선 경기를 함께합니다.',
+    memberCount: 32,
+    meetingDays: const ['화', '목'],
+    monthlyFee: 30000,
+    distanceKm: 1.7,
     myRole: 'member',
   ),
-  Club(
-    id: 'preview-club-my-2',
-    sport: 'futsal',
-    name: '한강 풋살 유나이티드',
-    region: '서울',
-    address: '서울 마포구 망원동',
-    description: '수요일 저녁에 함께 뛰는 직장인 풋살 클럽입니다.',
+  _previewShowcaseClub(
+    id: 'preview-tennis-04',
+    sport: 'tennis',
+    name: '송도 에이스 클럽',
+    region: '인천 연수구',
+    address: '인천 연수구 송도동',
+    description: '실력보다 매너를 우선하는 혼성 복식 클럽입니다.',
     memberCount: 18,
-    meetingDays: const ['수'],
+    meetingDays: const ['금', '일'],
     monthlyFee: 25000,
+    distanceKm: 4.2,
+    cardColor: '#18376D',
     myRole: 'member',
-    cardColor: '#E05252',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-01',
+    sport: 'futsal',
+    name: '잠실 풋살 러너스',
+    region: '서울 송파구',
+    address: '서울 송파구 잠실동',
+    description: '주말 저녁 꾸준히 함께 뛰는 생활체육 풋살팀입니다.',
+    memberCount: 27,
+    meetingDays: const ['토'],
+    monthlyFee: 30000,
+    distanceKm: 1.4,
+    myRole: 'member',
+  ),
+  _previewShowcaseClub(
+    id: 'preview-futsal-04',
+    sport: 'futsal',
+    name: '송도 유나이티드',
+    region: '인천 연수구',
+    address: '인천 연수구 송도동',
+    description: '남녀 모두 참여하는 금요일 야간 풋살팀입니다.',
+    memberCount: 18,
+    meetingDays: const ['금'],
+    monthlyFee: 25000,
+    distanceKm: 3.9,
+    cardColor: '#176B63',
+    myRole: 'member',
   ),
 ];
 
 final _previewRecruitingPosts = [
   RecruitingPostPreview(
     id: 'preview-recruiting-1',
-    clubId: 'preview-club-futsal',
+    clubId: 'preview-futsal-01',
     sport: 'futsal',
-    clubName: '서울 풋살 러너스',
+    clubName: '잠실 풋살 러너스',
     title: '토요일 저녁 필드 플레이어 모집',
     region: '서울',
     place: '잠실 풋살장',
@@ -1509,9 +1757,9 @@ final _previewRecruitingPosts = [
   ),
   RecruitingPostPreview(
     id: 'preview-recruiting-2',
-    clubId: 'preview-club-futsal-2',
+    clubId: 'preview-futsal-02',
     sport: 'futsal',
-    clubName: '한강 풋살 유나이티드',
+    clubName: '마포 시티 파이브',
     title: '평일 저녁 회원 모집',
     region: '서울',
     place: '망원 풋살장',
@@ -1526,5 +1774,45 @@ final _previewRecruitingPosts = [
     cost: '월 2.5만원',
     intro: '즐겁게 오래 함께할 팀원을 찾습니다.',
     createdAt: DateTime(2026, 7, 18),
+  ),
+  RecruitingPostPreview(
+    id: 'preview-recruiting-3',
+    clubId: 'preview-tennis-01',
+    sport: 'tennis',
+    clubName: '강남 올코트 테니스',
+    title: '주말 복식 신규 회원 모집',
+    region: '서울 강남구',
+    place: '대치 테니스장',
+    schedule: '매주 토요일 09:00',
+    grade: '신입–3부',
+    gender: '혼성',
+    age: '20–40대',
+    position: '복식',
+    fieldCount: 4,
+    keeperCount: 0,
+    totalCount: 4,
+    cost: '월 3만원',
+    intro: '기본 매너를 지키며 꾸준히 함께할 회원을 찾습니다.',
+    createdAt: DateTime(2026, 8, 15),
+  ),
+  RecruitingPostPreview(
+    id: 'preview-recruiting-4',
+    clubId: 'preview-tennis-02',
+    sport: 'tennis',
+    clubName: '서초 라켓 메이트',
+    title: '평일 저녁 회원 모집',
+    region: '서울 서초구',
+    place: '반포 테니스장',
+    schedule: '매주 목요일 20:00',
+    grade: '4부–신입',
+    gender: '여성',
+    age: '30–50대',
+    position: '복식',
+    fieldCount: 3,
+    keeperCount: 0,
+    totalCount: 3,
+    cost: '월 2.5만원',
+    intro: '즐겁게 오래 함께할 테니스 회원을 찾습니다.',
+    createdAt: DateTime(2026, 8, 16),
   ),
 ];

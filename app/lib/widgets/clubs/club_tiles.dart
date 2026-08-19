@@ -562,8 +562,43 @@ class _ClubAvatarImage extends StatelessWidget {
 
     if (url == null || url.isEmpty) return fallback;
 
+    return ClubMediaImage(
+      source: url,
+      fit: fit,
+      fallback: fallback,
+    );
+  }
+}
+
+/// 클럽 미디어는 운영 DB의 Storage URL과 로컬 디자인 프리뷰용 asset URL을
+/// 같은 카드에서 렌더링한다. `asset://`은 seed/프리뷰 전용이며 네트워크 요청을
+/// 만들지 않는다.
+class ClubMediaImage extends StatelessWidget {
+  const ClubMediaImage({
+    super.key,
+    required this.source,
+    required this.fit,
+    required this.fallback,
+  });
+
+  final String source;
+  final BoxFit fit;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = source.trim();
+    if (value.startsWith('asset://')) {
+      final assetPath = value.substring('asset://'.length);
+      return Image.asset(
+        assetPath,
+        fit: fit,
+        errorBuilder: (_, __, ___) => fallback,
+      );
+    }
+
     return Image.network(
-      url,
+      value,
       fit: fit,
       errorBuilder: (_, __, ___) => fallback,
     );

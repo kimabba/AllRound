@@ -12,13 +12,19 @@ import '../app_back_button.dart';
 import '../app_card.dart';
 import 'club_tiles.dart';
 
+String recruitingHomeTitle(String title, {int maxLength = 8}) {
+  final characters = title.runes.toList(growable: false);
+  if (characters.length <= maxLength) return title;
+  return String.fromCharCodes(characters.take(maxLength));
+}
+
 class TeamRecruitingBoard extends StatelessWidget {
   final List<RecruitingPostPreview> posts;
   final bool isLoading;
   final Set<String> managedClubIds;
   final ValueChanged<RecruitingPostPreview> onClosePost;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
-  final VoidCallback onViewAll;
+  final Club? Function(RecruitingPostPreview post) clubForPost;
 
   const TeamRecruitingBoard({
     super.key,
@@ -27,7 +33,7 @@ class TeamRecruitingBoard extends StatelessWidget {
     required this.managedClubIds,
     required this.onClosePost,
     required this.onOpenPost,
-    required this.onViewAll,
+    required this.clubForPost,
   });
 
   @override
@@ -38,21 +44,9 @@ class TeamRecruitingBoard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '팀원 모집',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: posts.isEmpty ? null : onViewAll,
-              label: const Text('전체보기'),
-              iconAlignment: IconAlignment.end,
-              icon: const Icon(Icons.chevron_right_rounded, size: 18),
-            ),
-          ],
+        Text(
+          '팀원 모집',
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: AppSpacing.sm),
         if (isLoading)
@@ -72,27 +66,22 @@ class TeamRecruitingBoard extends StatelessWidget {
           )
         else
           SizedBox(
-            height: 174,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final cardWidth = (constraints.maxWidth - AppSpacing.sm) / 2;
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: posts.take(3).length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final post = posts[index];
-                    return SizedBox(
-                      width: cardWidth,
-                      child: _RecruitingHomeCard(
-                        post: post,
-                        canManage: managedClubIds.contains(post.clubId),
-                        onClose: () => onClosePost(post),
-                        onTap: () => onOpenPost(post),
-                      ),
-                    );
-                  },
+            height: 190,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: posts.take(5).length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return SizedBox(
+                  width: 156,
+                  child: _RecruitingHomeCard(
+                    post: post,
+                    club: clubForPost(post),
+                    canManage: managedClubIds.contains(post.clubId),
+                    onClose: () => onClosePost(post),
+                    onTap: () => onOpenPost(post),
+                  ),
                 );
               },
             ),
@@ -105,12 +94,14 @@ class TeamRecruitingBoard extends StatelessWidget {
 class _RecruitingHomeCard extends StatelessWidget {
   const _RecruitingHomeCard({
     required this.post,
+    required this.club,
     required this.canManage,
     required this.onClose,
     required this.onTap,
   });
 
   final RecruitingPostPreview post;
+  final Club? club;
   final bool canManage;
   final VoidCallback onClose;
   final VoidCallback onTap;
@@ -126,70 +117,120 @@ class _RecruitingHomeCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             border: Border.all(color: cs.outlineVariant),
             borderRadius: AppRadius.card,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      post.clubName,
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: ColoredBox(
+                  color: cs.primary,
+                  child: const SizedBox(width: 3),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (club != null)
+                          SimpleClubAvatar(
+                            club: club!,
+                            size: 28,
+                            circular: true,
+                          )
+                        else
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: cs.primaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              post.sport == 'futsal'
+                                  ? Icons.sports_soccer_rounded
+                                  : Icons.sports_tennis_rounded,
+                              size: 16,
+                              color: cs.primary,
+                            ),
+                          ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            post.clubName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (canManage)
+                          SizedBox(
+                            width: AppSizes.touchTarget,
+                            height: AppSizes.touchTarget,
+                            child: IconButton(
+                              tooltip: '모집 마감',
+                              onPressed: onClose,
+                              icon: const Icon(Icons.more_horiz_rounded),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      recruitingHomeTitle(post.title),
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${post.grade} · ${post.totalCount}명',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: tt.labelMedium?.copyWith(
+                      style: tt.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  if (canManage)
-                    SizedBox(
-                      width: AppSizes.touchTarget,
-                      height: AppSizes.touchTarget,
-                      child: IconButton(
-                        tooltip: '모집 마감',
-                        onPressed: onClose,
-                        icon: const Icon(Icons.more_horiz_rounded),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${post.age} · ${post.gender}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
-                ],
-              ),
-              Text(
-                post.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const Spacer(),
-              Text(
-                '${post.grade} · ${post.countLabel}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '${post.age} · ${post.gender}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  post.cost,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.labelLarge?.copyWith(
-                    color: cs.primary,
-                    fontWeight: FontWeight.w900,
-                  ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        post.cost,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelLarge?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
