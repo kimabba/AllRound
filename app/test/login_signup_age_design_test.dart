@@ -32,20 +32,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Google 신규 사용자는 이메일 가입 안내로 바로 이동한다', (tester) async {
+  testWidgets('Google은 기존·신규 구분 없이 한 번에 계속한다', (tester) async {
     _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(_app(textScale: 1));
 
-    await tester.tap(
-      find.byKey(AllRoundE2EKeys.googleExistingLoginButton),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Google 로그인 안내'), findsOneWidget);
-    expect(find.textContaining('기존 AllRound 계정'), findsOneWidget);
-
-    await tester.tap(find.byKey(AllRoundE2EKeys.googleEmailSignupAction));
-    await tester.pumpAndSettle();
-    expect(find.byKey(AllRoundE2EKeys.signupBirthDate), findsOneWidget);
+    expect(find.byKey(AllRoundE2EKeys.googleContinueButton), findsOneWidget);
+    expect(find.text('Google로 계속하기'), findsOneWidget);
+    expect(find.text('Google 로그인 안내'), findsNothing);
+    expect(find.textContaining('기존 AllRound 계정'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -53,7 +47,8 @@ void main() {
   // 화면이 커질수록 그 빈칸도 커지므로 제일 큰 화면까지 같이 본다.
   // (minHeight 에 상한을 두면 내용이 뷰포트 위쪽에 붙어 여기서 걸린다.)
   for (final size in const [Size(390, 844), Size(834, 1194)]) {
-    testWidgets('${size.width.toInt()}x${size.height.toInt()} 에서 CTA 가 '
+    testWidgets(
+        '${size.width.toInt()}x${size.height.toInt()} 에서 CTA 가 '
         '화면 아래쪽에 자리잡는다', (tester) async {
       _setViewport(tester, size);
       await tester.pumpWidget(_app(textScale: 1));
@@ -77,6 +72,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('열리는 대회를'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('로그인 소개 슬라이드는 작은 카드가 아니라 화면 폭을 채운다', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_app(textScale: 1));
+
+    final pageView = find.byType(PageView);
+    expect(tester.getTopLeft(pageView).dx, 0);
+    expect(tester.getSize(pageView).width, 390);
+    expect(find.byType(Image), findsOneWidget);
+    final headline = tester.widget<Text>(
+      find.text('운동 친구를 만나러 가볼까요?'),
+    );
+    expect(headline.maxLines, 1);
+    expect(headline.style?.fontSize, greaterThan(29));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('사용자 소개 네 장은 서로 다른 풀스크린 사진을 사용한다', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_app(textScale: 1));
+
+    const expectedAssets = [
+      'assets/images/auth/login-friends-v1.jpg',
+      'assets/images/auth/login-futsal-tournaments-v1.jpg',
+      'assets/images/auth/login-clubs-v1.jpg',
+      'assets/images/auth/login-futsal-ballboy-v1.jpg',
+    ];
+    const expectedSports = ['TENNIS', 'FUTSAL', 'TENNIS', 'FUTSAL'];
+    for (var index = 0; index < expectedAssets.length; index++) {
+      final image = tester.widget<Image>(find.byType(Image));
+      expect((image.image as AssetImage).assetName, expectedAssets[index]);
+      expect(find.text(expectedSports[index]), findsOneWidget);
+      if (index < expectedAssets.length - 1) {
+        await tester.drag(find.byType(PageView), const Offset(-360, 0));
+        await tester.pumpAndSettle();
+      }
+    }
+
     expect(tester.takeException(), isNull);
   });
 
@@ -124,8 +163,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // "계속하면 동의한 것으로 간주"를 없앤 대신, 가입 버튼이 체크 전에는 눌리지
-  // 않아야 한다. 여기가 무너지면 동의 없이 계정이 만들어진다.
   testWidgets('필수 약관 동의 전에는 회원가입 버튼이 눌리지 않는다', (tester) async {
     _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(_app(textScale: 1));
@@ -133,7 +170,6 @@ void main() {
     await tester.tap(find.byKey(AllRoundE2EKeys.emailFlowButton));
     await tester.pumpAndSettle();
 
-    // 로그인 모드에는 필수 동의가 없다 — 기존 회원에게 다시 물을 이유가 없다.
     expect(find.byKey(AllRoundE2EKeys.signupTermsConsent), findsNothing);
     expect(
       tester
