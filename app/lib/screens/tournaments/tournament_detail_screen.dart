@@ -294,10 +294,6 @@ class _DetailBody extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),
-              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
-                _TournamentPosterCard(url: t.posterUrl!.trim()),
-                const SizedBox(height: AppSpacing.xl),
-              ],
 
               _DetailFacts(
                 date: _dateText(),
@@ -363,6 +359,18 @@ class _DetailBody extends StatelessWidget {
               ),
 
               const SizedBox(height: AppSpacing.lg),
+
+              // ── 포스터 원본 (요강 정리 뒤 참고용 — 세로로 긴 스캔본이 많아
+              // 맨 위에 두면 장소·부서 같은 핵심 정보가 스크롤 밖으로 밀린다) ──
+              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
+                Text(
+                  '포스터 원본',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _TournamentPosterCard(url: t.posterUrl!.trim()),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               // ── 참가 신청 준비 중 안내 (모든 대회 공고 하단 고정) ──
               Container(
