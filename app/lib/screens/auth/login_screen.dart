@@ -564,6 +564,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 웹은 initState 의 Uri.base 로 OAuth 콜백 에러를 잡지만, 모바일은 세션
+    // 변화 없이 딥링크만 돌아와 조용히 실패한다(에러가 onAuthStateChange
+    // 스트림으로만 통지됨, supabase_flutter의 notifyException). 신규 가입
+    // 차단 같은 케이스를 모바일에서도 동일하게 노출한다.
+    ref.listen<AsyncValue<AuthState>>(authStateProvider, (previous, next) {
+      final error = next.error;
+      if (error is! AuthException) return;
+      final message = authErrorMessage(error, signUp: false);
+      setState(() {
+        _error = message;
+        _signUp = message == '신규 가입은 이메일로 진행해 주세요.';
+      });
+    });
+
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     // 로컬 관리자 모드(make admin): 마케팅·온보딩 카피를 숨기고

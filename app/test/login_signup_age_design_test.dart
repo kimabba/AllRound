@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:allround/screens/auth/login_screen.dart';
+import 'package:allround/state/providers.dart';
 import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:allround/theme/tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   testWidgets('이메일 가입은 320px 200% 글자에서 가입 전 생년월일을 요구한다', (
@@ -201,6 +205,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // 모바일은 Google OAuth 콜백이 세션 변화 없이 딥링크로만 돌아와, 웹의
+  // Uri.base 체크로는 못 잡는다. onAuthStateChange 스트림 에러로도 잡아내는지 확인.
+  testWidgets('구글 로그인이 딥링크로 돌아오며 실패하면 모바일에서도 에러가 보인다', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    final controller = StreamController<AuthState>();
+    addTearDown(controller.close);
+    await tester.pumpWidget(_app(textScale: 1, authStream: controller.stream));
+
+    controller.addError(AuthException('google_signup_disabled'));
+    await tester.pump();
+
+    expect(find.text('신규 가입은 이메일로 진행해 주세요.'), findsOneWidget);
+  });
+
   testWidgets('이메일 시트는 스크롤하면 키보드 포커스를 해제한다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     await tester.pumpWidget(_app(textScale: 1));
@@ -232,8 +252,12 @@ void main() {
   });
 }
 
-Widget _app({required double textScale}) {
+Widget _app({required double textScale, Stream<AuthState>? authStream}) {
   return ProviderScope(
+    overrides: [
+      if (authStream != null)
+        authStateProvider.overrideWith((ref) => authStream),
+    ],
     child: MaterialApp(
       theme: AppTheme.light(),
       home: MediaQuery(
