@@ -61,6 +61,8 @@ flutter:
     - assets/images/tournaments/
     - assets/images/coachbot/
     - assets/images/coach/round-coach.png
+    - assets/images/auth/
+    - assets/images/clubs/
     - assets/images/rules/
   fonts:
     - family: Pretendard
