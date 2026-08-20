@@ -182,16 +182,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   0,
                 ),
                 sliver: SliverToBoxAdapter(
-                  child: _MyGradeCard(
-                    summary: gradeSummary,
-                    onOpenRankings: () => context.push('/rankings'),
-                    onAsk: () => openChatSheet(
-                      context,
-                      const ChatEntryContext(
-                        screenLabel: '홈',
-                        initialMessage: '협회마다 부서와 포인트 기준이 어떻게 다른가요?',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionTitle(title: '내 랭킹'),
+                      const SizedBox(height: AppSpacing.sm),
+                      _MyGradeCard(
+                        summary: gradeSummary,
+                        onOpenRankings: () => context.push('/rankings'),
+                        onAsk: () => openChatSheet(
+                          context,
+                          const ChatEntryContext(
+                            screenLabel: '홈',
+                            initialMessage: '협회마다 부서와 포인트 기준이 어떻게 다른가요?',
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -229,8 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: _TournamentHomeContent(
                       key: AllRoundE2EKeys.homeTournamentList,
                       tournaments: visible,
-                      favorites:
-                          myTournaments.value
+                      favorites: myTournaments.value
                               ?.where((item) => item.sport == selectedSport)
                               .toList() ??
                           const [],
@@ -337,9 +343,8 @@ class _MyGradeCard extends StatelessWidget {
     );
 
     final points = Column(
-      crossAxisAlignment: largeText
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.end,
+      crossAxisAlignment:
+          largeText ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       children: [
         Text(
           '시즌 포인트',
@@ -476,9 +481,8 @@ class _Top10Progress extends StatelessWidget {
 
     // 순위는 협회가 매기고 점수는 표시용이라 둘이 어긋날 수 있다(같은 점수,
     // 다른 순위). 남은 점수가 음수로 보이지 않게 0 에서 자른다.
-    final remaining = inTop10 || cutoff == null
-        ? 0
-        : (cutoff - myPoints).clamp(0, cutoff);
+    final remaining =
+        inTop10 || cutoff == null ? 0 : (cutoff - myPoints).clamp(0, cutoff);
     final progress = inTop10 || cutoff == null || cutoff == 0
         ? 1.0
         : (myPoints / cutoff).clamp(0.0, 1.0);
@@ -701,9 +705,8 @@ class _TournamentHomeContent extends StatelessWidget {
 
     // 히어로는 "지금 신청해야 하는 것"을 맡는다. 마감 임박이 없을 때만
     // 다가오는 순서로 채운다.
-    final heroItems = (deadlineSoon.isNotEmpty ? deadlineSoon : tournaments)
-        .take(5)
-        .toList();
+    final heroItems =
+        (deadlineSoon.isNotEmpty ? deadlineSoon : tournaments).take(5).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -878,7 +881,9 @@ class _HeroTournamentCard extends StatelessWidget {
                             deadline,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
                                 ?.copyWith(
                                   color: cs.primary,
                                   fontWeight: FontWeight.w800,
@@ -891,11 +896,11 @@ class _HeroTournamentCard extends StatelessWidget {
                           // 사진이 없으면 세로 여유가 생기므로 제목을 덜 자른다.
                           maxLines: showImage ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -1233,8 +1238,8 @@ class _RulebookBand extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     const Text('경기 전에 꼭 알아둘 규칙'),
                   ],
@@ -1246,8 +1251,8 @@ class _RulebookBand extends StatelessWidget {
                       child: Text(
                         title,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                              fontWeight: FontWeight.w900,
+                            ),
                       ),
                     ),
                     const Text('경기 전에 꼭 알아둘 규칙'),
@@ -1366,11 +1371,10 @@ class _HomePersonalSchedule extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final today = kstTodayDate(DateTime.now());
-    final upcoming =
-        tournaments
-            .where((item) => !item.startDate.isBefore(today))
-            .toList(growable: false)
-          ..sort((a, b) => a.startDate.compareTo(b.startDate));
+    final upcoming = tournaments
+        .where((item) => !item.startDate.isBefore(today))
+        .toList(growable: false)
+      ..sort((a, b) => a.startDate.compareTo(b.startDate));
     final tournament = upcoming.firstOrNull;
     final club = clubs.where((item) => item.isMember).firstOrNull;
 
