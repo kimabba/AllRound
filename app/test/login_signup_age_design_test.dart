@@ -124,6 +124,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // "계속하면 동의한 것으로 간주"를 없앤 대신, 가입 버튼이 체크 전에는 눌리지
+  // 않아야 한다. 여기가 무너지면 동의 없이 계정이 만들어진다.
+  testWidgets('필수 약관 동의 전에는 회원가입 버튼이 눌리지 않는다', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_app(textScale: 1));
+
+    await tester.tap(find.byKey(AllRoundE2EKeys.emailFlowButton));
+    await tester.pumpAndSettle();
+
+    // 로그인 모드에는 필수 동의가 없다 — 기존 회원에게 다시 물을 이유가 없다.
+    expect(find.byKey(AllRoundE2EKeys.signupTermsConsent), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(AllRoundE2EKeys.authSubmitButton))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(AllRoundE2EKeys.authModeToggle));
+    await tester.pumpAndSettle();
+
+    expect(find.text('이용약관·개인정보 처리방침 동의 (필수)'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(AllRoundE2EKeys.authSubmitButton))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(AllRoundE2EKeys.signupTermsConsent));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(AllRoundE2EKeys.authSubmitButton))
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('이메일 시트는 스크롤하면 키보드 포커스를 해제한다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     await tester.pumpWidget(_app(textScale: 1));

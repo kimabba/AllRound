@@ -74,7 +74,9 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.textContaining('올라운드 '), findsOneWidget);
-    expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
+    // 지역·검색은 목록 바로 위로 내려갔다. 목록이 아직 없는 로딩 중에는
+    // 조작할 대상도 없으므로 함께 나오지 않는다.
+    expect(find.text('대회명 또는 지역을 검색해보세요'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -285,6 +287,23 @@ void main() {
 
       expect(find.textContaining('national-1'), findsWidgets);
       expect(find.textContaining('jeonnam-1'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 지역 필터 개수(_regionCounts)는 빈 조각을 건너뛰고 세는데, 목록 카드
+    // 배지가 같은 문자열의 첫 조각만 보면 선행 구분자('·서울')에서 badge가
+    // "전국"으로, 필터는 "서울"로 서로 다른 답을 낸다.
+    testWidgets('지역 배지는 선행 구분자를 건너뛰고 실제 지역을 보여준다', (tester) async {
+      await pumpHome(
+        tester,
+        load: () async => [tennisAt('seoul-1', '·서울', 3)],
+        activeSport: 'tennis',
+      );
+      await tester.pumpAndSettle();
+
+      // 지역 드롭다운 버튼은 선택값("전국")을 항상 보여주므로 "전국"이
+      // 아예 없다고는 단언하지 않는다 — 배지 자리에 "서울"이 뜨는지만 본다.
+      expect(find.text('서울'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

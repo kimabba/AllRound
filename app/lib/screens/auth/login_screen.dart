@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../state/providers.dart';
@@ -11,6 +12,8 @@ import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 import '../../utils/age.dart';
 import '../../utils/auth_error_message.dart';
+import '../../utils/legal_urls.dart';
+import '../in_app_browser_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,6 +30,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _signUp = false;
   bool _busy = false;
   bool _marketingConsent = false;
+
+  /// 필수 동의. 체크 전에는 가입 버튼이 눌리지 않는다.
+  bool _termsConsent = false;
   String? _error;
   String? _info;
 
@@ -76,6 +82,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       set(() => _error = '계정 생성 전에 생년월일을 확인해 주세요.');
       return;
     }
+    // 버튼이 이미 막혀 있지만, 시트 리빌드 사이에 새어드는 탭까지 여기서 막는다.
+    if (_signUp && !_termsConsent) {
+      set(() => _error = '이용약관과 개인정보 처리방침에 동의해 주세요.');
+      return;
+    }
 
     FocusManager.instance.primaryFocus?.unfocus();
     set(() {
@@ -91,6 +102,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           password: password,
           data: {
             'birth_date': _formatBirthDateForAuth(_signupBirthDate!),
+            // 필수 동의는 "언제 받았는지"가 증거다. 값 자체는 위에서 이미
+            // 막았으므로 여기 도달하면 항상 동의한 상태다.
+            'terms_agreed_at': DateTime.now().toUtc().toIso8601String(),
             'marketing_consent': _marketingConsent,
             if (_marketingConsent)
               'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
@@ -198,6 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _password.clear();
       _passwordConfirm.clear();
       _signupBirthDate = null;
+      _termsConsent = false;
     });
   }
 
@@ -422,10 +437,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
+                        // 필수 동의. 문서는 링크로 열어 읽고 체크하게 한다 —
+                        // "계속하면 동의한 것으로 간주"는 동의를 받은 게 아니다.
+                        _ConsentRow(
+                          checkboxKey: AllRoundE2EKeys.signupTermsConsent,
+                          value: _termsConsent,
+                          label: '이용약관·개인정보 처리방침 동의 (필수)',
+                          onChanged: (value) {
+                            setState(() => _termsConsent = value ?? false);
+                            refreshSheet();
+                          },
+                        ),
+                        Wrap(
+                          children: const [
+                            _LegalLinkButton(
+                              label: '이용약관',
+                              url: kTermsOfServiceUrl,
+                            ),
+                            _LegalLinkButton(
+                              label: '개인정보 처리방침',
+                              url: kPrivacyPolicyUrl,
+                            ),
+                          ],
+                        ),
                         // 선택 동의라 계정을 만드는 이 자리에서만 묻는다.
                         // 로그인하는 기존 회원에게는 물을 이유가 없다.
-                        _MarketingConsentRow(
+                        _ConsentRow(
                           value: _marketingConsent,
+                          label: '마케팅 정보 수신 동의 (선택)',
                           onChanged: (value) {
                             setState(() => _marketingConsent = value ?? false);
                             refreshSheet();
@@ -480,9 +519,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.lg),
+                      // 버튼이 죽어 있는 이유를 말해준다. 안 그러면 눌러도
+                      // 아무 일이 없는 화면 앞에서 사용자가 멈춘다.
+                      if (_signUp && !_termsConsent) ...[
+                        Text(
+                          '필수 동의에 체크하면 가입을 시작할 수 있어요.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       FilledButton(
                         key: AllRoundE2EKeys.authSubmitButton,
-                        onPressed: _busy
+                        onPressed: _busy || (_signUp && !_termsConsent)
                             ? null
                             : () => _emailAuth(
                                   onChanged: refreshSheet,
@@ -633,17 +684,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             child: const Text('이메일로 계속하기'),
                           ),
-                          if (!adminMode) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            Text(
-                              '계속하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
-                              textAlign: TextAlign.center,
-                              style: tt.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                height: 1.45,
-                              ),
-                            ),
-                          ],
+                          // 약관 동의는 "계속하면 동의한 것으로 간주"가 아니라
+                          // 회원가입 시트에서 직접 체크로 받는다.
                         ],
                       ),
                     ],
@@ -1019,14 +1061,19 @@ class _CourtMotifPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-class _MarketingConsentRow extends StatelessWidget {
-  const _MarketingConsentRow({
+/// 회원가입 시트의 동의 한 줄(필수·선택 공용).
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
     required this.value,
+    required this.label,
     required this.onChanged,
+    this.checkboxKey,
   });
 
   final bool value;
+  final String label;
   final ValueChanged<bool?> onChanged;
+  final Key? checkboxKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1039,15 +1086,16 @@ class _MarketingConsentRow extends StatelessWidget {
         child: Row(
           children: [
             Checkbox(
+              key: checkboxKey,
               value: value,
               onChanged: onChanged,
               side: BorderSide(color: cs.outline, width: 1.4),
               // 레이블이 없으면 스크린리더가 무엇에 대한 체크박스인지 알리지 못한다.
-              semanticLabel: '마케팅 정보 수신 동의 (선택)',
+              semanticLabel: label,
             ),
             Expanded(
               child: Text(
-                '마케팅 정보 수신 동의 (선택)',
+                label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
@@ -1057,6 +1105,36 @@ class _MarketingConsentRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 동의하기 전에 읽을 수 있게 문서를 연다.
+///
+/// 앱 안 웹뷰로 연다 — 기본 브라우저로 튕기면 가입 시트가 뒤로 밀려서,
+/// 읽고 돌아왔을 때 입력하던 내용이 어디 갔는지 알 수 없다. 웹뷰를 못 띄우는
+/// 환경(웹 빌드)에서는 기본 브라우저로 내린다.
+class _LegalLinkButton extends StatelessWidget {
+  const _LegalLinkButton({required this.label, required this.url});
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: () {
+        final uri = Uri.parse(url);
+        if (kIsWeb) {
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => InAppBrowserScreen(uri: uri)),
+        );
+      },
+      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+      label: Text(label),
     );
   }
 }

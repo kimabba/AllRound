@@ -18,12 +18,14 @@
 import { gnuboardRankingParser } from './parsers/gnuboard_ranking.ts';
 import { gnuboardSub5_5ContestParser } from './parsers/gnuboard_sub5_5_contest.ts';
 import { katoOpenListParser } from './parsers/kato_openlist.ts';
+import { ktaSportsForAllParser } from './parsers/kta_sportsforall.ts';
 import type { ParserFn } from './types.ts';
 
 export const PARSER_REGISTRY: Record<string, ParserFn> = {
   'gnuboard-sub5-5-contest': gnuboardSub5_5ContestParser,
   'kato-openlist': katoOpenListParser,
   'gnuboard-ranking': gnuboardRankingParser,
+  'kta-sportsforall': ktaSportsForAllParser,
 };
 
 export function getParser(key: string): ParserFn | undefined {
