@@ -232,7 +232,7 @@ Deno.serve(withCors(async (req) => {
             .from('clubs')
             .select(
               'id, sport, name, region, address, description, member_count, ' +
-                'monthly_fee, meeting_days, gender_preference, contact',
+                'monthly_fee, fee_type, meeting_days, gender_preference, contact',
             )
             .eq('id', selectedEntity.id)
             // 카드 검색(status='approved')과 동일 가시성 명시.
@@ -705,7 +705,7 @@ Deno.serve(withCors(async (req) => {
             .from('clubs')
             .select(
               'id, sport, name, region, description, member_count, ' +
-                'monthly_fee, meeting_days, gender_preference',
+                'monthly_fee, fee_type, meeting_days, gender_preference',
             )
             .eq('status', 'approved')
             .order('member_count', { ascending: false })
