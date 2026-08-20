@@ -22,7 +22,7 @@ CHROME_BIN ?= $(shell for p in \
     [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p" && break; \
   done)
 
-.PHONY: setup backend app admin web check reset release-android release-ios
+.PHONY: setup backend app admin design web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
 # iOS/macOS 의존성 = Swift Package Manager (CocoaPods 사용 안 함)
@@ -91,6 +91,11 @@ admin:
 	@test -n "$(CHROME_BIN)" || (echo "❌ 크로미움 계열 브라우저를 못 찾았습니다 (Chrome·Brave·Edge·Chromium)." && echo "   설치하거나 CHROME_EXECUTABLE 에 실행 파일 경로를 지정하세요." && exit 1)
 	@echo "🌐 브라우저: $(CHROME_BIN)"
 	cd app && CHROME_EXECUTABLE="$(CHROME_BIN)" flutter run -d chrome --web-port=3000 --dart-define-from-file=.env.local --dart-define=ADMIN_MODE=true
+
+# 사용자 앱 전체 화면 디자인 월 (Chrome · 로컬 전용)
+design:
+	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
+	cd app && flutter run -d chrome --web-port=3000 --web-launch-url='http://localhost:3000/?designRoute=%2Fdesign' --dart-define-from-file=.env.local --dart-define=USER_DESIGN_PREVIEW=true
 
 # ────────────────────────────────────────────────────
 # 프로덕션 릴리스 빌드 (스토어 제출용)

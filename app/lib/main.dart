@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'router.dart';
+import 'screens/dev/design_preview_device.dart';
 import 'services/api.dart';
 import 'services/local_user_preferences.dart';
 import 'services/notifications.dart'
@@ -149,16 +150,56 @@ class MatchUpApp extends ConsumerWidget {
       ],
       locale: const Locale('ko', 'KR'),
       builder: (context, child) {
-        final app = _NotificationEventListener(
+        final routeUri = router.routeInformationProvider.value.uri;
+        final routeTheme = routeUri.queryParameters['designTheme'];
+        final selectedDevice = AppConfig.userDesignPreview
+            ? DesignPreviewDevice.fromUri(routeUri)
+            : null;
+        final appContent = _NotificationEventListener(
           router: router,
           child: _AllRoundStartupSplash(
             child: child ?? const SizedBox.shrink(),
           ),
         );
-        if (!kIsWeb || !AppConfig.userDesignPreview) return app;
+        final app = AppConfig.userDesignPreview && routeTheme != null
+            ? Theme(
+                data: routeTheme == 'dark' ? AppTheme.dark() : AppTheme.light(),
+                child: appContent,
+              )
+            : appContent;
+        final isDesignWall = routeUri.path == '/design';
+        final isAdminSurface = AppConfig.adminMode ||
+            AppConfig.adminDesignPreview ||
+            routeUri.path.startsWith('/admin');
+        if (!kIsWeb || isDesignWall || isAdminSurface) {
+          return app;
+        }
 
         return LayoutBuilder(
           builder: (context, constraints) {
+            if (selectedDevice != null) {
+              final deviceSize = selectedDevice.size;
+              final deviceMediaQuery = MediaQuery.of(context).copyWith(
+                size: deviceSize,
+                padding: selectedDevice.safeArea,
+                viewPadding: selectedDevice.safeArea,
+                viewInsets: EdgeInsets.zero,
+              );
+              return ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                child: SingleChildScrollView(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: deviceSize.width,
+                      height: deviceSize.height,
+                      child: MediaQuery(data: deviceMediaQuery, child: app),
+                    ),
+                  ),
+                ),
+              );
+            }
+
             final previewWidth =
                 constraints.maxWidth < 390 ? constraints.maxWidth : 390.0;
             final previewSize = Size(previewWidth, constraints.maxHeight);

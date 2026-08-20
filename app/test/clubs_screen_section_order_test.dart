@@ -43,8 +43,10 @@ void main() {
 
     expect(
       source,
-      contains('onChanged: (value) {\n'
-          '            setState(() => _clubNameQuery = value.trim());'),
+      contains(
+        'onChanged: (value) {\n'
+        '            setState(() => _clubNameQuery = value.trim());',
+      ),
     );
   });
 
@@ -58,15 +60,19 @@ void main() {
       ),
     );
     expect(source, contains("tooltip: '키보드 닫기'"));
-    expect(source,
-        contains('onTapOutside: (_) => _clubNameQueryFocusNode.unfocus()'));
+    expect(
+      source,
+      contains('onTapOutside: (_) => _clubNameQueryFocusNode.unfocus()'),
+    );
   });
 
   test('나의 클럽 배너는 카드 높이를 먼저 확보해 다음 내용과 겹치지 않는다', () {
     final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
     final carousel = source.indexOf('class _MyClubsCarouselState');
-    final banner =
-        source.indexOf('SizedBox(\n          height: 108,', carousel);
+    final banner = source.indexOf(
+      'SizedBox(\n          height: 108,',
+      carousel,
+    );
     final layout = source.indexOf('child: LayoutBuilder(', banner);
     final pageView = source.indexOf('child: PageView.builder(', layout);
 
@@ -87,14 +93,12 @@ void main() {
 
   test('디자인 프리뷰는 테니스와 풋살 클럽을 각각 10개 제공한다', () {
     final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
-    final tennisIds = RegExp("id: 'preview-tennis-\\d{2}'")
-        .allMatches(source)
-        .map((match) => match.group(0))
-        .toSet();
-    final futsalIds = RegExp("id: 'preview-futsal-\\d{2}'")
-        .allMatches(source)
-        .map((match) => match.group(0))
-        .toSet();
+    final tennisIds = RegExp(
+      "id: 'preview-tennis-\\d{2}'",
+    ).allMatches(source).map((match) => match.group(0)).toSet();
+    final futsalIds = RegExp(
+      "id: 'preview-futsal-\\d{2}'",
+    ).allMatches(source).map((match) => match.group(0)).toSet();
 
     expect(tennisIds, hasLength(10));
     expect(futsalIds, hasLength(10));
@@ -108,14 +112,16 @@ void main() {
     expect(
       source,
       contains(
-          'visibleRecruitingPosts.isNotEmpty ||\n                      managedClubs.isNotEmpty'),
+        'visibleRecruitingPosts.isNotEmpty ||\n                      managedClubs.isNotEmpty',
+      ),
     );
   });
 
   test('클럽 홈은 세 가로 목록을 최대 5개로 제한하고 하단 전체보기만 둔다', () {
     final screen = File('lib/screens/clubs_screen.dart').readAsStringSync();
-    final recruiting = File('lib/widgets/clubs/team_recruiting_widgets.dart')
-        .readAsStringSync();
+    final recruiting = File(
+      'lib/widgets/clubs/team_recruiting_widgets.dart',
+    ).readAsStringSync();
 
     expect(screen, contains('recommendedClubs.take(5).toList()'));
     expect(screen, contains('itemCount: nearby.take(5).length'));
@@ -130,8 +136,9 @@ void main() {
 
   test('클럽과 팀원 모집 홈 카드는 좁은 폭으로 다음 카드를 예고한다', () {
     final screen = File('lib/screens/clubs_screen.dart').readAsStringSync();
-    final recruiting = File('lib/widgets/clubs/team_recruiting_widgets.dart')
-        .readAsStringSync();
+    final recruiting = File(
+      'lib/widgets/clubs/team_recruiting_widgets.dart',
+    ).readAsStringSync();
 
     expect(screen, contains('width: 156'));
     expect(recruiting, contains('width: 156'));

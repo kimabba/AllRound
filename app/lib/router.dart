@@ -15,6 +15,7 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/blocked_users_screen.dart';
+import 'screens/dev/design_wall_screen.dart';
 import 'models/chat_entry_context.dart';
 import 'models/tournament.dart';
 import 'screens/clubs/club_detail_screen.dart';
@@ -50,9 +51,7 @@ const kMobileAdminPaths = {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: kIsWeb && AppConfig.userDesignPreview
-        ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
-        : '/',
+    initialLocation: _initialLocation(),
     refreshListenable: GoRouterRefreshStream(ref),
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
@@ -67,6 +66,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       final adminDesignPreview = kIsWeb && AppConfig.adminDesignPreview;
       final userDesignPreview = kIsWeb && AppConfig.userDesignPreview;
+
+      if (loc == '/design' && !userDesignPreview) {
+        return user == null ? '/login' : '/';
+      }
 
       if (adminDesignPreview && loc.startsWith('/admin')) {
         return null;
@@ -130,6 +133,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         builder: (_, __) => catalogAware(OnboardingScreen.new),
       ),
+      GoRoute(
+        path: '/design',
+        builder: (_, __) => catalogAware(DesignWallScreen.new),
+      ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
@@ -170,6 +177,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   'futsal' => 'futsal',
                   _ => null,
                 },
+                initialCategory: state.uri.queryParameters['category'],
               ),
             ),
           ),
@@ -345,6 +353,19 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+String _initialLocation() {
+  if (!kIsWeb || !AppConfig.userDesignPreview) return '/';
+
+  // make design 은 개발 전용 디자인 월을 시작 경로로 넘긴다. query parameter 를
+  // 쓰면 Flutter 의 기본 hash 라우팅 방식과 충돌하지 않고 첫 화면을 고를 수 있다.
+  final designRoute = Uri.base.queryParameters['designRoute'];
+  if (designRoute != null && designRoute.startsWith('/')) {
+    return designRoute;
+  }
+
+  return Uri.base.path.isEmpty ? '/' : Uri.base.path;
+}
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {

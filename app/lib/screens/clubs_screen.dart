@@ -140,9 +140,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       final api = ref.read(apiProvider);
       const sports = <String>['tennis', 'futsal'];
       final results = await Future.wait(
-        sports.map(
-          (sport) => api.searchClubs(sport: sport, region: _clubFilters.region),
-        ),
+        sports.map((sport) => api.searchClubs(sport: sport)),
       );
       final seen = <String>{};
       final list = [
@@ -175,7 +173,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       if (mounted) {
         setState(() {
           _recruitingPosts = posts;
-          _recruitingCapped = posts.length >= _recruitingFetchLimit;
         });
       }
     } catch (error) {
@@ -841,9 +838,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ClubHomeSectionHeader(
-          title: '내 주변 클럽',
-        ),
+        _ClubHomeSectionHeader(title: '내 주변 클럽'),
         if (_loadingNearby) ...[
           const SizedBox(height: AppSpacing.sm),
           const LinearProgressIndicator(),
@@ -1676,6 +1671,15 @@ final _previewClubs = [
     cardColor: '#A15C08',
   ),
 ];
+
+/// 디자인 월의 상세 화면도 클럽 홈과 같은 프리뷰 객체를 사용한다.
+/// ID 문자열만 넘기면 실제 API를 호출해 프리뷰 상세가 비는 문제가 생긴다.
+Club? clubDesignPreviewById(String id) {
+  for (final club in _previewClubs) {
+    if (club.id == id) return club;
+  }
+  return null;
+}
 
 final _previewMyClubs = [
   _previewShowcaseClub(
