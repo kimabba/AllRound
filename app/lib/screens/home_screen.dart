@@ -29,21 +29,6 @@ enum _HomeTournamentFilter { recommended, thisWeek, all }
 /// 지역 필터의 "전체" 항목. 지역 이름과 같은 자리에서 쓰이므로 상수로 둔다.
 const String _allRegions = '전국';
 
-/// 디자인 프리뷰에서는 관심 대회를 직접 누를 수 없으므로 종목별 세 대회를
-/// 저장된 상태로 보여준다. 운영 데이터와 사용자 즐겨찾기에는 영향을 주지 않는다.
-const Set<String> _previewFavoriteTournamentIds = {
-  'preview-home-seoul-open',
-  'preview-home-ranking',
-  'preview-home-night-cup',
-  'preview-home-futsal',
-  'preview-home-futsal-jamwon',
-  'preview-home-futsal-thebase',
-};
-
-const String _previewPosterBase =
-    'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/'
-    'tournament-posters/design-samples';
-
 /// 홈에서 한 번에 보여주는 대회 수. 풋살과 테니스에 같은 기준을 적용한다.
 const int homeTournamentDisplayLimit = 3;
 
@@ -153,9 +138,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final myTournaments = ref.watch(myTournamentRecordsProvider);
     final cs = Theme.of(context).colorScheme;
     final selectedSport = ref.watch(activeSportProvider) ?? 'futsal';
-    final savedTournamentIds = AppConfig.userDesignPreview
-        ? _previewFavoriteTournamentIds
-        : ref.watch(favoriteIdsProvider).value ?? const <String>{};
+    final favoriteIds =
+        ref.watch(favoriteIdsProvider).value ?? const <String>{};
     final source = AppConfig.userDesignPreview
         ? AsyncValue.data(_previewTournaments())
         : tournaments;
@@ -274,19 +258,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: _TournamentHomeContent(
                       key: AllRoundE2EKeys.homeTournamentList,
                       tournaments: visible,
-                      favorites: AppConfig.userDesignPreview
-                          ? visible
-                              .where(
-                                (item) => savedTournamentIds.contains(item.id),
-                              )
-                              .toList(growable: false)
-                          : myTournaments.value
-                                  ?.where(
-                                    (item) => item.sport == selectedSport,
-                                  )
-                                  .toList() ??
-                              const [],
-                      favoriteIds: savedTournamentIds,
+                      favorites: myTournaments.value
+                              ?.where((item) => item.sport == selectedSport)
+                              .toList() ??
+                          const [],
+                      favoriteIds: favoriteIds,
                       selectedSport: selectedSport,
                       onOpen: (item) => context.push('/tournaments/${item.id}'),
                       onFavorite: _toggleFavorite,
@@ -1970,7 +1946,6 @@ List<Tournament> _previewTournaments() {
       location: '올림픽공원 테니스장',
       eligibleGrades: const ['open'],
       entryFee: 60000,
-      posterUrl: '$_previewPosterBase/tennis-01.jpg',
       status: 'published',
     ),
     Tournament(
@@ -1979,12 +1954,11 @@ List<Tournament> _previewTournaments() {
       title: '전국 동호인 테니스대회',
       organizer: '대한테니스협회',
       startDate: today.add(const Duration(days: 15)),
-      applicationDeadline: today.add(const Duration(days: 5)),
+      applicationDeadline: today.add(const Duration(days: 8)),
       region: '서울',
       location: '송파구 종합운동장',
       eligibleGrades: const ['open'],
       entryFee: 60000,
-      posterUrl: '$_previewPosterBase/tennis-02.jpg',
       status: 'published',
     ),
     Tournament(
@@ -1992,69 +1966,12 @@ List<Tournament> _previewTournaments() {
       sport: 'futsal',
       title: '서울 풋살 챔피언십',
       organizer: '서울풋살연맹',
-      startDate: today.add(const Duration(days: 12)),
-      applicationDeadline: today.add(const Duration(days: 2)),
+      startDate: today.add(const Duration(days: 22)),
+      applicationDeadline: today.add(const Duration(days: 12)),
       region: '서울',
       location: '마포 난지 풋살장',
       eligibleGrades: const ['open'],
       entryFee: 80000,
-      posterUrl: '$_previewPosterBase/futsal-01.jpg',
-      status: 'published',
-    ),
-    Tournament(
-      id: 'preview-home-futsal-jamwon',
-      sport: 'futsal',
-      title: '잠원 풋살 나이트 컵',
-      organizer: '서울풋살연맹',
-      startDate: today.add(const Duration(days: 16)),
-      applicationDeadline: today.add(const Duration(days: 4)),
-      region: '서울',
-      location: '잠원스포츠파크 풋살장',
-      eligibleGrades: const ['open'],
-      entryFee: 70000,
-      posterUrl: '$_previewPosterBase/futsal-02.jpg',
-      status: 'published',
-    ),
-    Tournament(
-      id: 'preview-home-futsal-thebase',
-      sport: 'futsal',
-      title: '용산 더베이스 풋살 페스티벌',
-      organizer: '서울풋살연맹',
-      startDate: today.add(const Duration(days: 20)),
-      applicationDeadline: today.add(const Duration(days: 6)),
-      region: '서울',
-      location: '용산 더베이스 풋살장',
-      eligibleGrades: const ['open'],
-      entryFee: 90000,
-      posterUrl: '$_previewPosterBase/futsal-03.jpg',
-      status: 'published',
-    ),
-    Tournament(
-      id: 'preview-home-futsal-seoulforest',
-      sport: 'futsal',
-      title: '서울숲 풋살 챌린지',
-      organizer: '서울생활체육회',
-      startDate: today.add(const Duration(days: 43)),
-      applicationDeadline: today.add(const Duration(days: 30)),
-      region: '서울',
-      location: '서울숲 풋살장',
-      eligibleGrades: const ['open'],
-      entryFee: 60000,
-      posterUrl: '$_previewPosterBase/futsal-01.jpg',
-      status: 'published',
-    ),
-    Tournament(
-      id: 'preview-home-futsal-yongsan',
-      sport: 'futsal',
-      title: '용산 주말 풋살 리그',
-      organizer: '용산구체육회',
-      startDate: today.add(const Duration(days: 50)),
-      applicationDeadline: today.add(const Duration(days: 36)),
-      region: '서울',
-      location: '이촌한강공원 풋살장',
-      eligibleGrades: const ['open'],
-      entryFee: 75000,
-      posterUrl: '$_previewPosterBase/futsal-02.jpg',
       status: 'published',
     ),
     Tournament(
@@ -2062,13 +1979,12 @@ List<Tournament> _previewTournaments() {
       sport: 'tennis',
       title: '한강 나이트 테니스 컵',
       organizer: '한강테니스클럽',
-      startDate: today.add(const Duration(days: 18)),
-      applicationDeadline: today.add(const Duration(days: 7)),
+      startDate: today.add(const Duration(days: 28)),
+      applicationDeadline: today.add(const Duration(days: 18)),
       region: '서울',
       location: '망원 테니스장',
       eligibleGrades: const ['open'],
       entryFee: 40000,
-      posterUrl: '$_previewPosterBase/tennis-03.jpg',
       status: 'published',
     ),
   ];

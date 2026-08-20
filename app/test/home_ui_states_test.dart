@@ -426,7 +426,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('대회명 또는 지역을 검색해보세요'));
+    await tester.tap(find.bySemanticsLabel('대회 검색'));
     await tester.pumpAndSettle();
 
     expect(find.text('검색 열림=1'), findsOneWidget);
