@@ -48,6 +48,25 @@ void main() {
       cost: '월 3만원',
       createdAt: DateTime(2026, 8, 19),
     ),
+    RecruitingPostPreview(
+      id: 'recruiting-futsal',
+      clubId: clubs.last.id,
+      sport: 'futsal',
+      clubName: clubs.last.name,
+      title: '평일 풋살 팀원 모집',
+      region: '서울 송파구',
+      place: '잠실 풋살장',
+      schedule: '매주 수요일',
+      grade: '무관',
+      gender: '남성',
+      age: '20–40대',
+      position: '필드',
+      fieldCount: 3,
+      keeperCount: 1,
+      totalCount: 0,
+      cost: '회당 1만원',
+      createdAt: DateTime(2026, 8, 18),
+    ),
   ];
 
   testWidgets('전체보기는 클럽과 팀원 모집 탭에 검색창과 필터를 제공한다', (tester) async {
@@ -78,7 +97,7 @@ void main() {
 
     expect(find.text('전체보기'), findsOneWidget);
     expect(find.text('클럽 2'), findsOneWidget);
-    expect(find.text('팀원 모집 1'), findsOneWidget);
+    expect(find.text('팀원 모집 2'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byTooltip('지역·종목·조건 필터'), findsOneWidget);
 
@@ -89,11 +108,48 @@ void main() {
     expect(find.text('강남 테니스클럽'), findsOneWidget);
     expect(find.text('잠실 풋살클럽'), findsNothing);
 
+    expect(find.text('팀원 모집 1'), findsOneWidget);
     await tester.tap(find.text('팀원 모집 1'));
     await tester.pumpAndSettle();
     expect(find.text('주말 복식 회원 모집'), findsOneWidget);
+    expect(find.text('평일 풋살 팀원 모집'), findsNothing);
     expect(find.textContaining('최신 글만 표시'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('한 종목 모집글을 마감해도 다른 종목 모집글은 남는다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: ClubBrowseScreen(
+          clubs: clubs,
+          recruitingPosts: posts,
+          recruitingCapped: false,
+          initialSports: const {'tennis', 'futsal'},
+          favoriteClubIds: const {},
+          managedClubIds: {clubs.first.id},
+          openRecruitingClubIds: {clubs.first.id, clubs.last.id},
+          onOpenClub: (_) {},
+          onFavoriteToggle: (_, __) async {},
+          onOpenPost: (_) {},
+          onClosePost: (closedPost) async => posts
+              .where((post) => post.id != closedPost.id)
+              .toList(growable: false),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('팀원 모집 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('주말 복식 회원 모집'), findsOneWidget);
+    expect(find.text('평일 풋살 팀원 모집'), findsOneWidget);
+
+    await tester.tap(find.text('마감하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('주말 복식 회원 모집'), findsNothing);
+    expect(find.text('평일 풋살 팀원 모집'), findsOneWidget);
+    expect(find.text('팀원 모집 1'), findsOneWidget);
   });
 
   testWidgets('전체보기 상세 필터 시트를 열 수 있다', (tester) async {
