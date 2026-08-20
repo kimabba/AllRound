@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:allround/models/chat_ui.dart';
+import 'package:allround/widgets/chat_club_card.dart';
 import 'package:allround/widgets/chat_tournament_card.dart';
 
 void main() {
@@ -43,7 +44,11 @@ void main() {
     test('returns empty list on malformed payload', () {
       expect(ChatUiBlock.listFromEvent({'blocks': 'oops'}), isEmpty);
       expect(ChatUiBlock.listFromEvent(const {}), isEmpty);
-      expect(ChatUiBlock.listFromEvent({'blocks': [42]}), isEmpty);
+      expect(
+          ChatUiBlock.listFromEvent({
+            'blocks': [42]
+          }),
+          isEmpty);
     });
 
     test('skips items with missing required fields', () {
@@ -62,7 +67,8 @@ void main() {
       expect(blocks.single.tournamentItems, isEmpty);
     });
 
-    test('club entity block yields no tournament items but is still emitted', () {
+    test('club entity block yields no tournament items but is still emitted',
+        () {
       final data = {
         'blocks': [
           {'type': 'cards', 'entity': 'club', 'items': []}
@@ -72,6 +78,31 @@ void main() {
       expect(blocks.length, 1);
       expect(blocks.first.entity, 'club');
       expect(blocks.first.tournamentItems, isEmpty);
+    });
+
+    test('club card parses per-event fee type', () {
+      final blocks = ChatUiBlock.listFromEvent({
+        'blocks': [
+          {
+            'type': 'cards',
+            'entity': 'club',
+            'items': [
+              {
+                'id': 'club-1',
+                'name': '수요 풋살',
+                'sport': 'futsal',
+                'member_count': 12,
+                'monthly_fee': 20000,
+                'fee_type': 'per_event',
+              },
+            ],
+          },
+        ],
+      });
+
+      final item = blocks.single.clubItems.single;
+      expect(item.monthlyFee, 20000);
+      expect(item.feeType, 'per_event');
     });
 
     test('parses regulation_fields (normal)', () {
@@ -95,7 +126,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields.length, 2);
       expect(item.regulationFields.first.label, '장소');
       expect(item.regulationFields.first.value, '영암종합스포츠타운');
@@ -120,7 +152,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields, isEmpty);
     });
 
@@ -151,7 +184,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields.length, 3);
       expect(
         item.regulationFields.map((f) => f.label).toList(),
@@ -177,7 +211,8 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.regulationFields, isEmpty);
     });
 
@@ -199,13 +234,15 @@ void main() {
           }
         ],
       };
-      final item = ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
+      final item =
+          ChatUiBlock.listFromEvent(data).single.tournamentItems.single;
       expect(item.eligibleGrades, ['ok']);
     });
   });
 
   group('ChatTournamentCard', () {
-    testWidgets('renders title, region and an action; hides id', (tester) async {
+    testWidgets('renders title, region and an action; hides id',
+        (tester) async {
       const item = TournamentChatCardItem(
         id: '11111111-1111-1111-1111-111111111111',
         title: '광주 테니스 오픈',
@@ -294,5 +331,27 @@ void main() {
       expect(find.text('영암 오픈'), findsOneWidget);
       expect(find.text('AI 상세 설명'), findsOneWidget);
     });
+  });
+
+  testWidgets('건별 요금제 클럽카드는 1회 참가비로 표시한다', (tester) async {
+    const item = ClubChatCardItem(
+      id: 'club-1',
+      name: '수요 풋살',
+      sport: 'futsal',
+      memberCount: 12,
+      monthlyFee: 20000,
+      feeType: 'per_event',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatClubCard(item: item, onAction: (_, __) {}),
+        ),
+      ),
+    );
+
+    expect(find.text('1회 참가비 2만원'), findsOneWidget);
+    expect(find.text('월회비 2만원'), findsNothing);
   });
 }
