@@ -39,6 +39,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
   RulePopularityHighlight? _activeHighlight;
   String? _activeSport;
   String? _error;
+  String? _tennisError;
+  String? _futsalError;
   bool _loading = true;
   String _query = '';
 
@@ -65,6 +67,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     setState(() {
       _loading = true;
       _error = null;
+      _tennisError = null;
+      _futsalError = null;
     });
 
     final api = ref.read(apiProvider);
@@ -102,22 +106,37 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
           _loading = false;
         });
       } else {
-        final tennis = await api.listRules('tennis');
-        final futsal = await api.listRules('futsal');
-        RulePopularityHighlight? tennisHighlight;
-        RulePopularityHighlight? futsalHighlight;
-        try {
-          tennisHighlight = await api.popularRuleHighlight24h('tennis');
-          futsalHighlight = await api.popularRuleHighlight24h('futsal');
-        } catch (_) {
-          // 인기 집계가 실패해도 종목별 규칙 목록은 그대로 표시한다.
+        Future<_SportRulesLoadResult> loadSportRules(String value) async {
+          try {
+            final rules = await api.listRules(value);
+            RulePopularityHighlight? highlight;
+            try {
+              highlight = await api.popularRuleHighlight24h(value);
+            } catch (_) {
+              // 인기 집계가 실패해도 해당 종목 규칙 목록은 그대로 표시한다.
+            }
+            return _SportRulesLoadResult(rules: rules, highlight: highlight);
+          } catch (_) {
+            return const _SportRulesLoadResult.failed();
+          }
         }
+
+        final results = await Future.wait([
+          loadSportRules('tennis'),
+          loadSportRules('futsal'),
+        ]);
+        final tennis = results[0];
+        final futsal = results[1];
         if (!mounted) return;
         setState(() {
-          _tennisByCat = _groupByCategory(tennis);
-          _futsalByCat = _groupByCategory(futsal);
-          _tennisHighlight = tennisHighlight;
-          _futsalHighlight = futsalHighlight;
+          _tennisByCat =
+              tennis.rules == null ? null : _groupByCategory(tennis.rules!);
+          _futsalByCat =
+              futsal.rules == null ? null : _groupByCategory(futsal.rules!);
+          _tennisHighlight = tennis.highlight;
+          _futsalHighlight = futsal.highlight;
+          _tennisError = tennis.failed ? _sportLoadError('tennis') : null;
+          _futsalError = futsal.failed ? _sportLoadError('futsal') : null;
           _loading = false;
         });
       }
@@ -241,6 +260,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
                 query: _query,
                 searchController: _search,
                 highlight: _tennisHighlight,
+                error: _tennisError,
+                onRetry: _load,
               ),
               _RuleBookBody(
                 grouped: _futsalByCat,
@@ -248,6 +269,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
                 query: _query,
                 searchController: _search,
                 highlight: _futsalHighlight,
+                error: _futsalError,
+                onRetry: _load,
               ),
             ],
           ),
@@ -278,6 +301,8 @@ class _RuleBookBody extends StatelessWidget {
     required this.query,
     required this.searchController,
     required this.highlight,
+    this.error,
+    this.onRetry,
   });
 
   final Map<String, List<RuleArticle>>? grouped;
@@ -285,9 +310,31 @@ class _RuleBookBody extends StatelessWidget {
   final String query;
   final TextEditingController searchController;
   final RulePopularityHighlight? highlight;
+  final String? error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    if (error != null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          AppEmptyState(
+            icon: Icons.menu_book_outlined,
+            title: '${sportLabelFromString(sport)} 룰북을 불러올 수 없어요',
+            description: error,
+            actionLabel: '다시 시도',
+            onAction: onRetry,
+          ),
+        ],
+      );
+    }
+
     final filtered = _filtered(grouped, query);
 
     if (grouped == null || grouped!.isEmpty) {
@@ -384,6 +431,24 @@ class _RuleBookBody extends StatelessWidget {
     return null;
   }
 }
+
+class _SportRulesLoadResult {
+  const _SportRulesLoadResult({required this.rules, this.highlight})
+      : failed = false;
+
+  const _SportRulesLoadResult.failed()
+      : rules = null,
+        highlight = null,
+        failed = true;
+
+  final List<RuleArticle>? rules;
+  final RulePopularityHighlight? highlight;
+  final bool failed;
+}
+
+String _sportLoadError(String sport) =>
+    '${sportLabelFromString(sport)} 규칙만 불러오지 못했습니다. '
+    '다른 종목 규칙은 계속 볼 수 있습니다.';
 
 /// 룰북 화면의 앱바 액션. 화면이 로딩·오류·단일종목·탭 4갈래로 갈라지므로
 /// 한 곳에만 넣으면 분기에 따라 마이 진입점이 사라진다(실제로 그랬다).
