@@ -22,7 +22,7 @@ CHROME_BIN ?= $(shell for p in \
     [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p" && break; \
   done)
 
-.PHONY: setup backend app device-preview admin design web check reset release-android release-ios
+.PHONY: setup backend app device-preview device-database admin design web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
 # iOS/macOS 의존성 = Swift Package Manager (CocoaPods 사용 안 함)
@@ -82,6 +82,13 @@ device-preview:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	@test "$(DEVICE_ID)" != "macos" || (echo "DEVICE_ID에 실제 휴대폰 ID를 지정하세요: make device-preview DEVICE_ID=<id>" && exit 1)
 	cd app && flutter run --profile -d $(DEVICE_ID) --dart-define-from-file=.env.local --dart-define=USER_DESIGN_PREVIEW=true
+
+# 실제 iOS/Android 기기에서 로컬 DB 시드와 Edge Function을 실제 인증으로 확인한다.
+# Mac과 휴대폰이 같은 네트워크에 있어야 하고 .env.local은 Mac의 LAN 주소를 가리킨다.
+device-database:
+	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다." && exit 1)
+	@test "$(DEVICE_ID)" != "macos" || (echo "DEVICE_ID에 실제 휴대폰 ID를 지정하세요." && exit 1)
+	cd app && flutter run --profile -d $(DEVICE_ID) --dart-define-from-file=.env.local --dart-define=DEVICE_DATABASE_PREVIEW=true
 
 # 터미널 3: 웹빌드 — 로컬 전용 (빌드 후 로컬 서버, 배포 안 함 · JY-81)
 web:

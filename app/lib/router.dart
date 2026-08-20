@@ -358,6 +358,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 });
 
 String _initialLocation() {
+  // 실제 기기 프리뷰는 원격 의존성이 적고 요청 대상인 클럽 화면부터 연다.
+  // 웹은 주소로 각 화면을 선택하므로 기존 동작을 유지한다.
+  if (!kIsWeb && AppConfig.userDesignPreview) return '/clubs';
   if (!kIsWeb || !AppConfig.userDesignPreview) return '/';
 
   // make design 은 개발 전용 디자인 월을 시작 경로로 넘긴다. query parameter 를
@@ -372,6 +375,9 @@ String _initialLocation() {
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Ref ref) {
+    // 프리뷰는 인증·종목·관리자 상태를 사용하지 않는다. 실제 기기가 로컬
+    // Supabase에 닿지 않아도 내장 샘플 화면을 바로 열 수 있어야 한다.
+    if (AppConfig.userDesignPreview) return;
     ref.listen(authStateProvider, (_, __) => notifyListeners());
     ref.listen(userSportsProvider, (_, __) => notifyListeners());
     ref.listen(isAdminProvider, (_, __) => notifyListeners());

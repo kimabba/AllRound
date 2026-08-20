@@ -8,6 +8,7 @@ void main() {
   test('개발용 우회 플래그는 기본 빌드에서 모두 꺼져 있다', () {
     expect(AppConfig.adminDesignPreview, isFalse);
     expect(AppConfig.userDesignPreview, isFalse);
+    expect(AppConfig.deviceDatabasePreview, isFalse);
     expect(AppConfig.adminMode, isFalse);
     expect(AppConfig.hasDevOverrideFlags, isFalse);
   });

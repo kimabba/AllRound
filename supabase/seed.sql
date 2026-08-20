@@ -219,8 +219,51 @@ begin
     raise exception 'local seed user is missing';
   end if;
 
+  update public.users
+  set nickname = '로컬 QA',
+      birth_year = 1995,
+      birth_date = '1995-05-12',
+      primary_region = 'seoul_metro',
+      interest_regions = array['seoul_metro', 'gyeonggi'],
+      ugc_terms_version = '2026-07-15',
+      ugc_terms_accepted_at = now()
+  where id = v_local_user_id;
+
+  insert into public.user_sports (user_id, sport, grade, is_primary) values
+    (v_local_user_id, 'futsal', 'intermediate', true),
+    (v_local_user_id, 'tennis', 'y1to3', false)
+  on conflict (user_id, sport) do update set
+    grade = excluded.grade,
+    is_primary = excluded.is_primary;
+
+  insert into public.user_tennis_orgs (
+    user_id, org, score, is_primary, region_code,
+    division_codes, division
+  ) values (
+    v_local_user_id, 'gj', 1280, true, 'gwangju',
+    array['gj_m_veteran'], '베테랑부'
+  )
+  on conflict (user_id, org, division) do update set
+    score = excluded.score,
+    is_primary = excluded.is_primary,
+    region_code = excluded.region_code,
+    division_codes = excluded.division_codes;
+
+  insert into public.org_player_links (
+    id, org_code, org_player_id, user_id, status,
+    claimed_at, decided_at, decided_by
+  ) values (
+    '60000000-0000-4000-8000-000000000001',
+    'gj', 'local-qa-001', v_local_user_id, 'confirmed',
+    now() - interval '30 days', now() - interval '29 days', v_local_user_id
+  )
+  on conflict (org_code, org_player_id, user_id) do update set
+    status = excluded.status,
+    decided_at = excluded.decided_at,
+    decided_by = excluded.decided_by;
+
   insert into public.club_members (club_id, user_id, role, status) values
-    ('10000000-0000-4000-8000-000000000001', v_local_user_id, 'member', 'active'),
+    ('10000000-0000-4000-8000-000000000001', v_local_user_id, 'owner', 'active'),
     ('10000000-0000-4000-8000-000000000004', v_local_user_id, 'member', 'active'),
     ('20000000-0000-4000-8000-000000000001', v_local_user_id, 'member', 'active'),
     ('20000000-0000-4000-8000-000000000004', v_local_user_id, 'member', 'active')
@@ -228,6 +271,48 @@ begin
     role = excluded.role,
     status = excluded.status,
     left_at = null;
+
+  update public.club_members
+  set can_kick = true,
+      can_create_event = true,
+      can_post_notice = true
+  where club_id = '10000000-0000-4000-8000-000000000001'
+    and user_id = v_local_user_id;
+
+  update public.clubs
+  set created_by = v_local_user_id
+  where id = '10000000-0000-4000-8000-000000000001';
+
+  insert into public.club_posts (
+    id, club_id, author_id, tag, title, body, is_pinned, created_at
+  ) values
+    (
+      '40000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001', v_local_user_id,
+      'notice', '이번 주 정기 운동 안내',
+      '토요일 오전 9시까지 대치 테니스장 2번 코트로 모여주세요.',
+      true, '2026-08-18 09:00:00+09'
+    ),
+    (
+      '40000000-0000-4000-8000-000000000002',
+      '10000000-0000-4000-8000-000000000001', v_local_user_id,
+      'free', '새 회원 인사드립니다',
+      '즐겁게 운동하고 좋은 경기 많이 만들겠습니다. 잘 부탁드려요!',
+      false, '2026-08-19 18:30:00+09'
+    ),
+    (
+      '40000000-0000-4000-8000-000000000003',
+      '20000000-0000-4000-8000-000000000001', v_local_user_id,
+      'notice', '목요일 풋살 매치 준비',
+      '검은색 상의와 개인 음료를 챙겨주세요. 경기 시작 20분 전 집합입니다.',
+      true, '2026-08-20 10:00:00+09'
+    )
+  on conflict (id) do update set
+    tag = excluded.tag,
+    title = excluded.title,
+    body = excluded.body,
+    is_pinned = excluded.is_pinned,
+    created_at = excluded.created_at;
 
   insert into public.club_recruiting_posts (
     id, club_id, created_by, title, intro, place, schedule_text,
@@ -373,4 +458,83 @@ insert into public.tournaments (
  array['beginner','intermediate'],
  25000, null,
  '리그전',
- 'manual', 'published');
+'manual', 'published');
+
+-- =========================
+-- 장소·협회 랭킹·전적 QA 데이터
+-- =========================
+insert into public.venues (
+  id, sport, name, region, region_code, address,
+  venue_type, court_count, source, verified_at
+) values
+  (
+    '70000000-0000-4000-8000-000000000001', 'tennis',
+    '잠실 종합운동장 테니스장', '서울', 'seoul_metro',
+    '서울 송파구 올림픽로 25', 'outdoor', 8, 'local_qa', now()
+  ),
+  (
+    '70000000-0000-4000-8000-000000000002', 'tennis',
+    '대치 유수지 체육공원 테니스장', '서울', 'seoul_metro',
+    '서울 강남구 역삼로90길 43', 'outdoor', 6, 'local_qa', now()
+  ),
+  (
+    '70000000-0000-4000-8000-000000000003', 'futsal',
+    '잠실 실내 풋살장', '서울', 'seoul_metro',
+    '서울 송파구 잠실동', 'indoor', 3, 'local_qa', now()
+  ),
+  (
+    '70000000-0000-4000-8000-000000000004', 'futsal',
+    '송도 센트럴 풋살파크', '인천', 'incheon',
+    '인천 연수구 송도동', 'outdoor', 4, 'local_qa', now()
+  )
+on conflict (id) do update set
+  name = excluded.name,
+  region = excluded.region,
+  region_code = excluded.region_code,
+  address = excluded.address,
+  venue_type = excluded.venue_type,
+  court_count = excluded.court_count,
+  verified_at = excluded.verified_at;
+
+insert into public.org_rankings (
+  id, org_code, division_code, rank, player_name,
+  org_player_id, club_raw, rank_points, total_points,
+  source_url, fetched_at
+) values
+  ('80000000-0000-4000-8000-000000000001', 'gj', 'gj_m_veteran', 1, '김라켓', 'local-qa-101', '광주 에이스', 1680, 1680, 'https://local.invalid/rankings', now()),
+  ('80000000-0000-4000-8000-000000000002', 'gj', 'gj_m_veteran', 2, '이서브', 'local-qa-102', '무등 테니스', 1510, 1510, 'https://local.invalid/rankings', now()),
+  ('80000000-0000-4000-8000-000000000003', 'gj', 'gj_m_veteran', 3, '박발리', 'local-qa-103', '빛고을 클럽', 1390, 1390, 'https://local.invalid/rankings', now()),
+  ('80000000-0000-4000-8000-000000000004', 'gj', 'gj_m_veteran', 4, 'Local QA Admin', 'local-qa-001', '올라운드 QA', 1280, 1280, 'https://local.invalid/rankings', now()),
+  ('80000000-0000-4000-8000-000000000005', 'gj', 'gj_m_veteran', 5, '최스매시', 'local-qa-105', '상무 테니스', 1190, 1190, 'https://local.invalid/rankings', now())
+on conflict (org_code, division_code, rank) do update set
+  player_name = excluded.player_name,
+  org_player_id = excluded.org_player_id,
+  club_raw = excluded.club_raw,
+  rank_points = excluded.rank_points,
+  total_points = excluded.total_points,
+  source_url = excluded.source_url,
+  fetched_at = excluded.fetched_at;
+
+insert into public.org_ranking_snapshots (
+  org_code, division_code, org_player_id, captured_on, rank, total_points
+) values
+  ('gj', 'gj_m_veteran', 'local-qa-001', current_date - 21, 7, 980),
+  ('gj', 'gj_m_veteran', 'local-qa-001', current_date - 14, 6, 1080),
+  ('gj', 'gj_m_veteran', 'local-qa-001', current_date - 7, 5, 1170),
+  ('gj', 'gj_m_veteran', 'local-qa-001', current_date, 4, 1280)
+on conflict (org_code, division_code, org_player_id, captured_on) do update set
+  rank = excluded.rank,
+  total_points = excluded.total_points;
+
+insert into public.org_player_results (
+  org_code, org_player_id, tournament_name, played_on,
+  event_raw, result_raw, result_round, points
+) values
+  ('gj', 'local-qa-001', '광주 여름 오픈', current_date - 30, '베테랑부 복식', '8강', 8, 180),
+  ('gj', 'local-qa-001', '무등산배 동호인 대회', current_date - 60, '베테랑부 복식', '준우승', 2, 320),
+  ('gj', 'local-qa-001', '빛고을 테니스 페스티벌', current_date - 90, '베테랑부 복식', '16강', 16, 100)
+on conflict (org_code, org_player_id, tournament_name, played_on) do update set
+  event_raw = excluded.event_raw,
+  result_raw = excluded.result_raw,
+  result_round = excluded.result_round,
+  points = excluded.points;

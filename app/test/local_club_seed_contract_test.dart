@@ -22,9 +22,14 @@ void main() {
     expect(seed, contains('insert into public.club_members'));
     expect(seed, contains("where email = 'local-admin@allround.invalid'"));
     expect(
-      RegExp("v_local_user_id, 'member', 'active'").allMatches(seed),
+      RegExp("v_local_user_id, '(owner|member)', 'active'").allMatches(seed),
       hasLength(4),
     );
+    expect(seed, contains('insert into public.user_sports'));
+    expect(seed, contains('insert into public.club_posts'));
+    expect(seed, contains('insert into public.venues'));
+    expect(seed, contains('insert into public.org_rankings'));
+    expect(seed, contains('insert into public.org_player_results'));
     expect(
       seed,
       contains(

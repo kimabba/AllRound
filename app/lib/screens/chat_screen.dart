@@ -5,8 +5,11 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config.dart';
 import '../models/chat_entry_context.dart';
 import '../models/moderation.dart';
+import '../services/api.dart';
+import '../services/preview_chat.dart';
 import '../state/chat_state.dart';
 import '../state/chat_stream_controller.dart';
 import '../state/providers.dart';
@@ -89,6 +92,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatStreamControllerProvider).resetConversation();
   }
 
+  Stream<ChatStreamEvent> _createChatStream({
+    required String message,
+    String? conversationId,
+    Map<String, String>? selectedEntity,
+    Map<String, dynamic>? tournamentRefine,
+  }) {
+    final activeSport = ref.read(activeSportProvider);
+    if (AppConfig.userDesignPreview || AppConfig.deviceDatabasePreview) {
+      return previewChatStream(
+        message: message,
+        activeSport: activeSport,
+        selectedEntity: selectedEntity,
+      );
+    }
+    return ref.read(apiProvider).chat(
+          message: message,
+          conversationId: conversationId,
+          activeSport: activeSport,
+          selectedEntity: selectedEntity,
+          tournamentRefine: tournamentRefine,
+        );
+  }
+
   Future<void> _send() async {
     final text = _ctrl.text.trim();
     final chat = ref.read(chatProvider);
@@ -96,11 +122,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     _ctrl.clear();
 
-    final api = ref.read(apiProvider);
-    final stream = api.chat(
+    final stream = _createChatStream(
       message: text,
       conversationId: chat.conversationId,
-      activeSport: ref.read(activeSportProvider),
       selectedEntity: _selectedEntryEntity,
     );
     _scrollToBottom();
@@ -118,11 +142,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
 
-    final api = ref.read(apiProvider);
-    final stream = api.chat(
+    final stream = _createChatStream(
       message: message,
       conversationId: chat.conversationId,
-      activeSport: ref.read(activeSportProvider),
       selectedEntity: {'type': entityType, 'id': entityId},
     );
     _scrollToBottom();
@@ -140,11 +162,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
 
-    final api = ref.read(apiProvider);
-    final stream = api.chat(
+    final stream = _createChatStream(
       message: label,
       conversationId: chat.conversationId,
-      activeSport: ref.read(activeSportProvider),
       tournamentRefine: refine,
     );
     _scrollToBottom();

@@ -81,9 +81,12 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       setState(() {
         if (sport != null) {
           _activeByCat = _previewRulesFor(sport);
+          _activeHighlight = _previewHighlightFor(sport);
         } else {
           _tennisByCat = _previewRulesFor('tennis');
           _futsalByCat = _previewRulesFor('futsal');
+          _tennisHighlight = _previewHighlightFor('tennis');
+          _futsalHighlight = _previewHighlightFor('futsal');
         }
         _loading = false;
       });
@@ -146,9 +149,12 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         setState(() {
           if (sport != null) {
             _activeByCat = _previewRulesFor(sport);
+            _activeHighlight = _previewHighlightFor(sport);
           } else {
             _tennisByCat = _previewRulesFor('tennis');
             _futsalByCat = _previewRulesFor('futsal');
+            _tennisHighlight = _previewHighlightFor('tennis');
+            _futsalHighlight = _previewHighlightFor('futsal');
           }
           _error = null;
           _loading = false;
@@ -518,6 +524,19 @@ Map<String, List<RuleArticle>> _previewRulesFor(String sport) {
           ),
       ],
   };
+}
+
+RulePopularityHighlight _previewHighlightFor(String sport) {
+  final isFutsal = sport == 'futsal';
+  return RulePopularityHighlight(
+    articleId: isFutsal ? 'preview-futsal-골키퍼-0' : 'preview-tennis-경기 진행-0',
+    sport: sport,
+    category: isFutsal ? '골키퍼' : '경기 진행',
+    title: isFutsal ? '골키퍼 4초 제한' : '타이브레이크는 언제 하나요?',
+    articleClickCount: isFutsal ? 18 : 24,
+    categoryClickCount: isFutsal ? 31 : 42,
+    windowStartedAt: DateTime.now().subtract(const Duration(hours: 24)),
+  );
 }
 
 const _previewTennisRules = <String, List<(String, String)>>{

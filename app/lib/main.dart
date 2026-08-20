@@ -76,11 +76,47 @@ Future<void> initializeAllRoundServices({
   _allRoundServicesInitialized = true;
 }
 
+/// 웹·실제 기기 프리뷰가 공유하는 네트워크 독립 초기화.
+Future<void> initializeAllRoundPreviewServices() {
+  return initializeAllRoundServices(
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: false,
+      detectSessionInUri: false,
+      persistSession: false,
+      localStorage: EmptyLocalStorage(),
+      pkceAsyncStorage: _PreviewPkceStorage(),
+    ),
+  );
+}
+
+/// 로컬 DB 기능 확인용 실기기 빌드에서 시드 QA 계정으로 실제 인증한다.
+/// 네트워크가 끊겨도 앱 자체는 로그인 화면으로 열리게 실패를 삼킨다.
+Future<void> initializeDeviceDatabasePreviewSession() async {
+  if (!AppConfig.deviceDatabasePreview) return;
+  final auth = Supabase.instance.client.auth;
+  if (auth.currentUser?.email == AppConfig.localQaEmail) return;
+  try {
+    await auth.signInWithPassword(
+      email: AppConfig.localQaEmail,
+      password: AppConfig.localQaPassword,
+    );
+  } on AuthException {
+    // 로컬 DB가 꺼졌거나 시드가 없으면 일반 로그인 화면에서 복구할 수 있다.
+  }
+}
+
 Future<void> main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    await initializeAllRoundServices();
-    await _initCrashlytics();
+    if (AppConfig.userDesignPreview) {
+      await initializeAllRoundPreviewServices();
+    } else {
+      await initializeAllRoundServices();
+    }
+    await initializeDeviceDatabasePreviewSession();
+    if (!AppConfig.userDesignPreview && !AppConfig.deviceDatabasePreview) {
+      await _initCrashlytics();
+    }
 
     // riverpod 3 는 실패한 provider 를 지수 백오프로 자동 재시도한다. 이 앱은
     // 에러 상태 화면 + 수동 "다시 불러오기" 버튼으로 재시도를 다루므로 자동 재시도를 끈다.
@@ -312,6 +348,15 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
   /// DB 로드 완료까지 함께 대기해 첫 화면이 kato 한글 라벨로 그려지게 한다(JY-121).
   /// 로드 지연 시 상한 3초. 미인증이면 카탈로그를 기다리지 않는다(fallback 로그인 플로우).
   Future<void> _dismissSplashWhenReady() async {
+    // 실제 기기 프리뷰는 서버 상태를 확인하는 앱이 아니라 내장 샘플 UI를 확인하는
+    // 빌드다. 127.0.0.1 로컬 서버나 저장된 세션을 기다리면 네이티브 시작 화면에서
+    // 멈춘 것처럼 보이므로 브랜딩 시간만 지킨 뒤 즉시 앱을 연다.
+    if (AppConfig.userDesignPreview) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (mounted) setState(() => _visible = false);
+      return;
+    }
+
     final waits = <Future<void>>[
       Future<void>.delayed(const Duration(milliseconds: 1800)),
       // 최소 지원 빌드 확인. 어차피 기다리는 1800ms 안에 끝나므로 체감 지연이 없다.
@@ -358,6 +403,7 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(
+            key: const ValueKey('startup-splash-opacity'),
             opacity: _visible ? 1 : 0,
             duration: const Duration(milliseconds: 260),
             child: ColoredBox(
@@ -397,4 +443,19 @@ class _AllRoundStartupSplashState extends State<_AllRoundStartupSplash> {
       ],
     );
   }
+}
+
+/// 프리뷰 빌드는 OAuth를 수행하지 않으므로 PKCE 값을 기기에 저장하지 않는다.
+/// SharedPreferences 초기화도 생략해 실제 기기의 첫 프레임을 로컬 저장소와 분리한다.
+class _PreviewPkceStorage extends GotrueAsyncStorage {
+  const _PreviewPkceStorage();
+
+  @override
+  Future<String?> getItem({required String key}) async => null;
+
+  @override
+  Future<void> removeItem({required String key}) async {}
+
+  @override
+  Future<void> setItem({required String key, required String value}) async {}
 }

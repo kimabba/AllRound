@@ -46,6 +46,18 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// 실제 기기에서 로컬 Supabase 데이터와 기능을 함께 점검하는 QA 모드.
+  ///
+  /// 디자인 프리뷰처럼 인증을 우회하지 않고 로컬 시드 계정으로 실제 로그인한다.
+  /// 릴리스 빌드에는 [assertConfigured]가 포함을 차단한다.
+  static const deviceDatabasePreview = bool.fromEnvironment(
+    'DEVICE_DATABASE_PREVIEW',
+    defaultValue: false,
+  );
+
+  static const localQaEmail = 'local-admin@allround.invalid';
+  static const localQaPassword = 'QaLocal-Only-2026!';
+
   /// App Store 스크린샷 자동 캡처에서 개발용 안내 문구만 숨긴다.
   /// 사용자 프리뷰와 함께 쓰는 로컬 전용 플래그이며 릴리스 빌드에서는 금지한다.
   static const appStoreScreenshot = bool.fromEnvironment(
@@ -89,6 +101,7 @@ class AppConfig {
   static bool get hasDevOverrideFlags =>
       adminDesignPreview ||
       userDesignPreview ||
+      deviceDatabasePreview ||
       appStoreScreenshot ||
       adminMode;
 
@@ -106,7 +119,7 @@ class AppConfig {
       throw StateError(
         'release build 에 개발용 플래그가 켜져 있습니다 '
         '(ADMIN_DESIGN_PREVIEW / USER_DESIGN_PREVIEW / '
-        'APP_STORE_SCREENSHOT / ADMIN_MODE). '
+        'DEVICE_DATABASE_PREVIEW / APP_STORE_SCREENSHOT / ADMIN_MODE). '
         '프로덕션 빌드에서는 제거하세요.',
       );
     }
