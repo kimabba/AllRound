@@ -11,7 +11,7 @@ Apple 업데이트의 버전·빌드번호·Bundle ID·권한·릴리스 이력�
 [`apple-release-runbook.md`](apple-release-runbook.md)를 정본으로 사용한다.
 
 ## 우리 앱 프로필 (요건 판단 근거)
-- 로그인: **iOS는 자체 이메일만**, Android/Web은 이메일 + Google 기존회원 로그인 — 계정 생성 있음
+- 로그인: **iOS는 자체 이메일만**, Android/Web은 이메일 + Google 로그인·가입 — 계정 생성 있음
 - **UGC 있음**: 클럽 게시판·댓글·모임 + AI 코치 채팅
 - **AI 생성 콘텐츠**: Google Gemini 기반 코치봇
 - **광고 SDK 없음 / 트래킹 SDK 없음** (→ ATT 불필요, 데이터안전 단순)
@@ -97,7 +97,7 @@ Apple 업데이트의 버전·빌드번호·Bundle ID·권한·릴리스 이력�
 ## 🍎 D. Apple App Store 전용
 
 ### 로그인·계정
-- [x] **Sign in with Apple 불필요** — App Store용 iOS 빌드는 Google 로그인을 노출하지 않고 자체 이메일 인증만 제공한다. Apple 4.8의 자체 계정 시스템 예외를 심사노트에 명시한다. Android/Web의 Google 기존회원 로그인은 유지한다.
+- [x] **Sign in with Apple 불필요** — App Store용 iOS 빌드는 Google 로그인을 노출하지 않고 자체 이메일 인증만 제공한다. Apple 4.8의 자체 계정 시스템 예외를 심사노트에 명시한다. Android/Web의 Google 로그인·가입은 유지한다.
 - [x] 계정 삭제 인앱 제공 (공통 B와 동일, JY-112)
 
 ### 개인정보

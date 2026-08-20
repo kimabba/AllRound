@@ -85,13 +85,8 @@ SELECT is(
   public.before_user_created_allround(
     '{"user":{"app_metadata":{"provider":"google"},"user_metadata":{}}}'::jsonb
   ),
-  jsonb_build_object(
-    'error', jsonb_build_object(
-      'http_code', 403,
-      'message', 'GOOGLE_SIGNUP_DISABLED: 신규 가입은 이메일로 진행해 주세요.'
-    )
-  ),
-  '신규 Google 사용자는 검증된 생년월일 전달 경로가 생길 때까지 거부한다'
+  '{}'::jsonb,
+  '신규 Google 사용자는 가입 후 온보딩 연령 게이트를 전제로 허용한다'
 );
 
 SELECT is(

@@ -37,6 +37,8 @@
 
 `USER_DESIGN_PREVIEW=true`로 웹 앱을 실행하면 인증 없이 사용자 라우트를 점검할 수 있다. 앱 본문은 최대 390px 모바일 폭으로 표시되고 주소의 사용자 경로를 시작 라우트로 사용한다. 홈·대회·클럽·룰북과 주요 MY 보조 화면에는 로컬 프리뷰 데이터가 제공된다. 이 플래그는 릴리스 빌드에서 허용되지 않는다.
 
+루트에서 `make design`을 실행하면 개발 전용 `/design` 화면이 열리고, 사용자 화면 전체를 휴대폰 프레임으로 한 번에 비교할 수 있다. 상단 도구에서 320×568, 390×844, 430×932 화면과 라이트·다크 테마, 테니스·풋살을 바꾸면 모든 프레임이 같은 조건으로 다시 그려진다. 데스크톱에서는 각 프레임을 실제 논리 픽셀 크기(1:1)로 렌더링하고 창이 기기 폭보다 좁을 때만 한 번 축소한다. 각 프레임은 노치·홈 인디케이터 안전 영역을 포함한 첫 화면을 보여주며, `전체 화면·스크롤`을 누르면 선택한 기기 크기를 유지한 채 아래 콘텐츠까지 스크롤해 점검할 수 있다. 코드 변경은 Flutter 핫리로드로 디자인 월 전체에 반영된다.
+
 ## 종목 스왑 (dev 기능)
 - `_MainShell` 상단에 테니스↔풋살 SegmentedButton
 - `sportOverrideProvider`로 `activeSportProvider` 수동 오버라이드
@@ -88,7 +90,8 @@
 ## 로그인 흐름
 1. 이메일 신규 가입은 생년월일을 먼저 선택하고 `birth_date` metadata와 함께 요청
 2. Before User Created Auth Hook이 누락·잘못된 날짜·만 14세 미만을 `auth.users` 생성 전에 거부
-3. Google은 기존 AllRound 계정 로그인만 허용하고, 신규 사용자는 이메일 가입으로 안내
-4. 가입 트리거가 검증된 생년월일을 `public.users.birth_date`에 즉시 저장
-5. 로그인 후 user_sports 미등록이면 `/onboarding`으로 리다이렉트
-6. (개발용) Dev 어드민 로그인: dev-auth Edge Function → magic link 토큰 → verifyOTP
+3. Google은 기존·신규 구분 없이 OAuth로 계속하며 신규 계정은 빈 profile을 생성
+4. Google 신규 사용자는 `/onboarding` 첫 단계에서 생년월일을 필수로 저장하고, 검증 전에는 RLS·Edge guard가 핵심 쓰기를 차단
+5. 이메일 가입 트리거는 검증된 생년월일을 `public.users.birth_date`에 즉시 저장
+6. 로그인 후 user_sports 미등록이면 `/onboarding`으로 리다이렉트
+7. (개발용) Dev 어드민 로그인: dev-auth Edge Function → magic link 토큰 → verifyOTP
