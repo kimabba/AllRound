@@ -203,16 +203,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   0,
                 ),
                 sliver: SliverToBoxAdapter(
-                  child: _MyGradeCard(
-                    summary: gradeSummary,
-                    onOpenRankings: () => context.push('/rankings'),
-                    onAsk: () => openChatSheet(
-                      context,
-                      const ChatEntryContext(
-                        screenLabel: '홈',
-                        initialMessage: '협회마다 부서와 포인트 기준이 어떻게 다른가요?',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionTitle(title: '내 랭킹'),
+                      const SizedBox(height: AppSpacing.sm),
+                      _MyGradeCard(
+                        summary: gradeSummary,
+                        onOpenRankings: () => context.push('/rankings'),
+                        onAsk: () => openChatSheet(
+                          context,
+                          const ChatEntryContext(
+                            screenLabel: '홈',
+                            initialMessage: '협회마다 부서와 포인트 기준이 어떻게 다른가요?',
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
