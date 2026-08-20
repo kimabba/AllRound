@@ -68,12 +68,19 @@ void main() {
       tester.element(find.byKey(AllRoundE2EKeys.homeScreen)),
     );
     final chat = container.read(chatProvider);
-    chat.addUserMessage('이번 주 서울 풋살 대회 있어?');
+    final previewStart = DateTime.now().add(const Duration(days: 14));
+    final previewDeadline = DateTime.now().add(const Duration(days: 7));
+    String dateOnly(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+
+    chat.addUserMessage('가까운 서울 풋살 대회 있어?');
     chat.appendContent(
       chat.lastAssistantIndex,
       '이번 주 신청 가능한 서울 풋살 대회를 찾았어요.',
     );
-    chat.addUiBlocks(chat.lastAssistantIndex, const [
+    chat.addUiBlocks(chat.lastAssistantIndex, [
       ChatUiBlock(
         type: 'cards',
         entity: 'tournament',
@@ -84,10 +91,10 @@ void main() {
             sport: 'futsal',
             region: '서울',
             location: '잠실 풋살장',
-            startDate: '2026-08-23',
-            applicationDeadline: '2026-08-18',
+            startDate: dateOnly(previewStart),
+            applicationDeadline: dateOnly(previewDeadline),
             eligible: true,
-            eligibleGrades: ['beginner', 'intermediate'],
+            eligibleGrades: const ['beginner', 'intermediate'],
             entryFee: 100000,
             format: '5대5 조별리그',
           ),
