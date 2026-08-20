@@ -14,7 +14,6 @@ import '../theme/tokens.dart';
 import '../utils/club_labels.dart';
 import '../utils/club_card_colors.dart';
 import '../utils/club_sections.dart';
-import '../utils/club_sort.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/clubs/club_filter_widgets.dart';
@@ -55,7 +54,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
   late final FocusNode _clubNameQueryFocusNode;
   ClubSearchFilters _clubFilters = const ClubSearchFilters();
   late Set<String> _clubInterests;
-  ClubSortOrder _clubSortOrder = ClubSortOrder.recommended;
   List<RecruitingPostPreview> _recruitingPosts = const [];
   bool _loadingRecruiting = false;
   bool _recruitingCapped = false;
@@ -74,7 +72,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
       _loadMyClubs();
       _load();
       _loadRecruitingPosts();
-      _restoreClubSortOrder();
       if (AppConfig.userDesignPreview) _findNearbyClubs();
     });
   }
@@ -90,11 +87,6 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
 
   void _handleClubSearchFocusChanged() {
     if (mounted) setState(() {});
-  }
-
-  Future<void> _restoreClubSortOrder() async {
-    final order = await loadClubSortOrder();
-    if (mounted) setState(() => _clubSortOrder = order);
   }
 
   Future<void> _loadMyClubs() async {
@@ -701,9 +693,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         )
         .toList();
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
-    final recommendedClubs = _clubSortOrder == ClubSortOrder.recommended
-        ? _recommendedClubs(visibleClubs)
-        : sortClubs(visibleClubs, _clubSortOrder);
+    final recommendedClubs = _recommendedClubs(visibleClubs);
     final displayedRecommendationClubs =
         hasClubNameQuery ? recommendedClubs : recommendedClubs.take(5).toList();
     final myMembershipClubs = (_myClubs ?? const <Club>[])
@@ -891,7 +881,7 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           const AppEmptyState(
             icon: Icons.location_off_outlined,
             title: '주변 클럽을 찾지 못했어요',
-            description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+            description: '현재 위치 주변에 등록된 클럽이 없습니다.',
           ),
         ],
         const SizedBox(height: AppSpacing.sm),
