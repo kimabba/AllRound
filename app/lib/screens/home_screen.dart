@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../config.dart';
 import '../models/chat_entry_context.dart';
+import '../models/rule_quiz.dart';
 import '../models/tournament.dart';
 import '../models/tournament_card_info.dart';
 import '../state/providers.dart';
@@ -18,6 +19,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/chat_sheet.dart';
 import '../widgets/notification_inbox_action.dart';
+import '../widgets/rule_quiz_dialog.dart';
 import '../widgets/sport_title.dart';
 import '../widgets/tournament_cover_image.dart';
 import '../widgets/tournament_section_bar.dart';
@@ -26,6 +28,24 @@ enum _HomeTournamentFilter { recommended, thisWeek, all }
 
 /// 지역 필터의 "전체" 항목. 지역 이름과 같은 자리에서 쓰이므로 상수로 둔다.
 const String _allRegions = '전국';
+
+/// 디자인 프리뷰에서는 관심 대회를 직접 누를 수 없으므로 종목별 세 대회를
+/// 저장된 상태로 보여준다. 운영 데이터와 사용자 즐겨찾기에는 영향을 주지 않는다.
+const Set<String> _previewFavoriteTournamentIds = {
+  'preview-home-seoul-open',
+  'preview-home-ranking',
+  'preview-home-night-cup',
+  'preview-home-futsal',
+  'preview-home-futsal-jamwon',
+  'preview-home-futsal-thebase',
+};
+
+const String _previewPosterBase =
+    'https://bsjdgwmveokanclqwtvx.supabase.co/storage/v1/object/public/'
+    'tournament-posters/design-samples';
+
+/// 홈에서 한 번에 보여주는 대회 수. 풋살과 테니스에 같은 기준을 적용한다.
+const int homeTournamentDisplayLimit = 3;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -133,8 +153,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final myTournaments = ref.watch(myTournamentRecordsProvider);
     final cs = Theme.of(context).colorScheme;
     final selectedSport = ref.watch(activeSportProvider) ?? 'futsal';
-    final favoriteIds =
-        ref.watch(favoriteIdsProvider).value ?? const <String>{};
+    final savedTournamentIds = AppConfig.userDesignPreview
+        ? _previewFavoriteTournamentIds
+        : ref.watch(favoriteIdsProvider).value ?? const <String>{};
     final source = AppConfig.userDesignPreview
         ? AsyncValue.data(_previewTournaments())
         : tournaments;
@@ -202,6 +223,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xxl,
+                AppSpacing.md,
+                AppSpacing.xxl,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: _TournamentHomeControls(
+                  selectedRegion: selectedRegion,
+                  regionCounts: regionCounts,
+                  onRegionSelected: (value) =>
+                      setState(() => _selectedRegion = value),
+                  onSearch: () => context.push('/tournaments?search=1'),
+                ),
+              ),
+            ),
             source.when(
               loading: () => const _HomeTournamentSkeleton(
                 key: AllRoundE2EKeys.homeLoadingState,
@@ -227,32 +265,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 );
                 return SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
+                    AppSpacing.xxl,
                     AppSpacing.lg,
-                    AppSpacing.xl,
+                    AppSpacing.xxl,
                     0,
                   ),
                   sliver: SliverToBoxAdapter(
                     child: _TournamentHomeContent(
                       key: AllRoundE2EKeys.homeTournamentList,
                       tournaments: visible,
-                      favorites: myTournaments.value
-                              ?.where((item) => item.sport == selectedSport)
-                              .toList() ??
-                          const [],
-                      favoriteIds: favoriteIds,
+                      favorites: AppConfig.userDesignPreview
+                          ? visible
+                              .where(
+                                (item) => savedTournamentIds.contains(item.id),
+                              )
+                              .toList(growable: false)
+                          : myTournaments.value
+                                  ?.where(
+                                    (item) => item.sport == selectedSport,
+                                  )
+                                  .toList() ??
+                              const [],
+                      favoriteIds: savedTournamentIds,
                       selectedSport: selectedSport,
-                      selectedRegion: selectedRegion,
-                      regionCounts: regionCounts,
-                      onRegionSelected: (value) =>
-                          setState(() => _selectedRegion = value),
-                      onSearch: () => context.push('/tournaments?search=1'),
                       onOpen: (item) => context.push('/tournaments/${item.id}'),
                       onFavorite: _toggleFavorite,
                       onBrowse: () => context.push('/tournaments'),
-                      onFavorites: () => context.push('/favorites'),
-                      onRules: () =>
-                          context.push('/rules?sport=$selectedSport'),
+                      onRuleCategory: (category) => context.push(
+                        Uri(
+                          path: '/rules',
+                          queryParameters: {
+                            'sport': selectedSport,
+                            'category': category,
+                          },
+                        ).toString(),
+                      ),
                     ),
                   ),
                 );
@@ -593,9 +640,10 @@ class _TournamentHomeControls extends StatelessWidget {
         ],
       );
     }
+    final compact = MediaQuery.sizeOf(context).width < 360;
     return Row(
       children: [
-        SizedBox(width: 132, child: region),
+        SizedBox(width: compact ? 108 : 120, child: region),
         const SizedBox(width: AppSpacing.sm),
         Expanded(child: search),
       ],
@@ -668,30 +716,20 @@ class _TournamentHomeContent extends StatelessWidget {
     required this.favorites,
     required this.favoriteIds,
     required this.selectedSport,
-    required this.selectedRegion,
-    required this.regionCounts,
-    required this.onRegionSelected,
-    required this.onSearch,
     required this.onOpen,
     required this.onFavorite,
     required this.onBrowse,
-    required this.onFavorites,
-    required this.onRules,
+    required this.onRuleCategory,
   });
 
   final List<Tournament> tournaments;
   final List<Tournament> favorites;
   final Set<String> favoriteIds;
   final String selectedSport;
-  final String selectedRegion;
-  final Map<String, int> regionCounts;
-  final ValueChanged<String> onRegionSelected;
-  final VoidCallback onSearch;
   final ValueChanged<Tournament> onOpen;
   final Future<void> Function(Tournament, bool) onFavorite;
   final VoidCallback onBrowse;
-  final VoidCallback onFavorites;
-  final VoidCallback onRules;
+  final ValueChanged<String> onRuleCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -701,12 +739,15 @@ class _TournamentHomeContent extends StatelessWidget {
       final today = kstTodayDate(DateTime.now());
       final days = deadline.difference(today).inDays;
       return days >= 0 && days <= 7;
-    }).toList();
+    }).toList()
+      ..sort(
+        (a, b) => a.applicationDeadline!.compareTo(b.applicationDeadline!),
+      );
 
     // 히어로는 "지금 신청해야 하는 것"을 맡는다. 마감 임박이 없을 때만
     // 다가오는 순서로 채운다.
     final heroItems =
-        (deadlineSoon.isNotEmpty ? deadlineSoon : tournaments).take(5).toList();
+        (deadlineSoon.isNotEmpty ? deadlineSoon : tournaments).take(3).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,28 +757,20 @@ class _TournamentHomeContent extends StatelessWidget {
             const _SectionTitle(title: '접수 마감 임박'),
             const SizedBox(height: AppSpacing.sm),
           ],
-          _TournamentHero(tournaments: heroItems, onOpen: onOpen),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: _TournamentHero(tournaments: heroItems, onOpen: onOpen),
+          ),
           const SizedBox(height: AppSpacing.xl),
         ],
         _InterestTournamentBand(
           tournaments: favorites,
           onOpen: onOpen,
           onBrowse: onBrowse,
-          onFavorites: onFavorites,
         ),
         const SizedBox(height: AppSpacing.xxl),
-        // 지역·검색은 이 목록에만 걸리는 조작이라 목록 바로 위에 둔다.
-        // 화면 최상단에 있던 시절에는 무엇이 걸러지는지가 멀어서 안 보였다.
-        _TournamentHomeControls(
-          selectedRegion: selectedRegion,
-          regionCounts: regionCounts,
-          onRegionSelected: onRegionSelected,
-          onSearch: onSearch,
-        ),
-        const SizedBox(height: AppSpacing.lg),
         // 마감 임박 가로줄과 지역별 목록을 하나로 합쳤다. 예전에는 같은 대회가
         // 히어로·가로줄·목록에 최대 세 번 나왔다.
-        // 지역 이름은 바로 위 드롭다운이 이미 말하고 있어 부제로 겹쳐 쓰지 않는다.
         _SectionTitle(title: '다가오는 대회', onAction: onBrowse),
         const SizedBox(height: AppSpacing.sm),
         if (tournaments.isEmpty)
@@ -750,7 +783,7 @@ class _TournamentHomeContent extends StatelessWidget {
             onAction: onBrowse,
           )
         else
-          for (final item in tournaments.take(5))
+          for (final item in tournaments.take(homeTournamentDisplayLimit))
             _TournamentListCard(
               tournament: item,
               saved: favoriteIds.contains(item.id),
@@ -758,7 +791,7 @@ class _TournamentHomeContent extends StatelessWidget {
               onFavorite: () => onFavorite(item, favoriteIds.contains(item.id)),
             ),
         const SizedBox(height: AppSpacing.xxl),
-        _RulebookBand(sport: selectedSport, onOpen: onRules),
+        _RulebookBand(sport: selectedSport, onCategory: onRuleCategory),
       ],
     );
   }
@@ -940,102 +973,173 @@ class _InterestTournamentBand extends StatelessWidget {
     required this.tournaments,
     required this.onOpen,
     required this.onBrowse,
-    required this.onFavorites,
   });
 
   final List<Tournament> tournaments;
   final ValueChanged<Tournament> onOpen;
   final VoidCallback onBrowse;
-  final VoidCallback onFavorites;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final first = tournaments.firstOrNull;
     final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
-    final info = Row(
-      children: [
-        if (first == null)
-          Icon(Icons.favorite_border_rounded, color: cs.primary)
-        else
-          ClipRRect(
-            borderRadius: AppRadius.card,
-            child: SizedBox(
-              width: 76,
-              height: 58,
-              child: TournamentCoverImage(tournament: first),
+    if (tournaments.isEmpty) {
+      return Material(
+        color: cs.surfaceContainerLow,
+        borderRadius: AppRadius.card,
+        child: InkWell(
+          onTap: onBrowse,
+          borderRadius: AppRadius.card,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                Icon(Icons.favorite_border_rounded, color: cs.primary),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '관심 대회가 없어요',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      Text(
+                        '하트로 저장한 대회를 여기에 모아드려요',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(onPressed: onBrowse, child: const Text('대회 둘러보기')),
+              ],
             ),
           ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = largeText
+            ? constraints.maxWidth * 0.84
+            : tournaments.length > 2
+                // 세 번째 카드의 일부를 보여 옆으로 더 있다는 것을 알린다.
+                ? constraints.maxWidth * 0.54
+                : (constraints.maxWidth - AppSpacing.sm) / 2;
+        final cardHeight = cardWidth / 1.55 + 64;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionTitle(title: '관심 대회'),
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              height: cardHeight,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: tournaments.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, index) => SizedBox(
+                  width: cardWidth,
+                  child: _FavoriteTournamentCard(
+                    tournament: tournaments[index],
+                    onOpen: () => onOpen(tournaments[index]),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FavoriteTournamentCard extends StatelessWidget {
+  const _FavoriteTournamentCard({
+    required this.tournament,
+    required this.onOpen,
+  });
+
+  final Tournament tournament;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      borderRadius: AppRadius.card,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: cs.outlineVariant),
+            borderRadius: AppRadius.card,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                first?.title ?? '관심 대회가 없어요',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              AspectRatio(
+                aspectRatio: 1.55,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    TournamentCoverImage(tournament: tournament),
+                    Positioned(
+                      top: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: cs.surface.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xs),
+                          child: Icon(
+                            Icons.favorite_rounded,
+                            color: cs.primary,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(
-                first == null
-                    ? '하트로 저장한 대회를 여기에 모아드려요'
-                    : '관심 대회 ${tournaments.length}개',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tournament.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${DateFormat('M월 d일').format(tournament.startDate)} · ${tournament.region ?? '지역 미정'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-      ],
-    );
-    final action = Semantics(
-      button: true,
-      child: InkWell(
-        onTap: first == null ? onBrowse : onFavorites,
-        borderRadius: AppRadius.pill,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          decoration: BoxDecoration(
-            border: Border.all(color: cs.primary),
-            borderRadius: AppRadius.pill,
-          ),
-          child: Text(
-            first == null ? '대회 둘러보기' : '전체보기',
-            style: TextStyle(color: cs.primary, fontWeight: FontWeight.w800),
-          ),
-        ),
-      ),
-    );
-    return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: AppRadius.card,
-      child: InkWell(
-        onTap: first == null ? onBrowse : () => onOpen(first),
-        borderRadius: AppRadius.card,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: largeText
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    info,
-                    const SizedBox(height: AppSpacing.sm),
-                    action,
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(child: info),
-                    const SizedBox(width: AppSpacing.sm),
-                    action,
-                  ],
-                ),
         ),
       ),
     );
@@ -1211,97 +1315,159 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _RulebookBand extends StatelessWidget {
-  const _RulebookBand({required this.sport, required this.onOpen});
+  const _RulebookBand({required this.sport, required this.onCategory});
 
   final String sport;
-  final VoidCallback onOpen;
+  final ValueChanged<String> onCategory;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final title = sport == 'tennis' ? '테니스 룰북' : '풋살 룰북';
-    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
-    return Material(
-      color: cs.primaryContainer.withValues(alpha: 0.45),
-      borderRadius: AppRadius.hero,
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: AppRadius.hero,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            children: [
-              if (largeText)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const Text('경기 전에 꼭 알아둘 규칙'),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
+    final quiz = dailyRuleQuiz(sport);
+    final categories = sport == 'tennis'
+        ? const [
+            (icon: Icons.sports_rounded, label: '경기 진행'),
+            (icon: Icons.sports_tennis_rounded, label: '서브'),
+            (icon: Icons.swipe_up_rounded, label: '발리'),
+            (icon: Icons.groups_2_outlined, label: '복식/라인'),
+          ]
+        : const [
+            (icon: Icons.sports_rounded, label: '경기 진행'),
+            (icon: Icons.sports_handball_rounded, label: '골키퍼'),
+            (icon: Icons.warning_amber_rounded, label: '파울'),
+            (icon: Icons.replay_rounded, label: '킥인/재개'),
+          ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(title: title),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          width: double.infinity,
+          child: Material(
+            color: cs.primary,
+            borderRadius: AppRadius.hero,
+            child: Semantics(
+              button: true,
+              label: '오늘의 핵심 퀴즈 풀기',
+              child: InkWell(
+                onTap: () => showRuleQuizDialog(context, quiz),
+                borderRadius: AppRadius.hero,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '오늘의 핵심 퀴즈',
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: cs.onPrimary.withValues(alpha: 0.8),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        quiz.question,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: cs.onPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '배너를 눌러 문제를 풀어보세요',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onPrimary.withValues(alpha: 0.82),
                             ),
                       ),
-                    ),
-                    const Text('경기 전에 꼭 알아둘 규칙'),
-                    const Icon(Icons.chevron_right_rounded),
-                  ],
+                    ],
+                  ),
                 ),
-              const SizedBox(height: AppSpacing.md),
-              const Row(
-                children: [
-                  Expanded(child: _RuleItem(Icons.sports_rounded, '경기 진행')),
-                  Expanded(child: _RuleItem(Icons.badge_outlined, '참가 자격')),
-                  Expanded(
-                    child: _RuleItem(Icons.scoreboard_outlined, '점수·승패'),
-                  ),
-                  Expanded(
-                    child: _RuleItem(Icons.warning_amber_rounded, '주의사항'),
-                  ),
-                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            for (var index = 0; index < categories.length; index++) ...[
+              if (index > 0) const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _RuleItem(
+                  categories[index].icon,
+                  categories[index].label,
+                  onTap: () => onCategory(categories[index].label),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }
 
 class _RuleItem extends StatelessWidget {
-  const _RuleItem(this.icon, this.label);
+  const _RuleItem(this.icon, this.label, {required this.onTap});
 
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        Icon(icon, color: cs.primary),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
+    return Material(
+      color: cs.surface,
+      borderRadius: AppRadius.card,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.card,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          decoration: BoxDecoration(
+            border: Border.all(color: cs.outlineVariant),
+            borderRadius: AppRadius.card,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 76;
+              final labelWidget = Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
+              );
+              if (compact) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, color: cs.primary, size: 16),
+                    const SizedBox(height: 2),
+                    labelWidget,
+                  ],
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: cs.primary, size: 17),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(child: labelWidget),
+                ],
+              );
+            },
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1804,6 +1970,7 @@ List<Tournament> _previewTournaments() {
       location: '올림픽공원 테니스장',
       eligibleGrades: const ['open'],
       entryFee: 60000,
+      posterUrl: '$_previewPosterBase/tennis-01.jpg',
       status: 'published',
     ),
     Tournament(
@@ -1812,11 +1979,12 @@ List<Tournament> _previewTournaments() {
       title: '전국 동호인 테니스대회',
       organizer: '대한테니스협회',
       startDate: today.add(const Duration(days: 15)),
-      applicationDeadline: today.add(const Duration(days: 8)),
+      applicationDeadline: today.add(const Duration(days: 5)),
       region: '서울',
       location: '송파구 종합운동장',
       eligibleGrades: const ['open'],
       entryFee: 60000,
+      posterUrl: '$_previewPosterBase/tennis-02.jpg',
       status: 'published',
     ),
     Tournament(
@@ -1824,12 +1992,69 @@ List<Tournament> _previewTournaments() {
       sport: 'futsal',
       title: '서울 풋살 챔피언십',
       organizer: '서울풋살연맹',
-      startDate: today.add(const Duration(days: 22)),
-      applicationDeadline: today.add(const Duration(days: 12)),
+      startDate: today.add(const Duration(days: 12)),
+      applicationDeadline: today.add(const Duration(days: 2)),
       region: '서울',
       location: '마포 난지 풋살장',
       eligibleGrades: const ['open'],
       entryFee: 80000,
+      posterUrl: '$_previewPosterBase/futsal-01.jpg',
+      status: 'published',
+    ),
+    Tournament(
+      id: 'preview-home-futsal-jamwon',
+      sport: 'futsal',
+      title: '잠원 풋살 나이트 컵',
+      organizer: '서울풋살연맹',
+      startDate: today.add(const Duration(days: 16)),
+      applicationDeadline: today.add(const Duration(days: 4)),
+      region: '서울',
+      location: '잠원스포츠파크 풋살장',
+      eligibleGrades: const ['open'],
+      entryFee: 70000,
+      posterUrl: '$_previewPosterBase/futsal-02.jpg',
+      status: 'published',
+    ),
+    Tournament(
+      id: 'preview-home-futsal-thebase',
+      sport: 'futsal',
+      title: '용산 더베이스 풋살 페스티벌',
+      organizer: '서울풋살연맹',
+      startDate: today.add(const Duration(days: 20)),
+      applicationDeadline: today.add(const Duration(days: 6)),
+      region: '서울',
+      location: '용산 더베이스 풋살장',
+      eligibleGrades: const ['open'],
+      entryFee: 90000,
+      posterUrl: '$_previewPosterBase/futsal-03.jpg',
+      status: 'published',
+    ),
+    Tournament(
+      id: 'preview-home-futsal-seoulforest',
+      sport: 'futsal',
+      title: '서울숲 풋살 챌린지',
+      organizer: '서울생활체육회',
+      startDate: today.add(const Duration(days: 43)),
+      applicationDeadline: today.add(const Duration(days: 30)),
+      region: '서울',
+      location: '서울숲 풋살장',
+      eligibleGrades: const ['open'],
+      entryFee: 60000,
+      posterUrl: '$_previewPosterBase/futsal-01.jpg',
+      status: 'published',
+    ),
+    Tournament(
+      id: 'preview-home-futsal-yongsan',
+      sport: 'futsal',
+      title: '용산 주말 풋살 리그',
+      organizer: '용산구체육회',
+      startDate: today.add(const Duration(days: 50)),
+      applicationDeadline: today.add(const Duration(days: 36)),
+      region: '서울',
+      location: '이촌한강공원 풋살장',
+      eligibleGrades: const ['open'],
+      entryFee: 75000,
+      posterUrl: '$_previewPosterBase/futsal-02.jpg',
       status: 'published',
     ),
     Tournament(
@@ -1837,12 +2062,13 @@ List<Tournament> _previewTournaments() {
       sport: 'tennis',
       title: '한강 나이트 테니스 컵',
       organizer: '한강테니스클럽',
-      startDate: today.add(const Duration(days: 28)),
-      applicationDeadline: today.add(const Duration(days: 18)),
+      startDate: today.add(const Duration(days: 18)),
+      applicationDeadline: today.add(const Duration(days: 7)),
       region: '서울',
       location: '망원 테니스장',
       eligibleGrades: const ['open'],
       entryFee: 40000,
+      posterUrl: '$_previewPosterBase/tennis-03.jpg',
       status: 'published',
     ),
   ];
