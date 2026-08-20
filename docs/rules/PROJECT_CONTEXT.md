@@ -104,6 +104,25 @@ alter database postgres set app.cron_invoke_url = 'https://<project>.functions.s
 alter database postgres set app.cron_invoke_key = '<internal-random-cron-secret>';
 ```
 
+### Flutter env files — dev and release are separate
+
+| File | Used by | Points at |
+|---|---|---|
+| `app/.env.local` | `make app` · `make web` · `make admin` | **local Supabase** (`supabase start`, `http://127.0.0.1:54321`) |
+| `app/.env.production` | `make release-android` · `make release-ios` | production project |
+
+Both are gitignored. Copy from `app/.env.local.example` / `app/.env.production.example`.
+
+**Never point `.env.local` at production.** The two used to share one file; once the
+production values went in for a release build, `make app` started writing to the
+live database, so accounts, clubs, and tournament submissions created while
+developing landed next to real user data. `scripts/harness/check_static_rules.py`
+now fails if a `release-*` target reads `.env.local`.
+
+Local Supabase is seeded from `supabase/seed.sql` (tournaments, rulebook articles,
+clubs). `venues` and `org_rankings` are still empty there, so those screens render
+blank locally — seeding them is open work, not a reason to switch back to production.
+
 ### Flutter `--dart-define`
 
 ```text
