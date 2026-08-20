@@ -23,7 +23,21 @@ void main() {
     }
 
     expect(router, contains("path: '/design'"));
-    expect(router, contains("loc == '/design' && !userDesignPreview"));
+    expect(router,
+        contains('final userDesignPreview = AppConfig.userDesignPreview;'));
+    expect(
+      router,
+      contains('final webUserDesignPreview = kIsWeb && userDesignPreview;'),
+    );
+    expect(router, contains("loc == '/design' && !webUserDesignPreview"));
+    expect(
+      router,
+      isNot(
+        contains(
+          'final userDesignPreview = kIsWeb && AppConfig.userDesignPreview;',
+        ),
+      ),
+    );
     expect(main, contains("path == '/design'"));
     expect(main, contains('DesignPreviewDevice.fromUri(routeUri)'));
     expect(main, contains('final isAdminSurface ='));

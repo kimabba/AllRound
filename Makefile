@@ -22,7 +22,7 @@ CHROME_BIN ?= $(shell for p in \
     [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p" && break; \
   done)
 
-.PHONY: setup backend app admin design web check reset release-android release-ios
+.PHONY: setup backend app device-preview admin design web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
 # iOS/macOS 의존성 = Swift Package Manager (CocoaPods 사용 안 함)
@@ -74,6 +74,14 @@ backend:
 app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	cd app && flutter run -d $(DEVICE_ID) --dart-define-from-file=.env.local
+
+# 실제 iOS/Android 기기에서 사용자 프리뷰를 확인한다.
+# iOS 26 실기기의 debug 런타임 문제를 피하면서 개발 플래그를 허용하기 위해
+# release가 아닌 profile 모드를 사용한다. DEVICE_ID는 `flutter devices` 값이다.
+device-preview:
+	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
+	@test "$(DEVICE_ID)" != "macos" || (echo "DEVICE_ID에 실제 휴대폰 ID를 지정하세요: make device-preview DEVICE_ID=<id>" && exit 1)
+	cd app && flutter run --profile -d $(DEVICE_ID) --dart-define-from-file=.env.local --dart-define=USER_DESIGN_PREVIEW=true
 
 # 터미널 3: 웹빌드 — 로컬 전용 (빌드 후 로컬 서버, 배포 안 함 · JY-81)
 web:

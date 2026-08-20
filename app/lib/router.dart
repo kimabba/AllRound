@@ -65,9 +65,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == '/reset-password' ? null : '/reset-password';
       }
       final adminDesignPreview = kIsWeb && AppConfig.adminDesignPreview;
-      final userDesignPreview = kIsWeb && AppConfig.userDesignPreview;
+      final userDesignPreview = AppConfig.userDesignPreview;
+      final webUserDesignPreview = kIsWeb && userDesignPreview;
 
-      if (loc == '/design' && !userDesignPreview) {
+      // 디자인 월 자체는 웹 전용이다. 실제 기기 프리뷰는 일반 사용자 라우트만
+      // 인증 없이 열어 웹 프리뷰와 동일한 내장 샘플 데이터를 보여준다.
+      if (loc == '/design' && !webUserDesignPreview) {
         return user == null ? '/login' : '/';
       }
 
