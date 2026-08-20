@@ -246,7 +246,7 @@ Deno.serve(withCors(async (req) => {
     if (requesterIds.length > 0) {
       const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
         supabase.from('user_sports').select('user_id, sport, grade').in('user_id', requesterIds),
-        supabase.from('user_tennis_orgs').select('user_id, org, division_local, score')
+        supabase.from('user_tennis_orgs').select('user_id, org, division, score')
           .in('user_id', requesterIds),
         supabase.from('club_members').select('user_id, club_id').in('user_id', requesterIds)
           .eq('status', 'active'),
@@ -279,7 +279,7 @@ Deno.serve(withCors(async (req) => {
           sports: (sportsResult.data ?? []).filter((row) => row.user_id === requesterId)
             .map((row) => ({ sport: row.sport, grade: row.grade })),
           tennis_orgs: (orgsResult.data ?? []).filter((row) => row.user_id === requesterId)
-            .map((row) => ({ org: row.org, division: row.division_local, score: row.score })),
+            .map((row) => ({ org: row.org, division: row.division, score: row.score })),
           clubs: (membershipsResult.data ?? []).filter((row) => row.user_id === requesterId)
             .map((row) => clubNames.get(row.club_id as string)).filter(Boolean),
           tournaments: (entriesResult.data ?? []).filter((row) => row.user_id === requesterId)

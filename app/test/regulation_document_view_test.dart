@@ -116,4 +116,33 @@ void main() {
     expect(find.byType(SingleChildScrollView), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('사용자 화면에서는 수집 출처·내부 ID·모집상태를 숨긴다', (tester) async {
+    final document = RegulationDocument.fromLegacy(
+      fields: const [
+        (label: '출처', value: '풋살허브'),
+        (label: '풋살허브 ID', value: '82'),
+        (label: '모집상태', value: 'OPEN'),
+        (label: '장소', value: '서울 풋살장'),
+      ],
+      notes: const [],
+    )!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RegulationDocumentView(
+            document: document,
+            hidePublicMetadata: true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('출처'), findsNothing);
+    expect(find.text('풋살허브 ID'), findsNothing);
+    expect(find.text('모집상태'), findsNothing);
+    expect(find.text('장소'), findsOneWidget);
+    expect(find.text('서울 풋살장'), findsOneWidget);
+  });
 }

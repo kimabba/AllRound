@@ -6,6 +6,7 @@ import '../models/tournament.dart';
 import '../models/tournament_card_info.dart';
 import '../theme/tokens.dart';
 import '../utils/kst.dart';
+import 'tournament_cover_image.dart';
 
 class TournamentCard extends StatelessWidget {
   const TournamentCard({
@@ -36,48 +37,26 @@ class TournamentCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final status = _status(context);
     final deadlineText = _deadlineText();
-    final date = tournament.startDate;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 86 : 104),
+          constraints: BoxConstraints(minHeight: compact ? 94 : 116),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: cs.outlineVariant)),
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: 54,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '대회',
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      DateFormat('dd').format(date),
-                      style: tt.headlineLarge?.copyWith(
-                        height: 1,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text('${date.month}월', style: tt.labelSmall),
-                  ],
+              ClipRRect(
+                borderRadius: AppRadius.card,
+                child: SizedBox(
+                  width: compact ? 88 : 104,
+                  height: compact ? 72 : 84,
+                  child: TournamentCoverImage(tournament: tournament),
                 ),
               ),
-              Container(width: 1, height: 60, color: cs.outlineVariant),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -92,7 +71,13 @@ class TournamentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      _locationText().isEmpty ? _dateText() : _locationText(),
+                      // 커버 이미지가 예전 날짜 컬럼(일/월 큰 글씨)을 대체하면서
+                      // 날짜를 보여줄 자리가 이 줄뿐이다. 장소가 있으면 날짜가
+                      // 통째로 가려지지 않도록 날짜를 앞에 두고 이어붙인다.
+                      [
+                        _dateText(),
+                        _locationText(),
+                      ].where((s) => s.isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tt.bodySmall?.copyWith(
@@ -152,8 +137,8 @@ class TournamentCard extends StatelessWidget {
                     },
                     icon: Icon(
                       isFavorite
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_outline_rounded,
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                       color: isFavorite ? cs.primary : cs.onSurfaceVariant,
                     ),
                   ),
@@ -199,8 +184,7 @@ class TournamentCard extends StatelessWidget {
     }
     final deadline = tournament.applicationDeadline;
     if (deadline != null) {
-      final daysLeft =
-          deadline.difference(kstTodayDate(DateTime.now())).inDays;
+      final daysLeft = deadline.difference(kstTodayDate(DateTime.now())).inDays;
       if (daysLeft < 0) {
         return _StatusBadgeData(
           label: '마감',

@@ -45,6 +45,7 @@ import 'widgets/mini_ballboy_bar.dart';
 const kMobileAdminPaths = {
   '/admin/clubs',
   '/admin/ranking-claims',
+  '/admin/drafts',
 };
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -96,7 +97,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 허용한다. 권한 판정은 서버 role이 기준이다.
       // 여기 없는 /admin/* 는 아래에서 홈으로 돌려보내므로, 알림 딥링크를 새로
       // 만들 때는 이 목록에도 넣어야 한다(랭킹 연결 알림이 그래서 추가됐다).
-      if (kMobileAdminPaths.contains(loc)) {
+      if (kMobileAdminPaths.contains(loc) ||
+          loc.startsWith('/admin/edit/') ||
+          loc.startsWith('/admin/preview/')) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
         return (adminAsync.value ?? false) ? null : '/';
@@ -116,7 +119,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
-          path: '/login', builder: (_, __) => catalogAware(LoginScreen.new)),
+        path: '/login',
+        builder: (_, __) => catalogAware(LoginScreen.new),
+      ),
       GoRoute(
         path: '/reset-password',
         builder: (_, __) => catalogAware(ResetPasswordScreen.new),
@@ -153,7 +158,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => catalogAware(ClubsScreen.new),
           ),
           GoRoute(
-              path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
+            path: '/more',
+            builder: (_, __) => catalogAware(MoreScreen.new),
+          ),
           GoRoute(
             path: '/rules',
             builder: (_, state) => catalogAware(
@@ -251,7 +258,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 3)),
+            builder: (_, state) => catalogAware(
+              () => AdminScreen(
+                initialTab: 3,
+                focusClubId: state.uri.queryParameters['clubId'],
+              ),
+            ),
           ),
           GoRoute(
             path: '/admin/kb',
@@ -277,6 +289,24 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ),
           ),
+          GoRoute(
+            path: '/admin/preview/tournaments/:id',
+            builder: (_, state) => catalogAware(
+              () => TournamentDetailScreen(
+                tournamentId: state.pathParameters['id']!,
+                adminPreview: true,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/preview/clubs/:id',
+            builder: (_, state) => catalogAware(
+              () => ClubDetailScreen(
+                clubId: state.pathParameters['id']!,
+                adminPreview: true,
+              ),
+            ),
+          ),
         ],
       ),
       GoRoute(
@@ -292,9 +322,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/clubs/:id/inquiries/manage',
         builder: (_, state) => catalogAware(
-          () => ClubInquiryInboxScreen(
-            clubId: state.pathParameters['id']!,
-          ),
+          () => ClubInquiryInboxScreen(clubId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -332,21 +360,15 @@ class _MainShell extends ConsumerWidget {
 
   final Widget child;
 
-  static const _tabs = <String>[
-    '/',
-    '/clubs',
-  ];
+  static const _tabs = <String>['/', '/clubs', '/profile'];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
   /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
-  /// 마이는 하단 탭에서 빠지고 각 화면 상단의 ProfileAction 아이콘으로만
-  /// 들어오므로 여기 포함한다.
   static const _untabbedPaths = [
     '/more',
     '/notifications',
     '/favorites',
     '/blocked-users',
-    '/profile',
     '/rankings/me',
   ];
 
@@ -373,8 +395,9 @@ class _MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentPath =
-        GoRouter.of(context).routeInformationProvider.value.uri.path;
+    final currentPath = GoRouter.of(
+      context,
+    ).routeInformationProvider.value.uri.path;
     final idx = _indexOf(currentPath);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isFullChat = currentPath == '/chat';
@@ -448,8 +471,10 @@ class _AdminTournamentListScreen extends ConsumerWidget {
                   '${r['sport']} · ${r['region'] ?? ''} · ${r['start_date']}',
                 ),
                 trailing: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),

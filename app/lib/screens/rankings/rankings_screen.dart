@@ -718,8 +718,9 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('협회 랭킹'),
-        bottom: const TournamentSectionBar(
+        bottom: TournamentSectionBar(
           selected: TournamentSection.rankings,
+          showRankings: ref.watch(activeSportProvider) == 'tennis',
         ),
       ),
       body: Column(

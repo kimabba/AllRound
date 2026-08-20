@@ -59,6 +59,32 @@ void main() {
     expect(route, '/admin/clubs');
   });
 
+  test('클럽 승인 요청에 클럽 ID가 있으면 해당 요청을 선택한다', () {
+    final route = routeForNotificationEvent(
+      const NotificationEvent(
+        title: '새 클럽 승인 요청',
+        body: '',
+        referenceType: 'club_approval_request',
+        referenceId: 'club-1',
+      ),
+    );
+
+    expect(route, '/admin/clubs?clubId=club-1');
+  });
+
+  test('대회 등록 승인 요청은 해당 등록 정보로 이동한다', () {
+    final route = routeForNotificationEvent(
+      const NotificationEvent(
+        title: '새 대회 승인 요청',
+        body: '',
+        referenceType: 'tournament_submission',
+        referenceId: 'tournament-1',
+      ),
+    );
+
+    expect(route, '/admin/edit/tournament-1');
+  });
+
   test('대회 알림은 해당 대회 상세로 이동한다', () {
     final route = routeForNotificationEvent(
       const NotificationEvent(

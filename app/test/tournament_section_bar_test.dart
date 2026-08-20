@@ -68,4 +68,21 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('풋살이 주종목이면 랭킹 탭을 숨긴다', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: TournamentSectionBar(
+            selected: TournamentSection.overview,
+            showRankings: false,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('대회'), findsOneWidget);
+    expect(find.text('랭킹'), findsNothing);
+    expect(find.text('룰북'), findsOneWidget);
+  });
 }

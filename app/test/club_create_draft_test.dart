@@ -12,11 +12,14 @@ void main() {
     website: 'https://example.com',
     description: '즐겁게 운동해요',
     monthlyFee: '30000',
+    feeType: 'per_event',
     meetingDays: ['월', '수'],
     genderPreference: 'mixed',
     cardColor: '#176B63',
     step: 2,
     hadSelectedImages: true,
+    latitude: 37.5,
+    longitude: 127.1,
   );
 
   test('club create draft round-trips typed fields', () {
@@ -27,9 +30,12 @@ void main() {
     expect(restored.name, '한강 클럽');
     expect(restored.meetingDays, ['월', '수']);
     expect(restored.genderPreference, 'mixed');
+    expect(restored.feeType, 'per_event');
     expect(restored.cardColor, '#176B63');
     expect(restored.step, 2);
     expect(restored.hadSelectedImages, isTrue);
+    expect(restored.latitude, 37.5);
+    expect(restored.longitude, 127.1);
     expect(restored.hasUserContent, isTrue);
   });
 
@@ -43,14 +49,26 @@ void main() {
       website: '',
       description: '',
       monthlyFee: '',
+      feeType: 'monthly',
       meetingDays: [],
-      genderPreference: null,
+      genderPreference: 'mixed',
       cardColor: '#3156D8',
       step: 2,
       hadSelectedImages: false,
     );
 
     expect(emptyDraft.hasUserContent, isFalse);
+    expect(
+      resolveClubCreateSport(selectedSport: 'tennis', draft: emptyDraft),
+      'tennis',
+    );
+  });
+
+  test('작성 중인 임시저장이 있으면 임시저장 종목을 유지한다', () {
+    expect(
+      resolveClubCreateSport(selectedSport: 'futsal', draft: draft),
+      'tennis',
+    );
   });
 
   test('a non-default card color is draft content', () {
@@ -63,6 +81,7 @@ void main() {
       website: '',
       description: '',
       monthlyFee: '',
+      feeType: 'monthly',
       meetingDays: [],
       genderPreference: null,
       cardColor: '#176B63',
@@ -84,6 +103,7 @@ void main() {
     expect(restored!.sport, 'tennis');
     expect(restored.meetingDays, ['월']);
     expect(restored.genderPreference, isNull);
+    expect(restored.feeType, 'monthly');
     expect(restored.cardColor, '#3156D8');
     expect(restored.step, 2);
   });

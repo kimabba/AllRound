@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
-/// 메인 하단 메뉴. 최종 사용자 동선은 대회·클럽·볼보이 세 가지다.
+/// 메인 하단 메뉴. 최종 사용자 동선은 대회·클럽·볼보이·MY 네 가지다.
 /// 룰북은 대회 화면 안에서 열고, 볼보이는 현재 화면의 대화를 시트로 이어간다.
-/// 마이는 하단 탭에서 빠졌고 각 화면 상단의 [ProfileAction] 아이콘으로 들어온다.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
@@ -28,18 +27,21 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['대회', '클럽'];
+    const labels = ['대회', '클럽', 'MY'];
     const icons = [
       Icons.emoji_events_outlined,
       Icons.groups_outlined,
+      Icons.person_outline_rounded,
     ];
     const selectedIcons = [
       Icons.emoji_events_rounded,
       Icons.groups_rounded,
+      Icons.person_rounded,
     ];
     const keys = [
       AllRoundE2EKeys.navToday,
       AllRoundE2EKeys.navClubs,
+      AllRoundE2EKeys.navProfile,
     ];
 
     Widget tab(int index) {
@@ -64,7 +66,7 @@ class AppBottomNav extends StatelessWidget {
                     height: 30,
                     decoration: BoxDecoration(
                       color: currentIndex == index
-                          ? cs.primaryContainer
+                          ? cs.primary
                           : Colors.transparent,
                       borderRadius: AppRadius.pill,
                     ),
@@ -74,7 +76,7 @@ class AppBottomNav extends StatelessWidget {
                           : icons[index],
                       size: 23,
                       color: currentIndex == index
-                          ? cs.primary
+                          ? cs.onPrimary
                           : cs.onSurfaceVariant,
                     ),
                   ),
@@ -88,6 +90,16 @@ class AppBottomNav extends StatelessWidget {
                       fontWeight: currentIndex == index
                           ? FontWeight.w800
                           : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: currentIndex == index ? 18 : 0,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: AppRadius.pill,
                     ),
                   ),
                 ],
@@ -119,13 +131,14 @@ class AppBottomNav extends StatelessWidget {
                     width: 42,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: cs.primary,
+                      color: Colors.transparent,
+                      border: Border.all(color: cs.outlineVariant),
                       borderRadius: AppRadius.pill,
                     ),
                     child: Icon(
-                      Icons.chat_bubble_rounded,
+                      Icons.chat_bubble_outline_rounded,
                       size: 21,
-                      color: cs.onPrimary,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -133,8 +146,8 @@ class AppBottomNav extends StatelessWidget {
                     _chatLabel,
                     maxLines: 1,
                     style: tt.labelSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w800,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -172,6 +185,7 @@ class AppBottomNav extends StatelessWidget {
                 tab(0),
                 tab(1),
                 if (onChatTap != null) chatTab(),
+                tab(2),
               ],
             ),
           ),

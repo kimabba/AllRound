@@ -31,6 +31,39 @@ void main() {
     expect(find.text('서울 10명'), findsOneWidget);
   });
 
+  testWidgets('원형 로고는 동그라미 안을 채우고 가장자리를 원형으로 자른다', (tester) async {
+    final logoClub = Club(
+      id: 'logo-club',
+      sport: 'futsal',
+      name: '풋살 클럽',
+      region: '서울',
+      logoUrl: 'https://example.com/logo.png',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SimpleClubAvatar(
+            key: const ValueKey('circular-club-logo'),
+            club: logoClub,
+            size: 48,
+            circular: true,
+          ),
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.descendant(
+        of: find.byKey(const ValueKey('circular-club-logo')),
+        matching: find.byType(Container),
+      ),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.shape, BoxShape.circle);
+    expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
+  });
+
   testWidgets('추천 섹션 헤더는 아이콘과 설명을 함께 표시한다', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

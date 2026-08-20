@@ -13,8 +13,8 @@ class AllRoundE2EKeys {
   static const signupTermsConsent = Key('e2e-signup-terms-consent');
   static const authSubmitButton = Key('e2e-auth-submit-button');
   static const authModeToggle = Key('e2e-auth-mode-toggle');
-  static const googleExistingLoginButton =
-      Key('e2e-google-existing-login-button');
+  static const googleContinueButton = Key('e2e-google-continue-button');
+  static const googleExistingLoginButton = googleContinueButton;
   static const googleExistingLoginConfirm =
       Key('e2e-google-existing-login-confirm');
   static const googleEmailSignupAction = Key('e2e-google-email-signup-action');

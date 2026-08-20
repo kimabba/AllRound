@@ -24,7 +24,7 @@ class MoreScreen extends ConsumerWidget {
         onTap: () => context.push('/profile'),
       ),
       _MenuItem(
-        icon: Icons.bookmark_rounded,
+        icon: Icons.favorite_rounded,
         label: '관심',
         subtitle: '관심 대회와 클럽 모아보기',
         onTap: () => context.push('/favorites'),

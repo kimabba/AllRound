@@ -30,6 +30,8 @@ import 'widgets/club_intro_photo_strip.dart';
 
 enum ClubDetailResult { membershipChanged, deleted }
 
+enum _RejectedClubAction { delete, edit, resubmit }
+
 /// 클럽 상세 전체화면: 소개 / 멤버 / 모임 탭.
 ///
 /// [club]이 전달되면 즉시 표시, 없으면 [clubId]로 서버에서 로드.
@@ -37,11 +39,13 @@ class ClubDetailScreen extends ConsumerStatefulWidget {
   final Club? club;
   final String? clubId;
   final bool openManagement;
+  final bool adminPreview;
   const ClubDetailScreen({
     super.key,
     this.club,
     this.clubId,
     this.openManagement = false,
+    this.adminPreview = false,
   }) : assert(club != null || clubId != null);
 
   @override
@@ -59,6 +63,8 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
   bool _joinRequestLoading = false;
   bool _joinRequestLoadFailed = false;
   int _joinRequestLoadId = 0;
+  String? _rejectionDialogShownForClubId;
+  bool _rejectionDialogScheduled = false;
 
   Club? _club;
   bool _loading = false;
@@ -73,6 +79,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     if (widget.club != null) {
       _club = widget.club;
       _initTab();
+      _scheduleRejectedClubDialog();
       _refreshClub();
     } else {
       _fetchClub();
@@ -143,6 +150,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
         _loading = false;
       });
       _initTab();
+      _scheduleRejectedClubDialog();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -178,6 +186,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           _tab!.index = nextIndex;
         }
       });
+      _scheduleRejectedClubDialog();
       if (fetched.isMember) {
         _reloadMembers();
         _reloadMemberOnlyData();
@@ -217,6 +226,29 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
     ref.invalidate(myClubsProvider);
     ref.invalidate(myFavoriteClubsProvider);
     unawaited(_refreshClub());
+  }
+
+  Future<void> _openMemberGroupChat() async {
+    try {
+      final members =
+          await (_membersF ?? ref.read(apiProvider).clubMembers(club.id));
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClubMemberChatScreen(
+            clubId: club.id,
+            title: '${club.name} 단체 채팅',
+            members: members,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('대화방을 불러오지 못했습니다. 다시 시도해주세요.')),
+      );
+    }
   }
 
   Future<void> _toggleFavorite(bool isFavorite) async {
@@ -263,6 +295,104 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
           SnackBar(content: Text('재심사 요청 실패: $error')),
         );
       }
+    }
+  }
+
+  void _scheduleRejectedClubDialog() {
+    final rejectedClub = _club;
+    if (rejectedClub == null ||
+        !rejectedClub.isRejected ||
+        rejectedClub.statusReason == 'deleted_by_owner' ||
+        widget.adminPreview ||
+        _rejectionDialogShownForClubId == rejectedClub.id ||
+        _rejectionDialogScheduled) {
+      return;
+    }
+
+    _rejectionDialogScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rejectionDialogScheduled = false;
+      if (!mounted ||
+          _club?.id != rejectedClub.id ||
+          _club?.isRejected != true) {
+        return;
+      }
+      _rejectionDialogShownForClubId = rejectedClub.id;
+      unawaited(_showRejectedClubDialog());
+    });
+  }
+
+  Future<void> _showRejectedClubDialog() async {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final reason = club.statusReason?.trim();
+    final action = await showDialog<_RejectedClubAction>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('club-rejected-review-dialog'),
+        scrollable: true,
+        icon: Icon(Icons.error_outline_rounded, color: cs.error),
+        title: const Text('클럽 승인이 반려되었습니다'),
+        actionsOverflowButtonSpacing: AppSpacing.sm,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '반려 사유',
+              style: tt.labelMedium?.copyWith(
+                color: cs.error,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              reason?.isNotEmpty == true ? reason! : '관리자가 반려 사유를 등록하지 않았습니다.',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _RejectedClubAction.delete,
+            ),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            child: const Text('삭제'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _RejectedClubAction.edit,
+            ),
+            child: const Text('수정'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _RejectedClubAction.resubmit,
+            ),
+            child: const Text('재심사'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    switch (action) {
+      case _RejectedClubAction.delete:
+        await _deleteRejectedClub();
+        return;
+      case _RejectedClubAction.edit:
+        _tab?.animateTo(_tab!.length - 1);
+        return;
+      case _RejectedClubAction.resubmit:
+        await _resubmitRejectedClub();
+        return;
+      case null:
+        return;
     }
   }
 
@@ -476,21 +606,28 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         leading: const AppBackButton(fallbackLocation: '/clubs'),
-        title: Text(club.name),
+        title: Text(widget.adminPreview ? '사용자 화면 미리보기' : club.name),
         actions: [
-          IconButton(
-            key: isFavorite
-                ? AllRoundE2EKeys.clubFavoriteSaved
-                : AllRoundE2EKeys.clubFavoriteUnsaved,
-            tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
-            onPressed: () => _toggleFavorite(isFavorite),
-            icon: Icon(
-              isFavorite
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_outline_rounded,
+          if (isMember && !widget.adminPreview)
+            IconButton(
+              tooltip: '멤버 단체 채팅',
+              onPressed: _openMemberGroupChat,
+              icon: const Icon(Icons.forum_outlined),
             ),
-          ),
-          if (canModerateClub)
+          if (!widget.adminPreview)
+            IconButton(
+              key: isFavorite
+                  ? AllRoundE2EKeys.clubFavoriteSaved
+                  : AllRoundE2EKeys.clubFavoriteUnsaved,
+              tooltip: isFavorite ? '관심 해제' : '관심 클럽 저장',
+              onPressed: () => _toggleFavorite(isFavorite),
+              icon: Icon(
+                isFavorite
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_outline_rounded,
+              ),
+            ),
+          if (canModerateClub && !widget.adminPreview)
             PopupMenuButton<String>(
               tooltip: '클럽 더보기',
               onSelected: (value) {
@@ -506,13 +643,7 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       ),
       body: Column(
         children: [
-          if (club.isRejected && club.statusReason != 'deleted_by_owner')
-            _RejectedClubBanner(
-              reason: club.statusReason,
-              onDelete: _deleteRejectedClub,
-              onEdit: () => _tab?.animateTo(_tab!.length - 1),
-              onResubmit: _resubmitRejectedClub,
-            ),
+          if (widget.adminPreview) _ClubAdminPreviewBanner(clubName: club.name),
           _Header(club: club),
           Material(
             color: cs.surface,
@@ -615,75 +746,30 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen>
       );
 }
 
-// ─── 헤더 ────────────────────────────────────────────────────────
-class _RejectedClubBanner extends StatelessWidget {
-  const _RejectedClubBanner({
-    required this.reason,
-    required this.onDelete,
-    required this.onEdit,
-    required this.onResubmit,
-  });
+class _ClubAdminPreviewBanner extends StatelessWidget {
+  const _ClubAdminPreviewBanner({required this.clubName});
 
-  final String? reason;
-  final VoidCallback onDelete;
-  final VoidCallback onEdit;
-  final VoidCallback onResubmit;
+  final String clubName;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        0,
-      ),
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: cs.errorContainer,
-        borderRadius: AppRadius.card,
-        border: Border.all(color: cs.error.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      color: cs.primaryContainer,
+      child: Row(
         children: [
-          Text(
-            '클럽 승인이 반려되었습니다',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: cs.onErrorContainer,
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            reason?.trim().isNotEmpty == true
-                ? reason!
-                : '관리자가 반려 사유를 등록하지 않았습니다.',
-            style: TextStyle(color: cs.onErrorContainer),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
-              TextButton.icon(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded),
-                label: const Text('삭제'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('수정하기'),
-              ),
-              FilledButton.icon(
-                onPressed: onResubmit,
-                icon: const Icon(Icons.replay_rounded),
-                label: const Text('재심사 요청'),
-              ),
-            ],
+          Icon(Icons.visibility_outlined, color: cs.onPrimaryContainer),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '$clubName 승인 후 사용자에게 보일 화면입니다.',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
           ),
         ],
       ),
@@ -691,6 +777,7 @@ class _RejectedClubBanner extends StatelessWidget {
   }
 }
 
+// ─── 헤더 ────────────────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final Club club;
   const _Header({required this.club});
@@ -983,7 +1070,10 @@ class _IntroTab extends StatelessWidget {
                     if (monthlyFee != null)
                       _InfoChip(
                         icon: Icons.payments_outlined,
-                        label: clubMonthlyFeeLabel(monthlyFee!),
+                        label: clubFeeLabel(
+                          monthlyFee!,
+                          feeType: club.feeType,
+                        ),
                       ),
                   ],
                 ),
@@ -1767,8 +1857,10 @@ class _ClubManagementTab extends ConsumerWidget {
           monthlyFee: monthlyFee,
           onChanged: onMonthlyFeeChanged,
         ),
-        const SizedBox(height: AppSpacing.md),
-        _ClubDuesLedgerCard(club: club),
+        if (club.feeType == 'monthly') ...[
+          const SizedBox(height: AppSpacing.md),
+          _ClubDuesLedgerCard(club: club),
+        ],
         const SizedBox(height: AppSpacing.md),
         _JoinRequestManageCard(
           club: club,
@@ -2535,8 +2627,8 @@ class _MonthlyFeeManageCardState extends ConsumerState<_MonthlyFeeManageCard> {
           TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: '월회비',
+            decoration: InputDecoration(
+              labelText: widget.club.feeType == 'per_event' ? '1회 참가비' : '월회비',
               hintText: '예: 40000',
               suffixText: '원',
             ),
@@ -3876,8 +3968,7 @@ class _EventCreateSheetState extends ConsumerState<ClubEventCreateSheet> {
               selected: {_repeatInterval},
               onSelectionChanged: _busy
                   ? null
-                  : (values) =>
-                      setState(() => _repeatInterval = values.first),
+                  : (values) => setState(() => _repeatInterval = values.first),
             ),
             if (_repeatInterval != null) ...[
               const SizedBox(height: AppSpacing.xs),
@@ -3924,7 +4015,7 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
   List<ClubPost>? _posts;
   final _authorSearch = TextEditingController();
   bool _loading = true;
-  String? _activeTag;
+  String _activeTag = 'free';
   bool get _canPinPosts => widget.club.isOwner || widget.club.isManager;
   bool get _canPostNotice => widget.club.canPostNotice;
 
@@ -3973,14 +4064,6 @@ class _PostsTabState extends ConsumerState<_PostsTab> {
               vertical: AppSpacing.sm,
             ),
             children: [
-              _TagChip(
-                label: '전체',
-                selected: _activeTag == null,
-                onTap: () {
-                  _activeTag = null;
-                  _load();
-                },
-              ),
               _TagChip(
                 label: '공지',
                 selected: _activeTag == 'notice',
@@ -4835,6 +4918,15 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
                 children: [
+                  if (widget.canPostNotice)
+                    _PostTagChoice(
+                      label: '공지',
+                      selected: _tag == 'notice',
+                      onTap: () => setState(() {
+                        _tag = 'notice';
+                        _images.clear();
+                      }),
+                    ),
                   _PostTagChoice(
                     label: '자유',
                     selected: _tag == 'free',
@@ -4870,15 +4962,6 @@ class _PostCreateSheetState extends ConsumerState<_PostCreateSheet> {
                       _images.clear();
                     }),
                   ),
-                  if (widget.canPostNotice)
-                    _PostTagChoice(
-                      label: '중요 공지',
-                      selected: _tag == 'notice',
-                      onTap: () => setState(() {
-                        _tag = 'notice';
-                        _images.clear();
-                      }),
-                    ),
                 ],
               ),
               if (widget.canPinPosts) ...[
