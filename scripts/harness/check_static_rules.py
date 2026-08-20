@@ -693,6 +693,32 @@ def check_no_device_local_today() -> None:
         f"(로컬이 의도인 예외 {marker_count}곳)"
     )
 
+def check_release_targets_use_prod_env() -> None:
+    """릴리스 빌드가 개발용 .env.local 로 되돌아가지 못하게 막는다.
+
+    한때 개발(`make app`)과 릴리스(`make release-ios`)가 같은 `.env.local` 을 썼다.
+    릴리스용으로 거기에 프로덕션 값을 넣은 뒤로는 개발 실행도 프로덕션 DB 에
+    붙어, 개발 중 만든 계정·클럽·제보가 실사용자 데이터와 섞였다.
+    """
+    makefile = read("Makefile")
+    violations: list[str] = []
+    current: str | None = None
+    for line_number, line in enumerate(makefile.splitlines(), start=1):
+        if line and not line[0].isspace() and line.rstrip().endswith(":"):
+            current = line.split(":", 1)[0].strip()
+        if current and current.startswith("release-") and "--dart-define-from-file" in line:
+            if ".env.local" in line:
+                violations.append(f"Makefile:{line_number}: {current} → {line.strip()}")
+    if violations:
+        fail(
+            "릴리스 타깃이 개발용 .env.local 을 쓴다.\n"
+            "릴리스는 app/.env.production 을 쓴다 — 파일을 겸용하면 개발 실행이\n"
+            "프로덕션 DB(실사용자 데이터)에 붙는다.\n"
+            + "\n".join(violations)
+        )
+    print("✓ 릴리스 빌드가 프로덕션 전용 env 파일을 쓴다 (.env.production)")
+
+
 def main() -> int:
     check_root_file_lengths()
     check_required_rule_docs()
@@ -704,6 +730,7 @@ def main() -> int:
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
     check_no_device_local_today()
+    check_release_targets_use_prod_env()
     print("✅ static repository rules passed")
     return 0
 
