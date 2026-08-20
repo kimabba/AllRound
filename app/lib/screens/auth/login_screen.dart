@@ -30,12 +30,7 @@ const _loginSlidePhotoAssets = <String>[
   _loginClubsPhotoAsset,
   _loginBallboyPhotoAsset,
 ];
-const _loginSlideSportLabels = <String>[
-  'TENNIS',
-  'FUTSAL',
-  'TENNIS',
-  'FUTSAL',
-];
+const _loginSlideSportLabels = <String>['TENNIS', 'FUTSAL', 'TENNIS', 'FUTSAL'];
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -378,11 +373,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         textInputAction: _signUp
                             ? TextInputAction.next
                             : TextInputAction.done,
-                        onSubmitted: (_) => _busy
-                            ? null
-                            : _emailAuth(
-                                onChanged: refreshSheet,
-                              ),
+                        onSubmitted: (_) =>
+                            _busy ? null : _emailAuth(onChanged: refreshSheet),
                         onChanged: (_) => _clearAuthError(setSheetState),
                       ),
                       if (_signUp) ...[
@@ -397,9 +389,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _busy
                               ? null
-                              : _emailAuth(
-                                  onChanged: refreshSheet,
-                                ),
+                              : _emailAuth(onChanged: refreshSheet),
                           onChanged: (_) => _clearAuthError(setSheetState),
                         ),
                         const SizedBox(height: AppSpacing.sm),
@@ -408,9 +398,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           '유출된 흔한 비밀번호는 보안을 위해 사용할 수 없어요.',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -467,9 +457,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: TextButton(
                             onPressed: _busy
                                 ? null
-                                : () => _forgotPassword(
-                                      onChanged: refreshSheet,
-                                    ),
+                                : () =>
+                                    _forgotPassword(onChanged: refreshSheet),
                             child: const Text('비밀번호를 잊으셨나요?'),
                           ),
                         ),
@@ -520,9 +509,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         key: AllRoundE2EKeys.authSubmitButton,
                         onPressed: _busy || (_signUp && !_termsConsent)
                             ? null
-                            : () => _emailAuth(
-                                  onChanged: refreshSheet,
-                                ),
+                            : () => _emailAuth(onChanged: refreshSheet),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(AppSizes.control),
                           shape: RoundedRectangleBorder(
@@ -533,8 +520,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : Text(_signUp ? '회원가입 시작하기' : '로그인'),
                       ),
@@ -547,9 +535,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 _setMode(signUp: !_signUp);
                                 setSheetState(() {});
                               },
-                        child: Text(
-                          _signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기',
-                        ),
+                        child: Text(_signUp ? '이미 계정이 있어요' : '계정이 없어요. 회원가입하기'),
                       ),
                     ],
                   ),
@@ -726,8 +712,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               decoration: BoxDecoration(
                                 color: cs.errorContainer,
                                 border: Border.all(color: cs.error),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.sm),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
                               ),
                               child: Text(
                                 _error!,
@@ -853,10 +840,7 @@ class _AllRoundMascot extends StatelessWidget {
 /// 로그인 전에 "여기서 뭘 할 수 있는지"를 넘겨 보는 카드.
 /// 첫 장은 인사, 나머지는 하단 탭의 동선(대회·클럽·볼보이)과 1:1 로 맞춘다.
 class _IntroCarousel extends StatefulWidget {
-  const _IntroCarousel({
-    required this.adminMode,
-    required this.onPageChanged,
-  });
+  const _IntroCarousel({required this.adminMode, required this.onPageChanged});
 
   final bool adminMode;
   final ValueChanged<int> onPageChanged;
@@ -974,10 +958,8 @@ class _IntroCarouselState extends State<_IntroCarousel> {
               // 화면 전체가 넘어가면서 안쪽 콘텐츠에도 작은 시차를 준다.
               itemBuilder: (context, index) => AnimatedBuilder(
                 animation: _controller,
-                builder: (context, _) => _IntroCard(
-                  data: cards[index],
-                  offset: _offsetOf(index),
-                ),
+                builder: (context, _) =>
+                    _IntroCard(data: cards[index], offset: _offsetOf(index)),
               ),
             ),
           ),
@@ -997,7 +979,9 @@ class _IntroCarouselState extends State<_IntroCarousel> {
                     color: index == _page
                         ? (photoSlide ? AppPalette.photoForeground : cs.primary)
                         : (photoSlide
-                            ? AppPalette.photoForeground.withValues(alpha: 0.4)
+                            ? AppPalette.photoForeground.withValues(
+                                alpha: 0.4,
+                              )
                             : cs.outlineVariant),
                     borderRadius: AppRadius.pill,
                   ),
@@ -1180,8 +1164,10 @@ class _IntroCard extends StatelessWidget {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: (constraints.maxHeight - verticalPadding)
-                      .clamp(0.0, double.infinity),
+                  minHeight: (constraints.maxHeight - verticalPadding).clamp(
+                    0.0,
+                    double.infinity,
+                  ),
                 ),
                 child: Align(
                   alignment: onPhoto ? Alignment.bottomLeft : Alignment.center,
@@ -1226,10 +1212,7 @@ class _IntroBackdropPainter extends CustomPainter {
     );
 
     final focusCenter = Offset(size.width * 0.5, size.height * 0.46);
-    final focusRadius = (size.width * 0.43).clamp(
-      0.0,
-      size.height * 0.32,
-    );
+    final focusRadius = (size.width * 0.43).clamp(0.0, size.height * 0.32);
     canvas.drawCircle(
       focusCenter,
       focusRadius,
@@ -1468,12 +1451,7 @@ class _SocialButton extends StatelessWidget {
         children: [
           Icon(icon),
           const SizedBox(width: AppSpacing.sm),
-          Flexible(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-            ),
-          ),
+          Flexible(child: Text(label, textAlign: TextAlign.center)),
         ],
       ),
     );
