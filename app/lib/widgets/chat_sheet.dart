@@ -19,7 +19,11 @@ Future<void> openChatSheet(
     useSafeArea: true,
     showDragHandle: false,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.28),
+    barrierColor: Colors.black.withValues(alpha: 0.22),
+    sheetAnimationStyle: const AnimationStyle(
+      duration: AppDuration.medium3,
+      reverseDuration: AppDuration.medium2,
+    ),
     builder: (sheetContext) => _KeyboardAwareChatSheet(
       entryContext: entryContext,
       onExpand: (expandedContext) async {
@@ -47,21 +51,68 @@ class _KeyboardAwareChatSheet extends StatefulWidget {
 }
 
 class _KeyboardAwareChatSheetState extends State<_KeyboardAwareChatSheet> {
-  static const _initialSize = 0.62;
-  static const _minSize = 0.46;
   static const _maxSize = 0.94;
 
   final _sheetController = DraggableScrollableController();
   bool _keyboardVisible = false;
   double? _sizeBeforeKeyboard;
+  double _headerDragDistance = 0;
+
+  double _peekSize(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (AppSizes.chatSheetPeekMinHeight / screenHeight)
+        .clamp(0.25, 0.42)
+        .toDouble();
+  }
+
+  void _handleHeaderDragStart(DragStartDetails details) {
+    _headerDragDistance = 0;
+  }
+
+  void _handleHeaderDragUpdate(DragUpdateDetails details) {
+    if (!_sheetController.isAttached) return;
+    final delta = details.primaryDelta ?? 0;
+    _headerDragDistance += delta;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final peekSize = _peekSize(context);
+    final nextSize = (_sheetController.size - delta / screenHeight)
+        .clamp(peekSize, _maxSize)
+        .toDouble();
+    _sheetController.jumpTo(nextSize);
+  }
+
+  void _handleHeaderDragEnd(DragEndDetails details) {
+    if (!_sheetController.isAttached) return;
+    final peekSize = _peekSize(context);
+    final currentSize = _sheetController.size;
+    final velocity = details.primaryVelocity ?? 0;
+
+    if (_headerDragDistance > AppSizes.touchTarget &&
+        currentSize <= peekSize + 0.01) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    final midpoint = (peekSize + _maxSize) / 2;
+    final targetSize =
+        velocity < -300 || currentSize >= midpoint ? _maxSize : peekSize;
+    unawaited(
+      _sheetController.animateTo(
+        targetSize,
+        duration: AppDuration.medium1,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     if (keyboardVisible && !_keyboardVisible) {
-      _sizeBeforeKeyboard =
-          _sheetController.isAttached ? _sheetController.size : _initialSize;
+      _sizeBeforeKeyboard = _sheetController.isAttached
+          ? _sheetController.size
+          : _peekSize(context);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_keyboardVisible || !_sheetController.isAttached) {
           return;
@@ -75,8 +126,9 @@ class _KeyboardAwareChatSheetState extends State<_KeyboardAwareChatSheet> {
         );
       });
     } else if (!keyboardVisible && _keyboardVisible) {
-      final restoreSize = (_sizeBeforeKeyboard ?? _initialSize)
-          .clamp(_minSize, _maxSize)
+      final peekSize = _peekSize(context);
+      final restoreSize = (_sizeBeforeKeyboard ?? peekSize)
+          .clamp(peekSize, _maxSize)
           .toDouble();
       _sizeBeforeKeyboard = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,22 +155,67 @@ class _KeyboardAwareChatSheetState extends State<_KeyboardAwareChatSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final peekSize = _peekSize(context);
     return DraggableScrollableSheet(
       controller: _sheetController,
-      initialChildSize: _initialSize,
-      minChildSize: _minSize,
+      initialChildSize: peekSize,
+      minChildSize: peekSize,
       maxChildSize: _maxSize,
       expand: false,
       snap: true,
-      snapSizes: const [_initialSize, _maxSize],
+      snapSizes: [peekSize, _maxSize],
+      shouldCloseOnMinExtent: false,
       builder: (sheetBodyContext, scrollController) {
-        return ClipRRect(
-          borderRadius: AppRadius.sheet,
-          child: ChatScreen(
-            embedded: true,
-            scrollController: scrollController,
-            entryContext: widget.entryContext,
-            onExpand: widget.onExpand,
+        final cs = Theme.of(sheetBodyContext).colorScheme;
+        final floatingRadius = BorderRadius.circular(AppRadius.xxl * 2);
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: AppDuration.medium2,
+          curve: AppCurves.emphasizedDecelerate,
+          builder: (context, value, child) => Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, AppSpacing.md * (1 - value)),
+              child: child,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              0,
+              AppSpacing.sm,
+              _keyboardVisible ? 0 : AppSpacing.sm,
+            ),
+            child: DecoratedBox(
+              key: const Key('ballboy-floating-sheet-surface'),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border.all(color: cs.outlineVariant),
+                borderRadius: floatingRadius,
+                boxShadow: AppShadows.overlay,
+              ),
+              child: ClipRRect(
+                borderRadius: floatingRadius,
+                child: AnimatedBuilder(
+                  animation: _sheetController,
+                  builder: (context, _) {
+                    final currentSize = _sheetController.isAttached
+                        ? _sheetController.size
+                        : peekSize;
+                    return ChatScreen(
+                      embedded: true,
+                      compactSheet: currentSize <= peekSize + 0.04,
+                      scrollController: scrollController,
+                      entryContext: widget.entryContext,
+                      onExpand: widget.onExpand,
+                      onSheetDragStart: _handleHeaderDragStart,
+                      onSheetDragUpdate: _handleHeaderDragUpdate,
+                      onSheetDragEnd: _handleHeaderDragEnd,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         );
       },

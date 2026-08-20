@@ -30,12 +30,12 @@ class AppBottomNav extends StatelessWidget {
     const labels = ['대회', '클럽', 'MY'];
     const icons = [
       Icons.emoji_events_outlined,
-      Icons.groups_outlined,
+      Icons.groups_2_outlined,
       Icons.person_outline_rounded,
     ];
     const selectedIcons = [
       Icons.emoji_events_rounded,
-      Icons.groups_rounded,
+      Icons.groups_2_rounded,
       Icons.person_rounded,
     ];
     const keys = [
@@ -59,47 +59,23 @@ class AppBottomNav extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOut,
-                    width: 42,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: currentIndex == index
-                          ? cs.primary
-                          : Colors.transparent,
-                      borderRadius: AppRadius.pill,
-                    ),
-                    child: Icon(
-                      currentIndex == index
-                          ? selectedIcons[index]
-                          : icons[index],
-                      size: 23,
-                      color: currentIndex == index
-                          ? cs.onPrimary
-                          : cs.onSurfaceVariant,
-                    ),
+                  Icon(
+                    currentIndex == index ? selectedIcons[index] : icons[index],
+                    size: 25,
+                    color: currentIndex == index
+                        ? cs.primary
+                        : cs.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     labels[index],
                     style: tt.labelSmall?.copyWith(
                       color: currentIndex == index
-                          ? cs.onSurface
+                          ? cs.primary
                           : cs.onSurfaceVariant,
                       fontWeight: currentIndex == index
                           ? FontWeight.w800
-                          : FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: currentIndex == index ? 18 : 0,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      borderRadius: AppRadius.pill,
+                          : FontWeight.w500,
                     ),
                   ),
                 ],
@@ -127,27 +103,16 @@ class AppBottomNav extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 42,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      border: Border.all(color: cs.outlineVariant),
-                      borderRadius: AppRadius.pill,
-                    ),
-                    child: Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      size: 21,
-                      color: cs.onSurfaceVariant,
-                    ),
+                  _BallboyNavIcon(
+                    color: cs.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     _chatLabel,
                     maxLines: 1,
                     style: tt.labelSmall?.copyWith(
                       color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -160,15 +125,8 @@ class AppBottomNav extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.98),
+        color: cs.surface,
         border: Border(top: BorderSide(color: cs.outlineVariant)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.07),
-            blurRadius: 18,
-            offset: const Offset(0, -5),
-          ),
-        ],
       ),
       child: SafeArea(
         top: false,
@@ -197,4 +155,29 @@ class AppBottomNav extends StatelessWidget {
   /// 라벨 정본. 챗 화면 카피("여러분의 도우미 볼보이(BB)")와 같은 이름을 쓴다.
   /// `BB` 두 글자는 누르기 전에는 뜻을 알 수 없어 탭 라벨로 부적합하다.
   static const _chatLabel = '볼보이';
+}
+
+/// 기준 디자인의 둥근 말풍선과 가운데 점 세 개를 Material 아이콘 조합으로
+/// 재현한다. 특정 플랫폼의 이모지 글리프에 기대지 않아 Android/iOS가 같다.
+class _BallboyNavIcon extends StatelessWidget {
+  const _BallboyNavIcon({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 27,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline_rounded, size: 27, color: color),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Icon(Icons.more_horiz_rounded, size: 15, color: color),
+          ),
+        ],
+      ),
+    );
+  }
 }

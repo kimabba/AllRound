@@ -54,6 +54,7 @@ class AppSizes {
   static const double appBar = 56;
   static const double listRow = 56;
   static const double bottomNavigation = 64;
+  static const double chatSheetPeekMinHeight = 176;
   static const double chatComposerMax = 104;
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../config.dart';
 import '../models/chat_ui.dart';
 
 class ChatMessage {
@@ -109,5 +110,42 @@ class ChatNotifier extends ChangeNotifier {
 }
 
 final chatProvider = ChangeNotifierProvider<ChatNotifier>((ref) {
-  return ChatNotifier();
+  final chat = ChatNotifier();
+  if (!AppConfig.appStoreScreenshot) return chat;
+
+  final start = DateTime.now().add(const Duration(days: 14));
+  final deadline = DateTime.now().add(const Duration(days: 7));
+  String dateOnly(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
+  final assistant = ChatMessage(
+    role: 'assistant',
+    content: '이번 주 신청 가능한 서울 풋살 대회를 찾았어요.',
+  )..uiBlocks = [
+      ChatUiBlock(
+        type: 'cards',
+        entity: 'tournament',
+        tournamentItems: [
+          TournamentChatCardItem(
+            id: 'app-store-futsal-cup',
+            title: '서울 풋살 챔피언십',
+            sport: 'futsal',
+            region: '서울',
+            location: '잠실 풋살장',
+            startDate: dateOnly(start),
+            applicationDeadline: dateOnly(deadline),
+            eligible: true,
+            eligibleGrades: const ['beginner', 'intermediate'],
+            entryFee: 100000,
+            format: '5대5 조별리그',
+          ),
+        ],
+      ),
+    ];
+  chat.messages.addAll([
+    ChatMessage(role: 'user', content: '가까운 서울 풋살 대회 있어?'),
+    assistant,
+  ]);
+  return chat;
 });

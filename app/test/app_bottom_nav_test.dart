@@ -98,7 +98,7 @@ void main() {
     expect(ballboyX, lessThan(tester.getCenter(find.text('MY')).dx));
   });
 
-  testWidgets('현재 탭은 채운 아이콘으로, 볼보이는 중립 아이콘으로 구분한다', (tester) async {
+  testWidgets('현재 탭은 배경 캡슐 없이 채운 아이콘으로 구분한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -111,9 +111,11 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.groups_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.groups_2_rounded), findsOneWidget);
     expect(find.byIcon(Icons.emoji_events_outlined), findsOneWidget);
     expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
     expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
+    expect(find.byType(AnimatedContainer), findsNothing);
   });
 }

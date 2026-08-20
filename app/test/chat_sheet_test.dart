@@ -1,6 +1,7 @@
 import 'package:allround/models/chat_entry_context.dart';
 import 'package:allround/screens/chat_screen.dart';
 import 'package:allround/testing/e2e_keys.dart';
+import 'package:allround/theme/tokens.dart';
 import 'package:allround/widgets/app_bottom_nav.dart';
 import 'package:allround/widgets/chat_sheet.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +50,7 @@ void main() {
     expect(context.initialMessage, '작성 중인 질문');
   });
 
-  testWidgets('전역 AI 진입창에서 절반 높이 채팅 시트를 연다', (tester) async {
+  testWidgets('전역 AI 진입창에서 화면 하단 1/4 높이 채팅 시트를 연다', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
@@ -74,9 +75,27 @@ void main() {
     await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
     await tester.pumpAndSettle();
 
-    expect(find.text('현재 대회 연결'), findsOneWidget);
+    expect(
+      find.byKey(const Key('ballboy-floating-sheet-surface')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('ballboy-floating-header')), findsOneWidget);
+    expect(find.byKey(const Key('ballboy-floating-composer')), findsOneWidget);
+    expect(find.text('볼보이'), findsWidgets);
+    expect(find.text('궁금한 건 그냥 물어보세요'), findsOneWidget);
+    expect(find.textContaining('여러분의 도우미'), findsNothing);
+    expect(find.textContaining('다른 탭을 둘러봐도'), findsNothing);
+    expect(find.text('현재 대회 연결'), findsNothing);
     // 추천 칩 없이 바로 질문하는 빈 화면 (볼보이 안내 문구)
     expect(find.textContaining('그냥 물어보세요'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const Key('ballboy-floating-header')),
+      const Offset(0, -360),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('현재 대회 연결'), findsOneWidget);
 
     final sendButtonFinder = find.widgetWithIcon(
       IconButton,
@@ -94,6 +113,37 @@ void main() {
       tester.widget<IconButton>(sendButtonFinder).onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('볼보이 시트를 아래로 끌면 닫힌다', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: Builder(
+              builder: (context) => AppBottomNav(
+                currentIndex: 0,
+                onChanged: (_) {},
+                onChatTap: () =>
+                    openChatSheet(context, chatEntryContextForPath('/')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
+    await tester.pumpAndSettle();
+    expect(find.byKey(AllRoundE2EKeys.embeddedChatSheet), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const Key('ballboy-floating-header')),
+      const Offset(0, 320),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AllRoundE2EKeys.embeddedChatSheet), findsNothing);
   });
 
   testWidgets('작은 화면에서 키보드가 열리면 채팅 시트가 자동 확장된다', (tester) async {
@@ -128,7 +178,8 @@ void main() {
     var sheet = tester.widget<DraggableScrollableSheet>(
       find.byType(DraggableScrollableSheet),
     );
-    expect(sheet.controller?.size, closeTo(0.62, 0.01));
+    final expectedPeekSize = AppSizes.chatSheetPeekMinHeight / 568;
+    expect(sheet.controller?.size, closeTo(expectedPeekSize, 0.01));
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 260);
     await tester.pump();
@@ -148,7 +199,7 @@ void main() {
     sheet = tester.widget<DraggableScrollableSheet>(
       find.byType(DraggableScrollableSheet),
     );
-    expect(sheet.controller?.size, closeTo(0.62, 0.01));
+    expect(sheet.controller?.size, closeTo(expectedPeekSize, 0.01));
     expect(tester.takeException(), isNull);
   });
 

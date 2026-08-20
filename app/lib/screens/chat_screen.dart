@@ -24,12 +24,20 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.scrollController,
     this.entryContext,
     this.onExpand,
+    this.compactSheet = false,
+    this.onSheetDragStart,
+    this.onSheetDragUpdate,
+    this.onSheetDragEnd,
   });
 
   final bool embedded;
   final ScrollController? scrollController;
   final ChatEntryContext? entryContext;
   final ValueChanged<ChatEntryContext?>? onExpand;
+  final bool compactSheet;
+  final GestureDragStartCallback? onSheetDragStart;
+  final GestureDragUpdateCallback? onSheetDragUpdate;
+  final GestureDragEndCallback? onSheetDragEnd;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -209,9 +217,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       children: [
         if (widget.embedded && !compactForKeyboard)
           _EmbeddedChatHeader(
+            compact: widget.compactSheet,
             hasMessages: messages.isNotEmpty,
             busy: busy,
             onReset: _resetConversation,
+            onDragStart: widget.onSheetDragStart,
+            onDragUpdate: widget.onSheetDragUpdate,
+            onDragEnd: widget.onSheetDragEnd,
             onExpand: () {
               ref.read(chatProvider).setDraft(_ctrl.text);
               final expandedContext = widget.entryContext?.copyWith(
@@ -222,6 +234,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
           ),
         if (!compactForKeyboard &&
+            !widget.compactSheet &&
             (widget.entryContext?.canAttachEntity ?? false))
           _EntityContextToggle(
             key: AllRoundE2EKeys.chatContextToggle,
@@ -236,7 +249,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         Expanded(
           child: messages.isEmpty
-              ? _EmptyHint(scrollController: widget.embedded ? _scroll : null)
+              ? _EmptyHint(
+                  compact: widget.compactSheet,
+                  scrollController: widget.embedded ? _scroll : null,
+                )
               : ListView.builder(
                   controller: _scroll,
                   keyboardDismissBehavior:
@@ -274,7 +290,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           busy: busy,
           onSend: _send,
           onStop: _stopStreaming,
-          showDisclosure: !compactForKeyboard,
+          showDisclosure: !compactForKeyboard && !widget.compactSheet,
+          floating: widget.embedded,
+          compactForKeyboard: compactForKeyboard,
+          compactForSheet: widget.compactSheet,
         ),
       ],
     );
@@ -284,7 +303,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // (root Scaffold의 SnackBar는 모달 시트 뒤에 가려져 사용자가 못 봄)
       return Scaffold(
         key: AllRoundE2EKeys.embeddedChatSheet,
-        backgroundColor: cs.surface,
+        backgroundColor: cs.surfaceContainerLow,
         body: chatBody,
       );
     }
@@ -292,7 +311,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.fullChatScreen,
       appBar: AppBar(
-        title: const Text('BB'),
+        title: const Text('볼보이'),
         actions: [
           if (messages.isNotEmpty)
             IconButton(
@@ -309,50 +328,102 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 class _EmbeddedChatHeader extends StatelessWidget {
   const _EmbeddedChatHeader({
+    required this.compact,
     required this.hasMessages,
     required this.busy,
     required this.onReset,
     required this.onExpand,
+    this.onDragStart,
+    this.onDragUpdate,
+    this.onDragEnd,
   });
 
+  final bool compact;
   final bool hasMessages;
   final bool busy;
   final VoidCallback onReset;
   final VoidCallback onExpand;
+  final GestureDragStartCallback? onDragStart;
+  final GestureDragUpdateCallback? onDragUpdate;
+  final GestureDragEndCallback? onDragEnd;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: AppSpacing.xs),
-          Container(
-            width: 36,
-            height: 3,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant,
-              borderRadius: BorderRadius.circular(AppRadius.full),
-            ),
+    return Column(
+      children: [
+        SizedBox(height: compact ? 2 : AppSpacing.xs),
+        Container(
+          width: AppSpacing.xxxl,
+          height: AppRadius.xs,
+          decoration: BoxDecoration(
+            color: cs.outline,
+            borderRadius: AppRadius.pill,
           ),
-          SizedBox(
-            height: 49,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            0,
+          ),
+          child: GestureDetector(
+            key: const Key('ballboy-floating-header'),
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: onDragStart,
+            onVerticalDragUpdate: onDragUpdate,
+            onVerticalDragEnd: onDragEnd,
+            child: Container(
+              height: compact ? AppSizes.touchTarget : AppSizes.appBar,
+              padding: const EdgeInsets.only(left: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(AppRadius.xxl),
+              ),
               child: Row(
                 children: [
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
+                  Container(
+                    width: AppSpacing.xxxl,
+                    height: AppSpacing.xxxl,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: AppRadius.pill,
+                    ),
                     child: Text(
                       'BB',
-                      style: tt.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.onPrimary,
+                        fontWeight: FontWeight.w900,
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '볼보이',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (!compact)
+                          Text(
+                            '대회·클럽 AI 도우미',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   if (hasMessages)
@@ -371,8 +442,8 @@ class _EmbeddedChatHeader extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -398,9 +469,8 @@ class _ChatHeaderAction extends StatelessWidget {
         icon: Icon(icon, size: 22),
         tooltip: tooltip,
         style: IconButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
         ),
       ),
     );
@@ -433,48 +503,61 @@ class _EntityContextToggle extends StatelessWidget {
       hint: '공개된 정보만 질문에 함께 사용합니다.',
       onTap: () => onChanged(!selected),
       child: ExcludeSemantics(
-        child: Material(
-          color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
-          child: InkWell(
-            onTap: () => onChanged(!selected),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xl,
-                vertical: AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    selected ? Icons.link_rounded : Icons.link_off_rounded,
-                    size: 18,
-                    color: selected ? cs.primary : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$label 연결',
-                          style: tt.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          '공개된 정보만 질문에 함께 사용합니다.',
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            0,
+          ),
+          child: Material(
+            color: selected ? cs.primaryContainer : cs.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              side: BorderSide(color: cs.outlineVariant),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => onChanged(!selected),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? Icons.link_rounded : Icons.link_off_rounded,
+                      size: 18,
+                      color: selected ? cs.primary : cs.onSurfaceVariant,
                     ),
-                  ),
-                  Checkbox(
-                    key: stateKey,
-                    value: selected,
-                    onChanged: (value) => onChanged(value ?? false),
-                  ),
-                ],
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$label 연결',
+                            style: tt.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            '공개된 정보만 질문에 함께 사용합니다.',
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Checkbox(
+                      key: stateKey,
+                      value: selected,
+                      onChanged: (value) => onChanged(value ?? false),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -486,38 +569,31 @@ class _EntityContextToggle extends StatelessWidget {
 
 class _EmptyHint extends StatelessWidget {
   final ScrollController? scrollController;
-  const _EmptyHint({this.scrollController});
+  final bool compact;
+  const _EmptyHint({required this.compact, this.scrollController});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SingleChildScrollView(
       controller: scrollController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.xl,
-        AppSpacing.xxl,
+        compact ? AppSpacing.sm : AppSpacing.xxl,
         AppSpacing.xl,
-        AppSpacing.xl,
+        compact ? AppSpacing.sm : AppSpacing.xl,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'BB에게\n그냥 물어보세요',
-            style: tt.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '여러분의 도우미 볼보이(BB)예요. 어느 메뉴에 있는지 몰라도 괜찮아요.\n'
-            '대회, 클럽, 구장, 규칙 — 궁금한 걸 말하면 BB가 찾아다 드려요.',
-            style: tt.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.left,
+            '궁금한 건 그냥 물어보세요',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -531,85 +607,130 @@ class _InputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onStop;
   final bool showDisclosure;
+  final bool floating;
+  final bool compactForKeyboard;
+  final bool compactForSheet;
   const _InputBar({
     required this.controller,
     required this.busy,
     required this.onSend,
     required this.onStop,
     required this.showDisclosure,
+    required this.floating,
+    required this.compactForKeyboard,
+    required this.compactForSheet,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final compactComposer = compactForKeyboard || compactForSheet;
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          10,
-          AppSpacing.md,
-          AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border: Border(top: BorderSide(color: cs.outlineVariant)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: 48,
-                      maxHeight: AppSizes.chatComposerMax,
-                    ),
-                    child: TextField(
-                      key: AllRoundE2EKeys.chatInput,
-                      controller: controller,
-                      decoration: InputDecoration(
-                        hintText: '메시지를 입력하세요',
-                        fillColor: cs.surfaceContainerLowest,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.md,
-                        ),
+      child: Padding(
+        padding: floating && !compactForKeyboard
+            ? const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                0,
+                AppSpacing.sm,
+                AppSpacing.sm,
+              )
+            : EdgeInsets.zero,
+        child: Container(
+          key: floating ? const Key('ballboy-floating-composer') : null,
+          padding: compactComposer
+              ? const EdgeInsets.all(AppSpacing.sm)
+              : const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  10,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            border: floating && !compactForKeyboard
+                ? Border.all(color: cs.outlineVariant)
+                : Border(top: BorderSide(color: cs.outlineVariant)),
+            borderRadius: floating && !compactForKeyboard
+                ? BorderRadius.circular(AppRadius.xxl * 1.5)
+                : BorderRadius.zero,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: AppSizes.control,
+                        maxHeight: compactComposer
+                            ? AppSizes.control
+                            : AppSizes.chatComposerMax,
                       ),
-                      textInputAction: TextInputAction.send,
-                      minLines: 1,
-                      maxLines: 4,
-                      onSubmitted: (_) => onSend(),
+                      child: TextField(
+                        key: AllRoundE2EKeys.chatInput,
+                        controller: controller,
+                        decoration: InputDecoration(
+                          hintText: '볼보이에게 물어보세요',
+                          isDense: compactComposer,
+                          fillColor: cs.surfaceContainerLowest,
+                          border: OutlineInputBorder(
+                            borderRadius: AppRadius.pill,
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.pill,
+                            borderSide: BorderSide(color: cs.outlineVariant),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.pill,
+                            borderSide: BorderSide(
+                              color: cs.primary,
+                              width: 1.5,
+                            ),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical:
+                                compactComposer ? AppSpacing.sm : AppSpacing.md,
+                          ),
+                        ),
+                        textInputAction: TextInputAction.send,
+                        minLines: 1,
+                        maxLines: compactComposer ? 1 : 4,
+                        onSubmitted: (_) => onSend(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller,
-                  builder: (context, value, _) {
-                    final canSend = value.text.trim().isNotEmpty;
-                    return _ChatComposerAction(
-                      onPressed: busy ? onStop : (canSend ? onSend : null),
-                      icon: busy
-                          ? Icons.stop_rounded
-                          : Icons.arrow_upward_rounded,
-                      tooltip: busy ? '응답 중지' : '메시지 보내기',
-                      backgroundColor: busy ? cs.error : cs.primary,
-                      foregroundColor: busy ? cs.onError : cs.onPrimary,
-                      disabledBackgroundColor: cs.surfaceContainerHighest,
-                      disabledForegroundColor: cs.onSurfaceVariant,
-                    );
-                  },
-                ),
+                  const SizedBox(width: AppSpacing.sm),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: controller,
+                    builder: (context, value, _) {
+                      final canSend = value.text.trim().isNotEmpty;
+                      return _ChatComposerAction(
+                        onPressed: busy ? onStop : (canSend ? onSend : null),
+                        icon: busy
+                            ? Icons.stop_rounded
+                            : Icons.arrow_upward_rounded,
+                        tooltip: busy ? '응답 중지' : '메시지 보내기',
+                        backgroundColor: busy ? cs.error : cs.primary,
+                        foregroundColor: busy ? cs.onError : cs.onPrimary,
+                        disabledBackgroundColor: cs.surfaceContainerHighest,
+                        disabledForegroundColor: cs.onSurfaceVariant,
+                        round: floating,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              if (showDisclosure) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const ChatAiDisclosure(),
               ],
-            ),
-            if (showDisclosure) ...[
-              const SizedBox(height: AppSpacing.sm),
-              const ChatAiDisclosure(),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -625,6 +746,7 @@ class _ChatComposerAction extends StatelessWidget {
     required this.foregroundColor,
     required this.disabledBackgroundColor,
     required this.disabledForegroundColor,
+    required this.round,
   });
 
   final VoidCallback? onPressed;
@@ -634,6 +756,7 @@ class _ChatComposerAction extends StatelessWidget {
   final Color foregroundColor;
   final Color disabledBackgroundColor;
   final Color disabledForegroundColor;
+  final bool round;
 
   @override
   Widget build(BuildContext context) {
@@ -650,7 +773,8 @@ class _ChatComposerAction extends StatelessWidget {
           disabledBackgroundColor: disabledBackgroundColor,
           disabledForegroundColor: disabledForegroundColor,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius:
+                round ? AppRadius.pill : BorderRadius.circular(AppRadius.md),
           ),
         ),
       ),
@@ -682,16 +806,109 @@ class _MessageBubble extends StatelessWidget {
         ? (msg.content.isEmpty ? '…' : msg.content)
         : _cleanAssistantContent(msg.content);
 
-    return Semantics(
-      container: true,
-      liveRegion: announce,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-        child: Align(
-          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
+    final messageContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          key: !isUser && announce
+              ? AllRoundE2EKeys.latestAssistantMessage
+              : null,
+          label: '${isUser ? '사용자 메시지' : 'AI 답변'}, $visibleContent',
+          child: ExcludeSemantics(
+            child: isUser
+                ? SelectableText(
+                    visibleContent,
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onPrimary,
+                      height: 1.5,
+                    ),
+                  )
+                : MarkdownBody(
+                    data: visibleContent,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: tt.bodyMedium?.copyWith(
+                        color: cs.onSurface,
+                        height: 1.5,
+                      ),
+                      h3: tt.titleSmall?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      listBullet: tt.bodyMedium?.copyWith(color: cs.onSurface),
+                      strong: tt.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+        // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
+        // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
+        if (msg.citations.isNotEmpty &&
+            !msg.uiBlocks.any(
+              (b) => b.tournamentItems.isNotEmpty || b.clubItems.isNotEmpty,
+            )) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Divider(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),
+          const SizedBox(height: AppSpacing.sm),
+          for (final c in msg.citations.take(8)) _CitationRow(citation: c),
+        ],
+        if (msg.uiBlocks.isNotEmpty)
+          for (final block in msg.uiBlocks) ...[
+            for (final item in block.tournamentItems)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: ChatTournamentCard(
+                  item: item,
+                  onAction: (message, entityId) =>
+                      onCardAction(message, 'tournament', entityId),
+                ),
+              ),
+            for (final item in block.clubItems)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: ChatClubCard(
+                  item: item,
+                  onAction: (message, entityId) =>
+                      onCardAction(message, 'club', entityId),
+                ),
+              ),
+            if (block.refineChip != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                    label: Text(block.refineChip!.label),
+                    onPressed: () => onRefine(
+                      block.refineChip!.label,
+                      block.refineChip!.refine,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        if (onReport != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onReport,
+              icon: const Icon(Icons.flag_outlined, size: 16),
+              label: const Text('AI 답변 신고'),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final messageWidget = isUser
+        ? ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78,
+              maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             ),
             child: Container(
               padding: const EdgeInsets.symmetric(
@@ -699,125 +916,55 @@ class _MessageBubble extends StatelessWidget {
                 vertical: AppSpacing.md,
               ),
               decoration: BoxDecoration(
-                color: isUser ? cs.primary : cs.surfaceContainerLow,
+                color: cs.primary,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: isUser ? null : Border.all(color: cs.outlineVariant),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Semantics(
-                    key: !isUser && announce
-                        ? AllRoundE2EKeys.latestAssistantMessage
-                        : null,
-                    label: '${isUser ? '사용자 메시지' : 'AI 답변'}, $visibleContent',
-                    child: ExcludeSemantics(
-                      child: isUser
-                          ? SelectableText(
-                              visibleContent,
-                              style: tt.bodyMedium?.copyWith(
-                                color: cs.onPrimary,
-                                height: 1.5,
-                              ),
-                            )
-                          : MarkdownBody(
-                              data: visibleContent,
-                              selectable: true,
-                              styleSheet: MarkdownStyleSheet(
-                                p: tt.bodyMedium?.copyWith(
-                                  color: cs.onSurface,
-                                  height: 1.5,
-                                ),
-                                h2: tt.titleMedium?.copyWith(
-                                  color: cs.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                h3: tt.titleSmall?.copyWith(
-                                  color: cs.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                listBullet: tt.bodyMedium?.copyWith(
-                                  color: cs.onSurface,
-                                ),
-                                strong: tt.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                  // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
-                  // 카드 없는 응답(규칙·구장 등)에서만 출처를 표시.
-                  if (msg.citations.isNotEmpty &&
-                      !msg.uiBlocks.any(
-                        (b) =>
-                            b.tournamentItems.isNotEmpty ||
-                            b.clubItems.isNotEmpty,
-                      )) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Divider(
-                      color: cs.outlineVariant.withValues(alpha: 0.5),
-                      height: 1,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    for (final c in msg.citations.take(8))
-                      _CitationRow(citation: c),
-                  ],
-                  if (msg.uiBlocks.isNotEmpty)
-                    for (final block in msg.uiBlocks) ...[
-                      for (final item in block.tournamentItems)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: ChatTournamentCard(
-                            item: item,
-                            onAction: (message, entityId) =>
-                                onCardAction(message, 'tournament', entityId),
-                          ),
-                        ),
-                      for (final item in block.clubItems)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: ChatClubCard(
-                            item: item,
-                            onAction: (message, entityId) =>
-                                onCardAction(message, 'club', entityId),
-                          ),
-                        ),
-                      if (block.refineChip != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: ActionChip(
-                              avatar: const Icon(
-                                Icons.filter_alt_outlined,
-                                size: 18,
-                              ),
-                              label: Text(block.refineChip!.label),
-                              onPressed: () => onRefine(
-                                block.refineChip!.label,
-                                block.refineChip!.refine,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  if (onReport != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: onReport,
-                        icon: const Icon(Icons.flag_outlined, size: 16),
-                        label: const Text('AI 답변 신고'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              child: messageContent,
             ),
-          ),
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _BallboyMessageMark(),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: messageContent),
+            ],
+          );
+
+    return Semantics(
+      container: true,
+      liveRegion: announce,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        child: Align(
+          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+          child: messageWidget,
+        ),
+      ),
+    );
+  }
+}
+
+class _BallboyMessageMark extends StatelessWidget {
+  const _BallboyMessageMark();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: AppSpacing.xxxl,
+      height: AppSpacing.xxxl,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Text(
+        'BB',
+        style: tt.labelSmall?.copyWith(
+          color: cs.onPrimaryContainer,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );

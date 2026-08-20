@@ -80,6 +80,12 @@ void main() {
       await tester.tap(find.byKey(AllRoundE2EKeys.globalChatDock));
       await tester.pumpAndSettle();
 
+      await tester.drag(
+        find.byKey(const Key('ballboy-floating-header')),
+        const Offset(0, -360),
+      );
+      await tester.pumpAndSettle();
+
       expect(find.text('현재 대회 연결'), findsOneWidget);
       expect(
         tester.getSemantics(find.byKey(AllRoundE2EKeys.chatContextToggle)),

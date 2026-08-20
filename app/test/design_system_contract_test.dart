@@ -22,11 +22,10 @@ void main() {
   // 값은 login_screen.dart 의 _IntroCard 본문과 짝을 맞춰 유지할 것.
   test('로그인 히어로 색 조합이 WCAG AA(4.5:1) 를 만족한다', () {
     const bodyAlpha = 0.8; // 소개 카드 본문 텍스트
+    const photoLogoScrimAlpha = 0.6; // 사진 슬라이드 상단 로고 영역
+    const photoCopyScrimAlpha = 0.63; // 하단 정렬 카피가 놓이는 약 55% 지점
 
-    for (final entry in {
-      '라이트': appLightScheme,
-      '다크': appDarkScheme,
-    }.entries) {
+    for (final entry in {'라이트': appLightScheme, '다크': appDarkScheme}.entries) {
       final scheme = entry.value;
       final container = scheme.primaryContainer;
 
@@ -49,10 +48,27 @@ void main() {
 
       // 보조 문구(bodySmall/labelSmall). 작은 글씨라 완화 기준이 적용되지 않는다.
       expect(
-        _contrastRatio(scheme.onSurfaceVariant, scheme.surface),
+        _contrastRatio(bodyColor, container),
         greaterThanOrEqualTo(4.5),
         reason: '${entry.key}: 보조 문구 대비가 AA 기준에 미달합니다.',
       );
+
+      // 가장 밝은 흰 사진 위에서도 그라데이션의 로고·카피 지점은 AA 를
+      // 만족해야 한다. 사진이 가장 많이 보이는 중앙에는 필수 텍스트가 없다.
+      for (final region in {
+        '로고': photoLogoScrimAlpha,
+        '카피': photoCopyScrimAlpha,
+      }.entries) {
+        final photoBackground = Color.alphaBlend(
+          scheme.scrim.withValues(alpha: region.value),
+          Colors.white,
+        );
+        expect(
+          _contrastRatio(AppPalette.photoForeground, photoBackground),
+          greaterThanOrEqualTo(4.5),
+          reason: '${entry.key}: 사진 슬라이드 ${region.key} 대비가 AA 기준에 미달합니다.',
+        );
+      }
     }
   });
 
@@ -64,42 +80,45 @@ void main() {
     expect(AppSizes.bottomNavigation, 64);
   });
 
-  testWidgets('small screen and 130% text keep the bottom action region usable',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 568);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'small screen and 130% text keep the bottom action region usable',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: MediaQuery(
-            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
-            child: Scaffold(
-              body: const SizedBox.expand(),
-              bottomNavigationBar: AppBottomNav(
-                currentIndex: 0,
-                onChanged: (_) {},
-                onChatTap: () {},
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+              child: Scaffold(
+                body: const SizedBox.expand(),
+                bottomNavigationBar: AppBottomNav(
+                  currentIndex: 0,
+                  onChanged: (_) {},
+                  onChatTap: () {},
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(tester.takeException(), isNull);
-    expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
-    expect(find.text('대회'), findsOneWidget);
-    expect(find.text('MY'), findsOneWidget);
-    expect(find.text('클럽'), findsOneWidget);
-    expect(find.text('룰북'), findsNothing);
-    expect(find.text('볼보이'), findsOneWidget);
-  });
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(AllRoundE2EKeys.globalChatDock), findsOneWidget);
+      expect(find.text('대회'), findsOneWidget);
+      expect(find.text('MY'), findsOneWidget);
+      expect(find.text('클럽'), findsOneWidget);
+      expect(find.text('룰북'), findsNothing);
+      expect(find.text('볼보이'), findsOneWidget);
+    },
+  );
 
-  testWidgets('200% text keeps the bottom nav within its fixed region',
-      (tester) async {
+  testWidgets('200% text keeps the bottom nav within its fixed region', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
