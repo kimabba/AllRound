@@ -31,4 +31,22 @@ void main() {
     expect(list.scrollDirection, Axis.horizontal);
     expect(find.byType(Image), findsOneWidget);
   });
+
+  testWidgets('로컬 시드의 asset URL은 네트워크 요청 없이 표시한다', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ClubIntroPhotoStrip(
+            imageUrls: [
+              'asset://assets/images/clubs/tennis-court.png',
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

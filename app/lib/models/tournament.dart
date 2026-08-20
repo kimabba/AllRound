@@ -398,6 +398,7 @@ class Club {
   bool get isPending => status == 'pending';
   bool get isApproved => status == 'approved';
   bool get isRejected => status == 'rejected';
+  bool get isDeletedByOwner => statusReason == 'deleted_by_owner';
   bool get isMember => myRole != null;
   bool get isOwner => myRole == 'owner';
   bool get isManager => myRole == 'manager' || myRole == 'owner';

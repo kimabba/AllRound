@@ -18,10 +18,10 @@ import '../../theme/tokens.dart';
 import '../../utils/club_image_upload.dart';
 import '../../utils/club_labels.dart';
 import '../../utils/google_calendar.dart';
-import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/clubs/club_tiles.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 import 'club_dues_screen.dart';
 import 'club_inquiry_screen.dart';
@@ -786,8 +786,6 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final isTennis = club.sport == 'tennis';
-    final accent = AppSportColors.forSport(club.sport);
 
     return Container(
       width: double.infinity,
@@ -814,13 +812,6 @@ class _Header extends StatelessWidget {
                   spacing: AppSpacing.xs,
                   runSpacing: AppSpacing.xs,
                   children: [
-                    _MetaChip(
-                      icon: isTennis
-                          ? Icons.sports_tennis_rounded
-                          : Icons.sports_soccer_rounded,
-                      label: sportLabelFromString(club.sport),
-                      color: accent,
-                    ),
                     if (club.region != null && club.region!.isNotEmpty)
                       _MetaChip(
                         icon: Icons.place_outlined,
@@ -864,6 +855,11 @@ class _ClubLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final isTennis = club.sport == 'tennis';
     final accent = AppSportColors.forSport(club.sport);
+    final fallback = Icon(
+      isTennis ? Icons.sports_tennis_rounded : Icons.sports_soccer_rounded,
+      color: accent,
+      size: size * 0.42,
+    );
     return Container(
       width: size,
       height: size,
@@ -873,23 +869,11 @@ class _ClubLogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
       child: club.logoUrl == null || club.logoUrl!.isEmpty
-          ? Icon(
-              isTennis
-                  ? Icons.sports_tennis_rounded
-                  : Icons.sports_soccer_rounded,
-              color: accent,
-              size: size * 0.46,
-            )
-          : Image.network(
-              club.logoUrl!,
+          ? fallback
+          : ClubMediaImage(
+              source: club.logoUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                isTennis
-                    ? Icons.sports_tennis_rounded
-                    : Icons.sports_soccer_rounded,
-                color: accent,
-                size: size * 0.42,
-              ),
+              fallback: fallback,
             ),
     );
   }
@@ -898,25 +882,22 @@ class _ClubLogo extends StatelessWidget {
 class _MetaChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color? color;
   const _MetaChip({
     required this.icon,
     required this.label,
-    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final fg = color ?? cs.onSurfaceVariant;
+    final fg = cs.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: (color ?? cs.primary)
-            .withValues(alpha: color == null ? 0.08 : 0.14),
+        color: cs.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(

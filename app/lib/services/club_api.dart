@@ -68,6 +68,9 @@ mixin ClubApi on ApiBase {
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return (body['clubs'] as List)
         .map((e) => Club.fromJson(e as Map<String, dynamic>))
+        // 구버전 Edge Function이 생성자 조건으로 소프트 삭제된 클럽까지
+        // 반환하더라도 앱의 모든 "내 클럽" 화면에서 다시 노출하지 않는다.
+        .where((club) => !club.isDeletedByOwner)
         .toList();
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/tokens.dart';
+import '../../../widgets/clubs/club_tiles.dart';
 
 /// 클럽 소개 사진을 가로 목록으로 표시한다.
 ///
@@ -37,10 +38,10 @@ class ClubIntroPhotoStrip extends StatelessWidget {
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Image.network(
-              urls[index],
+            child: ClubMediaImage(
+              source: urls[index],
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
+              fallback: Icon(
                 Icons.image_not_supported_outlined,
                 color: colorScheme.onSurfaceVariant,
               ),

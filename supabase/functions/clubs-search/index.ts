@@ -1,6 +1,7 @@
 import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
+import { visibleMyClubRows } from './mine.ts';
 import { boundingBox, distanceKm, numberParam } from './nearby.ts';
 
 /**
@@ -83,7 +84,7 @@ Deno.serve(withCors(async (req) => {
     if (error) return errorResponse(error.message, 500);
 
     // 3) club_members 필드를 직접 주입
-    const clubs = (data ?? []).map((c: Record<string, unknown>) => {
+    const clubs = visibleMyClubRows(data ?? []).map((c: Record<string, unknown>) => {
       const mem = memberMap.get(c['id'] as string);
       return {
         ...c,
