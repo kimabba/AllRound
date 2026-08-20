@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:allround/models/rule_quiz.dart';
 import 'package:allround/models/tournament.dart';
 import 'package:allround/screens/admin/no_access_screen.dart';
 import 'package:allround/screens/home_screen.dart';
@@ -15,6 +16,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 void main() {
+  test('다가오는 대회는 풋살과 테니스 모두 3개만 표시한다', () {
+    expect(homeTournamentDisplayLimit, 3);
+  });
+
   setUpAll(() async {
     await initializeDateFormatting('ko');
   });
@@ -74,9 +79,8 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.textContaining('올라운드 '), findsOneWidget);
-    // 지역·검색은 목록 바로 위로 내려갔다. 목록이 아직 없는 로딩 중에는
-    // 조작할 대상도 없으므로 함께 나오지 않는다.
-    expect(find.text('대회명 또는 지역을 검색해보세요'), findsNothing);
+    // 지역·검색은 대회 목록의 로딩 여부와 관계없이 항상 사용할 수 있다.
+    expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -363,6 +367,8 @@ void main() {
     expect(find.text(title), findsNWidgets(2));
     expect(find.text('접수 마감 임박'), findsOneWidget);
     expect(find.text('다가오는 대회'), findsOneWidget);
+    // 지역 선택 버튼의 '전국'만 남고 섹션 제목 옆에는 반복하지 않는다.
+    expect(find.text('전국'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -426,6 +432,46 @@ void main() {
     expect(find.text('검색 열림=1'), findsOneWidget);
   });
 
+  testWidgets('퀴즈는 배너를 누른 뒤 보기 선택과 정답 확인으로 푼다', (tester) async {
+    await pumpHome(
+      tester,
+      load: () async => const [],
+      activeSport: 'tennis',
+    );
+    await tester.pumpAndSettle();
+
+    final scrollView = find.byType(CustomScrollView);
+    final quizLabel = find.text('오늘의 핵심 퀴즈');
+    for (var attempt = 0;
+        attempt < 8 && quizLabel.evaluate().isEmpty;
+        attempt++) {
+      await tester.drag(scrollView, const Offset(0, -300));
+      await tester.pump(const Duration(milliseconds: 150));
+    }
+    expect(quizLabel, findsOneWidget);
+    await tester.ensureVisible(quizLabel);
+    await tester.pumpAndSettle();
+
+    expect(find.text('자세히 보기'), findsNothing);
+    final quiz = dailyRuleQuiz('tennis');
+    expect(find.text(quiz.explanation), findsNothing);
+
+    await tester.tap(quizLabel);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('오늘의 룰 퀴즈'), findsOneWidget);
+    expect(find.text(quiz.question), findsWidgets);
+    expect(find.text('정답 확인'), findsOneWidget);
+
+    await tester.tap(find.text(quiz.options[quiz.correctIndex]));
+    await tester.pump();
+    await tester.tap(find.text('정답 확인'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(quiz.explanation), findsOneWidget);
+  });
+
   group('홈 히어로 카드', () {
     final deadline = DateTime.now().add(const Duration(days: 6));
     final deadlineLine = '~${DateFormat('M월 d일').format(deadline)} 마감';
@@ -466,7 +512,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(Image), findsWidgets);
+      final posterImages = tester.widgetList<Image>(find.byType(Image));
+      expect(posterImages, isNotEmpty);
+      expect(
+        posterImages.every((image) => image.fit == BoxFit.cover),
+        isTrue,
+      );
       expect(find.text(deadlineLine), findsNothing);
       expect(tester.takeException(), isNull);
     });
