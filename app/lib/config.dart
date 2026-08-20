@@ -38,8 +38,9 @@ class AppConfig {
 
   /// Frontend-only preview switch for user-facing app UI work.
   ///
-  /// This lets designers open mobile app routes on web without a signed-in
-  /// session. It must only be enabled from local `flutter run` commands.
+  /// This lets designers open user app routes on web or a connected device
+  /// without a signed-in session. It must only be enabled from local
+  /// `flutter run` commands.
   static const userDesignPreview = bool.fromEnvironment(
     'USER_DESIGN_PREVIEW',
     defaultValue: false,

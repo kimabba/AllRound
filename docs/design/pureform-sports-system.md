@@ -106,9 +106,10 @@
 
 ## 8. 디자인 프리뷰
 
-`USER_DESIGN_PREVIEW=true`인 웹 실행은 운영 인증·권한을 대신하지 않는 로컬 UI 점검 전용이다.
+`USER_DESIGN_PREVIEW=true`인 웹·실제 기기 실행은 운영 인증·권한을 대신하지 않는 로컬 UI 점검 전용이다.
 
 - 데스크톱 브라우저에서도 앱 본문을 최대 390px 폭으로 고정해 모바일 레이아웃을 확인한다.
+- 실제 기기는 `make device-preview DEVICE_ID=<flutter devices의 id>`로 실행하며, 웹과 동일한 내장 프리뷰 데이터를 사용한다.
 - `/login`, `/onboarding`, `/notifications`, `/favorites`, `/blocked-users`, `/rules`, `/speed-gun` 등 원하는 사용자 경로를 주소에서 바로 열 수 있다.
 - 홈·대회·클럽·룰북·알림·관심·차단 화면은 프리뷰 데이터를 사용해 백엔드 장애와 무관하게 상태별 디자인을 확인한다.
 - 릴리스 빌드에서는 기존 `AppConfig.assertConfigured()` 가 프리뷰 플래그 유입을 차단한다.
