@@ -22,7 +22,7 @@ CHROME_BIN ?= $(shell for p in \
     [ -n "$$p" ] && [ -x "$$p" ] && printf '%s' "$$p" && break; \
   done)
 
-.PHONY: setup backend app admin web check reset release-android release-ios
+.PHONY: setup backend app device-local-db admin web check reset release-android release-ios
 
 # ────────────────────────────────────────────────────
 # iOS/macOS 의존성 = Swift Package Manager (CocoaPods 사용 안 함)
@@ -74,6 +74,14 @@ backend:
 app:
 	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다. app/.env.local.example 을 복사해서 anon key 를 채우세요." && exit 1)
 	cd app && flutter run -d $(DEVICE_ID) --dart-define-from-file=.env.local
+
+# 실제 iOS/Android 기기에서 로컬 Supabase에 연결해 정상 인증·DB 기능을 확인한다.
+# .env.local은 127.0.0.1이 아니라 Mac의 현재 LAN 주소를 가리켜야 한다.
+device-local-db:
+	@test -f app/.env.local || (echo "app/.env.local 파일이 없습니다." && exit 1)
+	@test "$(DEVICE_ID)" != "macos" || (echo "DEVICE_ID에 실제 휴대폰 ID를 지정하세요: make device-local-db DEVICE_ID=<id>" && exit 1)
+	@grep -Eq '"SUPABASE_URL"[[:space:]]*:[[:space:]]*"http://(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)' app/.env.local || (echo ".env.local의 SUPABASE_URL을 Mac LAN 주소로 바꾸세요. 127.0.0.1은 휴대폰에서 Mac을 가리키지 않습니다." && exit 1)
+	cd app && flutter run --profile -d $(DEVICE_ID) --dart-define-from-file=.env.local
 
 # 터미널 3: 웹빌드 — 로컬 전용 (빌드 후 로컬 서버, 배포 안 함 · JY-81)
 web:
