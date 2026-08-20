@@ -23,6 +23,7 @@ export interface CrawlerTournament {
   regulation_fields?: Array<{ label: string; value: string }>;
   regulation_notes?: string[];
   regulation_body?: string;
+  poster_url?: string; // 원문에 포스터/요강 이미지가 있으면 채운다(OCR 안 함, URL만)
   source_url: string;
 }
 
@@ -211,6 +212,7 @@ export async function upsertTournament(
     // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
     if (t.prize !== undefined) updatePayload.prize = t.prize;
     if (t.format !== undefined) updatePayload.format = t.format;
+    if (t.poster_url !== undefined) updatePayload.poster_url = t.poster_url;
     // 소스가 명시한 권역은 항상 반영하고, 텍스트에서 유도한 추측은 빈 칸만 채운다.
     // 추측으로 덮으면 (1) 유도 실패 시 기존 지역이 지워지고 (2) 유도가 틀렸을 때
     // 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌린다 — 고칠 방법이 없어진다.
@@ -279,6 +281,7 @@ export async function upsertTournament(
       regulation_fields: t.regulation_fields ?? null,
       regulation_notes: t.regulation_notes ?? null,
       regulation_body: t.regulation_body ?? null,
+      poster_url: t.poster_url ?? null,
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',

@@ -178,7 +178,7 @@ Apple 업데이트 절차·권한·버전 이력은 [`docs/team/apple-release-ru
 - 개인정보처리방침 URL 필수
 
 ### Google Play (Android)
-- Application ID: `kr.allround.app`
+- Application ID: `kr.allround.android` (`kr.allround.app`은 외부에 선점당해 변경. 딥링크 스킴은 여전히 `kr.allround.app`)
 - 카테고리: 스포츠
 - 콘텐츠 등급: 전체이용가
 - 개인정보처리방침 URL 필수

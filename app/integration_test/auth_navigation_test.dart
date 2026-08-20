@@ -139,6 +139,8 @@ Future<String> _signUp(WidgetTester tester) async {
   await _tap(tester, find.byKey(AllRoundE2EKeys.signupBirthDate));
   await _waitFor(tester, find.byType(DatePickerDialog));
   await _tap(tester, find.text('확인'));
+  // 필수 동의를 체크해야 가입 버튼이 살아난다.
+  await _tap(tester, find.byKey(AllRoundE2EKeys.signupTermsConsent));
   await _captureDesignScreenshot(tester, '18-signup-age');
   await _tap(tester, find.byKey(AllRoundE2EKeys.authSubmitButton));
   return email;
