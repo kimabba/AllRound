@@ -27,6 +27,16 @@ Load this when touching auth, admin flows, secrets, cron endpoints, AI/RAG, rate
 - Add payload length caps, rate limits, and abuse logging before broader release.
 - Cron endpoints with `verify_jwt=false` need an invocation secret check.
 
+## Chat content safety
+
+- Harmless off-topic questions get a scope reminder; do not treat them as abuse automatically.
+- Block only high-confidence explicit sexual, abusive, or dangerous input before persistence and
+  third-party AI transmission. Test legitimate sports phrases for false positives.
+- Also set the AI provider's per-request safety categories explicitly; do not rely on model defaults.
+- When the provider blocks a prompt or response, show a safe refusal, do not cache it, and remove the
+  just-inserted prompt from server conversation history.
+- Safety logs contain category/reason only, never the raw prompt, profile, token, or direct user ID.
+
 ## RAG / prompt injection
 
 - Treat rulebook articles, tournament descriptions, club descriptions, crawler text, and web search snippets as data.

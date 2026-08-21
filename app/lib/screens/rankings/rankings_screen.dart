@@ -9,8 +9,8 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/rankings/player_detail_sheet.dart';
 import '../../widgets/tournament_section_bar.dart';
+import 'player_history_sheet.dart';
 
 // ── 순위표 ────────────────────────────────────────────────────────────────
 
@@ -143,6 +143,7 @@ class RankingList extends StatelessWidget {
     this.disputableOrgPlayerIds = const {},
     this.onClaim,
     this.onDispute,
+    this.onPlayerTap,
   });
 
   final List<OrgRankingRow> rows;
@@ -151,6 +152,7 @@ class RankingList extends StatelessWidget {
   final Set<String> disputableOrgPlayerIds;
   final void Function(OrgRankingRow row)? onClaim;
   final void Function(OrgRankingRow row)? onDispute;
+  final void Function(OrgRankingRow row)? onPlayerTap;
 
   @override
   Widget build(BuildContext context) {
@@ -162,6 +164,9 @@ class RankingList extends StatelessWidget {
             row: rows[i],
             isMine: rows[i].orgPlayerId != null &&
                 rows[i].orgPlayerId == linkedOrgPlayerId,
+            onTap: rows[i].orgPlayerId == null || onPlayerTap == null
+                ? null
+                : () => onPlayerTap!(rows[i]),
             onClaim: onClaim != null &&
                     rows[i].orgPlayerId != null &&
                     claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
@@ -186,12 +191,14 @@ class _RankingRow extends StatelessWidget {
     required this.isMine,
     this.onClaim,
     this.onDispute,
+    this.onTap,
   });
 
   final OrgRankingRow row;
   final bool isMine;
   final VoidCallback? onClaim;
   final VoidCallback? onDispute;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +206,7 @@ class _RankingRow extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return InkWell(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
-      onTap: () => openPlayerDetailSheet(context, row),
+      onTap: onTap,
       child: Container(
         color: isMine ? cs.primaryContainer : null,
         padding: const EdgeInsets.symmetric(
@@ -265,6 +272,36 @@ class _RankingRow extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RankingTableHeader extends StatelessWidget {
+  const _RankingTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 36, child: Text('순위', style: style)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('선수 · 소속', style: style)),
+          Text('누적 포인트', style: style),
+          const SizedBox(width: 24),
+        ],
       ),
     );
   }
@@ -710,6 +747,23 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     );
   }
 
+  /// 랭킹표 행을 탭했을 때 — 연결 승인 여부와 무관하게 그 선수의 전적을 보여준다.
+  /// 협회 원본 조회·캐시는 Edge Function(ranking-player-history)이 맡는다.
+  Future<void> _openPlayerHistory(OrgRankingRow player) {
+    return showPlayerHistorySheet(
+      context,
+      player: player,
+      load: () => ref.read(apiProvider).playerHistory(player),
+      loadSnapshots: player.orgPlayerId == null
+          ? null
+          : () => ref.read(apiProvider).playerRankingHistory(
+                orgCode: player.orgCode,
+                divisionCode: player.divisionCode,
+                orgPlayerId: player.orgPlayerId!,
+              ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final orgCodes = kRankingDivisions.keys.toList();
@@ -888,13 +942,19 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     else
                       AppCard(
                         variant: AppCardVariant.outlined,
-                        child: RankingList(
-                          rows: visibleRows,
-                          linkedOrgPlayerId: data.linkedOrgPlayerId,
-                          claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                          disputableOrgPlayerIds: data.disputableOrgPlayerIds,
-                          onClaim: _claim,
-                          onDispute: _dispute,
+                        child: Column(
+                          children: [
+                            const _RankingTableHeader(),
+                            RankingList(
+                              rows: visibleRows,
+                              linkedOrgPlayerId: data.linkedOrgPlayerId,
+                              claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                              disputableOrgPlayerIds: data.disputableOrgPlayerIds,
+                              onClaim: _claim,
+                              onDispute: _dispute,
+                              onPlayerTap: _openPlayerHistory,
+                            ),
+                          ],
                         ),
                       ),
                   ],

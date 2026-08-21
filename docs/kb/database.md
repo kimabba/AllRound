@@ -110,6 +110,19 @@ DB-driven 크롤러 소스 정의
 | enabled | bool | |
 | last_crawled_at, last_status, last_error | | 최근 실행 상태 |
 
+### 협회 랭킹과 선수 이력
+
+| 테이블 | 설명 |
+|---|---|
+| `org_rankings` | 협회·부서별 현재 순위, 선수명, 소속, 포인트 |
+| `org_ranking_snapshots` | 본인 연결 선수의 랭킹 변동 기록 |
+| `org_player_results` | 협회가 공표한 선수별 대회명·일자·종목·성적·포인트 |
+| `org_player_history_fetches` | 선수 상세 온디맨드 수집 시각·건수·완전 수집 여부 |
+
+`ranking-player-history` Edge Function은 로그인 사용자에게 현재 랭킹에 있는 선수만
+허용하고, 첫 상세 조회 때 원본을 가져온 뒤 24시간 동안 캐시를 재사용한다. 선수별
+이력의 기존 본인 전용 RLS는 넓히지 않으며 Edge Function이 응답 범위를 통제한다.
+
 ### 기타 테이블
 - `chat_messages` — 대화 이력
 - `chat_rate_limit` — 챗봇 요청 제한
@@ -133,6 +146,8 @@ DB-driven 크롤러 소스 정의
 - club_members: 본인 + 같은 클럽 멤버만 조회
 - club_join_requests: 본인 + 해당 클럽 owner/manager만 조회
 - crawl_sources: admin only
+- org_player_results: 본인 연결 선수 + admin만 직접 조회
+- org_player_history_fetches: service role만 실제 행 조회·수정
 
 ## 마이그레이션 이력 (최근)
 - 029: division_codes_reset_eligible_grades

@@ -7,6 +7,8 @@ import { streamChat } from '../_shared/gemini.ts';
 import { buildTournamentCards, type TournamentCardRow } from '../_shared/chat_cards.ts';
 import type { Sport } from '../_shared/enums.ts';
 import { normalizeRegulationFields } from '../_shared/regulation.ts';
+import { selectGroundedRules } from './context.ts';
+import { GEMINI_SAFETY_REFUSAL } from './safety.ts';
 import type { DbCitation, SemanticRule, SemanticTournament, VenueRow } from './types.ts';
 
 /** Build DB citations from RAG results. */
@@ -21,7 +23,7 @@ export function buildDbCitations(
     id: t.id,
     title: t.title,
   }));
-  const ruleCitations: DbCitation[] = rules.slice(0, 3).map((r) => ({
+  const ruleCitations: DbCitation[] = selectGroundedRules(rules).map((r) => ({
     type: 'db' as const,
     source: 'rules',
     id: r.id,
@@ -34,6 +36,25 @@ export function buildDbCitations(
     title: v.name,
   }));
   return [...dbCitations, ...ruleCitations, ...venueCitations];
+}
+
+/**
+ * 응답 의도에 맞는 DB 인용을 고른다.
+ *
+ * rule_lookup 은 검색 결과 중 관련성이 확인된 룰북만 내려 무관한 대회·구장 출처가
+ * 섞이지 않게 한다. index.ts 는 이 순수 헬퍼를 호출해 citation SSE와 저장값에 같은
+ * 배열을 사용하면 된다.
+ */
+export function buildResponseDbCitations(
+  intent: string,
+  tournaments: SemanticTournament[],
+  rules: SemanticRule[],
+  venues: VenueRow[],
+): DbCitation[] {
+  if (intent === 'rule_lookup') {
+    return buildDbCitations([], rules, []);
+  }
+  return buildDbCitations(tournaments, rules, venues);
 }
 
 /** Build tournament card UI blocks from SemanticTournament[]. */
@@ -78,6 +99,8 @@ export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): un
 export interface StreamLlmResult {
   assistantText: string;
   errored: boolean;
+  blocked: boolean;
+  blockReason?: string;
   usage?: GeminiUsage;
 }
 
@@ -92,6 +115,8 @@ export async function streamLlmResponse(
 ): Promise<StreamLlmResult> {
   let assistantText = '';
   let llmErrored = false;
+  let blocked = false;
+  let blockReason: string | undefined;
   let usage: GeminiUsage | undefined;
 
   for await (
@@ -99,16 +124,21 @@ export async function streamLlmResponse(
       systemInstruction: systemPrompt,
     })
   ) {
-    if (evt.type === 'text' && evt.text) {
+    if (evt.type === 'text' && evt.text && !blocked) {
       assistantText += evt.text;
       send('delta', { text: evt.text });
     } else if (evt.type === 'error') {
       llmErrored = true;
       send('error', { message: evt.error });
+    } else if (evt.type === 'blocked') {
+      blocked = true;
+      blockReason = evt.blockReason;
+      assistantText = GEMINI_SAFETY_REFUSAL;
+      send('delta', { text: GEMINI_SAFETY_REFUSAL });
     } else if (evt.type === 'done' && evt.usage) {
       usage = evt.usage;
     }
   }
 
-  return { assistantText, errored: llmErrored, usage };
+  return { assistantText, errored: llmErrored, blocked, blockReason, usage };
 }
