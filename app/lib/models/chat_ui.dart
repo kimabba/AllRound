@@ -119,6 +119,7 @@ class ClubChatCardItem {
   final String? description;
   final int memberCount;
   final int? monthlyFee;
+  final String feeType;
   final List<String> meetingDays;
   final String? genderPreference;
 
@@ -130,6 +131,7 @@ class ClubChatCardItem {
     this.description,
     required this.memberCount,
     this.monthlyFee,
+    this.feeType = 'monthly',
     this.meetingDays = const [],
     this.genderPreference,
   });
@@ -148,9 +150,9 @@ class ClubChatCardItem {
       description: j['description'] as String?,
       memberCount: (j['member_count'] as int?) ?? 0,
       monthlyFee: j['monthly_fee'] as int?,
-      meetingDays:
-          (j['meeting_days'] as List?)?.whereType<String>().toList() ??
-              const [],
+      feeType: j['fee_type'] == 'per_event' ? 'per_event' : 'monthly',
+      meetingDays: (j['meeting_days'] as List?)?.whereType<String>().toList() ??
+          const [],
       genderPreference: j['gender_preference'] as String?,
     );
   }

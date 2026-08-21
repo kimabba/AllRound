@@ -2,6 +2,7 @@ import 'package:allround/models/club_recruiting.dart';
 import 'package:allround/models/tournament.dart';
 import 'package:allround/screens/clubs/club_browse_screen.dart';
 import 'package:allround/theme/app_theme.dart';
+import 'package:allround/widgets/clubs/club_filter_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -83,9 +84,11 @@ void main() {
           recruitingPosts: posts,
           recruitingCapped: true,
           initialSports: const {'tennis', 'futsal'},
+          initialFilters: const ClubSearchFilters(),
           favoriteClubIds: const {},
           managedClubIds: const {},
           openRecruitingClubIds: {clubs.first.id},
+          onSearchClubs: ({required sports, region}) async => clubs,
           onOpenClub: (_) {},
           onFavoriteToggle: (_, __) async {},
           onOpenPost: (_) {},
@@ -161,9 +164,11 @@ void main() {
           recruitingPosts: posts,
           recruitingCapped: false,
           initialSports: const {'tennis'},
+          initialFilters: const ClubSearchFilters(),
           favoriteClubIds: const {},
           managedClubIds: const {},
           openRecruitingClubIds: {clubs.first.id},
+          onSearchClubs: ({required sports, region}) async => clubs,
           onOpenClub: (_) {},
           onFavoriteToggle: (_, __) async {},
           onOpenPost: (_) {},
@@ -179,6 +184,52 @@ void main() {
     expect(find.text('종목'), findsOneWidget);
     expect(find.text('지역'), findsOneWidget);
     expect(find.text('모집 상태'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('전체보기에서 지역을 고르면 서버 결과를 다시 받는다', (tester) async {
+    final remoteClub = Club(
+      id: 'club-busan',
+      sport: 'tennis',
+      name: '부산 오션 라켓',
+      region: '부산 해운대구',
+      memberCount: 30,
+    );
+    String? requestedRegion;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: ClubBrowseScreen(
+          clubs: clubs,
+          recruitingPosts: posts,
+          recruitingCapped: false,
+          initialSports: const {'tennis'},
+          initialFilters: const ClubSearchFilters(),
+          favoriteClubIds: const {},
+          managedClubIds: const {},
+          openRecruitingClubIds: const {},
+          onSearchClubs: ({required sports, region}) async {
+            requestedRegion = region;
+            return [remoteClub];
+          },
+          onOpenClub: (_) {},
+          onFavoriteToggle: (_, __) async {},
+          onOpenPost: (_) {},
+          onClosePost: (_) async => posts,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('지역·종목·조건 필터'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, '부산'));
+    await tester.tap(find.widgetWithText(FilledButton, '검색'));
+    await tester.pumpAndSettle();
+
+    expect(requestedRegion, '부산');
+    expect(find.text('부산 오션 라켓'), findsOneWidget);
+    expect(find.text('강남 테니스클럽'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

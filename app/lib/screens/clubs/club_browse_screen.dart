@@ -11,6 +11,9 @@ import '../../widgets/clubs/club_filter_widgets.dart';
 import '../../widgets/clubs/club_tiles.dart';
 import '../../widgets/clubs/team_recruiting_widgets.dart';
 
+typedef ClubBrowseSearch =
+    Future<List<Club>> Function({required Set<String> sports, String? region});
+
 class ClubBrowseScreen extends StatefulWidget {
   const ClubBrowseScreen({
     super.key,
@@ -18,9 +21,11 @@ class ClubBrowseScreen extends StatefulWidget {
     required this.recruitingPosts,
     required this.recruitingCapped,
     required this.initialSports,
+    required this.initialFilters,
     required this.favoriteClubIds,
     required this.managedClubIds,
     required this.openRecruitingClubIds,
+    required this.onSearchClubs,
     required this.onOpenClub,
     required this.onFavoriteToggle,
     required this.onOpenPost,
@@ -31,9 +36,11 @@ class ClubBrowseScreen extends StatefulWidget {
   final List<RecruitingPostPreview> recruitingPosts;
   final bool recruitingCapped;
   final Set<String> initialSports;
+  final ClubSearchFilters initialFilters;
   final Set<String> favoriteClubIds;
   final Set<String> managedClubIds;
   final Set<String> openRecruitingClubIds;
+  final ClubBrowseSearch onSearchClubs;
   final ValueChanged<Club> onOpenClub;
   final ClubFavoriteToggle onFavoriteToggle;
   final ValueChanged<RecruitingPostPreview> onOpenPost;
@@ -48,9 +55,12 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
   late final TextEditingController _searchController = TextEditingController();
   late Set<String> _sports = {...widget.initialSports};
   late final Set<String> _favoriteClubIds = {...widget.favoriteClubIds};
+  late List<Club> _clubs = widget.clubs;
   late List<RecruitingPostPreview> _recruitingPosts = widget.recruitingPosts;
-  ClubSearchFilters _filters = const ClubSearchFilters();
+  late ClubSearchFilters _filters = widget.initialFilters;
   String _query = '';
+  bool _loadingClubs = false;
+  int _clubSearchVersion = 0;
 
   @override
   void dispose() {
@@ -82,9 +92,10 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
       _query = result.nameQuery;
       _searchController.text = result.nameQuery;
     });
+    await _reloadClubs();
   }
 
-  void _clearFilters() {
+  Future<void> _clearFilters() async {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _filters = const ClubSearchFilters();
@@ -92,6 +103,32 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
       _query = '';
       _searchController.clear();
     });
+    await _reloadClubs();
+  }
+
+  Future<void> _reloadClubs() async {
+    final searchVersion = ++_clubSearchVersion;
+    setState(() => _loadingClubs = true);
+    try {
+      final clubs = await widget.onSearchClubs(
+        sports: {..._sports},
+        region: _filters.region,
+      );
+      if (!mounted || searchVersion != _clubSearchVersion) return;
+      setState(() => _clubs = clubs);
+    } catch (_) {
+      if (!mounted || searchVersion != _clubSearchVersion) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('클럽 검색 결과를 불러오지 못했습니다.'),
+          action: SnackBarAction(label: '다시 시도', onPressed: _reloadClubs),
+        ),
+      );
+    } finally {
+      if (mounted && searchVersion == _clubSearchVersion) {
+        setState(() => _loadingClubs = false);
+      }
+    }
   }
 
   bool _matchesQuery(Iterable<String?> values) {
@@ -199,8 +236,8 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final clubsById = {for (final club in widget.clubs) club.id: club};
-    final clubs = widget.clubs.where(_matchesClub).toList()
+    final clubsById = {for (final club in _clubs) club.id: club};
+    final clubs = _clubs.where(_matchesClub).toList()
       ..sort((a, b) => b.memberCount.compareTo(a.memberCount));
     final posts = _recruitingPosts
         .where((post) => _matchesRecruitingPost(post, clubsById))
@@ -273,6 +310,10 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
                         ),
                       ],
                     ),
+                  ],
+                  if (_loadingClubs) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    const LinearProgressIndicator(),
                   ],
                 ],
               ),
