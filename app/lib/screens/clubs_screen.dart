@@ -622,9 +622,11 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
           recruitingPosts: posts,
           recruitingCapped: _recruitingCapped,
           initialSports: _clubInterests,
+          initialFilters: _clubFilters,
           favoriteClubIds: favoriteClubIds,
           managedClubIds: managedClubIds,
           openRecruitingClubIds: _openRecruitingClubIds,
+          onSearchClubs: _searchBrowseClubs,
           onOpenClub: _openClub,
           onFavoriteToggle: _toggleClubFavorite,
           onOpenPost: _openRecruitingDetail,
@@ -632,6 +634,31 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         ),
       ),
     );
+  }
+
+  Future<List<Club>> _searchBrowseClubs({
+    required Set<String> sports,
+    String? region,
+  }) async {
+    final requestedSports = sports.isEmpty
+        ? const <String>['tennis', 'futsal']
+        : sports.toList(growable: false);
+    if (AppConfig.userDesignPreview) {
+      return _previewClubs
+          .where((club) => requestedSports.contains(club.sport))
+          .where(
+            (club) => region == null || clubRegionMatches(club.region, region),
+          )
+          .toList(growable: false);
+    }
+
+    final api = ref.read(apiProvider);
+    final results = await Future.wait(
+      requestedSports.map(
+        (sport) => api.searchClubs(sport: sport, region: region),
+      ),
+    );
+    return _dedupeClubs(results.expand((clubs) => clubs));
   }
 
   /// 마감 후 갱신된 목록을 돌려준다. 전체보기 화면은 스냅샷을 들고 있어서
