@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../state/providers.dart';
 import '../services/local_user_preferences.dart';
@@ -14,6 +13,7 @@ import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
+import '../utils/customer_support.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_quick_actions.dart';
 import '../widgets/profile/profile_records_widgets.dart';
@@ -25,7 +25,6 @@ const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
 const _notifyClubPrefsKey = 'notify.club_updates';
 const _notifyCoachPrefsKey = 'notify.coachbot_replies';
 const _notifySoundPrefsKey = 'notify.sound';
-const _customerSupportEmail = 'play@jyoungad.kr';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -70,18 +69,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _openCustomerSupport() async {
-    final opened = await launchUrl(
-      Uri(
-        scheme: 'mailto',
-        path: _customerSupportEmail,
-        queryParameters: const {'subject': '올라운드 고객센터 문의'},
-      ),
+    final result = await openCustomerSupportEmail();
+    if (!mounted || result == CustomerSupportOpenResult.opened) return;
+
+    final message = switch (result) {
+      CustomerSupportOpenResult.addressCopied =>
+        '메일 앱이 없어 문의 주소를 복사했습니다: $customerSupportEmail',
+      CustomerSupportOpenResult.unavailable =>
+        '메일 앱을 열지 못했습니다. 문의 주소: $customerSupportEmail',
+      CustomerSupportOpenResult.opened => '',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메일 앱을 열지 못했습니다. 잠시 후 다시 시도해 주세요.')),
-      );
-    }
   }
 
   Future<void> _pickProfilePhoto(ImageSource source) async {
