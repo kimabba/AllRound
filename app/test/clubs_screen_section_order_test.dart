@@ -48,6 +48,27 @@ void main() {
     );
   });
 
+  test('삭제된 정렬 UI의 예전 저장값을 더 이상 적용하지 않는다', () {
+    final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
+
+    expect(source, isNot(contains('loadClubSortOrder')));
+    expect(source, isNot(contains('sortClubs(')));
+    expect(
+      source,
+      contains('final recommendedClubs = _recommendedClubs(visibleClubs);'),
+    );
+  });
+
+  test('주변 클럽 빈 화면은 삭제된 반경·지역 선택 기능을 안내하지 않는다', () {
+    final screen = File('lib/screens/clubs_screen.dart').readAsStringSync();
+    final tiles = File('lib/widgets/clubs/club_tiles.dart').readAsStringSync();
+
+    expect(screen, isNot(contains('반경을 넓히거나 지역을 직접 선택')));
+    expect(tiles, isNot(contains('반경을 넓히거나 지역을 직접 선택')));
+    expect(screen, contains('현재 위치 주변에 등록된 클럽이 없습니다.'));
+    expect(tiles, contains('현재 위치 주변에 등록된 클럽이 없습니다.'));
+  });
+
   test('클럽 검색은 스크롤과 버튼으로 키보드를 닫는다', () {
     final source = File('lib/screens/clubs_screen.dart').readAsStringSync();
 

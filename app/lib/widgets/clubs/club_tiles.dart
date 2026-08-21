@@ -115,7 +115,7 @@ class NearbyNewClubsSheet extends StatelessWidget {
                     child: AppEmptyState(
                       icon: Icons.groups_2_rounded,
                       title: '주변 클럽이 없습니다',
-                      description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+                      description: '현재 위치 주변에 등록된 클럽이 없습니다.',
                     ),
                   ),
                 )
