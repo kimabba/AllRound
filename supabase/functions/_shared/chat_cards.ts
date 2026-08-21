@@ -217,6 +217,7 @@ export interface ClubCardRow {
   description: string | null;
   member_count: number;
   monthly_fee: number | null;
+  fee_type: 'monthly' | 'per_event' | null;
   meeting_days: string[];
   gender_preference: string | null;
 }
@@ -230,6 +231,7 @@ export interface ClubCardItem {
   description: string | null;
   member_count: number;
   monthly_fee: number | null;
+  fee_type: 'monthly' | 'per_event';
   meeting_days: string[];
   gender_preference: string | null;
 }
@@ -243,6 +245,7 @@ export function buildClubCards(rows: ClubCardRow[]): ClubCardItem[] {
     description: r.description,
     member_count: r.member_count ?? 0,
     monthly_fee: r.monthly_fee,
+    fee_type: r.fee_type === 'per_event' ? 'per_event' : 'monthly',
     meeting_days: r.meeting_days ?? [],
     gender_preference: r.gender_preference,
   }));
@@ -300,7 +303,8 @@ export function renderClubDetailText(club: ClubDetailRow): string {
   const days = club.meeting_days ?? [];
   if (days.length > 0) lines.push(`- 정기 모임: ${days.join(', ')}`);
   if (club.monthly_fee !== null && club.monthly_fee !== undefined) {
-    lines.push(`- 월 회비: ${club.monthly_fee.toLocaleString('ko-KR')}원`);
+    const feeLabel = club.fee_type === 'per_event' ? '1회 참가비' : '월 회비';
+    lines.push(`- ${feeLabel}: ${club.monthly_fee.toLocaleString('ko-KR')}원`);
   }
   lines.push(`- 멤버: ${club.member_count ?? 0}명`);
   if (club.gender_preference) {

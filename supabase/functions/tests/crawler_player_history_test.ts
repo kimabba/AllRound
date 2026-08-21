@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from 'std/assert/mod.ts';
 import {
   crawlPlayerHistories,
+  dedupeHistoryRows,
   looksLikeHistoryPage,
   normalizeResultRound,
   parsePlayerHistoryRows,
@@ -285,5 +286,55 @@ Deno.test('upsert RPC 가 예외를 던져도 크롤 전체가 죽지 않는다'
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
     assertEquals(failures.length, 1);
     assertStringIncludes(failures[0], 'upsert 예외');
+  });
+});
+
+// ── dedupeHistoryRows — 단체전 중복 행이 upsert 를 통째로 깨는 실측 버그 ──────
+//
+// 실측(2026-08-19, gjtennis.kr userid=nujani): 협회 원본이 같은 대회명+날짜를
+// 부서="남자단체전"으로 3번 반복해서 준다. upsert_org_player_results 의 ON
+// CONFLICT 대상은 (org_code, org_player_id, tournament_name, played_on) 이고
+// event_raw(부서)는 안 걸려 있어, 한 INSERT 문 안에서 같은 대상을 두 번 이상
+// 건드리면 Postgres 가 "ON CONFLICT DO UPDATE command cannot affect row a
+// second time" 로 문장 전체를 롤백한다 — 그 선수의 전적이 하나도 안 쌓인다.
+
+Deno.test('dedupeHistoryRows: 같은 (대회명, 대회일) 중복 행을 하나로 줄인다', () => {
+  const rows = parsePlayerHistoryRows(`
+    <table><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>다른대회</td><td>1</td><td>골드부</td><td>800</td><td>2026-05-09</td>
+    </tr></table>`);
+  assertEquals(rows.length, 4);
+  const deduped = dedupeHistoryRows(rows);
+  assertEquals(deduped.length, 2);
+  assertEquals(deduped.map((r) => r.tournamentName).sort(), ['다른대회', '어등산클럽배']);
+});
+
+Deno.test('crawlPlayerHistories: 중복 행이 있어도 upsert 를 1번만 부르고 실패 없이 끝난다', async () => {
+  const DUP_ROW_HTML = `
+    <table><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>어등산클럽배</td><td>예선</td><td>남자단체전</td><td>10</td><td>2026-03-07</td>
+    </tr><tr>
+      <td>다른대회</td><td>1</td><td>골드부</td><td>800</td><td>2026-05-09</td>
+    </tr></table>`;
+  await withFetch((url) => {
+    const page = new URL(url).searchParams.get('page');
+    return new Response(page === '1' ? DUP_ROW_HTML : HEADER_ONLY_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'nujani' }] });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    assertEquals(rpcCalls.length, 1);
+    const args = rpcCalls[0] as { p_rows: unknown[] };
+    assertEquals(args.p_rows.length, 2); // 4행 → 중복 2행 제거 → 2행만 upsert
   });
 });
