@@ -81,10 +81,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatStreamControllerProvider).resetConversation();
   }
 
+  bool _hasChatSession() {
+    final session = ref.read(apiProvider).supabase.auth.currentSession;
+    if (session != null) return true;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('로그인된 앱에서 볼보이 채팅을 이용해 주세요.'),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _send() async {
     final text = _ctrl.text.trim();
     final chat = ref.read(chatProvider);
     if (text.isEmpty || chat.busy) return;
+    if (!_hasChatSession()) return;
     FocusManager.instance.primaryFocus?.unfocus();
     _ctrl.clear();
 
@@ -109,6 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ) async {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
+    if (!_hasChatSession()) return;
 
     final api = ref.read(apiProvider);
     final stream = api.chat(
@@ -131,6 +145,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ) async {
     final chat = ref.read(chatProvider);
     if (chat.busy) return;
+    if (!_hasChatSession()) return;
 
     final api = ref.read(apiProvider);
     final stream = api.chat(
