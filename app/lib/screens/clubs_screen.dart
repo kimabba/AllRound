@@ -683,22 +683,22 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         ],
       ),
     );
-    if (confirmed != true) return _visibleRecruitingPosts();
+    if (confirmed != true) return _recruitingPosts;
 
     try {
       await ref.read(apiProvider).closeTeamRecruitingPost(post.id);
       await _loadRecruitingPosts();
-      if (!mounted) return _visibleRecruitingPosts();
+      if (!mounted) return _recruitingPosts;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('팀원 모집을 마감했습니다.')));
     } catch (_) {
-      if (!mounted) return _visibleRecruitingPosts();
+      if (!mounted) return _recruitingPosts;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('모집을 마감하지 못했습니다.')));
     }
-    return _visibleRecruitingPosts();
+    return _recruitingPosts;
   }
 
   @override
