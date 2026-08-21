@@ -26,19 +26,20 @@ class TournamentCoverImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final posterUrl = tournament.posterUrl?.trim();
-    final fallback = Image.asset(
-      tournament.sport == 'tennis' ? _tennisAsset : _futsalAsset,
-      fit: fit,
-      alignment: _alignmentFor(tournament.id),
-    );
-    if (posterUrl == null || posterUrl.isEmpty) return fallback;
+    Image fallback(BoxFit fallbackFit) => Image.asset(
+          tournament.sport == 'tennis' ? _tennisAsset : _futsalAsset,
+          fit: fallbackFit,
+          alignment: _alignmentFor(tournament.id),
+        );
+    if (posterUrl == null || posterUrl.isEmpty) return fallback(fit);
+
     return Image.network(
       posterUrl,
+      // 홈 카드는 cover로 가로 프레임을 꽉 채우고, 상세 화면처럼 호출부가
+      // contain을 지정한 곳에서는 원본 전체를 보여준다.
       fit: fit,
-      // 휴대폰 사진 원본(수천 px)을 그대로 디코딩하면 카드 스크롤 때 프레임이
-      // 끊길 수 있다. 상세 화면의 고밀도 디스플레이까지 충분한 크기로 제한한다.
       cacheWidth: 1200,
-      errorBuilder: (_, __, ___) => fallback,
+      errorBuilder: (_, __, ___) => fallback(fit),
     );
   }
 
