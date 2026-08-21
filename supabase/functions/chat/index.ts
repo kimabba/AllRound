@@ -33,6 +33,7 @@ import {
   INTENT_VALUES,
   type IntentResult,
   resolveRequestedSport,
+  type Slots,
 } from '../_shared/intent.ts';
 import {
   buildClubCards,
@@ -74,7 +75,20 @@ import {
 } from './context.ts';
 import { performRagSearch, performVenueSearch } from './rag.ts';
 import { cacheIncrementHit, cacheInsert, cacheLookup } from './cache.ts';
-import { buildDbCitations, buildTournamentCardBlocks, streamLlmResponse } from './stream.ts';
+import {
+  buildResponseDbCitations,
+  buildTournamentCardBlocks,
+  streamLlmResponse,
+} from './stream.ts';
+import { assessChatInput } from './safety.ts';
+import {
+  type OrgRankingRow,
+  parseOrgPlayerLinks,
+  parseOrgRankingRows,
+  rankingScopeLabel,
+  renderMyRankingResults,
+  renderRankingResults,
+} from './ranking.ts';
 
 const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search', 'club_search']);
 
@@ -84,6 +98,102 @@ function isIntentValue(value: string): value is Intent {
 
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function chatTextResponse(conversationId: string, text: string): Response {
+  return new Response(
+    sseEvent('meta', { conversation_id: conversationId }) +
+      sseEvent('delta', { text }) +
+      sseEvent('done', {}),
+    {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      },
+    },
+  );
+}
+
+function buildRankingCitations(rows: readonly OrgRankingRow[]): DbCitation[] {
+  const scopes = new Map<string, OrgRankingRow>();
+  for (const row of rows) {
+    const key = `${row.org_code}:${row.division_code}`;
+    if (!scopes.has(key)) scopes.set(key, row);
+  }
+  return [...scopes.values()].slice(0, 6).map((row) => ({
+    type: 'db',
+    source: 'rankings',
+    id: `${row.org_code}:${row.division_code}`,
+    title: `${rankingScopeLabel(row.org_code, row.division_code)} 랭킹`,
+  }));
+}
+
+interface PriorChatMessage {
+  role: string;
+  content: string;
+  citations: unknown;
+}
+
+const RANKING_HISTORY_MARKER: DbCitation = {
+  type: 'db',
+  source: 'rankings',
+  id: 'ranking-query',
+  title: '협회 랭킹 조회',
+};
+
+function parsePriorMessages(value: unknown): PriorChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  const rows: PriorChatMessage[] = [];
+  for (const item of value) {
+    if (
+      typeof item === 'object' &&
+      item !== null &&
+      'role' in item &&
+      typeof item.role === 'string' &&
+      'content' in item &&
+      typeof item.content === 'string'
+    ) {
+      rows.push({
+        role: item.role,
+        content: item.content,
+        citations: 'citations' in item ? item.citations : null,
+      });
+    }
+  }
+  return rows;
+}
+
+function hasRankingCitation(value: unknown): boolean {
+  return Array.isArray(value) && value.some((citation) =>
+    typeof citation === 'object' &&
+    citation !== null &&
+    'source' in citation &&
+    citation.source === 'rankings'
+  );
+}
+
+/** 과거 랭킹 턴의 선수명을 후속 Gemini 요청에 다시 보내지 않는다. */
+function modelSafePriorMessages(messages: readonly PriorChatMessage[]): PriorChatMessage[] {
+  const excluded = new Set<number>();
+  for (let i = 0; i < messages.length; i++) {
+    if (!hasRankingCitation(messages[i].citations)) continue;
+    excluded.add(i);
+    if (messages[i].role === 'assistant' && i > 0 && messages[i - 1].role === 'user') {
+      excluded.add(i - 1);
+    }
+  }
+  return messages.filter((_, index) => !excluded.has(index));
+}
+
+function redactPlayerName(message: string, playerName: string | undefined): string {
+  return playerName ? message.replaceAll(playerName, '[선수명]') : message;
+}
+
+function logSafeSlots(slots: Slots): Omit<Slots, 'player_name'> {
+  const { player_name: _playerName, ...safe } = slots;
+  return safe;
 }
 
 Deno.serve(withCors(async (req) => {
@@ -119,6 +229,22 @@ Deno.serve(withCors(async (req) => {
   const conversationId = body.conversation_id ?? crypto.randomUUID();
   const userMessage = body.message.trim();
   const clientActiveSport: string | undefined = body.active_sport;
+  // 협회 랭킹은 개인정보가 포함될 수 있으므로 임베딩/Gemini 호출보다 먼저 로컬 룰로
+  // 판별한다. 아래 일반 의도 분류에서도 같은 결과를 재사용한다.
+  const initialSlots = extractSlots(userMessage);
+  const initialRuleHit = classifyByRule(userMessage);
+  const modelUserMessage = redactPlayerName(userMessage, initialSlots.player_name);
+
+  // 명백한 유해 입력은 DB 저장·임베딩·Gemini 전송 전에 차단한다. 차단 로그에는
+  // 원문이나 사용자 ID를 넣지 않고 범주만 남긴다.
+  const safetyDecision = assessChatInput(userMessage);
+  if (safetyDecision.blocked && safetyDecision.category && safetyDecision.responseText) {
+    console.warn(
+      'chat_safety',
+      JSON.stringify({ event: 'local_input_block', category: safetyDecision.category }),
+    );
+    return chatTextResponse(conversationId, safetyDecision.responseText);
+  }
 
   const selectedEntityResult = parseSelectedEntity(body.selected_entity);
   const selectedEntity = selectedEntityResult.ok ? selectedEntityResult.value : null;
@@ -144,20 +270,32 @@ Deno.serve(withCors(async (req) => {
   // Prior conversation (last 10 turns = 20 messages)
   const { data: priorRaw } = await supabase
     .from('chat_messages')
-    .select('role, content')
+    .select('role, content, citations')
     .eq('user_id', user.id)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(20);
-  const prior = priorRaw?.reverse() ?? null;
+  const prior = parsePriorMessages(priorRaw).reverse();
+  const modelPrior = modelSafePriorMessages(prior);
 
-  // Persist user message
-  await chatWriter.from('chat_messages').insert({
-    user_id: user.id,
-    conversation_id: conversationId,
-    role: 'user',
-    content: userMessage,
-  });
+  // Persist user message. Gemini 의미 안전 필터가 뒤에서 차단하면 이 id로 원문을
+  // 즉시 지운다. id 없이 content 조건으로 지우면 같은 문구의 과거 메시지까지
+  // 삭제할 수 있으므로 삽입 행을 정확히 잡는다.
+  const { data: userMessageRow, error: userMessageError } = await chatWriter
+    .from('chat_messages')
+    .insert({
+      user_id: user.id,
+      conversation_id: conversationId,
+      role: 'user',
+      content: userMessage,
+      ...(initialSlots.player_name ? { citations: [RANKING_HISTORY_MARKER] } : {}),
+    })
+    .select('id')
+    .single();
+  if (userMessageError || !userMessageRow || typeof userMessageRow.id !== 'string') {
+    return errorResponse('메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 500);
+  }
+  const userMessageId = userMessageRow.id;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -276,11 +414,170 @@ Deno.serve(withCors(async (req) => {
           return;
         }
 
+        // ---- 협회 랭킹: DB 결정적 응답, 임베딩·Gemini 미사용 ----
+        // 공개 랭킹과 본인 확정 연결만 읽는다. 질문·결과의 선수명은 로그에 남기지 않는다.
+        if (
+          !tournamentRefine &&
+          !selectedEntity &&
+          (initialRuleHit?.intent === 'ranking_lookup' || initialRuleHit?.intent === 'my_ranking')
+        ) {
+          const rankingIntent = initialRuleHit.intent;
+          send('intent', {
+            intent: rankingIntent,
+            confidence: 1,
+            method: 'rule',
+            slots: initialSlots,
+            rule_matched: initialRuleHit.rule,
+          });
+
+          let answerText: string;
+          let rankingRows: OrgRankingRow[] = [];
+
+          if (rankingIntent === 'my_ranking') {
+            const { data: linkRaw, error: linkError } = await supabase
+              .from('org_player_links')
+              .select('org_code, org_player_id, user_id, status')
+              .eq('user_id', user.id);
+
+            if (linkError) {
+              console.warn(
+                'chat_route',
+                JSON.stringify({
+                  event: 'my_ranking_link_query_error',
+                  reason_code: linkError.code,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              answerText =
+                '현재 본인 랭킹 연결 정보를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+            } else {
+              const links = parseOrgPlayerLinks(linkRaw ?? []);
+              const confirmedLinks = links.filter((link) => link.status === 'confirmed');
+
+              if (confirmedLinks.length > 0) {
+                // 협회 선수 ID는 전역 고유값이 아니라 (org_code, org_player_id) 복합키다.
+                // 각 confirmed 쌍을 정확히 조회해 다른 협회의 동명 ID가 citation/result_count에
+                // 섞이지 않게 한다.
+                const rankingResponses = await Promise.all(confirmedLinks.map((link) =>
+                  supabase
+                    .from('org_rankings')
+                    .select(
+                      'org_code, division_code, rank, player_name, org_player_id, ' +
+                        'club_raw, rank_points, total_points',
+                    )
+                    .eq('org_code', link.org_code)
+                    .eq('org_player_id', link.org_player_id)
+                    .order('rank', { ascending: true })
+                    .limit(10)
+                ));
+                const failedResponse = rankingResponses.find((response) => response.error !== null);
+                if (failedResponse?.error) {
+                  console.warn(
+                    'chat_route',
+                    JSON.stringify({
+                      event: 'my_ranking_query_error',
+                      reason_code: failedResponse.error.code,
+                      user_id_hash: hashedUserId,
+                      conversation_id: conversationId,
+                    }),
+                  );
+                  answerText =
+                    '현재 협회 랭킹표를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+                } else {
+                  const rankingRaw: unknown[] = [];
+                  for (const response of rankingResponses) {
+                    if (Array.isArray(response.data)) rankingRaw.push(...response.data);
+                  }
+                  rankingRows = parseOrgRankingRows(rankingRaw);
+                  answerText = renderMyRankingResults(rankingRows, links, user.id);
+                }
+              } else {
+                answerText = renderMyRankingResults([], links, user.id);
+              }
+            }
+          } else if (
+            !initialSlots.org_code &&
+            !initialSlots.division_code &&
+            !initialSlots.player_name
+          ) {
+            answerText =
+              '어느 랭킹인지 알려주세요. 예: “광주 골드부 랭킹” 또는 “김평화 선수 순위”.';
+          } else {
+            let rankingQuery = supabase
+              .from('org_rankings')
+              .select(
+                'org_code, division_code, rank, player_name, org_player_id, ' +
+                  'club_raw, rank_points, total_points',
+              )
+              .order('rank', { ascending: true })
+              .order('division_code', { ascending: true })
+              .limit(10);
+            if (initialSlots.org_code) {
+              rankingQuery = rankingQuery.eq('org_code', initialSlots.org_code);
+            }
+            if (initialSlots.division_code) {
+              rankingQuery = rankingQuery.eq('division_code', initialSlots.division_code);
+            }
+            if (initialSlots.player_name) {
+              rankingQuery = rankingQuery.eq('player_name', initialSlots.player_name);
+            }
+
+            const { data: rankingRaw, error: rankingError } = await rankingQuery;
+            if (rankingError) {
+              console.warn(
+                'chat_route',
+                JSON.stringify({
+                  event: 'ranking_query_error',
+                  reason_code: rankingError.code,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              answerText = '현재 협회 랭킹표를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+            } else {
+              rankingRows = parseOrgRankingRows(rankingRaw ?? []);
+              answerText = renderRankingResults(rankingRows, {
+                orgCode: initialSlots.org_code,
+                divisionCode: initialSlots.division_code,
+                playerName: initialSlots.player_name,
+              });
+            }
+          }
+
+          const citations = buildRankingCitations(rankingRows);
+          console.log(
+            'chat_route',
+            JSON.stringify({
+              event: rankingIntent === 'my_ranking' ? 'my_ranking_routed' : 'ranking_lookup_routed',
+              result_count: rankingRows.length,
+              has_org_filter: !!initialSlots.org_code,
+              has_division_filter: !!initialSlots.division_code,
+              has_player_filter: !!initialSlots.player_name,
+              user_id_hash: hashedUserId,
+              conversation_id: conversationId,
+            }),
+          );
+          send('route', { intent: rankingIntent, result_count: rankingRows.length });
+          send('context', { tournaments: [], rules: [] });
+          send('delta', { text: answerText });
+          if (citations.length > 0) send('citation', { items: citations });
+          await chatWriter.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: answerText,
+            citations,
+          });
+          send('done', {});
+          return;
+        }
+
         // ---- Embedding (reused for cache lookup + RAG) ----
         let vectorLiteral: string | null = null;
         let userContextHash: string | null = null;
         try {
-          const embedResult = await embedTextWithUsage(userMessage, 'RETRIEVAL_QUERY');
+          const embedResult = await embedTextWithUsage(modelUserMessage, 'RETRIEVAL_QUERY');
           vectorLiteral = toVectorLiteral(embedResult.values);
           userContextHash = await computeUserContextHash(
             user.id,
@@ -304,8 +601,8 @@ Deno.serve(withCors(async (req) => {
         const adminSupabase = serviceClient();
 
         // ---- Intent classification ----
-        const slots = extractSlots(userMessage);
-        const ruleHit = classifyByRule(userMessage);
+        const slots = initialSlots;
+        const ruleHit = initialRuleHit;
         let intentResult: IntentResult;
         if (tournamentRefine) {
           // JY-101: 정제 칩 재요청 — 분류/후속이어받기를 건너뛰고 tournament_search 로
@@ -426,7 +723,7 @@ Deno.serve(withCors(async (req) => {
             intent: intentResult.intent,
             confidence: intentResult.confidence,
             method: intentResult.method,
-            slots: intentResult.slots,
+            slots: logSafeSlots(intentResult.slots),
             rule_matched: intentResult.rule_matched ?? null,
             has_embedding: !!vectorLiteral,
             requested_sport: requestedSport ?? null,
@@ -532,7 +829,7 @@ Deno.serve(withCors(async (req) => {
           const profileContext = profileLines.join('\n');
 
           const profileHistory: ChatTurn[] = [];
-          for (const m of prior ?? []) {
+          for (const m of modelPrior) {
             profileHistory.push({
               role: m.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: m.content }],
@@ -546,7 +843,7 @@ Deno.serve(withCors(async (req) => {
             role: 'model',
             parts: [{ text: '네, 위 프로필 정보를 참고해 답변하겠습니다.' }],
           });
-          profileHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+          profileHistory.push({ role: 'user', parts: [{ text: modelUserMessage }] });
 
           send('route', { intent: 'my_profile', result_count: sports.length });
           send('context', { tournaments: [], rules: [] });
@@ -637,7 +934,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'club_search_routed',
                 result_count: typedClubs.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
@@ -728,7 +1025,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'tournament_application_guide_routed',
                 result_count: typedRows.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 requested_sport: requestedSport ?? null,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
@@ -852,7 +1149,7 @@ Deno.serve(withCors(async (req) => {
                 'chat_route',
                 JSON.stringify({
                   event: 'tournament_search_empty',
-                  slots: intentResult.slots,
+                  slots: logSafeSlots(intentResult.slots),
                   requested_sport: requestedSport,
                   user_id_hash: hashedUserId,
                   conversation_id: conversationId,
@@ -903,7 +1200,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'tournament_search_routed',
                 result_count: typedRows.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
@@ -946,7 +1243,7 @@ Deno.serve(withCors(async (req) => {
               'chat_route',
               JSON.stringify({
                 event: 'tournament_search_empty',
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 requested_sport: requestedSport,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
@@ -1104,7 +1401,7 @@ Deno.serve(withCors(async (req) => {
           .join('\n\n');
 
         const history: ChatTurn[] = [];
-        for (const m of prior ?? []) {
+        for (const m of modelPrior) {
           history.push({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }],
@@ -1120,7 +1417,7 @@ Deno.serve(withCors(async (req) => {
             parts: [{ text: '네, 위 컨텍스트를 참고해 답변하겠습니다.' }],
           });
         }
-        history.push({ role: 'user', parts: [{ text: userMessage }] });
+        history.push({ role: 'user', parts: [{ text: modelUserMessage }] });
 
         let assistantText = '';
         let cacheable = false;
@@ -1133,7 +1430,7 @@ Deno.serve(withCors(async (req) => {
         } else {
           const llmResult = await streamLlmResponse(history, systemPrompt, send);
           assistantText = llmResult.assistantText;
-          if (!llmResult.errored && assistantText.trim().length > 0) {
+          if (!llmResult.errored && !llmResult.blocked && assistantText.trim().length > 0) {
             cacheable = true;
           }
           if (llmResult.usage) {
@@ -1147,13 +1444,35 @@ Deno.serve(withCors(async (req) => {
               context: 'chat',
             });
           }
+          if (llmResult.blocked) {
+            console.warn(
+              'chat_safety',
+              JSON.stringify({
+                event: 'gemini_block',
+                reason: llmResult.blockReason ?? 'SAFETY',
+              }),
+            );
+            const { error: deleteBlockedError } = await chatWriter
+              .from('chat_messages')
+              .delete()
+              .eq('id', userMessageId)
+              .eq('user_id', user.id);
+            if (deleteBlockedError) {
+              console.error('chat_safety blocked input deletion failed');
+            }
+            send('done', {});
+            controller.close();
+            return;
+          }
         }
 
         // ---- Citations + Cards ----
-        // 규칙 질문은 답변 본문에 출처가 이미 인라인으로 들어가므로 하단 출처 리스트를 생략.
-        const dbCitationItems = intentResult.intent === 'rule_lookup'
-          ? []
-          : buildDbCitations(tournaments, rules, venues);
+        const dbCitationItems = buildResponseDbCitations(
+          intentResult.intent,
+          tournaments,
+          rules,
+          venues,
+        );
         if (dbCitationItems.length > 0) {
           send('citation', { items: dbCitationItems });
         }

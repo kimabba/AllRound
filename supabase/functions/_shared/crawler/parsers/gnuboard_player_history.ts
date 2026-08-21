@@ -154,6 +154,48 @@ export function playerHistoryUrl(
 // 상한은 폭주 방지용이다 — 46행짜리 선수가 4페이지였으니 20이면 300행까지 커버한다.
 const MAX_HISTORY_PAGES = 20;
 
+export interface PlayerHistoryFetchResult {
+  rows: PlayerHistoryRow[];
+  reachedPageLimit: boolean;
+}
+
+/**
+ * 협회 선수 한 명의 이력을 끝 페이지까지 가져온다.
+ *
+ * UI 온디맨드 조회와 정기 크롤러가 같은 페이지 종료·레이아웃 검증 규칙을 써야
+ * 한쪽만 조용히 일부 이력을 누락하는 일이 없다.
+ */
+export async function fetchPlayerHistory(
+  base: string,
+  orgPlayerId: string,
+): Promise<PlayerHistoryFetchResult> {
+  const rows: PlayerHistoryRow[] = [];
+
+  for (let page = 1; page <= MAX_HISTORY_PAGES; page++) {
+    const url = playerHistoryUrl(base, orgPlayerId, page);
+    let html: string;
+    try {
+      const res = await fetch(url, { headers: COMMON_HEADERS });
+      if (!res.ok) throw new Error(`p${page}: HTTP ${res.status}`);
+      html = await res.text();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(message.startsWith(`p${page}:`) ? message : `p${page}: ${message}`);
+    }
+
+    const pageRows = parsePlayerHistoryRows(html);
+    if (pageRows.length === 0) {
+      if (!looksLikeHistoryPage(html)) {
+        throw new Error(`p${page}: 0행, 표 헤더 없음 — 레이아웃 변경 의심`);
+      }
+      return { rows, reachedPageLimit: false };
+    }
+    rows.push(...pageRows);
+  }
+
+  return { rows, reachedPageLimit: true };
+}
+
 /** 이 파일이 DB 에 요구하는 최소 형태. supabase-js 클라이언트가 이걸 만족한다. */
 export interface SupabaseLike {
   from(table: string): {
@@ -200,61 +242,19 @@ export async function crawlPlayerHistories(
   if (!links || links.length === 0) return failures;
 
   for (const link of links) {
-    // 페이지를 끝까지 모은다. 0행이 나오면 그 페이지가 범위 밖이다.
-    const rows: PlayerHistoryRow[] = [];
-    let pageFailed = false;
-    // 0행을 만나지 못한 채 루프가 끝나면(=MAX_HISTORY_PAGES 를 다 채움) 뒤쪽
-    // 이력이 잘렸을 수 있다. 0행 페이지를 만나면 false 로 내려 정상 종료를 표시한다.
-    let reachedPageLimit = true;
-
-    for (let page = 1; page <= MAX_HISTORY_PAGES; page++) {
-      const url = playerHistoryUrl(base, link.org_player_id, page);
-      let html: string;
-      try {
-        const res = await fetch(url, { headers: COMMON_HEADERS });
-        if (!res.ok) {
-          failures.push(`이력 ${link.org_player_id} p${page}: HTTP ${res.status}`);
-          pageFailed = true;
-          break;
-        }
-        html = await res.text();
-      } catch (e) {
-        failures.push(
-          `이력 ${link.org_player_id} p${page}: ${e instanceof Error ? e.message : String(e)}`,
-        );
-        pageFailed = true;
-        break;
-      }
-
-      const pageRows = parsePlayerHistoryRows(html);
-      if (pageRows.length === 0) {
-        // 0행이 나온 페이지는 몇 번째든 같은 규칙으로 가른다 — 페이지 번호로 분기하지
-        // 않는다. 1페이지만 봤던 이전 버전은 2페이지 이후 에러/차단/로그인 페이지를
-        // 그대로 "범위 밖"으로 삼켜, 뒤 페이지 데이터가 실패 기록 없이 통째로 사라질
-        // 수 있었다(1페이지에서 고친 것과 같은 결함이 옆 페이지로 옮겨간 것).
-        // 표 헤더(<th>)는 이력이 0건이어도 그대로 나오므로 looksLikeHistoryPage 로
-        // "아직 이력 없음/더 볼 페이지 없음"(정상)과 "레이아웃 변경"(실패)을 가른다.
-        if (looksLikeHistoryPage(html)) {
-          reachedPageLimit = false; // 정상 종료 — 범위 밖(또는 애초에 이력 없음)
-        } else {
-          failures.push(
-            `이력 ${link.org_player_id} p${page}: 0행, 표 헤더 없음 — 레이아웃 변경 의심`,
-          );
-          pageFailed = true;
-        }
-        break;
-      }
-      rows.push(...pageRows);
+    let fetched: PlayerHistoryFetchResult;
+    try {
+      fetched = await fetchPlayerHistory(base, link.org_player_id);
+    } catch (e) {
+      failures.push(
+        `이력 ${link.org_player_id} ${e instanceof Error ? e.message : String(e)}`,
+      );
+      continue;
     }
-
-    // 중간 페이지에서 실패하면 그 선수는 이번 회차를 통째로 건너뛴다.
-    // 부분 적재는 upsert 라 데이터를 지우진 않지만, "몇 페이지까지 받았나"를
-    // 알 수 없는 채로 남는 것보다 다음 크롤에 온전히 받는 편이 낫다.
-    if (pageFailed) continue;
 
     // 상한까지 꽉 채우고 끝났다 — 데이터는 있는 만큼 적재하되(아래 계속) 잘렸다는
     // 사실을 알린다. 조용히 뒤쪽 이력이 사라지는 것보다 낫다.
-    if (reachedPageLimit) {
+    if (fetched.reachedPageLimit) {
       failures.push(
         `이력 ${link.org_player_id}: ${MAX_HISTORY_PAGES}페이지 상한 도달 — 이후 이력 잘림 가능`,
       );
@@ -262,13 +262,13 @@ export async function crawlPlayerHistories(
 
     // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
     // (표 헤더 없이 0행이 왔다면 pageFailed 로 위에서 이미 걸러졌다.)
-    if (rows.length === 0) continue;
+    if (fetched.rows.length === 0) continue;
 
     try {
       const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
         p_org: org,
         p_org_player_id: link.org_player_id,
-        p_rows: rows.map((r) => ({
+        p_rows: fetched.rows.map((r) => ({
           tournament_name: r.tournamentName,
           played_on: r.playedOn,
           event_raw: r.eventRaw,

@@ -173,6 +173,69 @@ Deno.test('match_schedule 은 일정 키워드 동반 시에만 매칭', () => {
   assertEquals(classifyByRule('매치 일정 알려줘')?.intent, 'match_schedule');
 });
 
+Deno.test('협회 랭킹과 내 랭킹을 별도 의도로 고신뢰 분류한다', () => {
+  assertEquals(classifyByRule('광주 골드부 랭킹 보여줘'), {
+    intent: 'ranking_lookup',
+    rule: 'org_ranking_keyword',
+  });
+  assertEquals(classifyByRule('전남 여자금배부 김평화 선수 순위 알려줘')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 선수 순위가 몇 위야?')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 랭킹 알려줘')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 선수 몇 등이야?')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('내 현재 랭킹 알려줘'), {
+    intent: 'my_ranking',
+    rule: 'my_ranking_keyword',
+  });
+  assertEquals(classifyByRule('저는 지금 몇 위예요?')?.intent, 'my_ranking');
+});
+
+Deno.test('랭킹 질문에서 광주·전남 협회, 부서, 명시 선수명을 추출한다', () => {
+  assertEquals(extractSlots('광주 골드부 랭킹 보여줘', FIXED_NOW), {
+    region: 'gwangju',
+    org_code: 'gj',
+    division_code: 'gj_m_gold',
+  });
+  assertEquals(extractSlots('전남 여자금배부 김평화 선수 순위 알려줘', FIXED_NOW), {
+    region: 'jeonnam',
+    org_code: 'jn',
+    division_code: 'jn_w_geumbae',
+    player_name: '김평화',
+  });
+  assertEquals(extractSlots('광주협회 국화부 선수명: 박사랑 랭킹', FIXED_NOW), {
+    region: 'gwangju',
+    org_code: 'gj',
+    division_code: 'gj_w_gukhwa',
+    player_name: '박사랑',
+  });
+  assertEquals(extractSlots('김평화 선수 랭킹 포인트 몇 점이야?', FIXED_NOW), {
+    player_name: '김평화',
+  });
+  assertEquals(extractSlots('김평화 랭킹 알려줘', FIXED_NOW), {
+    player_name: '김평화',
+  });
+});
+
+Deno.test('랭킹 포인트 산정 질문은 현재 랭킹이 아니라 rule_lookup 이다', () => {
+  assertEquals(classifyByRule('랭킹 포인트는 어떻게 산정해?'), {
+    intent: 'rule_lookup',
+    rule: 'ranking_points_rule',
+  });
+  assertEquals(classifyByRule('대회 랭킹 포인트 배점 기준 알려줘')?.intent, 'rule_lookup');
+  assertEquals(
+    classifyByRule('김평화 선수 랭킹 포인트 몇 점이야?')?.intent,
+    'ranking_lookup',
+  );
+  assertEquals(classifyByRule('테니스 룰불 내용 알려줘')?.intent, 'rule_lookup');
+});
+
+Deno.test('협회 단서 없는 일반 순위 표현은 협회 랭킹으로 오탐하지 않는다', () => {
+  assertEquals(classifyByRule('ATP 세계 랭킹 알려줘'), null);
+  assertEquals(classifyByRule('광주 맛집 순위 알려줘'), null);
+  assertEquals(classifyByRule('테니스 선수 되는 방법 알려줘'), null);
+  assertEquals(extractSlots('광주에 실내 테니스장 추천해줘', FIXED_NOW).org_code, undefined);
+  assertEquals(extractSlots('테니스 선수 되는 방법 알려줘', FIXED_NOW).player_name, undefined);
+});
+
 Deno.test("'경기' 동음이의 false-positive 회피 (게임 vs 경기도)", () => {
   // '경기' 단독(시합 의미)은 region 으로 잡히면 안 됨
   assertEquals(extractSlots('경기 보러 갈래', FIXED_NOW).region, undefined);

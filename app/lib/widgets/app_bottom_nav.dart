@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 
-/// 메인 하단 메뉴. 최종 사용자 동선은 대회·클럽·볼보이·MY 네 가지다.
+/// 메인 하단 메뉴. 최종 사용자 동선은 대회·클럽·볼보이 세 가지다.
 /// 룰북은 대회 화면 안에서 열고, 볼보이는 현재 화면의 대화를 시트로 이어간다.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  /// 가운데 볼보이 탭 콜백. null이면 볼보이 탭 숨김(채팅 미지원 화면).
+  /// 오른쪽 볼보이 메뉴 콜백. null이면 볼보이 메뉴 숨김(채팅 미지원 화면).
   final VoidCallback? onChatTap;
 
   /// 볼보이 탭 접근성 hint (예: '대회 화면에서 채팅 열기').
@@ -27,21 +27,18 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const labels = ['대회', '클럽', 'MY'];
+    const labels = ['대회', '클럽'];
     const icons = [
       Icons.emoji_events_outlined,
       Icons.groups_outlined,
-      Icons.person_outline_rounded,
     ];
     const selectedIcons = [
       Icons.emoji_events_rounded,
       Icons.groups_rounded,
-      Icons.person_rounded,
     ];
     const keys = [
       AllRoundE2EKeys.navToday,
       AllRoundE2EKeys.navClubs,
-      AllRoundE2EKeys.navProfile,
     ];
 
     Widget tab(int index) {
@@ -100,7 +97,7 @@ class AppBottomNav extends StatelessWidget {
       );
     }
 
-    // 볼보이는 가운데 고정한다. 탭 인덱스를 점유하지 않고 현재 화면 위에
+    // 볼보이는 클럽 오른쪽에 둔다. 탭 인덱스를 점유하지 않고 현재 화면 위에
     // 대화 시트를 열어 사용자가 다른 화면으로 이동해도 대화를 이어간다.
     Widget chatTab() {
       return Expanded(
@@ -174,7 +171,6 @@ class AppBottomNav extends StatelessWidget {
                 tab(0),
                 tab(1),
                 if (onChatTap != null) chatTab(),
-                tab(2),
               ],
             ),
           ),

@@ -2,6 +2,7 @@ import 'package:allround/models/org_ranking.dart';
 import 'package:allround/models/player_result.dart';
 import 'package:allround/models/tournament.dart';
 import 'package:allround/screens/rankings/rankings_screen.dart';
+import 'package:allround/screens/rankings/player_history_sheet.dart';
 import 'package:allround/services/api.dart';
 import 'package:allround/state/providers.dart';
 import 'package:allround/theme/app_theme.dart';
@@ -36,7 +37,8 @@ class _FakeRankingApi extends ApiService {
     required this.links,
     this.candidates = const [],
     this.myName = '김평화',
-  })  : super(
+    this.history,
+  }) : super(
           SupabaseClient(
             'http://127.0.0.1:54321',
             'qa-anon-key',
@@ -48,6 +50,7 @@ class _FakeRankingApi extends ApiService {
   final List<Map<String, dynamic>> links;
   final List<OrgRankingRow> candidates;
   final String myName;
+  final PlayerHistory? history;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -77,6 +80,17 @@ class _FakeRankingApi extends ApiService {
 
   @override
   Future<List<PlayerResult>> myPlayerResults() async => const [];
+
+  @override
+  Future<PlayerHistory> playerHistory(OrgRankingRow player) async {
+    return history ??
+        PlayerHistory(
+          results: const [],
+          fetchedAt: DateTime.utc(2026, 8, 9),
+          isComplete: true,
+          wasCached: true,
+        );
+  }
 }
 
 const _kTestUserId = 'me-uuid';
@@ -87,6 +101,7 @@ Future<void> _pumpScreen(
   required List<Map<String, dynamic>> links,
   List<OrgRankingRow> candidates = const [],
   String myName = '김평화',
+  PlayerHistory? history,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -97,6 +112,7 @@ Future<void> _pumpScreen(
             links: links,
             candidates: candidates,
             myName: myName,
+            history: history,
           ),
         ),
         currentUserProvider.overrideWithValue(
@@ -144,6 +160,68 @@ void main() {
 
     expect(find.text('김평화'), findsOneWidget);
     expect(find.text('이기영'), findsOneWidget);
+  });
+
+  testWidgets('선수 기록은 320px 200% 글자에서도 긴 협회 원문을 모두 표시한다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final player = _row(
+      rank: 1,
+      name: '아주긴이름의테니스선수',
+      points: 2649,
+      orgPlayerId: 'a',
+    );
+    const rawResult = '예선탈락(1회전 세트스코어 0:2 패배, 재경기 없음)';
+    final history = PlayerHistory(
+      results: [
+        PlayerResult(
+          orgCode: 'gj',
+          orgPlayerId: 'a',
+          tournamentName: '아주 긴 이름의 광주광역시 전국 생활체육 테니스대회',
+          playedOn: DateTime(2026, 5),
+          resultRaw: rawResult,
+          points: 0,
+          eventRaw: '남자골드부 개인복식',
+        ),
+      ],
+      fetchedAt: DateTime.utc(2026, 8, 9),
+      isComplete: true,
+      wasCached: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: PlayerHistorySheet(
+              player: player,
+              load: () async => history,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text(rawResult),
+      240,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('player-history-list')),
+        matching: find.byType(Scrollable),
+      ),
+      maxScrolls: 12,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text(rawResult), findsOneWidget);
+    final resultText = tester.widget<Text>(find.text(rawResult));
+    expect(resultText.maxLines, isNull);
+    expect(resultText.overflow, isNot(TextOverflow.ellipsis));
   });
 
   testWidgets('출처 표기가 항상 보인다', (tester) async {
@@ -200,6 +278,16 @@ void main() {
     // 소속(clubRaw) 도 검색 대상 — 같은 클럽 사람을 한 번에 본다.
     expect(filterRankingRows(rows, '어등산').length, 2);
     expect(filterRankingRows(rows, '없는이름'), isEmpty);
+  });
+
+  test('서버 행 순서와 무관하게 1위부터 정렬한다', () {
+    final rows = [
+      _row(rank: 3, name: '박세영', points: 1200, orgPlayerId: 'c'),
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+
+    expect(filterRankingRows(rows, '').map((row) => row.rank), [1, 2, 3]);
   });
 
   group('신청 가능한 행 계산', () {
@@ -355,6 +443,40 @@ void main() {
 
       expect(find.text('김평화'), findsOneWidget);
       expect(find.text('이기영'), findsNothing);
+    });
+
+    testWidgets('선수 행을 누르면 현재 순위와 대회 이력을 보여준다', (tester) async {
+      final history = PlayerHistory(
+        results: [
+          PlayerResult(
+            orgCode: 'gj',
+            orgPlayerId: 'a',
+            tournamentName: '광주시장배',
+            playedOn: DateTime(2026, 5),
+            resultRaw: '1',
+            resultRound: 1,
+            points: 1000,
+            eventRaw: '골드부',
+          ),
+        ],
+        fetchedAt: DateTime.utc(2026, 8, 9),
+        isComplete: true,
+        wasCached: false,
+      );
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        history: history,
+      );
+
+      await tester.tap(find.text('김평화').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('선수 기록'), findsOneWidget);
+      expect(find.text('1위'), findsWidgets);
+      expect(find.text('광주시장배'), findsOneWidget);
+      expect(find.text('우승'), findsOneWidget);
     });
 
     testWidgets('확정 연결이 있으면 행 버튼도 후보 카드도 안 뜬다', (tester) async {

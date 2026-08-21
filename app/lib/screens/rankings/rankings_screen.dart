@@ -8,6 +8,7 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/tournament_section_bar.dart';
+import 'player_history_sheet.dart';
 
 /// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
 /// 일치). 부서 카탈로그 전체(rankingGradesForOrg)와 다르다 — 오픈부·베테랑부 등은
@@ -84,9 +85,16 @@ Set<String> computeClaimableIds({
 /// 이름·소속 부분일치 필터. 표가 부서 하나에 수백 행(광주 남자일반부 871행)이라
 /// 스크롤만으로는 자기 이름을 찾을 수 없다. 서버 재조회 없이 받아둔 행에서 거른다.
 List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
+  final sorted = [...rows]..sort((a, b) {
+      final rankOrder = a.rank.compareTo(b.rank);
+      if (rankOrder != 0) return rankOrder;
+      final pointOrder = b.totalPoints.compareTo(a.totalPoints);
+      if (pointOrder != 0) return pointOrder;
+      return a.playerName.compareTo(b.playerName);
+    });
   final q = query.trim();
-  if (q.isEmpty) return rows;
-  return rows
+  if (q.isEmpty) return sorted;
+  return sorted
       .where(
         (r) => r.playerName.contains(q) || (r.clubRaw?.contains(q) ?? false),
       )
@@ -109,30 +117,37 @@ class RankingList extends StatelessWidget {
     required this.linkedOrgPlayerId,
     this.claimableOrgPlayerIds = const {},
     this.onClaim,
+    this.onPlayerTap,
   });
 
   final List<OrgRankingRow> rows;
   final String? linkedOrgPlayerId;
   final Set<String> claimableOrgPlayerIds;
   final void Function(OrgRankingRow row)? onClaim;
+  final void Function(OrgRankingRow row)? onPlayerTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final sortedRows = filterRankingRows(rows, '');
     return Column(
       children: [
-        for (var i = 0; i < rows.length; i++) ...[
+        for (var i = 0; i < sortedRows.length; i++) ...[
           _RankingRow(
-            row: rows[i],
-            isMine: rows[i].orgPlayerId != null &&
-                rows[i].orgPlayerId == linkedOrgPlayerId,
+            row: sortedRows[i],
+            isMine: sortedRows[i].orgPlayerId != null &&
+                sortedRows[i].orgPlayerId == linkedOrgPlayerId,
+            onTap: sortedRows[i].orgPlayerId == null || onPlayerTap == null
+                ? null
+                : () => onPlayerTap!(sortedRows[i]),
             onClaim: onClaim != null &&
-                    rows[i].orgPlayerId != null &&
-                    claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
-                ? () => onClaim!(rows[i])
+                    sortedRows[i].orgPlayerId != null &&
+                    claimableOrgPlayerIds.contains(sortedRows[i].orgPlayerId)
+                ? () => onClaim!(sortedRows[i])
                 : null,
           ),
-          if (i < rows.length - 1) Divider(height: 1, color: cs.outlineVariant),
+          if (i < sortedRows.length - 1)
+            Divider(height: 1, color: cs.outlineVariant),
         ],
       ],
     );
@@ -144,61 +159,127 @@ class _RankingRow extends StatelessWidget {
     required this.row,
     required this.isMine,
     this.onClaim,
+    this.onTap,
   });
 
   final OrgRankingRow row;
   final bool isMine;
   final VoidCallback? onClaim;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Container(
+    final isLeader = row.rank == 1;
+    return Material(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
-      color: isMine ? cs.primaryContainer : null,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          SizedBox(width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      color: isMine ? cs.primaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.listRow),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
               children: [
-                Text(
-                  row.playerName,
-                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
-                  Text(
-                    row.clubRaw!,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isLeader ? cs.primary : cs.surfaceContainerLow,
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(AppRadius.md),
+                    ),
                   ),
+                  child: Text(
+                    '${row.rank}',
+                    style: tt.bodyLarge?.copyWith(
+                      color: isLeader ? cs.onPrimary : cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        row.playerName,
+                        style:
+                            tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
+                        Text(
+                          row.clubRaw!.replaceAll('/', '').trim(),
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '${NumberFormat.decimalPattern('ko').format(row.totalPoints)}점',
+                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                if (onClaim != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, AppSizes.control),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    ),
+                    onPressed: onClaim,
+                    child: const Text('본인'),
+                  ),
+                ] else if (onTap != null) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ],
               ],
             ),
           ),
-          Text('${row.totalPoints}', style: tt.bodyLarge),
-          if (onClaim != null) ...[
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton(
-              // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
-              // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
-              style: OutlinedButton.styleFrom(
-                // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
-                // 폭만 내용에 맞게 줄인다.
-                minimumSize: const Size(0, AppSizes.control),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                ),
-              ),
-              onPressed: onClaim,
-              child: const Text('본인'),
-            ),
-          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RankingTableHeader extends StatelessWidget {
+  const _RankingTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 36, child: Text('순위', style: style)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('선수 · 소속', style: style)),
+          Text('누적 포인트', style: style),
+          const SizedBox(width: 24),
         ],
       ),
     );
@@ -483,6 +564,14 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     }
   }
 
+  Future<void> _openPlayerHistory(OrgRankingRow player) {
+    return showPlayerHistorySheet(
+      context,
+      player: player,
+      load: () => ref.read(apiProvider).playerHistory(player),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final orgCodes = _kRankingDivisions.keys.toList();
@@ -613,11 +702,17 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         ),
                       )
                     else
-                      RankingList(
-                        rows: visibleRows,
-                        linkedOrgPlayerId: data.linkedOrgPlayerId,
-                        claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                        onClaim: _claim,
+                      Column(
+                        children: [
+                          const _RankingTableHeader(),
+                          RankingList(
+                            rows: visibleRows,
+                            linkedOrgPlayerId: data.linkedOrgPlayerId,
+                            claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                            onClaim: _claim,
+                            onPlayerTap: _openPlayerHistory,
+                          ),
+                        ],
                       ),
                   ],
                 );

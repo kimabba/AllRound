@@ -29,6 +29,8 @@ import { REGION_CODES, type RegionCode, type Sport } from './enums.ts';
 export type Intent =
   | 'tournament_search'
   | 'tournament_detail'
+  | 'ranking_lookup'
+  | 'my_ranking'
   | 'club_search'
   | 'rule_lookup'
   | 'venue_search'
@@ -39,6 +41,8 @@ export type Intent =
 export const INTENT_VALUES: readonly Intent[] = [
   'tournament_search',
   'tournament_detail',
+  'ranking_lookup',
+  'my_ranking',
   'club_search',
   'rule_lookup',
   'venue_search',
@@ -58,7 +62,25 @@ export interface Slots {
   region?: RegionCode;
   sport?: Sport;
   date_range?: DateRange;
+  /** 협회 공표 랭킹을 직접 지칭한 경우에만 추출한다. */
+  org_code?: RankingOrgCode;
+  /** 현재 크롤 대상인 광주·전남 6개 랭킹 부서 코드. */
+  division_code?: RankingDivisionCode;
+  /** "김평화 선수"처럼 선수 표지가 명시된 고신뢰 이름만 추출한다. */
+  player_name?: string;
 }
+
+export type RankingOrgCode = 'gj' | 'jn';
+
+export type RankingDivisionSuffix =
+  | 'm_gold'
+  | 'm_general'
+  | 'm_instructor'
+  | 'w_rookie'
+  | 'w_gukhwa'
+  | 'w_geumbae';
+
+export type RankingDivisionCode = `${RankingOrgCode}_${RankingDivisionSuffix}`;
 
 export type IntentMethod = 'rule' | 'embedding' | 'fallback';
 
@@ -318,6 +340,91 @@ export function extractDateRange(text: string, now: Date = new Date()): DateRang
 // =========================
 // 슬롯 추출 진입점
 // =========================
+const RANKING_KW = /(랭킹|순위|몇\s*(?:위|등))/;
+const NON_ASSOCIATION_RANKING_KW = /(맛집|영화|음악|노래|대학|학교|관광|축구|야구|농구)/;
+
+const RANKING_DIVISIONS: ReadonlyArray<{
+  pattern: RegExp;
+  suffix: RankingDivisionSuffix;
+}> = [
+  { pattern: /(여자\s*금배부?|금배부)/, suffix: 'w_geumbae' },
+  { pattern: /(여자\s*신인부?|개나리부?)/, suffix: 'w_rookie' },
+  { pattern: /(국화부?)/, suffix: 'w_gukhwa' },
+  { pattern: /(남자\s*일반부?|일반부)/, suffix: 'm_general' },
+  { pattern: /(골드부?)/, suffix: 'm_gold' },
+  { pattern: /(지도자부?)/, suffix: 'm_instructor' },
+];
+
+function extractRankingOrg(text: string): RankingOrgCode | undefined {
+  if (/(광주(?:광역시)?\s*(?:테니스)?협회|GJTA)/i.test(text)) return 'gj';
+  if (/(전남|전라남도)\s*(?:테니스)?협회|JNTA/i.test(text)) return 'jn';
+  if (!RANKING_KW.test(text)) return undefined;
+  if (NON_ASSOCIATION_RANKING_KW.test(text)) return undefined;
+  if (/(광주광역시|광주)/.test(text)) return 'gj';
+  if (/(전라남도|전남)/.test(text)) return 'jn';
+  return undefined;
+}
+
+function extractRankingDivisionSuffix(text: string): RankingDivisionSuffix | undefined {
+  if (!RANKING_KW.test(text)) return undefined;
+  for (const { pattern, suffix } of RANKING_DIVISIONS) {
+    if (pattern.test(text)) return suffix;
+  }
+  return undefined;
+}
+
+const NON_PLAYER_NAMES = new Set([
+  '광주',
+  '전남',
+  '테니스',
+  '골드부',
+  '일반부',
+  '지도자',
+  '여자신인',
+  '국화부',
+  '금배부',
+  '랭킹',
+  '순위',
+  '세계',
+  '국내',
+  '전체',
+  '남자',
+  '여자',
+  '협회',
+  '동호인',
+  '맛집',
+  '영화',
+  '음악',
+  '노래',
+  '대학',
+  '학교',
+  '관광',
+  '축구',
+  '야구',
+  '농구',
+]);
+
+function extractPlayerName(text: string): string | undefined {
+  if (!RANKING_KW.test(text)) return undefined;
+  const beforeMarker = text.match(/([가-힣]{2,4})\s*선수(?:의)?/);
+  const labeledAfterMarker = text.match(
+    /(?:선수명\s*[:：]?|선수\s*[:：])\s*([가-힣]{2,4})(?=\s*(?:의|선수|랭킹|순위|포인트|$))/,
+  );
+  const plainBeforeRanking = text.match(
+    /(?:^|\s)([가-힣]{2,4})(?=\s*(?:선수(?:의)?\s*)?(?:랭킹|순위|몇\s*(?:위|등)))/,
+  );
+  for (
+    const candidate of [
+      beforeMarker?.[1],
+      labeledAfterMarker?.[1],
+      plainBeforeRanking?.[1],
+    ]
+  ) {
+    if (candidate && !NON_PLAYER_NAMES.has(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 export function extractSlots(text: string, now: Date = new Date()): Slots {
   const slots: Slots = {};
   const region = extractRegion(text);
@@ -326,6 +433,14 @@ export function extractSlots(text: string, now: Date = new Date()): Slots {
   if (sport) slots.sport = sport;
   const dateRange = extractDateRange(text, now);
   if (dateRange) slots.date_range = dateRange;
+  const orgCode = extractRankingOrg(text);
+  if (orgCode) slots.org_code = orgCode;
+  const divisionSuffix = extractRankingDivisionSuffix(text);
+  if (orgCode && divisionSuffix) {
+    slots.division_code = `${orgCode}_${divisionSuffix}`;
+  }
+  const playerName = extractPlayerName(text);
+  if (playerName) slots.player_name = playerName;
   return slots;
 }
 
@@ -347,28 +462,54 @@ const MATCH_KW = /(매치|경기|시합\s*일정)/;
 const SCHEDULE_KW = /(일정|스케줄|언제|오늘|내일|이번\s*주|다음\s*주)/;
 const DETAIL_KW = /(자세|상세|어떻게|신청|참가\s*방법|등록\s*방법|접수)/;
 const SEARCH_KW = /(검색|찾|알려|뭐\s*있|있어|있나|추천|보여)/;
-const MY_PROFILE_KW = /(내\s*(등급|점수|협회|프로필|랭킹|부수)|제\s*(등급|점수|협회|프로필|부수))/;
+const MY_PROFILE_KW = /(내\s*(등급|점수|협회|프로필|부수)|제\s*(등급|점수|협회|프로필|부수))/;
+const MY_RANKING_KW = /((내|제)\s*(현재\s*)?(랭킹|순위)|(나|저는?)\s*(지금\s*)?몇\s*(?:위|등))/;
+const RANKING_RULE_KW =
+  /(?:랭킹\s*)?포인트.{0,12}(산정|계산|배점|기준|방식|규정|적립|소멸|어떻게)|(?:산정|계산|배점).{0,12}(?:랭킹\s*)?포인트/;
 // "클럽 만들기/개설/창단" 은 기존 클럽 검색이 아니다 → club_search 룰에서 제외해 폴백(임베딩)으로.
 const CREATE_KW = /(만들|만드는|개설|창단|창설)/;
 
 export function classifyByRule(text: string): RuleClassification | null {
-  // 1. tournament_detail — 대회 + 상세 키워드 (my_profile보다 먼저: "내 등급 대회 신청방법")
+  // 1. 랭킹 포인트 산정법은 현재 순위 조회가 아니라 규정 지식 조회다.
+  //    "어떻게" 때문에 tournament_detail 로 빠질 수 있어 가장 먼저 검사한다.
+  if (RANKING_RULE_KW.test(text)) {
+    return { intent: 'rule_lookup', rule: 'ranking_points_rule' };
+  }
+
+  // 2. tournament_detail — 대회 + 상세 키워드 (my_profile보다 먼저: "내 등급 대회 신청방법")
   if (TOURNAMENT_KW.test(text) && DETAIL_KW.test(text)) {
     return { intent: 'tournament_detail', rule: 'tournament_with_detail' };
   }
 
-  // 2. rule_lookup — 룰/규칙/규정 키워드는 tournament_search 보다 먼저.
+  // 3. rule_lookup — 룰/규칙/규정 키워드는 tournament_search 보다 먼저.
   //    "대회 참가 자격 규정" 처럼 '대회'가 있어도 규정 질문은 검색이 아니라 룰 조회다.
   if (RULE_KW.test(text)) {
     return { intent: 'rule_lookup', rule: 'rule_keyword' };
   }
 
-  // 3. tournament_search — 대회 키워드 (my_profile보다 먼저: "내 등급에 맞는 대회 알려줘")
+  // 4. 내 랭킹 — 일반 협회 랭킹과 별도 경로에서 본인 확정 연결을 사용한다.
+  if (MY_RANKING_KW.test(text)) {
+    return { intent: 'my_ranking', rule: 'my_ranking_keyword' };
+  }
+
+  // 5. 일반 협회 랭킹 — 협회·부서·선수 표지 중 하나가 함께 있을 때만 고신뢰 매칭.
+  //    "영화 순위", "ATP 랭킹" 같은 일반 문장을 협회 랭킹으로 오인하지 않는다.
+  if (
+    RANKING_KW.test(text) &&
+    (extractRankingOrg(text) !== undefined ||
+      extractRankingDivisionSuffix(text) !== undefined ||
+      extractPlayerName(text) !== undefined ||
+      /협회\s*(?:랭킹|순위)/.test(text))
+  ) {
+    return { intent: 'ranking_lookup', rule: 'org_ranking_keyword' };
+  }
+
+  // 6. tournament_search — 대회 키워드 (my_profile보다 먼저: "내 등급에 맞는 대회 알려줘")
   if (TOURNAMENT_KW.test(text)) {
     return { intent: 'tournament_search', rule: 'tournament_keyword' };
   }
 
-  // 4. my_profile — 대회 키워드 없을 때만 ("내 등급이 뭐야", "내 협회 알려줘")
+  // 7. my_profile — 대회 키워드 없을 때만 ("내 등급이 뭐야", "내 협회 알려줘")
   if (MY_PROFILE_KW.test(text)) {
     return { intent: 'my_profile', rule: 'my_profile_keyword' };
   }

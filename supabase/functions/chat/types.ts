@@ -82,7 +82,7 @@ export interface VenueRow {
 
 export interface DbCitation {
   type: 'db';
-  source: 'tournaments' | 'rules' | 'venues' | 'clubs';
+  source: 'tournaments' | 'rules' | 'venues' | 'clubs' | 'rankings';
   id: string;
   title: string;
 }
@@ -111,9 +111,16 @@ export const QA_CACHE_TTL_HOURS = 24;
  * (24시간) 동안 옛 프롬프트로 만든 답이 계속 나간다 — 내부 UUID 노출을 고치고도
  * 하루 동안 그대로 보였을 상황이 실제로 있었다(#363, codex 리뷰가 잡음).
  *
- * v2: 컨텍스트 행에서 내부 id 제거 + "출처는 제목으로" 지시로 교체.
+ * v3: 컨텍스트 행에서 내부 id 제거 + "출처는 제목으로" 지시로 교체.
+ * v4: 스포츠·앱 답변 범위, 근거 없는 사실 생성 금지, 유해 요청 거절을 명시.
+ * v5: 룰북 제목 인용 계약 + 관련 문서가 없을 때 DB 근거를 가장하지 않도록 강화.
  */
-export const CHAT_PROMPT_VERSION = 3;
+export const CHAT_PROMPT_VERSION = 5;
+
+// rules_semantic_search 는 유사도 하한 없이 상위 N개를 항상 반환한다. 운영 점검에서
+// 테니스 타이브레이크 질문에 무관한 문서가 0.66~0.69로 잡혔고, 관련 풋살 문서는
+// 0.82 이상이었다. 관측된 오답 구간을 제외하기 위해 0.72 미만은 DB 근거로 쓰지 않는다.
+export const RULE_GROUNDING_MIN_SIMILARITY = 0.72;
 
 // Intent classifier settings.
 // 임베딩 KNN 관측용 하한 — intent_classify RPC 가 이 값 이상 유사한 예시만 다수결에 포함.

@@ -14,16 +14,19 @@
 | `app/lib/widgets/tournaments/regulation_document_view.dart` | 대회별 원문 구조와 무관한 공통 요강 렌더러 |
 | `app/lib/utils/grade_labels.dart` | 부서코드·등급 레이블 + 테니스 협회 정의 |
 
-## 내비게이션 (바텀탭 4개 + 전역 AI)
+## 내비게이션 (하단 메뉴 3개)
 
 | 탭 | 경로 | 화면 |
 |---|---|---|
-| 오늘 | `/` | HomeScreen |
-| 대회 | `/tournaments` | TournamentsScreen |
+| 대회 | `/` | HomeScreen / TournamentsScreen |
 | 클럽 | `/clubs` | ClubsScreen |
-| MY | `/profile` | ProfileScreen |
+| 볼보이 | 현재 화면 위 시트 | ChatScreen(embedded) |
 
-일반 사용자 화면에서는 바텀탭 위에 `AI에게 물어보기` 진입창을 표시한다. 진입창은 `GlobalChatDock`이 현재 경로에 맞는 추천 질문을 구성하고, `ChatScreen(embedded: true)`를 절반 높이 바텀시트로 연다. `/chat`은 바텀시트의 전체 화면 확장 경로로 유지한다. 대회·클럽 엔티티 ID는 사용자가 연결 토글을 켠 경우에만 `selectedEntity`로 전송한다.
+MY는 하단 메뉴에서 제외하고 주요 화면 상단의 설정 아이콘으로 `/profile`에 진입한다.
+볼보이는 하단 메뉴에서 `GlobalChatDock`을 열어 현재 경로에 맞는 추천 질문을 구성하고,
+`ChatScreen(embedded: true)`를 절반 높이 바텀시트로 연다. `/chat`은 바텀시트의 전체
+화면 확장 경로로 유지한다. 대회·클럽 엔티티 ID는 사용자가 연결 토글을 켠 경우에만
+`selectedEntity`로 전송한다.
 
 독립 화면: `/rules`, `/notifications`, `/favorites`, `/blocked-users`, `/more`
 
@@ -78,6 +81,12 @@
 - `myUserSports()`, `saveUserSports()`
 - `myTennisOrgs()`, `saveTennisOrgs()`, `upsertTennisOrg()`, `deleteTennisOrg()`
 - `toggleFavorite()`, `myFavoriteIds()`
+
+### 협회 랭킹
+
+- `orgRankings()` — 협회·부서별 랭킹을 받아 화면에서 순위 오름차순으로 정렬
+- `playerHistory()` — 현재 랭킹 선수의 협회 공표 대회 이력을 온디맨드 조회
+- 랭킹 행을 누르면 선수 요약과 연도별 최신순 대회 이력을 바텀시트로 표시
 
 ### 챗봇
 - `chat()` — SSE 스트림 반환

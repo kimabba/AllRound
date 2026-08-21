@@ -15,7 +15,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(5);
+select plan(8);
 
 -- ── replace_org_ranking_division: service_role 전용 ──────────────────
 select is(
@@ -32,6 +32,22 @@ select is(
   has_function_privilege('service_role',
     'public.replace_org_ranking_division(text, text, text, jsonb)', 'EXECUTE'),
   true, 'service_role 은 랭킹 교체 RPC 를 실행할 수 있다 (크롤러 경로)');
+
+-- ── replace_org_player_history: service_role 전용 ───────────────────
+select is(
+  has_function_privilege('anon',
+    'public.replace_org_player_history(text, text, jsonb, boolean)', 'EXECUTE'),
+  false, 'anon 은 선수 이력 교체 RPC 를 실행할 수 없다');
+
+select is(
+  has_function_privilege('authenticated',
+    'public.replace_org_player_history(text, text, jsonb, boolean)', 'EXECUTE'),
+  false, 'authenticated 는 선수 이력 교체 RPC 를 실행할 수 없다');
+
+select is(
+  has_function_privilege('service_role',
+    'public.replace_org_player_history(text, text, jsonb, boolean)', 'EXECUTE'),
+  true, 'service_role 은 선수 이력 교체 RPC 를 실행할 수 있다 (Edge Function 경로)');
 
 -- ── my_ranking_candidates: 로그인 유저 전용 ─────────────────────────
 --   SECURITY INVOKER 라 anon 이 불러도 RLS 로 0행이지만, 로그인 전용 기능이라 권한도 좁힌다.

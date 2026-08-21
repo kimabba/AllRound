@@ -316,7 +316,6 @@ class _MainShell extends ConsumerWidget {
   static const _tabs = <String>[
     '/',
     '/clubs',
-    '/profile',
   ];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
@@ -326,6 +325,7 @@ class _MainShell extends ConsumerWidget {
     '/notifications',
     '/favorites',
     '/blocked-users',
+    '/profile',
   ];
 
   int _indexOf(String location) {

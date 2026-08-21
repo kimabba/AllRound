@@ -33,7 +33,7 @@ android {
     defaultConfig {
         applicationId = "kr.allround.app"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

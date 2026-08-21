@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../models/org_ranking.dart';
 import '../models/player_result.dart';
 import 'api_base.dart';
@@ -18,6 +20,54 @@ mixin RankingApi on ApiBase {
     return List<Map<String, dynamic>>.from(
       rows,
     ).map(OrgRankingRow.fromJson).toList();
+  }
+
+  /// 랭킹표에서 선택한 선수의 협회 공표 대회 이력.
+  ///
+  /// 클라이언트가 협회 원본을 직접 긁지 않는다. Edge Function 이 현재 랭킹 선수인지
+  /// 검증하고 호출 제한·24시간 캐시를 적용한 뒤 정규화된 결과만 반환한다.
+  Future<PlayerHistory> playerHistory(OrgRankingRow player) async {
+    final playerId = player.orgPlayerId;
+    if (playerId == null) {
+      throw ArgumentError('player.orgPlayerId is required for history');
+    }
+    final response = await httpGet(
+      uri('ranking-player-history', {
+        'org': player.orgCode,
+        'player_id': playerId,
+      }),
+      headers: await authHeaders(),
+    );
+    check(response);
+
+    final Object? decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid player history response');
+    }
+    final rawResults = decoded['results'];
+    final rawFetchedAt = decoded['fetched_at'];
+    final rawComplete = decoded['is_complete'];
+    final rawCached = decoded['cached'];
+    if (rawResults is! List ||
+        rawFetchedAt is! String ||
+        rawComplete is! bool ||
+        rawCached is! bool) {
+      throw const FormatException('Invalid player history payload');
+    }
+
+    final results = <PlayerResult>[];
+    for (final item in rawResults) {
+      if (item is! Map<String, dynamic>) {
+        throw const FormatException('Invalid player history row');
+      }
+      results.add(PlayerResult.fromJson(item));
+    }
+    return PlayerHistory(
+      results: results,
+      fetchedAt: DateTime.parse(rawFetchedAt),
+      isComplete: rawComplete,
+      wasCached: rawCached,
+    );
   }
 
   /// 내 이름·소속 협회·등록 부서와 일치하는 랭킹 후보. 이미 신청/확정된 건 RPC 가 제외한다.

@@ -29,6 +29,7 @@ Flutter App
   │     ├── clubs-search
   │     ├── chat / chat-history / semantic-search
   │     ├── embed-pending / notify-cron
+  │     ├── ranking-player-history
   │     ├── crawl-tennis-gwangju / crawl-tennis-jeonnam / crawl-tennis-korea
   │     └── health
   ├── Postgres
@@ -37,6 +38,7 @@ Flutter App
   │     ├── clubs
   │     ├── chat_messages / rule_articles
   │     ├── device_tokens / notifications_log
+  │     ├── org_rankings / org_player_results / org_player_history_fetches
   │     └── crawl_audit
   └── FCM
 ```
@@ -55,6 +57,7 @@ Flutter App
 | POST | `/embed-pending` | cron | Embedding worker, `verify_jwt=false`. |
 | POST | `/notify-cron` | cron | D-3/deadline notification worker, `verify_jwt=false`. |
 | POST | `/crawl-tennis-*` | cron | Tennis crawlers, `verify_jwt=false`. |
+| GET | `/ranking-player-history` | user | On-demand association-published player history with a 24-hour cache. |
 | GET | `/health` | none | Health check. |
 
 ## Key paths

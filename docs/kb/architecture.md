@@ -21,6 +21,7 @@ Flutter App
   │     ├── chat / chat-history / semantic-search
   │     ├── embed-pending / notify-cron
   │     ├── crawl-dispatch (DB-driven 크롤러 일원화)
+  │     ├── ranking-player-history (선수별 협회 공표 이력 온디맨드 조회)
   │     ├── dev-auth (개발용 즉시 로그인)
   │     └── health
   ├── Postgres (→ database.md 참조)
@@ -45,6 +46,7 @@ Flutter App
 | POST | `/embed-pending` | cron | 임베딩 워커 |
 | POST | `/notify-cron` | cron | D-3/마감 알림 워커 |
 | POST | `/crawl-dispatch` | cron/admin | DB-driven 크롤러 통합 진입점 |
+| GET | `/ranking-player-history` | user | 현재 랭킹 선수의 협회 공표 대회 이력 조회·24시간 캐시 |
 | POST | `/dev-auth` | none | 개발용 magic link 즉시 로그인 |
 | GET | `/health` | none | 헬스 체크 |
 
