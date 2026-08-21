@@ -93,12 +93,17 @@ async function isBlockedPair(
   firstUserId: string,
   secondUserId: string,
 ): Promise<boolean> {
-  const { data } = await supabase
+  // user_blocks 의 실제 컬럼은 blocker_id/blocked_id 다(id 컬럼 없음, PK는 두 컬럼
+  // 복합키) — 예전엔 존재하지 않는 컬럼을 조회해 매 호출이 에러였고, 그 에러를
+  // 삼켜 "차단 아님"으로 fail-open 됐었다. 이제 에러는 그대로 던져 호출자가
+  // (메시지 전송이든 알림이든) 안전하게 멈추게 한다 — fail-closed.
+  const { data, error } = await supabase
     .from('user_blocks')
-    .select('id')
+    .select('blocker_id')
     .in('blocker_id', [firstUserId, secondUserId])
-    .in('blocked_user_id', [firstUserId, secondUserId])
+    .in('blocked_id', [firstUserId, secondUserId])
     .limit(1);
+  if (error) throw new Error('Block check failed');
   return Array.isArray(data) && data.length > 0;
 }
 
@@ -241,7 +246,7 @@ Deno.serve(withCors(async (req) => {
     if (requesterIds.length > 0) {
       const [sportsResult, orgsResult, membershipsResult, entriesResult] = await Promise.all([
         supabase.from('user_sports').select('user_id, sport, grade').in('user_id', requesterIds),
-        supabase.from('user_tennis_orgs').select('user_id, org, division_local, score')
+        supabase.from('user_tennis_orgs').select('user_id, org, division, score')
           .in('user_id', requesterIds),
         supabase.from('club_members').select('user_id, club_id').in('user_id', requesterIds)
           .eq('status', 'active'),
@@ -274,7 +279,7 @@ Deno.serve(withCors(async (req) => {
           sports: (sportsResult.data ?? []).filter((row) => row.user_id === requesterId)
             .map((row) => ({ sport: row.sport, grade: row.grade })),
           tennis_orgs: (orgsResult.data ?? []).filter((row) => row.user_id === requesterId)
-            .map((row) => ({ org: row.org, division: row.division_local, score: row.score })),
+            .map((row) => ({ org: row.org, division: row.division, score: row.score })),
           clubs: (membershipsResult.data ?? []).filter((row) => row.user_id === requesterId)
             .map((row) => clubNames.get(row.club_id as string)).filter(Boolean),
           tournaments: (entriesResult.data ?? []).filter((row) => row.user_id === requesterId)

@@ -77,12 +77,21 @@ bool clubNameMatchesQuery(String clubName, String query) {
   return tokens.every(name.contains);
 }
 
-String clubMonthlyFeeLabel(int fee) {
-  if (fee <= 0) return '월회비 무료';
-  if (fee % 10000 == 0) return '월회비 ${fee ~/ 10000}만원';
-  if (fee % 1000 == 0) return '월회비 ${fee ~/ 1000}천원';
-  return '월회비 $fee원';
+String clubFeeLabel(int fee, {String feeType = 'monthly'}) {
+  final prefix = feeType == 'per_event' ? '1회 참가비' : '월회비';
+  if (fee <= 0) return '$prefix 무료';
+  if (fee % 10000 == 0) return '$prefix ${fee ~/ 10000}만원';
+  if (fee % 1000 == 0) return '$prefix ${fee ~/ 1000}천원';
+  return '$prefix $fee원';
 }
+
+String clubMonthlyFeeLabel(int fee) => clubFeeLabel(fee);
+
+String clubNameHintForSport(String sport) =>
+    switch (sport.trim().toLowerCase()) {
+      'futsal' => '예: 서울 풋살 클럽',
+      _ => '예: 광주 테니스 클럽',
+    };
 
 const int clubMonthlyFeeMax = 1000000;
 
@@ -96,6 +105,14 @@ String? clubMonthlyFeeInputError(String? value) {
     return '회비는 0원 이상 100만원 이하로 입력해주세요';
   }
   return null;
+}
+
+const int clubDescriptionMinLength = 30;
+
+String? clubDescriptionInputError(String? value) {
+  final length = value?.trim().length ?? 0;
+  if (length >= clubDescriptionMinLength) return null;
+  return '클럽 소개는 30자 이상 작성해주세요 (현재 $length자)';
 }
 
 String? clubWebsiteInputError(String? value) {

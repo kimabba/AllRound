@@ -2,6 +2,33 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import 'age.dart';
 
+/// 웹 OAuth 콜백 URL의 오류를 앱에서 보여줄 문구로 변환한다.
+/// Supabase/브라우저 조합에 따라 query 또는 fragment 로 오고 한 번 더
+/// percent-encoding 되기도 하므로 두 위치와 중복 인코딩을 모두 처리한다.
+String? authCallbackErrorMessage(Uri uri) {
+  var raw = uri.queryParameters['error_description'];
+  if (raw == null && uri.fragment.contains('error_description=')) {
+    final fragmentQuery = uri.fragment.startsWith('/')
+        ? Uri.tryParse(uri.fragment)?.queryParameters
+        : Uri.splitQueryString(uri.fragment);
+    raw = fragmentQuery?['error_description'];
+  }
+  if (raw == null || raw.trim().isEmpty) return null;
+
+  var decoded = raw;
+  for (var pass = 0; pass < 2; pass++) {
+    if (!decoded.contains('%')) break;
+    try {
+      final next = Uri.decodeComponent(decoded);
+      if (next == decoded) break;
+      decoded = next;
+    } on ArgumentError {
+      break;
+    }
+  }
+  return authErrorMessage(AuthException(decoded), signUp: false);
+}
+
 /// Supabase AuthException 영어 원문을 사용자용 한국어로 매핑한다.
 ///
 /// 로그인 화면에서 분리해 둔 이유는 테스트 가능하게 만들기 위해서다. 이 매핑은

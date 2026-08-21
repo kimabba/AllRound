@@ -7,6 +7,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
+import '../../utils/kst.dart';
 import '../../widgets/app_card.dart';
 import 'profile_settings_widgets.dart';
 import 'profile_sports_widgets.dart';
@@ -455,7 +456,7 @@ class TournamentRecordsList extends StatelessWidget {
                                   ),
                                   const Spacer(),
                                   Icon(
-                                    Icons.bookmark_rounded,
+                                    Icons.favorite_rounded,
                                     size: 18,
                                     color: cs.primary,
                                   ),
@@ -642,9 +643,9 @@ List<Tournament> previewTournamentRecords() {
 String recordStatusLabel(Tournament tournament) {
   final deadline = tournament.applicationDeadline;
   if (deadline == null) return '관심 대회';
-  final today = DateTime.now();
+  // 기준일은 KST — 서버 마감 판정과 짝을 맞춘다(utils/kst.dart).
   final daysLeft =
-      deadline.difference(DateTime(today.year, today.month, today.day)).inDays;
+      deadline.difference(kstTodayDate(DateTime.now())).inDays;
   if (daysLeft < 0) return '마감';
   if (daysLeft == 0) return '오늘 마감';
   return 'D-$daysLeft';

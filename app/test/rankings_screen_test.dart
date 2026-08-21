@@ -28,6 +28,16 @@ OrgRankingRow _row({
   );
 }
 
+/// 기본 등록 상태 — 광주협회 남자골드부. 화면 기본 선택과 같아 registeredHere 가 참이다.
+/// UserTennisOrg 는 const 생성자가 아니라 최종 필드로 둔다.
+final _kDefaultMyOrgs = [
+  UserTennisOrg(
+    org: 'gj',
+    division: 'default',
+    divisionCodes: const ['gj_m_gold'],
+  ),
+];
+
 /// 화면 통합용 — _load() 가 실제로 쓰는 네 조회만 갈아끼운다.
 /// (단위 테스트가 판정 함수를 고정해도, 화면이 그 판정을 안 쓰면 소용없다.)
 class _FakeRankingApi extends ApiService {
@@ -36,7 +46,9 @@ class _FakeRankingApi extends ApiService {
     required this.links,
     this.candidates = const [],
     this.myName = '김평화',
-  })  : super(
+    List<UserTennisOrg>? myOrgs,
+  })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
+        super(
           SupabaseClient(
             'http://127.0.0.1:54321',
             'qa-anon-key',
@@ -48,6 +60,7 @@ class _FakeRankingApi extends ApiService {
   final List<Map<String, dynamic>> links;
   final List<OrgRankingRow> candidates;
   final String myName;
+  final List<UserTennisOrg> myOrgs;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -64,13 +77,7 @@ class _FakeRankingApi extends ApiService {
   Future<List<OrgRankingRow>> myRankingCandidates() async => candidates;
 
   @override
-  Future<List<UserTennisOrg>> myTennisOrgs() async => [
-        UserTennisOrg(
-          org: 'gj',
-          division: 'default',
-          divisionCodes: const ['gj_m_gold'],
-        ),
-      ];
+  Future<List<UserTennisOrg>> myTennisOrgs() async => myOrgs;
 
   @override
   Future<UserProfile?> myProfile() async => UserProfile(name: myName);
@@ -87,6 +94,7 @@ Future<void> _pumpScreen(
   required List<Map<String, dynamic>> links,
   List<OrgRankingRow> candidates = const [],
   String myName = '김평화',
+  List<UserTennisOrg>? myOrgs,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -97,6 +105,7 @@ Future<void> _pumpScreen(
             links: links,
             candidates: candidates,
             myName: myName,
+            myOrgs: myOrgs,
           ),
         ),
         currentUserProvider.overrideWithValue(
@@ -305,6 +314,231 @@ void main() {
       ];
       expect(compute(links), {'a'});
     });
+  });
+
+  group('이의신청 가능한 행 계산', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+    const me = 'me-uuid';
+
+    Set<String> dispute(
+      List<Map<String, dynamic>> links, {
+      bool here = true,
+      String myName = '김평화',
+    }) =>
+        computeDisputableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: myName,
+          registeredHere: here,
+        );
+
+    Set<String> claim(List<Map<String, dynamic>> links) => computeClaimableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: '김평화',
+          registeredHere: true,
+        );
+
+    test('남이 확정한 선수에만 붙는다 — 신청 버튼이 사라지는 자리다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), {'a'});
+      // 두 집합은 겹치지 않는다 — 한 줄에 버튼이 둘 뜨면 안 된다.
+      expect(claim(links), isEmpty);
+    });
+
+    test('빈 자리(주인 없음)에는 붙지 않는다 — 그건 일반 신청이다', () {
+      expect(dispute(const []), isEmpty);
+      expect(claim(const []), {'a'});
+    });
+
+    test('남이 신청 중(pending)일 뿐이면 붙지 않는다', () {
+      // 아직 주인이 없다 — 일반 신청으로 경합하면 된다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'pending', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+      expect(claim(links), {'a'});
+    });
+
+    test('내가 이미 그 선수에 신청·반려 이력이 있으면 빠진다', () {
+      // unique(org_code, org_player_id, user_id) 가 상태를 안 가려서 재신청이
+      // 반드시 실패한다 — 버튼이 뜨면 이유 모를 에러만 본다.
+      for (final mineStatus in ['pending', 'rejected']) {
+        final links = [
+          {
+            'org_player_id': 'a',
+            'status': 'confirmed',
+            'user_id': 'other-uuid',
+          },
+          {'org_player_id': 'a', 'status': mineStatus, 'user_id': me},
+        ];
+        expect(dispute(links), isEmpty, reason: mineStatus);
+      }
+    });
+
+    test('이 협회에 내 확정 연결이 있으면 아무 행도 다툴 수 없다', () {
+      // has_confirmed_org_link() 가 INSERT 를 거부한다.
+      final links = [
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+    });
+
+    test('이름이 다르면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, myName: '없는사람'), isEmpty);
+      // 정책이 글자 그대로 비교한다 — 앞뒤 여백도 불일치다.
+      expect(dispute(links, myName: ' 김평화 '), isEmpty);
+    });
+
+    test('등록한 부서가 아니면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, here: false), isEmpty);
+    });
+
+    test('로그인 전(myUserId=null)에는 두 함수 다 아무 행도 내지 않는다', () {
+      // 내 링크를 못 알아봐 전부 남의 것으로 취급하게 된다. 서버는 어차피
+      // user_id = auth.uid() 로 거부한다(codex 리뷰 2026-08-18).
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+      ];
+      for (final compute in [computeDisputableIds, computeClaimableIds]) {
+        expect(
+          compute(
+            rows: rows,
+            links: links,
+            myUserId: null,
+            myName: '김평화',
+            registeredHere: true,
+          ),
+          isEmpty,
+        );
+      }
+    });
+  });
+
+  // 본인 연결 진입이 0건인 이유 중 하나 — 등록 안 한 부서를 보면 버튼만
+  // 조용히 사라지고 설명이 없었다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+  group('등록 안 한 부서 안내', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('협회를 하나도 등록 안 했으면 등록을 권하고 버튼을 준다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: const [],
+      );
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+    });
+
+    testWidgets('등록은 했지만 다른 부서를 보는 중이면 버튼을 주지 않는다', (tester) async {
+      // "등록하러 가라"가 틀린 조언인 자리다 — 그 협회 랭커가 아닌 사람이
+      // 자기 부서가 아닌 것을 등록하게 만든다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            // 화면 기본 선택은 gj_m_gold 라 여기는 "내 부서가 아님"이 된다.
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsNothing);
+    });
+
+    testWidgets('등록한 부서를 보는 중이면 이 안내가 안 뜬다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsNothing);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
+    });
+
+    // 우선순위 고정(codex 리뷰 2026-08-18). 후보 카드·'확인 중입니다'는 부서가
+    // 아니라 협회 단위로 뜬다 — 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+    // 남자일반부 후보를 가진 사람이 탭을 옮기기 전엔 카드를 못 본다.
+    // 진행 중인 신청 소식이 "여긴 네 부서가 아니야"보다 먼저다.
+    testWidgets('같은 협회에 진행 중인 신청이 있으면 그 소식이 먼저다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.text('확인 중입니다'), findsOneWidget);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
+    });
+
+    // 단 협회 등록이 0개면 등록 안내가 이긴다. 등록을 지워도 pending 은
+    // 남으므로(org_player_links 는 user_tennis_orgs 와 별개 테이블),
+    // 순서가 반대면 '확인 중입니다'가 등록 안내를 영구히 가린다
+    // (codex 리뷰 2026-08-18).
+    testWidgets('협회 등록을 지운 뒤 pending 이 남아 있어도 등록 안내가 이긴다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: const [],
+      );
+
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+      expect(find.text('확인 중입니다'), findsNothing);
+    });
+  });
+
+  testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {
+    OrgRankingRow? disputed;
+    await _pump(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+        ],
+        linkedOrgPlayerId: null,
+        disputableOrgPlayerIds: const {'a'},
+        onDispute: (row) => disputed = row,
+      ),
+    );
+
+    expect(find.text('이의신청'), findsOneWidget);
+    expect(find.text('본인'), findsNothing);
+    await tester.tap(find.text('이의신청'));
+    expect(disputed?.orgPlayerId, 'a');
   });
 
   testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {

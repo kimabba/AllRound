@@ -73,13 +73,30 @@ supabase secrets set \
 supabase secrets set CORS_ALLOW_ORIGIN=https://your-domain.com
 supabase secrets set FCM_PROJECT_ID=<firebase-project-id>
 supabase secrets set FCM_SERVICE_ACCOUNT='<service-account-json>'
+supabase secrets set RESEND_API_KEY=<resend-api-key>
+supabase secrets set TOURNAMENT_SUBMISSION_EMAIL_FROM='AllRound <noreply@verified-domain.com>'
+supabase secrets set TOURNAMENT_SUBMISSION_TENNIS_EMAIL=<준모-이메일>
+supabase secrets set TOURNAMENT_SUBMISSION_FUTSAL_EMAIL=<주희-이메일>
 ```
+
+대회 제보 메일은 종목별로 분리한다. 테니스는 `TOURNAMENT_SUBMISSION_TENNIS_EMAIL`
+(준모), 풋살은 `TOURNAMENT_SUBMISSION_FUTSAL_EMAIL`(주희)로 발송한다. 발신 주소는
+Resend에서 검증된 도메인을 써야 하며, 메일 발송이 실패해도 제보 저장은 유지된다.
 
 ### 2.4 Auth 설정
 
 Supabase Dashboard > Authentication > Providers:
 - **Google**: Client ID / Secret 등록
 - **Email**: 가입 활성화, 이메일 인증 비활성화 (권장)
+
+Supabase Dashboard > Authentication > URL Configuration:
+
+- Site URL: 실제 운영 웹 origin. 로컬 UI 점검만 할 때는 `http://127.0.0.1:7357`
+- Redirect URLs: `http://127.0.0.1:7357/**`, `http://localhost:7357/**`,
+  `kr.allround.app://login-callback/`, 실제 운영 웹 origin의 `/**`
+
+웹 OAuth는 현재 origin을 `redirectTo`로 명시한다. 허용 목록에 빠진 origin은 GoTrue가
+Site URL로 대체하므로, 실행 포트와 다른 `localhost` 오류 페이지로 이동할 수 있다.
 
 ### 2.5 Cron 설정 (pg_cron)
 
@@ -178,7 +195,7 @@ Apple 업데이트 절차·권한·버전 이력은 [`docs/team/apple-release-ru
 - 개인정보처리방침 URL 필수
 
 ### Google Play (Android)
-- Application ID: `kr.allround.app`
+- Application ID: `kr.allround.android` (`kr.allround.app`은 외부에 선점당해 변경. 딥링크 스킴은 여전히 `kr.allround.app`)
 - 카테고리: 스포츠
 - 콘텐츠 등급: 전체이용가
 - 개인정보처리방침 URL 필수

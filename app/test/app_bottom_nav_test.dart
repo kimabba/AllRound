@@ -3,14 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('대회·클럽·MY 탭을 표시한다', (tester) async {
+  testWidgets('대회·클럽·볼보이·MY 메뉴를 표시한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          bottomNavigationBar: AppBottomNav(
-            currentIndex: 0,
-            onChanged: (_) {},
-          ),
+          bottomNavigationBar: AppBottomNav(currentIndex: 0, onChanged: (_) {}),
         ),
       ),
     );
@@ -25,7 +22,7 @@ void main() {
     expect(find.text('코치'), findsNothing);
   });
 
-  testWidgets('MY 탭은 세 번째 인덱스를 전달한다', (tester) async {
+  testWidgets('MY 탭은 세 번째 페이지 인덱스를 전달한다', (tester) async {
     int? selectedIndex;
     await tester.pumpWidget(
       MaterialApp(
@@ -40,6 +37,23 @@ void main() {
 
     await tester.tap(find.text('MY'));
     expect(selectedIndex, 2);
+  });
+
+  testWidgets('클럽 탭은 두 번째 인덱스를 전달한다', (tester) async {
+    int? selectedIndex;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: AppBottomNav(
+            currentIndex: 0,
+            onChanged: (index) => selectedIndex = index,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('클럽'));
+    expect(selectedIndex, 1);
   });
 
   testWidgets('볼보이 버튼은 탭이 아니라 별도 콜백으로 열린다', (tester) async {
@@ -82,5 +96,24 @@ void main() {
     final ballboyX = tester.getCenter(find.text('볼보이')).dx;
     expect(ballboyX, greaterThan(tester.getCenter(find.text('클럽')).dx));
     expect(ballboyX, lessThan(tester.getCenter(find.text('MY')).dx));
+  });
+
+  testWidgets('현재 탭은 채운 아이콘으로, 볼보이는 중립 아이콘으로 구분한다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: AppBottomNav(
+            currentIndex: 1,
+            onChanged: (_) {},
+            onChatTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.groups_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.emoji_events_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
   });
 }

@@ -4,7 +4,10 @@ export type ValidationResult<T> =
 
 const meetingDays = new Set(['월', '화', '수', '목', '금', '토', '일']);
 const genderPreferences = new Set(['mixed', 'male', 'female']);
+const feeTypes = new Set(['monthly', 'per_event']);
 const maxMonthlyFee = 1_000_000;
+const minDescriptionLength = 30;
+const maxDescriptionLength = 2_000;
 const clubCardColors = new Set([
   '#18376D',
   '#3156D8',
@@ -63,6 +66,35 @@ export function parseMonthlyFee(
     };
   }
   return { ok: true, value };
+}
+
+export function parseFeeType(value: unknown): ValidationResult<string> {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: 'monthly' };
+  }
+  if (typeof value !== 'string' || !feeTypes.has(value)) {
+    return { ok: false, message: 'fee_type must be monthly or per_event' };
+  }
+  return { ok: true, value };
+}
+
+export function parseClubDescription(
+  value: unknown,
+): ValidationResult<string> {
+  if (typeof value !== 'string') {
+    return { ok: false, message: 'description is required' };
+  }
+  const description = value.trim();
+  if (
+    description.length < minDescriptionLength ||
+    description.length > maxDescriptionLength
+  ) {
+    return {
+      ok: false,
+      message: 'description must be between 30 and 2000 characters',
+    };
+  }
+  return { ok: true, value: description };
 }
 
 export function parseGenderPreference(

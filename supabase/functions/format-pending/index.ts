@@ -14,7 +14,12 @@ import {
   regulationDocumentVerificationFields,
 } from '../_shared/regulation_document.ts';
 import { isKatoSource, parseKatoRegulation } from '../_shared/crawler/parsers/kato_regulation.ts';
-import { extractPlainText, type RegulationResult, verifyAgainstSource } from './logic.ts';
+import {
+  extractPlainText,
+  type RegulationResult,
+  RESPONSE_SCHEMA,
+  verifyAgainstSource,
+} from './logic.ts';
 
 const BATCH_SIZE = 4;
 const LEASE_MINUTES = 15;
@@ -30,116 +35,6 @@ interface StructuredRegulationResponse {
   confidence: number;
   unusual: boolean;
 }
-
-const RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    regulation_document: {
-      type: 'object',
-      properties: {
-        schema_version: { type: 'integer', enum: [REGULATION_DOCUMENT_VERSION] },
-        summary: { type: 'string' },
-        sections: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              code: {
-                type: 'string',
-                enum: [
-                  'eligibility',
-                  'schedule_venue',
-                  'registration_payment',
-                  'match_operations',
-                  'awards',
-                  'refund_changes',
-                  'notices_contact',
-                  'other',
-                ],
-              },
-              availability: {
-                type: 'string',
-                enum: ['present', 'not_announced', 'not_applicable'],
-              },
-              blocks: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    type: {
-                      type: 'string',
-                      enum: [
-                        'paragraph',
-                        'subheading',
-                        'bullets',
-                        'key_values',
-                        'table',
-                        'notice',
-                        'division_schedule',
-                      ],
-                    },
-                    text: { type: 'string' },
-                    items: { type: 'array', items: { type: 'string' } },
-                    entries: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: { label: { type: 'string' }, value: { type: 'string' } },
-                        required: ['label', 'value'],
-                      },
-                    },
-                    columns: { type: 'array', items: { type: 'string' } },
-                    rows: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          cells: { type: 'array', items: { type: 'string' } },
-                        },
-                        required: ['cells'],
-                      },
-                    },
-                    divisions: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          name: { type: 'string' },
-                          date: { type: 'string' },
-                          venue: { type: 'string' },
-                          fee: { type: 'string' },
-                          account: { type: 'string' },
-                          capacity: { type: 'string' },
-                        },
-                        required: ['name'],
-                      },
-                    },
-                  },
-                  required: ['type'],
-                },
-              },
-            },
-            required: ['code', 'availability', 'blocks'],
-          },
-        },
-      },
-      required: ['schema_version', 'sections'],
-    },
-    prize: { type: 'string' },
-    format: { type: 'string' },
-    description: { type: 'string' },
-    confidence: { type: 'number' },
-    unusual: { type: 'boolean' },
-  },
-  required: [
-    'regulation_document',
-    'prize',
-    'format',
-    'description',
-    'confidence',
-    'unusual',
-  ],
-};
 
 function buildPrompt(title: string, sourceText: string): string {
   return [

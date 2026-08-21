@@ -6,15 +6,19 @@ import {
   type ClubCardRow,
   type ClubDetailRow,
   isGradeRegisteredForSport,
+  isScheduleConflictRow,
   isTournamentCardRow,
   parseSelectedEntity,
   parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderScheduleConflictText,
   renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
+  type ScheduleConflictRow,
+  todayKst,
   type TournamentCardRow,
 } from '../_shared/chat_cards.ts';
 
@@ -418,4 +422,125 @@ Deno.test('parseTournamentRefine: 정상 ISO 날짜 범위는 유지', () => {
     assertEquals(r.value.date_from, '2026-07-01');
     assertEquals(r.value.date_to, '2026-07-31');
   }
+});
+
+// ==========================================================================
+// Schedule conflicts (match_schedule 라우팅 — my_schedule_conflicts RPC 결과 렌더)
+// ==========================================================================
+
+Deno.test('renderScheduleConflictText - 겹침 없으면 안내 문구', () => {
+  const text = renderScheduleConflictText([]);
+  assert(text.includes('겹치는 일정이 없어요'));
+});
+
+Deno.test('renderScheduleConflictText - 대회끼리 겹침을 나열', () => {
+  const rows: ScheduleConflictRow[] = [
+    {
+      kind: 'tournament_vs_tournament',
+      a_id: 'a1',
+      a_title: '광주 오픈',
+      a_start: '2026-09-10',
+      a_end: '2026-09-11',
+      b_id: 'a2',
+      b_title: '전남 챔피언십',
+      b_date: '2026-09-11',
+    },
+  ];
+  const text = renderScheduleConflictText(rows);
+  assert(text.includes('광주 오픈'));
+  assert(text.includes('전남 챔피언십'));
+  assert(text.includes('대회'));
+});
+
+Deno.test('renderScheduleConflictText - 대회-클럽모임 겹침은 라벨을 클럽 모임으로 표기', () => {
+  const rows: ScheduleConflictRow[] = [
+    {
+      kind: 'tournament_vs_club_event',
+      a_id: 'a1',
+      a_title: '광주 오픈',
+      a_start: '2026-09-10',
+      a_end: '2026-09-11',
+      b_id: 'e1',
+      b_title: '정기 모임',
+      b_date: '2026-09-10',
+    },
+  ];
+  const text = renderScheduleConflictText(rows);
+  assert(text.includes('클럽 모임'));
+  assert(text.includes('정기 모임'));
+});
+
+Deno.test('isScheduleConflictRow - 필수 필드 누락이면 거부', () => {
+  assert(!isScheduleConflictRow({ kind: 'tournament_vs_tournament' }));
+  assert(
+    isScheduleConflictRow({
+      kind: 'tournament_vs_tournament',
+      a_id: 'a1',
+      a_title: 't',
+      a_start: '2026-09-10',
+      a_end: null,
+      b_id: 'a2',
+      b_title: 't2',
+      b_date: '2026-09-11',
+    }),
+  );
+});
+
+// ── 종료 판정(KST) ────────────────────────────────────────────────
+// 판정을 서버가 하는 이유: end_date 없는 행이 대다수인데(단일일 대회) 그 null 과
+// RAG 경로처럼 "종료일을 조회하지 못한" null 은 뜻이 다르다. 앱에 내려간 카드만
+// 보면 둘이 똑같아 보여 구분할 수 없다.
+
+Deno.test('finished — 종료일이 지났으면 true, 남았으면 false', () => {
+  const past = buildTournamentCards([{
+    ...SAMPLE_ROW,
+    start_date: '2020-01-01',
+    end_date: '2020-01-03',
+  }]);
+  assertEquals(past[0].finished, true);
+
+  const future = buildTournamentCards([{
+    ...SAMPLE_ROW,
+    start_date: '2099-01-01',
+    end_date: '2099-01-03',
+  }]);
+  assertEquals(future[0].finished, false);
+});
+
+Deno.test('finished — end_date 가 없으면 start_date 로 판정한다(단일일 대회)', () => {
+  const past = buildTournamentCards([{
+    ...SAMPLE_ROW,
+    start_date: '2020-01-01',
+    end_date: null,
+  }]);
+  assertEquals(past[0].finished, true, '지난 단일일 대회는 종료다');
+
+  const future = buildTournamentCards([{
+    ...SAMPLE_ROW,
+    start_date: '2099-01-01',
+    end_date: null,
+  }]);
+  assertEquals(future[0].finished, false);
+});
+
+Deno.test('finished — knowsEndDate=false 면 판정하지 않는다(RAG 경로)', () => {
+  // 진행 중인 여러 날 대회를 semantic_search 로 받으면 end_date 가 null 로 온다.
+  // 여기서 start_date 로 판정하면 진행 중인 대회가 "종료"로 찍힌다 — 그래서 null.
+  const cards = buildTournamentCards(
+    [{
+      ...SAMPLE_ROW,
+      start_date: '2020-01-01',
+      end_date: null,
+    }],
+    true,
+    false,
+  );
+  assertEquals(cards[0].finished, null);
+});
+
+Deno.test('todayKst — UTC 자정 경계에서 한국 날짜로 끊는다', () => {
+  // 2026-08-18 23:50 KST == 14:50 UTC
+  assertEquals(todayKst(new Date('2026-08-18T14:50:00Z')), '2026-08-18');
+  // 2026-08-19 00:10 KST == 8/18 15:10 UTC
+  assertEquals(todayKst(new Date('2026-08-18T15:10:00Z')), '2026-08-19');
 });

@@ -87,6 +87,16 @@ insert into public.rule_articles (sport, category, title, body, order_idx) value
  '풋살은 경기 도중 무제한 교체가 가능합니다. 교체 박스에서만 교체할 수 있으며, 나가는 선수가 완전히 코트를 벗어난 후 들어가야 합니다. 골키퍼 교체는 데드볼 상황에서만 가능합니다.',
  1);
 
+-- 위 3건은 로컬 검색 확인용의 옛 요약이며, 공식 룰북 30건과 중복되므로 화면에는 노출하지 않는다.
+update public.rule_articles
+set published = false
+where sport = 'futsal'
+  and title in (
+    '풋살 경기 시간 규칙',
+    '누적 파울 규칙',
+    '플라잉 서브 교체'
+  );
+
 -- =========================
 -- regions (권역 매핑 — 광주·전남 2026.05.01 분리 반영)
 --   045_seed_regions.sql 이 정식 시드(ON CONFLICT DO UPDATE)이므로

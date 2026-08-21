@@ -7,9 +7,14 @@ import '../../testing/e2e_keys.dart';
 import '../../theme/tokens.dart';
 
 class ProfileServiceSection extends StatelessWidget {
-  const ProfileServiceSection({super.key, required this.onRulesTap});
+  const ProfileServiceSection({
+    super.key,
+    required this.onCustomerSupportTap,
+    required this.onTournamentInquiryTap,
+  });
 
-  final VoidCallback onRulesTap;
+  final VoidCallback onCustomerSupportTap;
+  final VoidCallback onTournamentInquiryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -20,10 +25,17 @@ class ProfileServiceSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         const Divider(height: 1),
         ActionRow(
-          icon: Icons.menu_book_outlined,
-          label: '룰북',
-          subtitle: '테니스와 풋살 규칙 확인',
-          onTap: onRulesTap,
+          icon: Icons.support_agent_rounded,
+          label: '고객센터',
+          subtitle: '이용 중 궁금한 점을 문의하세요',
+          onTap: onCustomerSupportTap,
+        ),
+        const Divider(height: 1),
+        ActionRow(
+          icon: Icons.edit_calendar_outlined,
+          label: '대회 등록 문의',
+          subtitle: '알고 있는 대회의 등록을 요청하세요',
+          onTap: onTournamentInquiryTap,
         ),
         const Divider(height: 1),
       ],

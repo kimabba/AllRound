@@ -32,6 +32,7 @@ import {
   type Intent,
   INTENT_VALUES,
   type IntentResult,
+  isDateRangeFullyPast,
   resolveRequestedSport,
 } from '../_shared/intent.ts';
 import {
@@ -41,15 +42,18 @@ import {
   type ClubCardRow,
   type ClubDetailRow,
   isGradeRegisteredForSport,
+  isScheduleConflictRow,
   isTournamentCardRow,
   parseSelectedEntity,
   parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderScheduleConflictText,
   renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
+  type ScheduleConflictRow,
 } from '../_shared/chat_cards.ts';
 
 import type {
@@ -62,7 +66,7 @@ import type {
   UserTennisOrgRow,
   VenueRow,
 } from './types.ts';
-import { INTENT_KNN_THRESHOLD, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
+import { INTENT_KNN_THRESHOLD, isMyRankingRow, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
 import {
   buildContextPrompt,
   buildProfileContext,
@@ -376,9 +380,10 @@ Deno.serve(withCors(async (req) => {
         // ---- 짧은 후속 질문 이어받기 ----
         // "다음달은?", "광주는?" 처럼 대회 키워드가 없어 분류되지 않은 후속 질문은,
         // 직전 turn 이 대회 검색이었다면 대회 검색으로 이어받아 기간·지역만 갱신한다.
-        // venue/club 등 명확한 다른 의도(ROUTABLE)는 덮지 않는다.
+        // 룰 분류(confidence=1.0)는 어떤 의도든 덮지 않는다 — "오늘 매치 일정" 같은
+        // 확실한 match_schedule 이 직전 대회 검색에 끌려가면 안 된다.
         if (
-          !ROUTABLE_INTENTS.has(intentResult.intent) &&
+          !(intentResult.method === 'rule' || ROUTABLE_INTENTS.has(intentResult.intent)) &&
           (slots.date_range || slots.region)
         ) {
           const priorMsgs = (prior ?? []) as { role: string; content: string }[];
@@ -437,13 +442,80 @@ Deno.serve(withCors(async (req) => {
           }),
         );
 
-        // ---- match_schedule: 개인 매치 일정 데이터 미비 → 결정적 안내 fallback ----
-        // RAG 로 흘리면 무관한 대회/룰을 긁어오므로 안내로 종료한다.
-        if (intentResult.intent === 'match_schedule') {
-          const dr = intentResult.slots.date_range;
-          const scheduleText = '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
-            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
-            (dr ? '\n이 기간의 대회가 궁금하면 "이 기간 대회 알려줘"라고 말씀해 주세요.' : '');
+        // ---- match_schedule: 즐겨찾기 대회 + 클럽 모임 일정 겹침 확인 (LLM 미사용, 결정적) ----
+        if (
+          intentResult.intent === 'match_schedule' &&
+          intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD
+        ) {
+          const scheduleErrorText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
+            '잠시 후 다시 시도해 주세요.';
+          const todayKstForSchedule = new Date(Date.now() + 9 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
+          const rawDateRange = intentResult.slots.date_range;
+          // 이 RPC 는 미래 겹침만 보는 구조(내부에서 conflict_date >= 오늘 강제)라, 이미
+          // 지난 범위를 그대로 넘기면 항상 0행이 나와 "겹침 없음"으로 오판된다 — 그럴 땐
+          // 범위를 무시하고 기본 90일 창을 쓴다. isDateRangeFullyPast 참고.
+          const dateRange = rawDateRange && !isDateRangeFullyPast(rawDateRange, todayKstForSchedule)
+            ? rawDateRange
+            : undefined;
+          const scheduleRangeLabel = dateRange
+            ? `${dateRange.from} ~ ${dateRange.to}`
+            : '앞으로 90일';
+          const { data: conflictRows, error: conflictErr } = await supabase.rpc(
+            'my_schedule_conflicts',
+            { p_date_from: dateRange?.from ?? null, p_date_to: dateRange?.to ?? null },
+          );
+
+          let scheduleText: string;
+          if (conflictErr) {
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'schedule_conflicts_rpc_error',
+                reason: conflictErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+            scheduleText = scheduleErrorText;
+          } else {
+            const typedRows = (Array.isArray(conflictRows) ? conflictRows : [])
+              .filter(isScheduleConflictRow) as ScheduleConflictRow[];
+            if (typedRows.length === 0) {
+              // 겹침이 0건인 이유가 "비교할 게 없어서"인지 "겹치는 게 없어서"인지 구분해
+              // 서로 다른 안내를 준다. RPC 두 분기 모두 즐겨찾기 대회가 조인 뿌리라서
+              // 즐겨찾기 0건이면 클럽 가입 여부와 무관하게 겹침이 나올 수 없다 —
+              // 판정은 즐겨찾기 수만 본다.
+              // RPC가 published/closed 대회만 비교하므로 개수도 같은 기준으로 센다 —
+              // draft/rejected 즐겨찾기만 있으면 "비교할 게 없음" 안내가 맞다.
+              const favoriteResult = await supabase
+                .from('tournament_favorites')
+                .select('tournament_id, tournaments!inner(status)', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .in('tournaments.status', ['published', 'closed']);
+              // count는 실패해도 null로 와서 "0건"과 구분되지 않는다. error를 봐야 한다.
+              if (favoriteResult.error) {
+                console.error(
+                  'chat_route',
+                  JSON.stringify({
+                    event: 'schedule_conflicts_count_error',
+                    reason: favoriteResult.error.message,
+                    user_id_hash: hashedUserId,
+                    conversation_id: conversationId,
+                  }),
+                );
+                scheduleText = scheduleErrorText;
+              } else {
+                scheduleText = (favoriteResult.count ?? 0) === 0
+                  ? '비교할 즐겨찾기 대회나 클럽 모임이 없어요. ' +
+                    '대회를 즐겨찾기하거나 클럽에 가입하면 겹치는 일정을 확인해 드릴게요.'
+                  : renderScheduleConflictText([]);
+              }
+            } else {
+              scheduleText = renderScheduleConflictText(typedRows, scheduleRangeLabel);
+            }
+          }
+
           send('context', { tournaments: [], rules: [] });
           send('delta', { text: scheduleText });
           await chatWriter.from('chat_messages').insert({
@@ -528,7 +600,47 @@ Deno.serve(withCors(async (req) => {
               const score = o.score !== null ? ` (점수 ${o.score})` : '';
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }
+
+            // 본인 인증 연결(confirmed)된 랭킹만 표시. 대부분 사용자는 아직 연결이
+            // 없어 "조회 불가" 로 나온다 — 알려진 제약(design doc §3 제외 항목).
+            // org_rankings 는 테니스 협회 전용이라 등록 협회가 없으면 항상 0행 →
+            // 아예 조회하지 않고 섹션도 붙이지 않는다([등록 협회] 섹션과 같은 조건).
+            const { data: rankingRows, error: rankingErr } = await supabase.rpc(
+              'my_confirmed_ranking',
+            );
+            profileLines.push('');
+            profileLines.push('[내 랭킹]');
+            if (rankingErr) {
+              console.error(
+                'chat_route',
+                JSON.stringify({
+                  event: 'my_confirmed_ranking_rpc_error',
+                  reason: rankingErr.message,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              profileLines.push('- 랭킹 조회 중 오류가 발생해 표시할 수 없음');
+            } else {
+              const typedRanking = (Array.isArray(rankingRows) ? rankingRows : [])
+                .filter(isMyRankingRow);
+              if (typedRanking.length === 0) {
+                profileLines.push(
+                  '- 아직 협회 랭킹 본인 인증 연결이 되어 있지 않아 조회할 수 없음',
+                );
+              } else {
+                for (const r of typedRanking) {
+                  const orgName = TENNIS_ORG_LABELS[r.org_code as keyof typeof TENNIS_ORG_LABELS] ??
+                    r.org_code;
+                  profileLines.push(
+                    `- ${orgName} ${r.division_code}: ${r.rank}위 ` +
+                      `(순위포인트 ${r.rank_points}, 전체포인트 ${r.total_points})`,
+                  );
+                }
+              }
+            }
           }
+
           const profileContext = profileLines.join('\n');
 
           const profileHistory: ChatTurn[] = [];

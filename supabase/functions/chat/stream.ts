@@ -67,7 +67,9 @@ export function buildTournamentCardBlocks(tournaments: SemanticTournament[]): un
       {
         type: 'cards',
         entity: 'tournament',
-        items: buildTournamentCards(cardRows),
+        // knowsEndDate=false — semantic_search 는 end_date 를 반환하지 않는다(위 end_date: null).
+        // 종료 판정을 맡기지 않고 '모름'으로 남긴다.
+        items: buildTournamentCards(cardRows, true, false),
       },
     ],
   };

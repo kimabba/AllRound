@@ -112,6 +112,22 @@ export function regionCodeFromLabel(
   return REGION_CODE_BY_LABEL[label.trim()] ?? null;
 }
 
+/**
+ * 저장할 region_code 결정. 명시된 코드가 있으면 그것을 쓰고, 없으면 한글 지역명에서
+ * 유도한다. 지역 필터는 region_code 정확매칭이라 코드가 비면 그 대회는 어느 지역을
+ * 골라도 나오지 않는다 — 제보 경로가 이 상태였다(부산 대회 2건이 필터에서 0건).
+ */
+export function resolveRegionCode(
+  explicit: RegionCode | null | undefined,
+  label: string | null | undefined,
+): RegionCode | undefined {
+  // 빈 문자열은 "코드 없음"으로 본다. ?? 만 쓰면 '' 가 그대로 통과해
+  // 유도도 막히고 FK 위반으로 500 이 난다.
+  const trimmed = explicit?.trim();
+  if (trimmed) return trimmed as RegionCode;
+  return regionCodeFromLabel(label) ?? undefined;
+}
+
 // =========================
 // EntryFeeUnit
 // =========================

@@ -1,4 +1,5 @@
 import 'regulation_document.dart';
+import '../utils/kst.dart';
 
 /// 대회 요강 AI 정형화 처리 상태 (관리자 전용, 유저 노출 없음).
 enum FormatStatus {
@@ -122,10 +123,18 @@ class Tournament {
   /// 접수 마감 여부 공용 판정. 상태칩·신청바·카드가 같은 기준을 쓰도록 단일화한다.
   /// 기준: closed/cancelled 이거나, 신청 마감일이 지났거나,
   /// (마감일이 없으면) published 인데 대회 시작일이 지난 경우.
-  bool get isRegistrationClosed {
+  ///
+  /// 기준일은 기기 로컬이 아니라 **KST** 다 — 서버가 KST 로 마감을 판정하므로
+  /// (tournaments_for_user 의 p_recruiting 필터) 로컬 날짜를 쓰면 한국 자정
+  /// 근처에서 앱만 하루 먼저 '마감'을 띄운다.
+  bool get isRegistrationClosed => isRegistrationClosedAt(DateTime.now());
+
+  /// [isRegistrationClosed] 의 시각 주입 버전 — **테스트가 경계를 재현하려면 필요하다.**
+  /// 기기 로컬과 KST 가 갈리는 구간은 하루 중 몇 시간뿐이라, 내부에서 `DateTime.now()`
+  /// 를 부르면 그 몇 시간에 테스트를 돌릴 때만 회귀가 잡힌다(=사실상 안 잡힌다).
+  bool isRegistrationClosedAt(DateTime now) {
     if (status == 'closed' || status == 'cancelled') return true;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = kstTodayDate(now);
     if (applicationDeadline != null) {
       return applicationDeadline!.difference(today).inDays < 0;
     }
@@ -345,6 +354,7 @@ class Club {
   final String? createdBy;
   final List<String> meetingDays;
   final int? monthlyFee;
+  final String feeType;
   final String? genderPreference;
   final String cardColor;
   final bool inquiryLinksEnabled;
@@ -373,6 +383,7 @@ class Club {
     this.createdBy,
     this.meetingDays = const [],
     this.monthlyFee,
+    this.feeType = 'monthly',
     this.genderPreference,
     this.cardColor = '#3156D8',
     this.inquiryLinksEnabled = true,
@@ -421,6 +432,7 @@ class Club {
       createdBy: j['created_by'] as String?,
       meetingDays: (j['meeting_days'] as List?)?.cast<String>() ?? const [],
       monthlyFee: j['monthly_fee'] as int?,
+      feeType: (j['fee_type'] as String?) ?? 'monthly',
       genderPreference: j['gender_preference'] as String?,
       cardColor: (j['card_color'] as String?) ?? '#3156D8',
       inquiryLinksEnabled: (j['inquiry_links_enabled'] as bool?) ?? true,

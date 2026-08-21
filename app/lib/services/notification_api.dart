@@ -26,27 +26,45 @@ mixin NotificationApi on ApiBase {
   }
 
   Future<List<AppNotification>> myNotifications({int limit = 50}) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return const [];
     final rows = await supabase
         .from('notifications')
         .select()
+        .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(limit);
     return rows.map((r) => AppNotification.fromJson(r)).toList();
   }
 
   Future<int> unreadNotificationCount() async {
-    final res =
-        await supabase.from('notifications').select('id').eq('is_read', false);
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return 0;
+    final res = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('is_read', false);
     return (res as List).length;
   }
 
   Future<void> markNotificationRead(String id) async {
-    await supabase.from('notifications').update({'is_read': true}).eq('id', id);
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('id', id)
+        .eq('user_id', userId);
   }
 
   Future<void> markAllNotificationsRead() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
     await supabase
         .from('notifications')
-        .update({'is_read': true}).eq('is_read', false);
+        .update({'is_read': true})
+        .eq('user_id', userId)
+        .eq('is_read', false);
   }
 }

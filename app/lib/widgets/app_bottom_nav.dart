@@ -66,7 +66,7 @@ class AppBottomNav extends StatelessWidget {
                     height: 30,
                     decoration: BoxDecoration(
                       color: currentIndex == index
-                          ? cs.primaryContainer
+                          ? cs.primary
                           : Colors.transparent,
                       borderRadius: AppRadius.pill,
                     ),
@@ -76,7 +76,7 @@ class AppBottomNav extends StatelessWidget {
                           : icons[index],
                       size: 23,
                       color: currentIndex == index
-                          ? cs.primary
+                          ? cs.onPrimary
                           : cs.onSurfaceVariant,
                     ),
                   ),
@@ -90,6 +90,16 @@ class AppBottomNav extends StatelessWidget {
                       fontWeight: currentIndex == index
                           ? FontWeight.w800
                           : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: currentIndex == index ? 18 : 0,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: AppRadius.pill,
                     ),
                   ),
                 ],
@@ -121,13 +131,14 @@ class AppBottomNav extends StatelessWidget {
                     width: 42,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: cs.primary,
+                      color: Colors.transparent,
+                      border: Border.all(color: cs.outlineVariant),
                       borderRadius: AppRadius.pill,
                     ),
                     child: Icon(
-                      Icons.chat_bubble_rounded,
+                      Icons.chat_bubble_outline_rounded,
                       size: 21,
-                      color: cs.onPrimary,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -135,8 +146,8 @@ class AppBottomNav extends StatelessWidget {
                     _chatLabel,
                     maxLines: 1,
                     style: tt.labelSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w800,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

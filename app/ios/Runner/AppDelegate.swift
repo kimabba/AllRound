@@ -2,20 +2,28 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate {
+  let flutterEngine = FlutterEngine(
+    name: "allround_engine",
+    project: nil,
+    allowHeadlessExecution: true
+  )
   private var clubImageConverterChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    guard flutterEngine.run() else {
+      return false
+    }
+    GeneratedPluginRegistrant.register(with: flutterEngine)
+    configureClubImageConverter(with: flutterEngine)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-
-    guard let registrar = engineBridge.pluginRegistry.registrar(
+  private func configureClubImageConverter(with registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(
       forPlugin: "ClubImageConverter"
     ) else {
       return

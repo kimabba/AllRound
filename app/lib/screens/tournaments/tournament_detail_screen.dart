@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_schedule.dart';
@@ -17,11 +18,17 @@ import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/tournament_cover_image.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
-  const TournamentDetailScreen({super.key, required this.tournamentId});
+  const TournamentDetailScreen({
+    super.key,
+    required this.tournamentId,
+    this.adminPreview = false,
+  });
   final String tournamentId;
+  final bool adminPreview;
 
   @override
   ConsumerState<TournamentDetailScreen> createState() =>
@@ -102,12 +109,12 @@ class _TournamentDetailScreenState
     final isFav = (favorites.value ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview = _isPreviewTournament;
+    final isPreview = _isPreviewTournament || widget.adminPreview;
 
     return Scaffold(
       key: AllRoundE2EKeys.tournamentDetailScreen,
       appBar: AppBar(
-        title: const Text('대회'),
+        title: Text(widget.adminPreview ? '사용자 화면 미리보기' : '대회'),
         actions: [
           if (_t != null && !isPreview)
             IconButton(
@@ -115,7 +122,7 @@ class _TournamentDetailScreenState
                   ? AllRoundE2EKeys.tournamentFavoriteSaved
                   : AllRoundE2EKeys.tournamentFavoriteUnsaved,
               icon: Icon(
-                isFav ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                 color: isFav ? cs.primary : null,
               ),
               onPressed: () async {
@@ -159,7 +166,12 @@ class _TournamentDetailScreenState
                       title: '대회 정보가 없습니다',
                       description: '대회 목록에서 다른 대회를 확인해 주세요.',
                     )
-                  : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+                  : _DetailBody(
+                      t: _t!,
+                      df: _df,
+                      isPreview: isPreview,
+                      adminPreview: widget.adminPreview,
+                    ),
     );
   }
 }
@@ -208,10 +220,12 @@ class _DetailBody extends StatelessWidget {
   final Tournament t;
   final DateFormat df;
   final bool isPreview;
+  final bool adminPreview;
   const _DetailBody({
     required this.t,
     required this.df,
     required this.isPreview,
+    required this.adminPreview,
   });
 
   static final _feeFormat = NumberFormat.decimalPattern('ko');
@@ -240,8 +254,8 @@ class _DetailBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isPreview) ...[
-                const _DetailPreviewBanner(),
+              if (isPreview && !AppConfig.appStoreScreenshot) ...[
+                _DetailPreviewBanner(adminPreview: adminPreview),
                 const SizedBox(height: AppSpacing.md),
               ],
 
@@ -294,11 +308,6 @@ class _DetailBody extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),
-              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
-                _TournamentPosterCard(url: t.posterUrl!.trim()),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-
               _DetailFacts(
                 date: _dateText(),
                 location: t.location ?? t.region ?? '장소 확인 필요',
@@ -363,6 +372,18 @@ class _DetailBody extends StatelessWidget {
               ),
 
               const SizedBox(height: AppSpacing.lg),
+
+              // ── 포스터 원본 (요강 정리 뒤 참고용 — 세로로 긴 스캔본이 많아
+              // 맨 위에 두면 장소·부서 같은 핵심 정보가 스크롤 밖으로 밀린다) ──
+              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
+                Text(
+                  '포스터 원본',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _TournamentPosterCard(tournament: t),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               // ── 참가 신청 준비 중 안내 (모든 대회 공고 하단 고정) ──
               Container(
@@ -442,7 +463,10 @@ class _DetailBody extends StatelessWidget {
             AppSpacing.lg,
             AppSpacing.lg,
           ),
-          child: RegulationDocumentView(document: document),
+          child: RegulationDocumentView(
+            document: document,
+            hidePublicMetadata: true,
+          ),
         ),
       ];
     }
@@ -549,30 +573,33 @@ class _DetailBody extends StatelessWidget {
 }
 
 class _TournamentPosterCard extends StatelessWidget {
-  const _TournamentPosterCard({required this.url});
+  const _TournamentPosterCard({required this.tournament});
 
-  final String url;
+  final Tournament tournament;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ClipRRect(
-      borderRadius: AppRadius.card,
-      child: Image.network(
-        url,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: 240,
-            color: cs.surfaceContainerLow,
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final posterHeight = (constraints.maxWidth * 0.75).clamp(
+          360.0,
+          640.0,
+        );
+        return ClipRRect(
+          borderRadius: AppRadius.card,
+          child: SizedBox(
+            width: double.infinity,
+            height: posterHeight,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerLowest,
+              child: TournamentCoverImage(
+                tournament: tournament,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -673,7 +700,9 @@ class _DetailFact extends StatelessWidget {
 }
 
 class _DetailPreviewBanner extends StatelessWidget {
-  const _DetailPreviewBanner();
+  const _DetailPreviewBanner({required this.adminPreview});
+
+  final bool adminPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -692,7 +721,9 @@ class _DetailPreviewBanner extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
+              adminPreview
+                  ? '승인 후 사용자에게 보일 대회 화면입니다. 이 화면에서는 신청과 관심 저장이 작동하지 않습니다.'
+                  : '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,

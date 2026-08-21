@@ -6,6 +6,24 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 /// message/code 쌍은 실제 GoTrue 응답 본문에서 그대로 옮긴 값이다
 /// (프로젝트 `auth/v1/signup` 직접 호출로 확인, 2026-07-22).
 void main() {
+  test('Google 신규 가입 OAuth query 오류를 이메일 가입 안내로 바꾼다', () {
+    final uri = Uri.parse(
+      'http://127.0.0.1:7357/?error=access_denied&'
+      'error_description=GOOGLE_SIGNUP_DISABLED%3A+%EC%8B%A0%EA%B7%9C+'
+      '%EA%B0%80%EC%9E%85%EC%9D%80+%EC%9D%B4%EB%A9%94%EC%9D%BC%EB%A1%9C+'
+      '%EC%A7%84%ED%96%89%ED%95%B4+%EC%A3%BC%EC%84%B8%EC%9A%94.',
+    );
+    expect(authCallbackErrorMessage(uri), '신규 가입은 이메일로 진행해 주세요.');
+  });
+
+  test('중복 인코딩된 OAuth fragment 오류도 사용자 문구로 바꾼다', () {
+    final uri = Uri.parse(
+      'http://127.0.0.1:7357/#error=access_denied&'
+      'error_description=GOOGLE_SIGNUP_DISABLED%253A%2520new',
+    );
+    expect(authCallbackErrorMessage(uri), '신규 가입은 이메일로 진행해 주세요.');
+  });
+
   group('유출/취약 비밀번호 (#270 회귀 방지)', () {
     // 이 문구에는 'weak password' 도 'password should' 도 들어있지 않다.
     // 문자열만으로 분기하던 시절 제네릭 폴백으로 새던 바로 그 응답이다.
@@ -15,8 +33,8 @@ void main() {
         '다른 비밀번호로 바꿔 주세요.';
 
     test('error_code 로 잡는다', () {
-      final e = AuthException(pwnedMessage,
-          statusCode: '422', code: 'weak_password');
+      final e =
+          AuthException(pwnedMessage, statusCode: '422', code: 'weak_password');
       expect(authErrorMessage(e, signUp: true), expected);
     });
 
@@ -27,10 +45,8 @@ void main() {
     });
 
     test('정책 위반 문구(password should)도 같은 안내로 간다', () {
-      final e = AuthException(
-          'Password should be at least 6 characters.',
-          statusCode: '422',
-          code: 'weak_password');
+      final e = AuthException('Password should be at least 6 characters.',
+          statusCode: '422', code: 'weak_password');
       expect(authErrorMessage(e, signUp: true), expected);
     });
   });
@@ -65,18 +81,14 @@ void main() {
     });
 
     test('생년월일 누락', () {
-      final e = AuthException(
-          'BIRTH_DATE_REQUIRED: 계정 생성 전에 생년월일을 확인해 주세요.',
-          statusCode: '400',
-          code: 'unknown');
+      final e = AuthException('BIRTH_DATE_REQUIRED: 계정 생성 전에 생년월일을 확인해 주세요.',
+          statusCode: '400', code: 'unknown');
       expect(authErrorMessage(e, signUp: true), '계정 생성 전에 생년월일을 확인해 주세요.');
     });
 
     test('구글 신규가입 차단', () {
-      final e = AuthException(
-          'GOOGLE_SIGNUP_DISABLED: 신규 가입은 이메일로 진행해 주세요.',
-          statusCode: '403',
-          code: 'unknown');
+      final e = AuthException('GOOGLE_SIGNUP_DISABLED: 신규 가입은 이메일로 진행해 주세요.',
+          statusCode: '403', code: 'unknown');
       expect(authErrorMessage(e, signUp: true), '신규 가입은 이메일로 진행해 주세요.');
     });
   });

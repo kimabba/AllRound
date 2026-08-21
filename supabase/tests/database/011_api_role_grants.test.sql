@@ -37,7 +37,7 @@ select is(
       and c.relname in (
         'club_inquiry_threads','club_inquiry_messages',
         'club_dues_periods','club_dues_payments','club_dues_audit',
-        'user_sports'
+        'user_sports','tournament_submission_contacts'
       )
       -- has_table_privilege 만 보면 컬럼 단위 grant(예: grant insert (grade) on ...)를
       -- 놓친다. has_any_column_privilege 는 테이블 권한과 컬럼 권한을 함께 본다.

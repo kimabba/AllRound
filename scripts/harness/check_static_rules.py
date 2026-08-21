@@ -630,6 +630,95 @@ def check_sport_grade_label_hardcode() -> None:
     print(f"✓ 종목·등급 라벨이 정본 파일에서만 정의된다 (금지 라벨 {len(labels)}개, 자가검증 통과)")
 
 
+# 기기 로컬 자정을 만드는 패턴. 서버가 KST 로 대회 마감·종료를 판정하므로
+# (20260819030000_tournament_dates_use_kst.sql) 앱이 이걸 쓰면 한국 자정 근처에서
+# 두 쪽이 하루 어긋난다. app/lib/utils/kst.dart 의 kstTodayDate() 를 쓸 것.
+#
+# "오늘"을 만드는 것만 잡는다 — 인자로 받은 임의 날짜의 시각을 떼는 정규화
+# (dateOnly(d), DateTime(dueDate.year, ...))는 정당하므로 걸리면 안 된다.
+NOW_VAR_RE = re.compile(r"(?:final|var|late)?\s*(\w+)\s*=\s*DateTime\.now\(\)")
+DATE_ONLY_NOW_RE = re.compile(r"(?:\w+\.)?_?dateOnly\(\s*DateTime\.now\(\)\s*\)")
+
+# 판정이 아니라 로컬이 맞는 줄에 다는 마커. 파일 단위로 면제하면 같은 파일의
+# 진짜 위반까지 통째로 빠져나간다 — home_screen 은 이 PR 이 판정 5곳을 고친
+# 파일이면서 프리뷰 더미 한 줄 때문에 통째로 면제됐었다.
+DEVICE_LOCAL_MARKER = "device-local-ok:"
+
+
+def check_no_device_local_today() -> None:
+    """대회 날짜 판정에 기기 로컬 자정을 쓰지 못하게 막는다."""
+    violations: list[str] = []
+    marker_count = 0
+    for path in sorted((ROOT / "app" / "lib").rglob("*.dart")):
+        relative = path.relative_to(ROOT).as_posix()
+        source = path.read_text(encoding="utf-8")
+        lines = source.splitlines()
+
+        def record(match: re.Match[str]) -> None:
+            nonlocal marker_count
+            start_line = source.count("\n", 0, match.start()) + 1
+            end_line = source.count("\n", 0, match.end()) + 1
+            # 마커는 위반 줄 안이나 바로 윗줄에 단다. 여러 줄로 쪼개진 호출이면
+            # 그 범위 어디에 있어도 인정한다(포매터가 줄을 옮겨도 유지되도록).
+            window = lines[max(0, start_line - 2):end_line]
+            if any(DEVICE_LOCAL_MARKER in line for line in window):
+                marker_count += 1
+                return
+            violations.append(f"{relative}:{start_line}: {match.group(0)}")
+
+        for name in {m.group(1) for m in NOW_VAR_RE.finditer(source)}:
+            escaped = re.escape(name)
+            # 트레일링 콤마를 허용한다 — dart 포매터가 긴 줄을 쪼갤 때
+            # `DateTime(\n  now.year,\n  now.month,\n  now.day,\n)` 형태로 쓴다.
+            pattern = re.compile(
+                r"DateTime\(\s*%s\.year\s*,\s*%s\.month\s*,\s*%s\.day\s*,?\s*\)"
+                % (escaped, escaped, escaped)
+            )
+            for match in pattern.finditer(source):
+                record(match)
+        for match in DATE_ONLY_NOW_RE.finditer(source):
+            record(match)
+
+    if violations:
+        fail(
+            "기기 로컬 자정(KST 정합): DateTime.now() 로 만든 '오늘'을 그대로 썼다.\n"
+            "서버는 KST 로 대회 마감·종료를 판정한다 — 기기 시계를 쓰면 한국 자정\n"
+            "근처에서 앱만 하루 먼저/늦게 '마감'을 띄운다.\n"
+            "app/lib/utils/kst.dart 의 kstTodayDate(DateTime.now()) 를 쓸 것.\n"
+            f"판정이 아니어서 로컬이 맞으면 그 줄에 `// {DEVICE_LOCAL_MARKER} 이유` 를 단다.\n"
+            + "\n".join(sorted(violations))
+        )
+    print(
+        "✓ 대회 날짜 판정이 기기 로컬 자정을 쓰지 않는다 "
+        f"(로컬이 의도인 예외 {marker_count}곳)"
+    )
+
+def check_release_targets_use_prod_env() -> None:
+    """릴리스 빌드가 개발용 .env.local 로 되돌아가지 못하게 막는다.
+
+    한때 개발(`make app`)과 릴리스(`make release-ios`)가 같은 `.env.local` 을 썼다.
+    릴리스용으로 거기에 프로덕션 값을 넣은 뒤로는 개발 실행도 프로덕션 DB 에
+    붙어, 개발 중 만든 계정·클럽·제보가 실사용자 데이터와 섞였다.
+    """
+    makefile = read("Makefile")
+    violations: list[str] = []
+    current: str | None = None
+    for line_number, line in enumerate(makefile.splitlines(), start=1):
+        if line and not line[0].isspace() and line.rstrip().endswith(":"):
+            current = line.split(":", 1)[0].strip()
+        if current and current.startswith("release-") and "--dart-define-from-file" in line:
+            if ".env.local" in line:
+                violations.append(f"Makefile:{line_number}: {current} → {line.strip()}")
+    if violations:
+        fail(
+            "릴리스 타깃이 개발용 .env.local 을 쓴다.\n"
+            "릴리스는 app/.env.production 을 쓴다 — 파일을 겸용하면 개발 실행이\n"
+            "프로덕션 DB(실사용자 데이터)에 붙는다.\n"
+            + "\n".join(violations)
+        )
+    print("✓ 릴리스 빌드가 프로덕션 전용 env 파일을 쓴다 (.env.production)")
+
+
 def main() -> int:
     check_root_file_lengths()
     check_required_rule_docs()
@@ -640,6 +729,8 @@ def main() -> int:
     check_ai_disclosure_present()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
+    check_no_device_local_today()
+    check_release_targets_use_prod_env()
     print("✅ static repository rules passed")
     return 0
 

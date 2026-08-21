@@ -14,9 +14,11 @@ class TournamentSectionBar extends StatelessWidget
   const TournamentSectionBar({
     super.key,
     required this.selected,
+    this.showRankings = true,
   });
 
   final TournamentSection selected;
+  final bool showRankings;
 
   @override
   Size get preferredSize => const Size.fromHeight(AppSizes.control);
@@ -25,9 +27,10 @@ class TournamentSectionBar extends StatelessWidget
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    const entries = [
+    final entries = [
       (section: TournamentSection.overview, label: '대회', route: '/'),
-      (section: TournamentSection.rankings, label: '랭킹', route: '/rankings'),
+      if (showRankings)
+        (section: TournamentSection.rankings, label: '랭킹', route: '/rankings'),
       (section: TournamentSection.rules, label: '룰북', route: '/rules'),
     ];
 

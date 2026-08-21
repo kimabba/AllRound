@@ -45,8 +45,17 @@ class ProfileHeroSliver extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final topSafeArea = MediaQuery.paddingOf(context).top;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final expandedHeight = 316.0 + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
+    // 기본 화면에서는 프로필 카드의 빈 상단을 줄인다. 큰 글자와 iPhone 안전영역은
+    // 내용이 잘리지 않도록 줄인 높이를 다시 보충한다.
+    final compactReduction = 32.0 * (2.0 - textScale).clamp(0.0, 1.0);
+    final safeAreaCompensation = topSafeArea.clamp(0.0, compactReduction);
+    final expandedHeight = 316.0 +
+        AppSpacing.sm -
+        compactReduction +
+        safeAreaCompensation +
+        ((textScale - 1).clamp(0.0, 1.0) * 180.0);
     final primarySport = sports.maybeWhen(
       data: (items) => items.where((item) => item.isPrimary).firstOrNull?.sport,
       orElse: () => null,
@@ -54,7 +63,7 @@ class ProfileHeroSliver extends StatelessWidget {
 
     return SliverAppBar(
       expandedHeight: expandedHeight,
-      pinned: true,
+      pinned: false,
       backgroundColor: cs.surface,
       foregroundColor: cs.onSurface,
       title: Text(
@@ -87,9 +96,9 @@ class ProfileHeroSliver extends StatelessWidget {
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.xl,
-            kToolbarHeight + AppSpacing.xxl,
+            topSafeArea + kToolbarHeight + AppSpacing.xxl,
             AppSpacing.xl,
             AppSpacing.lg,
           ),

@@ -2,12 +2,14 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
+import { sendTournamentSubmissionEmail } from '../_shared/tournament_submission_email.ts';
 import {
   EntryFeeUnit,
   isValidEntryFeeUnit,
   isValidGrade,
   isValidRegionCode,
   RegionCode,
+  resolveRegionCode,
   Sport,
   TennisOrg,
 } from '../_shared/enums.ts';
@@ -33,7 +35,9 @@ import {
  *    prize?: string,
  *    format?: string,
  *    source_url?: string,
- *    poster_url?: string
+ *    poster_url?: string,
+ *    contact_name?: string,
+ *    contact_value?: string
  *  }
  */
 interface SubmitBody {
@@ -53,6 +57,8 @@ interface SubmitBody {
   format?: string;
   source_url?: string;
   poster_url?: string;
+  contact_name?: string;
+  contact_value?: string;
   // Phase 2 신규
   region_code?: RegionCode;
   host_associations?: string[];
@@ -110,7 +116,7 @@ function optionalStringArray(record: JsonRecord, key: string): ParseResult<strin
   return { value };
 }
 
-function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
+export function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
   if (!isRecord(raw)) return { error: 'Invalid JSON body' };
 
   const sport = raw.sport;
@@ -149,6 +155,10 @@ function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
   if ('error' in sourceUrl) return sourceUrl;
   const posterUrl = optionalString(raw, 'poster_url');
   if ('error' in posterUrl) return posterUrl;
+  const contactName = optionalString(raw, 'contact_name');
+  if ('error' in contactName) return contactName;
+  const contactValue = optionalString(raw, 'contact_value');
+  if ('error' in contactValue) return contactValue;
   const regionCode = optionalString(raw, 'region_code');
   if ('error' in regionCode) return regionCode;
   const hostAssociations = optionalStringArray(raw, 'host_associations');
@@ -180,7 +190,15 @@ function parseSubmitBody(raw: unknown): ParseResult<SubmitBody> {
       format: format.value,
       source_url: sourceUrl.value,
       poster_url: posterUrl.value,
-      region_code: regionCode.value as RegionCode | undefined,
+      contact_name: contactName.value,
+      contact_value: contactValue.value,
+      // 앱은 지역을 자유 입력으로만 보내고 region_code 는 보내지 않는다. 코드가 없으면
+      // 지역 필터(region_code 정확매칭)에서 영원히 빠지므로 라벨에서 유도해 채운다.
+      // 크롤러는 2026-06 에 같은 처리를 했지만 제보 경로가 빠져 있었다(#32).
+      region_code: resolveRegionCode(
+        regionCode.value as RegionCode | undefined,
+        region.value,
+      ),
       host_associations: hostAssociations.value,
       host_orgs: hostOrgs.value as TennisOrg[] | undefined,
       division_label_local: divisionLabelLocal.value,
@@ -208,6 +226,24 @@ function normalizeOptionalUrl(
     return { error: `${fieldName} must be a valid URL` };
   }
   return { value: trimmed };
+}
+
+export function validateSubmissionContact(
+  name: string | undefined,
+  value: string | undefined,
+): ParseResult<{ contactName: string; contactValue: string }> {
+  const contactName = name?.trim() ?? '';
+  const contactValue = value?.trim() ?? '';
+  if ((contactName.length === 0) !== (contactValue.length === 0)) {
+    return { error: 'contact_name and contact_value must be provided together' };
+  }
+  if (contactName.length > 100) {
+    return { error: 'contact_name must be 100 characters or fewer' };
+  }
+  if (contactValue.length > 200) {
+    return { error: 'contact_value must be 200 characters or fewer' };
+  }
+  return { value: { contactName, contactValue } };
 }
 
 // import.meta.main 가드: 테스트가 이 모듈을 import 할 때(age_gate_wiring_test.ts)
@@ -238,6 +274,9 @@ async function handler(req: Request): Promise<Response> {
   if (body.organizer && body.organizer.length > 100) {
     return errorResponse('organizer must be 100 characters or fewer');
   }
+  const contact = validateSubmissionContact(body.contact_name, body.contact_value);
+  if ('error' in contact) return errorResponse(contact.error);
+  const { contactName, contactValue } = contact.value;
   if (!body.start_date) return errorResponse('start_date required');
   if (!Array.isArray(body.eligible_grades) || body.eligible_grades.length === 0) {
     return errorResponse('eligible_grades required (non-empty array)');
@@ -348,6 +387,50 @@ async function handler(req: Request): Promise<Response> {
       await svc.from('tournaments').delete().eq('id', tournamentId);
       return errorResponse(detailErr.message, 500);
     }
+  }
+
+  // 3. 사용자 제보 담당자 정보는 공개 대회 행과 분리해서 저장한다.
+  // RLS 로 제보자 본인과 관리자만 읽을 수 있으며 승인 후에도 공개 검색에는 섞이지 않는다.
+  if (contactName.length > 0 && contactValue.length > 0) {
+    const { error: contactErr } = await svc
+      .from('tournament_submission_contacts')
+      .insert({
+        tournament_id: tournamentId,
+        submitted_by: user.id,
+        contact_name: contactName,
+        contact_value: contactValue,
+      });
+    if (contactErr) {
+      await svc.from('tournaments').delete().eq('id', tournamentId);
+      return errorResponse(contactErr.message, 500);
+    }
+  }
+
+  // 4. 종목 담당자에게 등록 문의 메일을 보낸다.
+  // 메일 서비스나 수신 주소 설정이 빠져도 제보 데이터는 보존한다. 실패 사유만
+  // 개인정보 없이 로그에 남겨 운영자가 설정/서비스 상태를 확인할 수 있게 한다.
+  const emailResult = await sendTournamentSubmissionEmail({
+    tournamentId,
+    sport: body.sport,
+    title: body.title.trim(),
+    organizer: body.organizer,
+    startDate: body.start_date,
+    region: body.region,
+    location: body.location,
+    sourceUrl: sourceUrl.value,
+    contactName,
+    contactValue,
+  });
+  if (emailResult.status !== 'sent') {
+    console.warn(
+      JSON.stringify({
+        event: 'tournament_submission_email_not_sent',
+        tournament_id: tournamentId,
+        sport: body.sport,
+        status: emailResult.status,
+        reason: emailResult.reason,
+      }),
+    );
   }
 
   return jsonResponse({ tournament: data }, { status: 201 });

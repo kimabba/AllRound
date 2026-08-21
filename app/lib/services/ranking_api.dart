@@ -1,10 +1,14 @@
 import '../models/org_ranking.dart';
+import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import 'api_base.dart';
 
 /// 협회 랭킹 조회 + 본인 계정 연결(클레임). 관리자 승인 큐는 AdminApi 를 쓴다.
 mixin RankingApi on ApiBase {
   /// 협회·부서 하나의 순위표. rank 오름차순(협회 공표 그대로, 앱이 재계산하지 않음).
+  ///
+  /// supabase-dart 의 order() 는 SQL/postgrest-js 와 반대로 ascending 기본값이
+  /// false 다 — 명시하지 않으면 조용히 내림차순(꼴찌부터)이 된다.
   Future<List<OrgRankingRow>> orgRankings({
     required String orgCode,
     required String divisionCode,
@@ -14,7 +18,7 @@ mixin RankingApi on ApiBase {
         .select()
         .eq('org_code', orgCode)
         .eq('division_code', divisionCode)
-        .order('rank');
+        .order('rank', ascending: true);
     return List<Map<String, dynamic>>.from(
       rows,
     ).map(OrgRankingRow.fromJson).toList();
@@ -42,19 +46,67 @@ mixin RankingApi on ApiBase {
   }
 
   /// 랭킹 후보 신청 — pending 클레임 생성. 관리자 승인 전까지 "확인 중"이다.
-  Future<void> claimRanking(OrgRankingRow candidate) async {
+  ///
+  /// [note] 는 이의신청(이미 남과 확정된 선수를 두고 다투는 경우)에서 쓴다.
+  /// 경합하는 두 사람은 정책상 이름이 반드시 같아서, 관리자가 가릴 재료가
+  /// 이것뿐이다. 승인·반려되면 DB 트리거가 지운다(확정 행은 전체 공개다).
+  Future<void> claimRanking(OrgRankingRow candidate, {String? note}) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('Not authenticated');
     final orgPlayerId = candidate.orgPlayerId;
     if (orgPlayerId == null) {
       throw ArgumentError('candidate.orgPlayerId is required to claim');
     }
+    final trimmed = note?.trim();
     await supabase.from('org_player_links').insert({
       'org_code': candidate.orgCode,
       'org_player_id': orgPlayerId,
       'user_id': userId,
       'status': 'pending',
+      // 공백만 남으면 CHECK(org_player_links_note_len)에 걸린다 — null 로 보낸다.
+      if (trimmed != null && trimmed.isNotEmpty) 'note': trimmed,
     });
+  }
+
+  /// 랭킹 표의 아무 선수나 눌렀을 때 보는 전적(최신 대회순).
+  ///
+  /// org_player_results_read RLS(2026-08-10)로 로그인 사용자 전체에게 열려
+  /// 있다 — org_rankings 표 자체가 이미 공개하는 것과 같은 데이터다. 다만
+  /// 크롤러가 아직 "본인 연결 승인자"만 전적을 적재하므로, 연결 안 된 선수는
+  /// 빈 목록이 정상이다(전적이 없는 게 아니라 아직 안 모은 것).
+  Future<List<PlayerResult>> playerResults({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_player_results')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('played_on', ascending: false);
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(PlayerResult.fromJson).toList();
+  }
+
+  /// 순위 추이(부서 하나). org_ranking_snapshots_read RLS(2026-08-10)로
+  /// 로그인 사용자 전체에게 열려 있다. 전 선수가 매일 자동 적재되므로
+  /// (연결 여부 무관) 대부분의 선수가 이 데이터를 갖는다.
+  Future<List<OrgRankingSnapshot>> playerRankingHistory({
+    required String orgCode,
+    required String divisionCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_ranking_snapshots')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('division_code', divisionCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('captured_on', ascending: true);
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(OrgRankingSnapshot.fromJson).toList();
   }
 
   /// 내 협회 전적 전량(최신 대회순).
@@ -92,6 +144,25 @@ mixin RankingApi on ApiBase {
         .limit(1);
     final list = List<Map<String, dynamic>>.from(rows);
     return list.isEmpty ? null : list.first;
+  }
+
+  /// 부서 순위표에서 [rank] 위 한 줄(없으면 null). "TOP 10 까지 남은 점수"처럼
+  /// 커트라인 한 줄만 필요할 때 쓴다 — orgRankings 를 쓰면 홈 화면이 열릴 때마다
+  /// 부서 순위표 전체(수백 행)를 받게 된다.
+  Future<OrgRankingRow?> divisionRankRow({
+    required String orgCode,
+    required String divisionCode,
+    required int rank,
+  }) async {
+    final rows = await supabase
+        .from('org_rankings')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('division_code', divisionCode)
+        .eq('rank', rank)
+        .limit(1);
+    final list = List<Map<String, dynamic>>.from(rows);
+    return list.isEmpty ? null : OrgRankingRow.fromJson(list.first);
   }
 
   /// 연결된 내 현재 순위(부서별). 스펙 §7.2 블록 1 "지금".

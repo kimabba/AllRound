@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../models/regulation_body_lines.dart';
 import '../../models/regulation_document.dart';
 import '../../theme/tokens.dart';
 
@@ -10,14 +11,21 @@ class RegulationDocumentView extends StatelessWidget {
     super.key,
     required this.document,
     this.showSummary = true,
+    this.hidePublicMetadata = false,
   });
 
   final RegulationDocument document;
   final bool showSummary;
+  final bool hidePublicMetadata;
 
   @override
   Widget build(BuildContext context) {
     final summary = document.summary;
+    final sections = document.sections
+        .where(
+          (section) => !hidePublicMetadata || _hasVisiblePublicContent(section),
+        )
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -29,13 +37,16 @@ class RegulationDocumentView extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xxl),
         ],
-        for (var index = 0; index < document.sections.length; index++) ...[
+        for (var index = 0; index < sections.length; index++) ...[
           if (index > 0) ...[
             const SizedBox(height: AppSpacing.xl),
             Divider(color: Theme.of(context).colorScheme.outlineVariant),
             const SizedBox(height: AppSpacing.xl),
           ],
-          _RegulationSectionView(section: document.sections[index]),
+          _RegulationSectionView(
+            section: sections[index],
+            hidePublicMetadata: hidePublicMetadata,
+          ),
         ],
       ],
     );
@@ -43,14 +54,24 @@ class RegulationDocumentView extends StatelessWidget {
 }
 
 class _RegulationSectionView extends StatelessWidget {
-  const _RegulationSectionView({required this.section});
+  const _RegulationSectionView({
+    required this.section,
+    required this.hidePublicMetadata,
+  });
 
   final RegulationSection section;
+  final bool hidePublicMetadata;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+    final blocks = section.blocks
+        .where(
+          (block) =>
+              !hidePublicMetadata || _hasVisiblePublicBlockContent(block),
+        )
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -73,9 +94,12 @@ class _RegulationSectionView extends StatelessWidget {
             ),
           )
         else
-          for (var index = 0; index < section.blocks.length; index++) ...[
+          for (var index = 0; index < blocks.length; index++) ...[
             if (index > 0) const SizedBox(height: AppSpacing.md),
-            _RegulationBlockView(block: section.blocks[index]),
+            _RegulationBlockView(
+              block: blocks[index],
+              hidePublicMetadata: hidePublicMetadata,
+            ),
           ],
       ],
     );
@@ -83,16 +107,24 @@ class _RegulationSectionView extends StatelessWidget {
 }
 
 class _RegulationBlockView extends StatelessWidget {
-  const _RegulationBlockView({required this.block});
+  const _RegulationBlockView({
+    required this.block,
+    required this.hidePublicMetadata,
+  });
 
   final RegulationBlock block;
+  final bool hidePublicMetadata;
 
   @override
   Widget build(BuildContext context) => switch (block.type) {
         RegulationBlockType.paragraph => _Paragraph(text: block.text!),
         RegulationBlockType.subheading => _Subheading(text: block.text!),
         RegulationBlockType.bullets => _BulletList(items: block.items),
-        RegulationBlockType.keyValues => _KeyValueList(entries: block.entries),
+        RegulationBlockType.keyValues => _KeyValueList(
+            entries: hidePublicMetadata
+                ? _visiblePublicEntries(block.entries)
+                : block.entries,
+          ),
         RegulationBlockType.table => _RegulationTable(
             columns: block.columns,
             rows: block.rows,
@@ -102,6 +134,19 @@ class _RegulationBlockView extends StatelessWidget {
           _DivisionSchedule(items: block.divisions),
       };
 }
+
+List<RegulationEntry> _visiblePublicEntries(List<RegulationEntry> entries) =>
+    entries
+        .where((entry) => !isHiddenPublicRegulationLabel(entry.label))
+        .toList(growable: false);
+
+bool _hasVisiblePublicBlockContent(RegulationBlock block) =>
+    block.type != RegulationBlockType.keyValues ||
+    _visiblePublicEntries(block.entries).isNotEmpty;
+
+bool _hasVisiblePublicContent(RegulationSection section) =>
+    section.availability != RegulationAvailability.present ||
+    section.blocks.any(_hasVisiblePublicBlockContent);
 
 class _Paragraph extends StatelessWidget {
   const _Paragraph({required this.text});

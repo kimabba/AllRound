@@ -1,7 +1,7 @@
 name: allround
 description: 올라운드 — 스포츠 동호인 통합 정보 앱
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.1.0+6
 
 environment:
   sdk: ^3.6.0
@@ -42,6 +42,8 @@ dependencies:
   image: ^4.9.1
   geolocator: ^14.0.3
   geocoding: ^5.0.0
+  flutter_map: ^8.3.1
+  latlong2: ^0.9.1
   cupertino_http: ^3.0.2
   firebase_crashlytics: ^5.2.7
 
@@ -59,6 +61,8 @@ flutter:
     - assets/images/tournaments/
     - assets/images/coachbot/
     - assets/images/coach/round-coach.png
+    - assets/images/auth/
+    - assets/images/clubs/
     - assets/images/rules/
   fonts:
     - family: Pretendard

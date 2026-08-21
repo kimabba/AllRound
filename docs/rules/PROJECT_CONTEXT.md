@@ -90,6 +90,8 @@ SUPABASE_SERVICE_ROLE_KEY=    # Supabase injects this
 SUPABASE_PUBLISHABLE_KEYS=    # JSON dictionary; userClient uses default first
 SUPABASE_SECRET_KEYS=         # JSON dictionary; serviceClient uses default first
 FIREBASE_SERVICE_ACCOUNT_JSON= # Firebase service-account JSON for FCM HTTP v1
+JUSO_SEARCH_API_KEY=           # 도로명주소 검색 API 승인키
+JUSO_COORD_API_KEY=            # 좌표제공 검색 API 승인키(검색 승인키와 별도)
 CRAWL_TENNIS_GWANGJU_URL=     # optional crawler targets
 CRAWL_TENNIS_JEONNAM_URL=
 CRAWL_TENNIS_KOREA_URL=
@@ -101,6 +103,25 @@ CRAWL_TENNIS_KOREA_URL=
 alter database postgres set app.cron_invoke_url = 'https://<project>.functions.supabase.co';
 alter database postgres set app.cron_invoke_key = '<internal-random-cron-secret>';
 ```
+
+### Flutter env files — dev and release are separate
+
+| File | Used by | Points at |
+|---|---|---|
+| `app/.env.local` | `make app` · `make web` · `make admin` | **local Supabase** (`supabase start`, `http://127.0.0.1:54321`) |
+| `app/.env.production` | `make release-android` · `make release-ios` | production project |
+
+Both are gitignored. Copy from `app/.env.local.example` / `app/.env.production.example`.
+
+**Never point `.env.local` at production.** The two used to share one file; once the
+production values went in for a release build, `make app` started writing to the
+live database, so accounts, clubs, and tournament submissions created while
+developing landed next to real user data. `scripts/harness/check_static_rules.py`
+now fails if a `release-*` target reads `.env.local`.
+
+Local Supabase is seeded from `supabase/seed.sql` (tournaments, rulebook articles,
+clubs). `venues` and `org_rankings` are still empty there, so those screens render
+blank locally — seeding them is open work, not a reason to switch back to production.
 
 ### Flutter `--dart-define`
 

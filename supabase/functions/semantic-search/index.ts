@@ -61,7 +61,11 @@ Deno.serve(withCors(async (req) => {
   try {
     queryEmbedding = await embedText(body.query, 'RETRIEVAL_QUERY');
   } catch (e) {
-    return errorResponse(`Embedding failed: ${(e as Error).message}`, 500);
+    // 원문 예외 메시지를 응답에 그대로 담지 않는다 — Gemini 호출이 네트워크 계층에서
+    // 실패하면(DNS/TLS 등) fetch 가 요청 URL 을 포함한 메시지를 던질 수 있다. 진단은
+    // 서버 로그로만 남긴다.
+    console.error('Embedding failed', { reason: e instanceof Error ? e.message : 'unknown' });
+    return errorResponse('Embedding failed', 500);
   }
   const literal = toVectorLiteral(queryEmbedding);
 

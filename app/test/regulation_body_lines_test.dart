@@ -124,11 +124,12 @@ void main() {
   });
 
   group('사용자용 요강 필터', () {
-    test('출처·풋살허브 ID 는 숨기고 안내는 남긴다', () {
+    test('출처·풋살허브 ID·모집상태는 숨기고 안내는 남긴다', () {
       final lines = publicRegulationBodyLines(
         '장소: 서울월드컵경기장\n'
         '출처: 풋살허브\n'
         '풋살허브 ID: 12345\n'
+        '모집 상태: OPEN\n'
         '안내: 입금계좌 확인 후 입금해주세요\n'
         '※ 일정은 변경될 수 있습니다',
       );
@@ -145,6 +146,8 @@ void main() {
       expect(isHiddenPublicRegulationLabel('풋살허브ID'), isTrue);
       expect(isHiddenPublicRegulationLabel('futsal_hub_id'), isTrue);
       expect(isHiddenPublicRegulationLabel('source_url'), isTrue);
+      expect(isHiddenPublicRegulationLabel('모집 상태'), isTrue);
+      expect(isHiddenPublicRegulationLabel('recruiting_status'), isTrue);
       expect(isHiddenPublicRegulationLabel('참가비'), isFalse);
     });
   });

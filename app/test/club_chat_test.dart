@@ -38,4 +38,33 @@ void main() {
     expect(source, contains(".order('id', ascending: false)"));
     expect(source, contains('return messages.reversed.toList'));
   });
+
+  test('채팅 메시지를 실시간으로 구독하고 시간순으로 정렬한다', () {
+    final apiSource = File('lib/services/club_api.dart').readAsStringSync();
+    final screenSource = File(
+      'lib/screens/clubs/club_member_chat_screen.dart',
+    ).readAsStringSync();
+
+    expect(apiSource, contains('watchClubChatMessages'));
+    expect(apiSource, contains(".stream(primaryKey: ['id'])"));
+    expect(apiSource, contains(".eq('thread_id', threadId)"));
+    expect(screenSource, contains('.watchClubChatMessages(threadId)'));
+    expect(screenSource, contains('StreamSubscription<List<ClubChatMessage>>'));
+    expect(screenSource, contains('Duration(seconds: 30)'));
+    expect(screenSource, isNot(contains('Duration(seconds: 5)')));
+  });
+
+  test('실시간 DB 공개와 채팅 도배 제한이 마이그레이션에 포함된다', () {
+    final migration = File(
+      '../supabase/migrations/20260819130000_enable_realtime_club_chat.sql',
+    ).readAsStringSync();
+
+    expect(migration, contains('add table public.club_chat_messages'));
+    expect(migration, contains('club_chat_messages_rate_limit'));
+    expect(migration, contains(") >= 20 then"));
+    expect(
+      migration,
+      contains('from public, anon, authenticated'),
+    );
+  });
 }

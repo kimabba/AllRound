@@ -36,8 +36,22 @@ export interface TournamentCardItem {
   eligible_grades: string[];
   entry_fee: number | null;
   format: string | null;
+  // 이미 끝난 대회인가(KST 기준). 판정할 수 없으면 null — 앱은 null 이면 표시하지 않는다.
+  //
+  // 서버가 판정해 내려보내는 이유가 둘이다.
+  //  1) end_date 가 없는 행이 대다수인데(단일일 대회) 그 null 과, 아래 RAG 경로처럼
+  //     "종료일을 애초에 조회하지 못한" null 은 뜻이 다르다. 그 구분은 행의 출처를
+  //     아는 서버만 할 수 있다 — 앱에 내려간 카드만 보면 둘이 똑같아 보인다.
+  //  2) 기준일이 KST 로 고정된다. 기기 시계를 쓰면 한국 자정 근처에서 서버 판정과
+  //     하루 어긋난다(20260819030000_tournament_dates_use_kst.sql 과 같은 문제).
+  finished: boolean | null;
   // 프론트 카드(chat_tournament_card.dart)가 렌더하는 요강 요약 (최대 3개).
   regulation_fields: RegulationField[];
+}
+
+/** KST 기준 오늘 'YYYY-MM-DD'. date 컬럼과 사전순 비교가 곧 시간순 비교다. */
+export function todayKst(now: Date = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -80,10 +94,17 @@ const MAX_CARDS = 10;
 /// `tournament_search_by_slots` 결과를 카드 아이템으로 변환.
 /// eligible 은 호출자가 필터 상태로 넘긴다: only_my_grade=true(참가 가능 대회만
 /// 반환) 면 true, 전체 검색(false)이면 자격을 알 수 없으므로 false 로 배지 숨김(JY-101).
+/// `knowsEndDate` 는 rows 의 end_date 가 실제 조회 결과인지를 말한다.
+/// RAG(semantic_search) 경로는 end_date 컬럼을 반환하지 않아 항상 null 이 들어오는데,
+/// 그걸 단일일 대회의 null 과 똑같이 취급하면 8/17~8/19 대회를 8/18 에 "종료"로
+/// 표시하게 된다 — 이 배지가 막으려던 것의 정반대다. 그 경로는 false 를 넘겨
+/// finished 를 null(=모름)로 남긴다.
 export function buildTournamentCards(
   rows: TournamentCardRow[],
   eligible = true,
+  knowsEndDate = true,
 ): TournamentCardItem[] {
+  const today = todayKst();
   return rows.slice(0, MAX_CARDS).map((r) => ({
     id: r.id,
     title: r.title,
@@ -94,6 +115,8 @@ export function buildTournamentCards(
     end_date: r.end_date,
     application_deadline: r.application_deadline ?? null,
     eligible,
+    // 서버 정렬(tournament_search_by_slots)과 같은 기준: coalesce(end, start) < 오늘 KST.
+    finished: knowsEndDate ? (r.end_date ?? r.start_date) < today : null,
     eligible_grades: r.eligible_grades ?? [],
     entry_fee: r.entry_fee,
     format: r.format,
@@ -288,6 +311,54 @@ export function renderClubDetailText(club: ClubDetailRow): string {
   if (club.contact) lines.push(`- 연락처: ${club.contact}`);
   if (club.description) lines.push('', club.description);
   return lines.join('\n');
+}
+
+// ==========================================================================
+// Schedule conflicts (match_schedule 라우팅 — my_schedule_conflicts RPC 결과 렌더)
+// ==========================================================================
+
+export interface ScheduleConflictRow {
+  kind: 'tournament_vs_tournament' | 'tournament_vs_club_event';
+  a_id: string;
+  a_title: string;
+  a_start: string;
+  a_end: string | null;
+  b_id: string;
+  b_title: string;
+  b_date: string;
+}
+
+export function isScheduleConflictRow(value: unknown): value is ScheduleConflictRow {
+  if (!isRecord(value)) return false;
+  return (value.kind === 'tournament_vs_tournament' || value.kind === 'tournament_vs_club_event') &&
+    typeof value.a_id === 'string' &&
+    typeof value.a_title === 'string' &&
+    typeof value.a_start === 'string' &&
+    (typeof value.a_end === 'string' || value.a_end === null) &&
+    typeof value.b_id === 'string' &&
+    typeof value.b_title === 'string' &&
+    typeof value.b_date === 'string';
+}
+
+/// my_schedule_conflicts RPC 결과를 결정론적 텍스트로 렌더(LLM 미사용, club_search/
+/// tournament_search 라우팅과 동일 패턴). rows=[] 는 "비교 대상은 있으나 겹침 없음"
+/// 의미다 — "비교할 대상 자체가 없음"은 호출자(chat/index.ts)가 별도로 안내한다.
+export function renderScheduleConflictText(
+  rows: ScheduleConflictRow[],
+  rangeLabel = '앞으로 90일',
+): string {
+  if (rows.length === 0) {
+    return [
+      '겹치는 일정이 없어요.',
+      '즐겨찾기한 대회와 클럽 모임 일정을 확인했지만 날짜가 겹치는 항목은 없습니다.',
+    ].join('\n');
+  }
+  const lines = rows.map((r) => {
+    const bLabel = r.kind === 'tournament_vs_tournament' ? '대회' : '클럽 모임';
+    const aRange = r.a_end && r.a_end !== r.a_start ? `${r.a_start} ~ ${r.a_end}` : r.a_start;
+    return `- "${r.a_title}"(${aRange})와 ${bLabel} "${r.b_title}"(${r.b_date})가 겹쳐요.`;
+  });
+  return [`## ${rangeLabel} 일정 겹침 ${rows.length}건`, '', ...lines].join('\n');
 }
 
 export type SelectedEntityType = 'tournament' | 'club';

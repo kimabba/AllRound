@@ -3,9 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club_recruiting.dart';
 import '../models/org_ranking.dart';
+import '../models/org_ranking_snapshot.dart';
 import '../models/player_result.dart';
 import '../models/tournament.dart';
 import '../services/api.dart';
+import '../utils/grade_labels.dart';
+import '../utils/kst.dart';
 
 final supabaseProvider = Provider<SupabaseClient>((_) {
   return Supabase.instance.client;
@@ -142,6 +145,63 @@ final myCurrentRankingsProvider =
   return api.myCurrentRankings();
 });
 
+/// 연결된 내 순위 추이. 여러 부서에 연결돼 있으면 첫 번째(myCurrentRankings
+/// 순서 기준) 부서만 그린다 — 부서별로 나눠 그리는 건 이번 스코프 밖이다.
+final myRankingHistoryProvider =
+    FutureProvider<List<OrgRankingSnapshot>>((ref) async {
+  ref.watch(authStateProvider);
+  final rankings = await ref.watch(myCurrentRankingsProvider.future);
+  if (rankings.isEmpty) return const [];
+  final primary = rankings.first;
+  final orgPlayerId = primary.orgPlayerId;
+  if (orgPlayerId == null) return const [];
+  final api = ref.watch(apiProvider);
+  return api.playerRankingHistory(
+    orgCode: primary.orgCode,
+    divisionCode: primary.divisionCode,
+    orgPlayerId: orgPlayerId,
+  );
+});
+
+/// 홈 "내 등급 카드" 한 장에 필요한 값. 협회가 공표한 사실만 담는다.
+/// [top10Points] 는 그 부서 10위의 점수(그 부서에 10명이 안 되면 null).
+typedef MyGradeSummary = ({OrgRankingRow ranking, int? top10Points});
+
+/// 여러 부서에 이름이 오른 사람의 대표 부서 한 줄. 협회가 랭킹표를 공표하는
+/// 순서([kRankingDivisions])가 곧 상위→하위라 그 자리를 그대로 쓴다.
+/// 목록에 없는 부서(미러 밖 협회)는 뒤로 민다.
+OrgRankingRow? topDivisionRanking(List<OrgRankingRow> rows) {
+  if (rows.isEmpty) return null;
+  int tier(OrgRankingRow row) {
+    final order = kRankingDivisions[row.orgCode];
+    // 협회 자체가 목록에 없으면(미러 확장 과도기) 맨 뒤로 보낸다. order.length(0)를
+    // 쓰면 목록에 있는 협회의 1순위 부서(tier 0)와 값이 같아져 잘못 앞서 뽑힌다.
+    if (order == null) return 1 << 30;
+    final index = order.indexOf(row.divisionCode);
+    return index < 0 ? order.length : index;
+  }
+
+  final sorted = [...rows]..sort((a, b) {
+      final byTier = tier(a).compareTo(tier(b));
+      if (byTier != 0) return byTier;
+      return a.divisionCode.compareTo(b.divisionCode);
+    });
+  return sorted.first;
+}
+
+/// 홈 최상단 등급 카드. 협회 연결이 없으면 null 이고 카드 자체가 안 뜬다.
+final myGradeSummaryProvider = FutureProvider<MyGradeSummary?>((ref) async {
+  ref.watch(authStateProvider);
+  final top = topDivisionRanking(await ref.watch(myCurrentRankingsProvider.future));
+  if (top == null) return null;
+  final cutoff = await ref.watch(apiProvider).divisionRankRow(
+        orgCode: top.orgCode,
+        divisionCode: top.divisionCode,
+        rank: 10,
+      );
+  return (ranking: top, top10Points: cutoff?.totalPoints);
+});
+
 /// 관심 화면용 스크랩 대회
 final myFavoriteTournamentsProvider =
     FutureProvider<List<Tournament>>((ref) async {
@@ -163,9 +223,34 @@ String? primarySportFrom(List<UserSport> sports) {
       sports.first.sport;
 }
 
+/// 사용자가 화면에서 고른 종목. null 이면 프로필 주 종목을 따른다.
+/// 앱을 다시 켜면 초기화되는 세션 한정 선택이다.
+class SportOverrideNotifier extends Notifier<String?> {
+  @override
+  String? build() {
+    // 로그아웃 시 반드시 비운다. 안 그러면 다음 로그인 계정이 이전 계정이 고른
+    // 종목으로 등급·추천·룰북·클럽 필터를 보게 된다(RecoveryModeNotifier 와 동일 원칙).
+    ref.listen(authStateProvider, (_, next) {
+      if (next.value?.event == AuthChangeEvent.signedOut) {
+        state = null;
+      }
+    });
+    return null;
+  }
+
+  void select(String? sport) => state = sport;
+}
+
+final sportOverrideProvider =
+    NotifierProvider<SportOverrideNotifier, String?>(SportOverrideNotifier.new);
+
 /// 사용자의 active 종목 — 앱 전체 필터 기준.
-/// 프로필의 주 종목을 사용한다.
+/// 화면에서 고른 종목이 있으면 그것을, 없으면 프로필의 주 종목을 사용한다.
+/// 대회 탭에서 종목을 바꾸면 룰북·전체 대회·클럽·챗봇이 함께 따라오게 하기 위한
+/// 단일 기준점이다(예전에는 대회 탭 안에서만 바뀌어 화면마다 종목이 어긋났다).
 final activeSportProvider = Provider<String?>((ref) {
+  final override = ref.watch(sportOverrideProvider);
+  if (override != null) return override;
   final sports = ref.watch(userSportsProvider).value ?? [];
   return primarySportFrom(sports);
 });
@@ -192,7 +277,7 @@ Future<List<Tournament>> loadHomeTournamentsBySport({
       ),
     ),
   );
-  final today = DateTime(now.year, now.month, now.day);
+  final today = kstTodayDate(now);
   final result = <Tournament>[];
 
   for (var index = 0; index < sports.length; index += 1) {

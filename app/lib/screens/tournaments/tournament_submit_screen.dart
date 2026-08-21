@@ -41,6 +41,8 @@ class _TournamentSubmitScreenState
   final _location = TextEditingController();
   final _description = TextEditingController();
   final _sourceUrl = TextEditingController();
+  final _contactName = TextEditingController();
+  final _contactValue = TextEditingController();
   PreparedClubImage? _posterImage;
   Sport _sport = Sport.tennis;
   String _tennisOrg = defaultTennisOrgFor(tennisOrgsWithDivisions); // 테니스 주최 협회
@@ -57,6 +59,8 @@ class _TournamentSubmitScreenState
     _location.dispose();
     _description.dispose();
     _sourceUrl.dispose();
+    _contactName.dispose();
+    _contactValue.dispose();
     super.dispose();
   }
 
@@ -139,12 +143,18 @@ class _TournamentSubmitScreenState
         if (_sourceUrl.text.trim().isNotEmpty)
           'source_url': _sourceUrl.text.trim(),
         if (posterUrl != null) 'poster_url': posterUrl,
+        'contact_name': _contactName.text.trim(),
+        'contact_value': _contactValue.text.trim(),
       });
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('제보 완료. 관리자 승인 후 노출됩니다.')));
-        context.pop();
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/tournaments');
+        }
       }
     } catch (_) {
       setState(
@@ -324,6 +334,7 @@ class _TournamentSubmitScreenState
               _Label('주최 협회 *'),
               const SizedBox(height: AppSpacing.sm),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 // controlled dropdown: 협회 변경 시 setState 로 즉시 반영돼야 하므로
                 // value 유지 (initialValue 는 최초값만 적용돼 회귀 발생).
                 // ignore: deprecated_member_use
@@ -374,6 +385,51 @@ class _TournamentSubmitScreenState
                 ],
               ),
             ],
+            const SizedBox(height: AppSpacing.xxl),
+
+            const _SectionTitle('담당자 정보'),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '등록 내용을 확인할 때 연락드릴 담당자 정보를 남겨주세요.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _contactName,
+              decoration: _inputDeco('담당자 이름 *'),
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.name],
+              validator: _requiredContactNameValidator,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _contactValue,
+              decoration: _inputDeco('전화번호 또는 이메일 *'),
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [
+                AutofillHints.telephoneNumber,
+                AutofillHints.email
+              ],
+              validator: _requiredContactValueValidator,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    '담당자 정보는 관리자 확인용이며 공개 대회 화면에는 표시되지 않습니다.',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpacing.xxl),
 
             const _SectionTitle('추가 정보'),
@@ -478,6 +534,20 @@ class _TournamentSubmitScreenState
     if (uri.scheme != 'http' && uri.scheme != 'https') {
       return 'http:// 또는 https:// 링크만 사용할 수 있어요';
     }
+    return null;
+  }
+
+  String? _requiredContactNameValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return '담당자 이름을 입력해주세요';
+    if (trimmed.length > 100) return '담당자 이름은 100자 이하로 입력해주세요';
+    return null;
+  }
+
+  String? _requiredContactValueValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return '전화번호 또는 이메일을 입력해주세요';
+    if (trimmed.length > 200) return '연락처는 200자 이하로 입력해주세요';
     return null;
   }
 }

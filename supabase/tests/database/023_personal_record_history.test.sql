@@ -1,8 +1,12 @@
--- 개인 기록장 — 테이블 격리와 스냅샷 적재 (#JY 개인기록장 1단계)
+-- 개인 기록장 — 테이블 격리와 스냅샷 적재 (#JY 개인기록장 1단계 → 2단계 랭킹 성장 기록)
 --
 -- 지키는 것:
---   1) 내 전적만 보인다 (남의 org_player_id 행은 안 보인다) — org_player_results, org_ranking_snapshots 둘 다
+--   1) 로그인 사용자는 서로의 전적·스냅샷도 볼 수 있다(2026-08-10) — org_player_results_read /
+--      org_ranking_snapshots_read 가 org_rankings 공개 수준과 통일됐다(랭킹 표 자체론
+--      로그인 사용자 전체에 이름·소속·점수를 공개하므로 개인 전적만 막을 근거가 없었다).
+--      own_select/admin_all 정책은 그대로 남아있지만(OR로 합쳐짐) 이제 read 정책이 더 넓다.
 --   2) anon 조회가 에러가 아니라 0행이다 (#365 함정) — 실제로 행이 존재하는 상태에서 검증
+--      (앞의 read 정책이 authenticated 로만 좁혀져 있어 anon 은 여전히 0행이다)
 --   3) replace_org_ranking_division 의 반환값이 "스냅샷 필터링 전" 랭킹 삽입 행수다
 --      (get diagnostics 가 스냅샷 insert 보다 먼저여야 하는 설계를 반환값으로 가드)
 --   4) 랭킹 교체가 스냅샷을 남기고, 같은 날 두 번 돌아도 행이 안 는다
@@ -59,7 +63,9 @@ select is(
 );
 
 -- ═══════════════════════════════════════════════
--- 2) 내 것만 보인다 — org_player_results, org_ranking_snapshots 둘 다
+-- 2) 로그인 사용자는 서로의 것도 본다 — org_player_results, org_ranking_snapshots 둘 다
+--    (2026-08-10: org_player_results_read/org_ranking_snapshots_read 가
+--     org_rankings_read 와 같은 조건 to authenticated using (true) 로 열림)
 -- ═══════════════════════════════════════════════
 set local role authenticated;
 set local request.jwt.claims to
@@ -67,24 +73,24 @@ set local request.jwt.claims to
 
 select is(
   (select count(*)::int from public.org_player_results),
-  2,
-  '연결 승인된 본인 전적 2건만 보인다'
+  3,
+  '로그인 사용자는 전적 전체(본인 2건+남의 1건)를 본다'
 );
 select is(
   (select count(*)::int from public.org_player_results where org_player_id = 'zz_theirs'),
-  0,
-  '남의 org_player_id 전적은 보이지 않는다'
+  1,
+  '남의 org_player_id 전적도 보인다'
 );
 
 select is(
   (select count(*)::int from public.org_ranking_snapshots),
-  1,
-  '본인(zz_mine) 스냅샷만 보인다'
+  2,
+  '로그인 사용자는 스냅샷 전체(본인+남)를 본다'
 );
 select is(
   (select count(*)::int from public.org_ranking_snapshots where org_player_id = 'zz_theirs'),
-  0,
-  '남의 스냅샷(zz_theirs)은 보이지 않는다'
+  1,
+  '남의 스냅샷(zz_theirs)도 보인다'
 );
 
 -- ═══════════════════════════════════════════════

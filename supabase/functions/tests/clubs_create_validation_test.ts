@@ -2,6 +2,8 @@ import { assertEquals, assertFalse } from 'std/assert/mod.ts';
 
 import {
   parseClubCardColor,
+  parseClubDescription,
+  parseFeeType,
   parseGenderPreference,
   parseMeetingDays,
   parseMonthlyFee,
@@ -38,6 +40,22 @@ Deno.test('clubs-create monthly fee accepts only the shared range', () => {
   assertFalse(parseMonthlyFee(1_000_001).ok);
   assertFalse(parseMonthlyFee(1.5).ok);
   assertFalse(parseMonthlyFee('30000').ok);
+});
+
+Deno.test('clubs-create fee type accepts monthly and per-event only', () => {
+  assertEquals(parseFeeType('monthly'), { ok: true, value: 'monthly' });
+  assertEquals(parseFeeType('per_event'), { ok: true, value: 'per_event' });
+  assertEquals(parseFeeType(undefined), { ok: true, value: 'monthly' });
+  assertFalse(parseFeeType('free').ok);
+});
+
+Deno.test('clubs-create description requires 30 to 2000 trimmed characters', () => {
+  assertFalse(parseClubDescription('a'.repeat(29)).ok);
+  assertEquals(parseClubDescription(`  ${'a'.repeat(30)}  `), {
+    ok: true,
+    value: 'a'.repeat(30),
+  });
+  assertFalse(parseClubDescription('a'.repeat(2001)).ok);
 });
 
 Deno.test('clubs-create gender preference accepts known codes only', () => {
