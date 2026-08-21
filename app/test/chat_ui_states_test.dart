@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:allround/screens/chat_screen.dart';
 import 'package:allround/widgets/chat_ai_disclosure.dart';
@@ -15,14 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 typedef _ChatStreamFactory = Stream<ChatStreamEvent> Function(String message);
 
 class _FakeChatApi extends ApiService {
-  _FakeChatApi(this._streamFactory)
-      : super(
-          SupabaseClient(
-            'http://127.0.0.1:54321',
-            'qa-anon-key',
-            authOptions: const AuthClientOptions(autoRefreshToken: false),
-          ),
-        );
+  _FakeChatApi(super.client, this._streamFactory);
 
   final _ChatStreamFactory _streamFactory;
 
@@ -45,11 +39,33 @@ void main() {
     required _ChatStreamFactory streamFactory,
     ThemeData? theme,
     double textScale = 1,
+    bool authenticated = true,
   }) async {
+    final client = SupabaseClient(
+      'http://127.0.0.1:54321',
+      'qa-anon-key',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    if (authenticated) {
+      final session = Session(
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
+        tokenType: 'bearer',
+        expiresIn: 3600,
+        user: const User(
+          id: 'test-user',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-08-21T00:00:00Z',
+        ),
+      );
+      await client.auth.setInitialSession(jsonEncode(session.toJson()));
+    }
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          apiProvider.overrideWithValue(_FakeChatApi(streamFactory)),
+          apiProvider.overrideWithValue(_FakeChatApi(client, streamFactory)),
           activeSportProvider.overrideWithValue('tennis'),
         ],
         child: MaterialApp(
@@ -114,6 +130,39 @@ void main() {
     expect(find.textContaining('AI 코치를 일시적으로 이용할 수 없어요'), findsOneWidget);
     expect(find.textContaining('GEMINI_API_KEY'), findsNothing);
     expect(find.textContaining('API_KEY_INVALID'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('로그인되지 않은 프리뷰에서는 질문을 지우지 않고 이유를 안내한다',
+      (tester) async {
+    var requestCount = 0;
+    await pumpChat(
+      tester,
+      authenticated: false,
+      streamFactory: (_) {
+        requestCount += 1;
+        return const Stream.empty();
+      },
+    );
+
+    const message = '이번 주 풋살 대회를 알려줘';
+    await tester.enterText(
+      find.byKey(AllRoundE2EKeys.chatInput),
+      message,
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('메시지 보내기'));
+    await tester.pumpAndSettle();
+
+    final input = tester.widget<TextField>(
+      find.byKey(AllRoundE2EKeys.chatInput),
+    );
+    expect(input.controller?.text, message);
+    expect(requestCount, 0);
+    expect(
+      find.text('로그인된 앱에서 볼보이 채팅을 이용해 주세요.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

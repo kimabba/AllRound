@@ -11,10 +11,13 @@ import 'local_user_preferences.dart';
 Future<void> signOutSecurely(
   SupabaseClient supabase, {
   SignOutScope scope = SignOutScope.global,
+  Duration cleanupTimeout = const Duration(seconds: 1),
 }) async {
   final userId = supabase.auth.currentUser?.id;
   try {
-    await ApiService(supabase).unregisterDeviceTokens();
+    // 로컬 Supabase가 꺼져 있거나 네트워크가 끊긴 경우 RPC가 오래 대기해도
+    // 실제 세션 종료까지 막으면 안 된다.
+    await ApiService(supabase).unregisterDeviceTokens().timeout(cleanupTimeout);
   } catch (_) {
     // Session termination must remain available offline.
   }

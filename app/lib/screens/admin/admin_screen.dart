@@ -973,42 +973,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                             ),
                           ],
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () =>
-                                    context.push('/admin/edit/$id'),
-                                icon: const Icon(Icons.description_outlined),
-                                label: const Text('등록 정보'),
-                              ),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () => context.push(
-                                  '/admin/preview/tournaments/$id',
-                                ),
-                                icon: const Icon(Icons.visibility_outlined),
-                                label: const Text('사용자 미리보기'),
-                              ),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () => _approve(id),
-                                child: const Text('승인'),
-                              ),
-                              OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () => _reject(id),
-                                child: const Text('거절'),
-                              ),
-                            ],
+                          AdminTournamentReviewActions(
+                            onOpenDetails: () =>
+                                context.push('/admin/edit/$id'),
+                            onOpenPreview: () => context.push(
+                              '/admin/preview/tournaments/$id',
+                            ),
+                            onApprove: () => _approve(id),
+                            onReject: () => _reject(id),
                           ),
                         ],
                       ),
@@ -1330,6 +1302,53 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           );
         },
       ),
+    );
+  }
+}
+
+class AdminTournamentReviewActions extends StatelessWidget {
+  const AdminTournamentReviewActions({
+    super.key,
+    required this.onOpenDetails,
+    required this.onOpenPreview,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final VoidCallback onOpenDetails;
+  final VoidCallback onOpenPreview;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onOpenDetails,
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('등록 정보'),
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onOpenPreview,
+          icon: const Icon(Icons.visibility_outlined),
+          label: const Text('사용자 미리보기'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onApprove,
+          child: const Text('승인'),
+        ),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onReject,
+          child: const Text('거절'),
+        ),
+      ],
     );
   }
 }

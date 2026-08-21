@@ -23,11 +23,5 @@ class SceneDelegate: FlutterSceneDelegate {
     window.rootViewController = flutterViewController
     self.window = window
     window.makeKeyAndVisible()
-
-    super.scene(
-      scene,
-      willConnectTo: session,
-      options: connectionOptions
-    )
   }
 }
