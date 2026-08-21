@@ -8,6 +8,7 @@ import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/legal_urls.dart';
+import 'in_app_browser_screen.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -64,19 +65,13 @@ class MoreScreen extends ConsumerWidget {
         icon: Icons.description_outlined,
         label: '이용약관',
         subtitle: '서비스 이용 조건',
-        onTap: () => launchUrl(
-          Uri.parse(kTermsOfServiceUrl),
-          mode: LaunchMode.externalApplication,
-        ),
+        onTap: () => _openLegalUrl(context, kTermsOfServiceUrl),
       ),
       _MenuItem(
         icon: Icons.privacy_tip_outlined,
         label: '개인정보 처리방침',
         subtitle: '개인정보 수집 및 이용 안내',
-        onTap: () => launchUrl(
-          Uri.parse(kPrivacyPolicyUrl),
-          mode: LaunchMode.externalApplication,
-        ),
+        onTap: () => _openLegalUrl(context, kPrivacyPolicyUrl),
       ),
     ];
 
@@ -108,6 +103,17 @@ class MoreScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _openLegalUrl(BuildContext context, String url) {
+  final uri = Uri.parse(url);
+  if (kIsWeb) {
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+    return;
+  }
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => InAppBrowserScreen(uri: uri)),
+  );
 }
 
 class _MenuSection extends StatelessWidget {
