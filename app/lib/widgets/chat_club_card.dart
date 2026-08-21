@@ -36,7 +36,8 @@ class ChatClubCard extends StatelessWidget {
     final description = item.description?.trim();
     final genderLabel = clubGenderLabel(item.genderPreference);
     final chips = <String>[
-      if (item.monthlyFee != null) clubMonthlyFeeLabel(item.monthlyFee!),
+      if (item.monthlyFee != null)
+        clubFeeLabel(item.monthlyFee!, feeType: item.feeType),
       if (genderLabel.isNotEmpty) genderLabel,
       if (item.meetingDays.isNotEmpty) item.meetingDays.join(' · '),
     ];

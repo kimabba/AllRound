@@ -218,6 +218,7 @@ const SAMPLE_CLUB_ROW: ClubCardRow = {
   description: '평일 아침에 함께 치는 클럽입니다.',
   member_count: 24,
   monthly_fee: 20000,
+  fee_type: 'monthly',
   meeting_days: ['화', '목'],
   gender_preference: 'mixed',
 };
@@ -233,6 +234,7 @@ Deno.test('buildClubCards maps rows to the fixed card contract', () => {
     description: '평일 아침에 함께 치는 클럽입니다.',
     member_count: 24,
     monthly_fee: 20000,
+    fee_type: 'monthly',
     meeting_days: ['화', '목'],
     gender_preference: 'mixed',
   });
@@ -301,6 +303,18 @@ Deno.test('renderClubDetailText omits missing optional fields', () => {
   assert(!text.includes('월 회비'));
   assert(!text.includes('성별'));
   assert(!text.includes('연락처'));
+});
+
+Deno.test('renderClubDetailText labels per-event club fees correctly', () => {
+  const club: ClubDetailRow = {
+    ...SAMPLE_CLUB_ROW,
+    fee_type: 'per_event',
+    address: null,
+    contact: null,
+  };
+  const text = renderClubDetailText(club);
+  assert(text.includes('- 1회 참가비: 20,000원'));
+  assert(!text.includes('월 회비'));
 });
 
 // ── 정제 칩 (JY-101) ──────────────────────────────────────────────
