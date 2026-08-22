@@ -9,6 +9,8 @@
 
 Apple 업데이트의 버전·빌드번호·Bundle ID·권한·릴리스 이력은
 [`apple-release-runbook.md`](apple-release-runbook.md)를 정본으로 사용한다.
+Google Play의 현재 계정·앱·빌드 준비 상태는
+[`RELEASE-STATUS-android.md`](RELEASE-STATUS-android.md)를 정본으로 사용한다.
 
 ## 우리 앱 프로필 (요건 판단 근거)
 - 로그인: **iOS는 자체 이메일만**, Android/Web은 이메일 + Google 기존회원 로그인 — 계정 생성 있음
@@ -72,7 +74,7 @@ Apple 업데이트의 버전·빌드번호·Bundle ID·권한·릴리스 이력�
 ## 🤖 C. Google Play 전용
 
 ### 빌드·기술
-- [x] **타깃 API 레벨** — 2026 신규앱/업데이트는 **API 36**(Android 16) 요구. 빌드는 platform-36 사용 중 ✅ (참고: `android-release-build.md`)
+- [x] **타깃 API 레벨** — `compileSdk`·`targetSdk` 36 및 release AAB 빌드 확인. Android 16 실기기/에뮬레이터 동작 검증은 별도 대기.
 - [ ] **AAB** 업로드 (APK 아님) + **Play 앱 서명** 활성화 (최초 업로드 시 설정) — 키스토어 alias `allround-upload`
 - [ ] `minSdk` 정책 상 무리 없는지 확인
 - [ ] 권한 최소화 — 사용 안 하는 위험 권한 매니페스트에서 제거 (특히 위치/저장소)

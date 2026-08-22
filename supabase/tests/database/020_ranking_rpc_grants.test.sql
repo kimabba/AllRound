@@ -33,6 +33,10 @@ select is(
     'public.replace_org_ranking_division(text, text, text, jsonb)', 'EXECUTE'),
   true, 'service_role 은 랭킹 교체 RPC 를 실행할 수 있다 (크롤러 경로)');
 
+-- 선수 이력 온디맨드 조회(ranking-player-history Edge Function)는 별도 RPC 없이
+-- 크롤러와 같은 upsert_org_player_results(20260804010000)를 재사용한다 —
+-- 그 RPC의 권한 가드는 여기서 다시 안 다룬다(이미 있으면 중복, 없으면 그 마이그레이션에서).
+
 -- ── my_ranking_candidates: 로그인 유저 전용 ─────────────────────────
 --   SECURITY INVOKER 라 anon 이 불러도 RLS 로 0행이지만, 로그인 전용 기능이라 권한도 좁힌다.
 select is(

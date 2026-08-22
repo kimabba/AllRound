@@ -15,6 +15,7 @@ import {
   CHAT_PROMPT_VERSION,
   REGULATION_BODY_CONTEXT_CAP,
   REGULATION_BODY_TOP_N,
+  RULE_GROUNDING_MIN_SIMILARITY,
 } from './types.ts';
 
 /**
@@ -116,8 +117,16 @@ export function buildSystemPrompt(): string {
 사용자의 등록 종목·등급·협회를 고려해 친절하게 답변하세요.
 BB는 앱의 중심 대화 창구입니다. 대회·클럽 정보뿐 아니라 운동 고민 상담, 앱 사용법, 종목 입문 질문 등 폭넓게 편하게 이야기 나누세요. 앱은 계속 성장 중이니, 아직 없는 것도 무안하게 끊지 말고 따뜻하게 안내하세요.
 
+[답변 범위와 안전]
+- 답변 범위는 테니스·풋살·운동·올라운드 앱 사용, 그리고 짧은 인사·감사입니다.
+- 범위와 무관한 정치·투자·도박·과제 대행·코딩·성적 역할극 같은 요청은 길게 이어가지 말고, 볼보이가 도울 수 있는 범위를 한 문장으로 안내하세요.
+- 성적으로 노골적인 요청, 욕설·모욕·혐오 표현 생성, 불법 행위나 사람을 해치는 방법은 거절하세요. 사용자를 비난하거나 해당 표현을 반복하지 마세요.
+- 근거가 없거나 확실하지 않은 정보는 사실처럼 만들지 말고, 확인할 수 없다고 분명히 말하세요. 특히 대회 일정·참가 자격·비용·협회 규정은 제공된 DB 데이터가 없으면 추측하지 마세요.
+
 [답변 규칙]
 - [사용자 프로필], [관련 대회], [관련 룰북], [구장 정보], [선택된 대회 상세], [내 프로필 상세] 블록의 데이터를 우선 사용해 답변합니다.
+- 룰북·규정 질문에 [관련 룰북] 블록이 있으면 그 문서 내용만 DB 근거로 사용하고, 답변 끝에 "근거 문서: <제공된 룰북 제목>"을 반드시 적으세요. 제목을 바꾸거나 내부 id로 대신하지 마세요.
+- 룰북·규정 질문에 [관련 룰북] 블록이 없으면 "현재 올라운드 DB에서 관련 룰북 문서를 찾지 못했습니다"라고 먼저 밝히세요. 일반 상식을 덧붙일 수는 있지만 "일반적인 규칙 안내"로 분리하고, DB나 특정 문서에서 확인한 내용처럼 말하지 마세요.
 - 데이터 블록이 없는 질문에는:
   - 앱 사용법, 인사, 감사, 운동 관련 상담 등 일반 대화에는 자연스럽고 도움되게 답하세요.
   - 스포츠 용어·규칙 등 일반 상식에는 답하되, "일반적인 규칙 기준이며 대회별로 다를 수 있습니다" 단서를 붙이세요.
@@ -131,7 +140,6 @@ BB는 앱의 중심 대화 창구입니다. 대회·클럽 정보뿐 아니라 �
 - 지도에서 클럽·대회·구장 찾기
 - 통합 일정 캘린더
 - 경기 이력·스코어 기록
-- 동호인 랭킹·레벨 시스템
 - 카카오 로그인
 - [구장 정보] 블록이 제공된 경우, 구장 이름·주소·실내/실외·연락처를 포함하여 친절히 안내하세요.
 - 간결하고 읽기 쉽게 답변하세요. 필요 시 목록·섹션을 활용하되, 굵게 강조(**)는 한글 렌더 문제로 사용하지 마세요.
@@ -166,6 +174,13 @@ export function wrapUntrustedData(text: string): string {
     '<data>\n' + escapeForData(text) + '\n</data>';
 }
 
+/** 유사도 하한을 통과한 룰북만 모델 컨텍스트와 DB 인용의 근거로 사용한다. */
+export function selectGroundedRules(rules: SemanticRule[]): SemanticRule[] {
+  return rules.filter((rule) =>
+    Number.isFinite(rule.similarity) && rule.similarity >= RULE_GROUNDING_MIN_SIMILARITY
+  ).slice(0, 3);
+}
+
 /**
  * RAG 결과를 모델 컨텍스트 블록으로 조립한다.
  *
@@ -184,6 +199,7 @@ export function buildContextPrompt(
   venues: VenueRow[] = [],
 ): string {
   const parts: string[] = [];
+  const groundedRules = selectGroundedRules(rules);
 
   if (tournaments.length > 0) {
     const top = tournaments.slice(0, 5);
@@ -227,10 +243,9 @@ export function buildContextPrompt(
     }
   }
 
-  if (rules.length > 0) {
-    const topRules = rules.slice(0, 3);
+  if (groundedRules.length > 0) {
     const rulesBySport = new Map<string, SemanticRule[]>();
-    for (const r of topRules) {
+    for (const r of groundedRules) {
       const key = r.sport;
       const arr = rulesBySport.get(key);
       if (arr) arr.push(r);

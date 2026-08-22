@@ -41,11 +41,87 @@ export interface GeminiUsage {
 }
 
 export interface StreamEvent {
-  type: 'text' | 'done' | 'error';
+  type: 'text' | 'done' | 'error' | 'blocked';
   text?: string;
   error?: string;
+  blockReason?: string;
   /** 'done' 이벤트에만 실림. SSE 마지막 청크의 usageMetadata. */
   usage?: GeminiUsage;
+}
+
+export const CHAT_SAFETY_SETTINGS = [
+  {
+    category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+    threshold: 'BLOCK_LOW_AND_ABOVE',
+  },
+  {
+    category: 'HARM_CATEGORY_HARASSMENT',
+    threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+  },
+  {
+    category: 'HARM_CATEGORY_HATE_SPEECH',
+    threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+  },
+  {
+    category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+    threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+  },
+] as const;
+
+interface ParsedGeminiStreamChunk {
+  text: string;
+  usage?: GeminiUsage;
+  blockReason?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseUsage(value: unknown): GeminiUsage | undefined {
+  if (!isRecord(value)) return undefined;
+  const usage: GeminiUsage = {};
+  if (typeof value.promptTokenCount === 'number') {
+    usage.promptTokenCount = value.promptTokenCount;
+  }
+  if (typeof value.candidatesTokenCount === 'number') {
+    usage.candidatesTokenCount = value.candidatesTokenCount;
+  }
+  if (typeof value.totalTokenCount === 'number') {
+    usage.totalTokenCount = value.totalTokenCount;
+  }
+  return usage;
+}
+
+/** Gemini SSE JSON 한 청크를 외부 JSON 경계에서 즉시 좁힌다. */
+export function parseGeminiStreamChunk(value: unknown): ParsedGeminiStreamChunk {
+  if (!isRecord(value)) return { text: '' };
+
+  const usage = parseUsage(value.usageMetadata);
+  const promptFeedback = isRecord(value.promptFeedback) ? value.promptFeedback : null;
+  const promptBlockReason = typeof promptFeedback?.blockReason === 'string'
+    ? promptFeedback.blockReason
+    : null;
+
+  const candidates = Array.isArray(value.candidates) ? value.candidates : [];
+  const candidate = isRecord(candidates[0]) ? candidates[0] : null;
+  const finishReason = typeof candidate?.finishReason === 'string' ? candidate.finishReason : null;
+  const blockReason = promptBlockReason && promptBlockReason !== 'BLOCK_REASON_UNSPECIFIED'
+    ? promptBlockReason
+    : finishReason === 'SAFETY'
+    ? finishReason
+    : undefined;
+  if (blockReason) {
+    return usage ? { text: '', usage, blockReason } : { text: '', blockReason };
+  }
+
+  const content = isRecord(candidate?.content) ? candidate.content : null;
+  const parts = Array.isArray(content?.parts) ? content.parts : [];
+  const text = parts
+    .filter((part) => isRecord(part) && part.thought !== true)
+    .map((part) => isRecord(part) && typeof part.text === 'string' ? part.text : '')
+    .join('');
+  return usage ? { text, usage } : { text };
 }
 
 /**
@@ -61,6 +137,7 @@ export async function* streamChat(
 
   const body: Record<string, unknown> = {
     contents: history,
+    safetySettings: CHAT_SAFETY_SETTINGS,
     generationConfig: {
       temperature: opts.temperature ?? 0.2,
       maxOutputTokens: opts.maxOutputTokens ?? 2048,
@@ -90,6 +167,7 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
   let capturedUsage: GeminiUsage | undefined;
+  let safetyBlockEmitted = false;
 
   // SSE 청크 처리를 한 곳에 (마지막 buffer 잔여 처리에도 재사용)
   function* parseLine(line: string): Generator<StreamEvent> {
@@ -98,14 +176,18 @@ export async function* streamChat(
     const json = trimmed.slice(5).trim();
     if (!json) return;
     try {
-      const parsed = JSON.parse(json);
-      if (parsed.usageMetadata) capturedUsage = parsed.usageMetadata as GeminiUsage;
-      const candidate = parsed.candidates?.[0];
-      const text = candidate?.content?.parts
-        ?.filter((p: Record<string, unknown>) => !p.thought)
-        .map((p: ChatPart) => p.text)
-        .join('') ?? '';
-      if (text) yield { type: 'text', text };
+      const parsed = parseGeminiStreamChunk(JSON.parse(json) as unknown);
+      if (parsed.usage) capturedUsage = parsed.usage;
+      if (parsed.blockReason && !safetyBlockEmitted) {
+        safetyBlockEmitted = true;
+        yield {
+          type: 'blocked',
+          error: '안전 정책상 이 내용은 답변할 수 없습니다.',
+          blockReason: parsed.blockReason,
+        };
+        return;
+      }
+      if (parsed.text) yield { type: 'text', text: parsed.text };
     } catch (_) {
       // 일부 청크가 깨질 수 있으므로 무시
     }

@@ -57,8 +57,15 @@
    > **`club_raw` 를 비워도 와일드카드가 아니다.** 비우면(`null`) 소속이 비어 있는 행하고만
    > 맞는다 — 소속이 있는 행은 조용히 안 지워진다. 반드시 실제 소속을 넣는다.
 
-3. 이미 저장된 행을 지운다:
+3. 이미 저장된 현재 랭킹·랭킹 기록·선수별 대회 이력을 모두 지운다. 선수별 이력은
+   `org_player_id`로 연결되므로 아이디가 있는 요청에서 두 테이블을 함께 삭제한다:
    ```sql
+   delete from public.org_player_results
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
+
+   delete from public.org_player_history_fetches
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
+
    delete from public.org_rankings
    where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
    -- 아이디가 없으면: and player_name = '<성명>' and club_raw = '<소속 원문>'
@@ -67,10 +74,19 @@
    where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
    ```
 
+   아이디가 없는 랭킹 행은 선수 상세 이력의 수집 대상이 아니므로 현재 랭킹과 랭킹
+   기록만 성명 + 소속으로 삭제한다.
+
 4. **다음 크롤 이후 재등장하지 않는지 확인한다.** 억제가 걸렸으면 안 돌아온다:
    ```sql
    select count(*) from public.org_rankings
    where org_code = '<gj|jn>' and player_name = '<성명>';
+
+   select count(*) from public.org_player_results
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
+
+   select count(*) from public.org_player_history_fetches
+   where org_code = '<gj|jn>' and org_player_id = '<협회아이디>';
    ```
 
 5. 처리 결과를 요청자에게 회신한다. **원본은 협회에 있다는 점을 함께 안내한다**

@@ -99,7 +99,9 @@ const CASES: RuleCase[] = [
     intent: 'my_profile',
     slots: {},
   },
-  // my_profile — '내 랭킹' (회귀: Task 4 match_schedule 룰이 my_profile을 건드렸을 때 감지)
+  // my_profile — '내 랭킹' (회귀: Task 4 match_schedule 룰이 my_profile을 건드렸을 때 감지.
+  // "본인 랭킹"은 #424가 이미 my_profile 라우팅에 my_confirmed_ranking RPC로 통합했다 —
+  // 여기서 별도 의도를 만들지 않는다. ranking_lookup은 협회 공개 랭킹 조회만 다룬다.)
   {
     msg: '내 랭킹 몇 점이야',
     intent: 'my_profile',
@@ -177,6 +179,74 @@ Deno.test('match_schedule 은 일정 키워드 동반 시에만 매칭', () => {
   assertEquals(classifyByRule('매치'), null);
   // '매치' + 일정 키워드 → match_schedule
   assertEquals(classifyByRule('매치 일정 알려줘')?.intent, 'match_schedule');
+});
+
+Deno.test('협회 공개 랭킹을 고신뢰로 분류한다', () => {
+  assertEquals(classifyByRule('광주 골드부 랭킹 보여줘'), {
+    intent: 'ranking_lookup',
+    rule: 'org_ranking_keyword',
+  });
+  assertEquals(classifyByRule('전남 여자금배부 김평화 선수 순위 알려줘')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 선수 순위가 몇 위야?')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 랭킹 알려줘')?.intent, 'ranking_lookup');
+  assertEquals(classifyByRule('김평화 선수 몇 등이야?')?.intent, 'ranking_lookup');
+});
+
+Deno.test('1인칭 자기지칭 바로 다음 단어를 선수명으로 오추출하지 않는다', () => {
+  // "현재"/"지금"처럼 자기지칭 뒤에 오는 단어는 선수명이 아니다 — 실측(2026-08-21)
+  // 오추출로 ranking_lookup이 잘못 걸려 "본인 랭킹" 질문이 엉뚱하게 라우팅되던 문제.
+  // 이런 문장은 rule 미매칭으로 두고 embedding/my_profile 이 처리하게 한다.
+  assertEquals(classifyByRule('내 현재 랭킹 알려줘'), null);
+  assertEquals(classifyByRule('저는 지금 몇 위예요?'), null);
+  assertEquals(classifyByRule('제가 지금 몇 위예요'), null);
+  assertEquals(classifyByRule('본인 연결된 랭킹 보여줘'), null);
+});
+
+Deno.test('랭킹 질문에서 광주·전남 협회, 부서, 명시 선수명을 추출한다', () => {
+  assertEquals(extractSlots('광주 골드부 랭킹 보여줘', FIXED_NOW), {
+    region: 'gwangju',
+    org_code: 'gj',
+    division_code: 'gj_m_gold',
+  });
+  assertEquals(extractSlots('전남 여자금배부 김평화 선수 순위 알려줘', FIXED_NOW), {
+    region: 'jeonnam',
+    org_code: 'jn',
+    division_code: 'jn_w_geumbae',
+    player_name: '김평화',
+  });
+  assertEquals(extractSlots('광주협회 국화부 선수명: 박사랑 랭킹', FIXED_NOW), {
+    region: 'gwangju',
+    org_code: 'gj',
+    division_code: 'gj_w_gukhwa',
+    player_name: '박사랑',
+  });
+  assertEquals(extractSlots('김평화 선수 랭킹 포인트 몇 점이야?', FIXED_NOW), {
+    player_name: '김평화',
+  });
+  assertEquals(extractSlots('김평화 랭킹 알려줘', FIXED_NOW), {
+    player_name: '김평화',
+  });
+});
+
+Deno.test('랭킹 포인트 산정 질문은 현재 랭킹이 아니라 rule_lookup 이다', () => {
+  assertEquals(classifyByRule('랭킹 포인트는 어떻게 산정해?'), {
+    intent: 'rule_lookup',
+    rule: 'ranking_points_rule',
+  });
+  assertEquals(classifyByRule('대회 랭킹 포인트 배점 기준 알려줘')?.intent, 'rule_lookup');
+  assertEquals(
+    classifyByRule('김평화 선수 랭킹 포인트 몇 점이야?')?.intent,
+    'ranking_lookup',
+  );
+  assertEquals(classifyByRule('테니스 룰불 내용 알려줘')?.intent, 'rule_lookup');
+});
+
+Deno.test('협회 단서 없는 일반 순위 표현은 협회 랭킹으로 오탐하지 않는다', () => {
+  assertEquals(classifyByRule('ATP 세계 랭킹 알려줘'), null);
+  assertEquals(classifyByRule('광주 맛집 순위 알려줘'), null);
+  assertEquals(classifyByRule('테니스 선수 되는 방법 알려줘'), null);
+  assertEquals(extractSlots('광주에 실내 테니스장 추천해줘', FIXED_NOW).org_code, undefined);
+  assertEquals(extractSlots('테니스 선수 되는 방법 알려줘', FIXED_NOW).player_name, undefined);
 });
 
 Deno.test("'경기' 동음이의 false-positive 회피 (게임 vs 경기도)", () => {
