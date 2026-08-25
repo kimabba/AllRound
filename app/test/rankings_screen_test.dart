@@ -237,6 +237,18 @@ void main() {
     expect(find.byType(CircleAvatar), findsNWidgets(2));
   });
 
+  testWidgets('이름이 공백뿐이면 아바타 이니셜이 물음표로 대체된다', (tester) async {
+    await _pump(
+      tester,
+      RankingList(
+        rows: [_row(rank: 1, name: '  ', points: 100, orgPlayerId: 'a')],
+        linkedOrgPlayerId: null,
+      ),
+    );
+
+    expect(find.text('?'), findsOneWidget);
+  });
+
   testWidgets('선수 행을 누르면 대회 이력을 보여준다', (tester) async {
     final history = PlayerHistory(
       results: [

@@ -206,8 +206,9 @@ class _RankingRow extends StatelessWidget {
     // 랭킹표는 협회 크롤 데이터라 프로필 사진이 없다 — 클럽 멤버 리스트와 같은
     // 이니셜 폴백을 쓴다(app/lib/screens/clubs/club_detail_screen.dart 의
     // CircleAvatar 패턴과 동일).
+    final trimmedName = row.playerName.trim();
     final initial =
-        row.playerName.characters.isEmpty ? '?' : row.playerName.characters.first;
+        trimmedName.characters.isEmpty ? '?' : trimmedName.characters.first;
     return AppCard(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
       variant: AppCardVariant.outlined,
@@ -241,6 +242,8 @@ class _RankingRow extends StatelessWidget {
               children: [
                 Text(
                   row.playerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style:
                       tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
