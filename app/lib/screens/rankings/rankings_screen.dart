@@ -134,6 +134,11 @@ List<OrgRankingRow> filterRankingRows(List<OrgRankingRow> rows, String query) {
 ///
 /// [onDispute] / [disputableOrgPlayerIds] 는 같은 구조의 이의신청 경로다 —
 /// 이미 남과 연결된 선수 줄에 붙는다. 두 집합은 서로 겹치지 않는다.
+///
+/// [CustomScrollView] 의 `slivers` 안에서만 쓸 수 있는 슬리버 위젯이다(부서당
+/// 최대 871행 — 화면에 보이는 행만 빌드하려면 여기서부터 지연이어야 한다).
+/// 단독으로 테스트할 때도 `CustomScrollView(slivers: [RankingList(...)])` 로
+/// 감싸야 한다 — `Scaffold(body: ...)` 처럼 박스 자리에 바로 넣으면 렌더 에러.
 class RankingList extends StatelessWidget {
   const RankingList({
     super.key,
@@ -156,30 +161,27 @@ class RankingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.sm),
-          _RankingRow(
-            row: rows[i],
-            isMine: rows[i].orgPlayerId != null &&
-                rows[i].orgPlayerId == linkedOrgPlayerId,
-            onTap: rows[i].orgPlayerId == null || onPlayerTap == null
-                ? null
-                : () => onPlayerTap!(rows[i]),
-            onClaim: onClaim != null &&
-                    rows[i].orgPlayerId != null &&
-                    claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
-                ? () => onClaim!(rows[i])
-                : null,
-            onDispute: onDispute != null &&
-                    rows[i].orgPlayerId != null &&
-                    disputableOrgPlayerIds.contains(rows[i].orgPlayerId)
-                ? () => onDispute!(rows[i])
-                : null,
-          ),
-        ],
-      ],
+    return SliverList.separated(
+      itemCount: rows.length,
+      itemBuilder: (context, i) => _RankingRow(
+        row: rows[i],
+        isMine: rows[i].orgPlayerId != null &&
+            rows[i].orgPlayerId == linkedOrgPlayerId,
+        onTap: rows[i].orgPlayerId == null || onPlayerTap == null
+            ? null
+            : () => onPlayerTap!(rows[i]),
+        onClaim: onClaim != null &&
+                rows[i].orgPlayerId != null &&
+                claimableOrgPlayerIds.contains(rows[i].orgPlayerId)
+            ? () => onClaim!(rows[i])
+            : null,
+        onDispute: onDispute != null &&
+                rows[i].orgPlayerId != null &&
+                disputableOrgPlayerIds.contains(rows[i].orgPlayerId)
+            ? () => onDispute!(rows[i])
+            : null,
+      ),
+      separatorBuilder: (context, i) => const SizedBox(height: AppSpacing.sm),
     );
   }
 }
@@ -1095,44 +1097,65 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                 }
                 final data = snap.data!;
                 final visibleRows = filterRankingRows(data.rows, _query);
-                return ListView(
+                // 부서당 최대 871행(광주 남자일반부) — 행 위젯을 전부 한 번에
+                // 빌드하지 않도록 CustomScrollView + 슬리버로 화면에 보이는
+                // 행만 지연 빌드한다. RankingList 가 그 슬리버(SliverList)를
+                // 낸다 — 행 빌드 로직의 정본은 여기 하나뿐이다.
+                return CustomScrollView(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xl,
-                    vertical: AppSpacing.md,
-                  ),
-                  children: [
-                    if (visibleRows.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(AppSpacing.xxl),
-                        child: Center(
-                          child: Text(
-                            data.rows.isEmpty ? '공표된 랭킹이 없습니다' : '검색 결과가 없습니다',
-                          ),
-                        ),
-                      )
-                    else
-                      Column(
-                        children: [
-                          const _RankingTableHeader(),
-                          RankingList(
-                            rows: visibleRows,
-                            linkedOrgPlayerId: data.linkedOrgPlayerId,
-                            claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                            disputableOrgPlayerIds: data.disputableOrgPlayerIds,
-                            onClaim: _claim,
-                            onDispute: _dispute,
-                            onPlayerTap: _openPlayerHistory,
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: AppSpacing.md,
+                      ),
+                      sliver: SliverMainAxisGroup(
+                        slivers: [
+                          if (visibleRows.isEmpty)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.all(AppSpacing.xxl),
+                                child: Center(
+                                  child: Text(
+                                    data.rows.isEmpty
+                                        ? '공표된 랭킹이 없습니다'
+                                        : '검색 결과가 없습니다',
+                                  ),
+                                ),
+                              ),
+                            )
+                          else ...[
+                            const SliverToBoxAdapter(
+                              child: _RankingTableHeader(),
+                            ),
+                            RankingList(
+                              rows: visibleRows,
+                              linkedOrgPlayerId: data.linkedOrgPlayerId,
+                              claimableOrgPlayerIds:
+                                  data.claimableOrgPlayerIds,
+                              disputableOrgPlayerIds:
+                                  data.disputableOrgPlayerIds,
+                              onClaim: _claim,
+                              onDispute: _dispute,
+                              onPlayerTap: _openPlayerHistory,
+                            ),
+                          ],
+                          // 목록 아래 최하단 — 검색창 아래에 있던 것을 여기로
+                          // 옮겼다(위치만 변경, 문구·조건은 그대로: 법적 고지라
+                          // 내용 무수정). 목록이 비었어도 항상 뜬다.
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(top: AppSpacing.md),
+                              child: RankingSourceNotice(
+                                orgLabel: tennisOrgLabel(_orgCode),
+                                fetchedAt: _latestFetchedAt(data.rows),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                    // 목록 아래 최하단 — 검색창 아래에 있던 것을 여기로 옮겼다
-                    // (위치만 변경, 문구·조건은 그대로: 법적 고지라 내용 무수정).
-                    const SizedBox(height: AppSpacing.md),
-                    RankingSourceNotice(
-                      orgLabel: tennisOrgLabel(_orgCode),
-                      fetchedAt: _latestFetchedAt(data.rows),
                     ),
                   ],
                 );
