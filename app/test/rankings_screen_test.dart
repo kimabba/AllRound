@@ -10,6 +10,7 @@ import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 OrgRankingRow _row({
@@ -67,6 +68,8 @@ class _FakeRankingApi extends ApiService {
     this.myName = '김평화',
     List<UserTennisOrg>? myOrgs,
     this.history,
+    this.myRankings = const [],
+    this.playerRankingsThrows = false,
   })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
         super(
           SupabaseClient(
@@ -82,13 +85,23 @@ class _FakeRankingApi extends ApiService {
   final String myName;
   final List<UserTennisOrg> myOrgs;
   final PlayerHistory? history;
+  final List<OrgRankingRow> myRankings;
+  final bool playerRankingsThrows;
+
+  /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
+  String? lastOrgCode;
+  String? lastDivisionCode;
+  String? lastPlayerRankingsOrgCode;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
     required String orgCode,
     required String divisionCode,
-  }) async =>
-      rows;
+  }) async {
+    lastOrgCode = orgCode;
+    lastDivisionCode = divisionCode;
+    return rows;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> orgPlayerLinks(String orgCode) async =>
@@ -124,11 +137,21 @@ class _FakeRankingApi extends ApiService {
     required String orgPlayerId,
   }) async =>
       const [];
+
+  @override
+  Future<List<OrgRankingRow>> playerRankings({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    lastPlayerRankingsOrgCode = orgCode;
+    if (playerRankingsThrows) throw Exception('boom');
+    return myRankings;
+  }
 }
 
 const _kTestUserId = 'me-uuid';
 
-Future<void> _pumpScreen(
+Future<_FakeRankingApi> _pumpScreen(
   WidgetTester tester, {
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
@@ -136,20 +159,23 @@ Future<void> _pumpScreen(
   String myName = '김평화',
   List<UserTennisOrg>? myOrgs,
   PlayerHistory? history,
+  List<OrgRankingRow> myRankings = const [],
+  bool playerRankingsThrows = false,
 }) async {
+  final api = _FakeRankingApi(
+    rows: rows,
+    links: links,
+    candidates: candidates,
+    myName: myName,
+    myOrgs: myOrgs,
+    history: history,
+    myRankings: myRankings,
+    playerRankingsThrows: playerRankingsThrows,
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        apiProvider.overrideWithValue(
-          _FakeRankingApi(
-            rows: rows,
-            links: links,
-            candidates: candidates,
-            myName: myName,
-            myOrgs: myOrgs,
-            history: history,
-          ),
-        ),
+        apiProvider.overrideWithValue(api),
         currentUserProvider.overrideWithValue(
           User(
             id: _kTestUserId,
@@ -167,6 +193,7 @@ Future<void> _pumpScreen(
     ),
   );
   await tester.pumpAndSettle();
+  return api;
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) {
@@ -181,6 +208,35 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 }
 
 void main() {
+  group('협회 드롭다운', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('세그먼트 대신 드롭다운이 뜨고, 부서 드롭다운과 한 줄에 나란하다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      // 협회가 계속 추가될 예정이라 세그먼트는 확장이 안 된다 — 드롭다운으로 교체.
+      expect(find.byType(SegmentedButton<String>), findsNothing);
+      expect(find.text('광주협회'), findsOneWidget);
+      expect(find.text('협회'), findsOneWidget); // labelText
+      expect(find.text('부서'), findsOneWidget); // labelText
+    });
+
+    testWidgets('협회를 바꾸면 그 협회의 첫 부서로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(tester, rows: rows, links: const []);
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 부서 items 가 통째로 바뀌어도 크래시 없이(ValueKey 재생성) 첫 부서로 리셋.
+      expect(api.lastOrgCode, 'jn');
+      expect(api.lastDivisionCode, 'jn_m_gold');
+    });
+  });
+
   testWidgets('순위표 행이 렌더링된다', (tester) async {
     await _pump(
       tester,
@@ -901,5 +957,172 @@ void main() {
     );
 
     expect(find.textContaining('본인'), findsOneWidget);
+  });
+
+  group('내 기록 요약 카드', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+    const confirmedLinks = [
+      {'org_player_id': 'a', 'status': 'confirmed', 'user_id': _kTestUserId},
+    ];
+
+    testWidgets('확정 연결이 있으면 요약 카드가 뜨고 "내 기록 보기" 링크는 없다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      // 부서(골드부)·순위(3위)·누적 포인트(2,649P)가 한 카드에 보인다.
+      expect(find.textContaining('골드부 3위'), findsOneWidget);
+      expect(find.textContaining('2,649P'), findsOneWidget);
+      // 진입점은 카드로 대체됐다 — 링크는 제거.
+      expect(find.text('내 기록 보기'), findsNothing);
+    });
+
+    testWidgets('연결은 있는데 공표 표에 내 행이 없어도 카드는 뜬다', (tester) async {
+      // 연초 협회 포인트 리셋 등으로 표가 비어도, 링크를 없앤 자리라 이 카드가
+      // /rankings/me 로 가는 유일한 진입점이다 — 사라지면 기록 화면이 고아가 된다.
+      await _pumpScreen(tester, rows: rows, links: confirmedLinks);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('내 기록 요약 조회가 실패해도 순위표는 정상적으로 뜬다', (tester) async {
+      // 부가 기능(요약 카드)이 핵심 기능(공개 순위표)을 죽이면 안 된다 —
+      // playerRankings() 가 예외를 던져도 _load() 전체가 실패해서는 안 된다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        playerRankingsThrows: true,
+      );
+
+      expect(find.text('김평화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('확정 연결이 없어도 카드가 뜨고, 그 아래 기존 연결 유도도 함께 뜬다', (tester) async {
+      // "이 화면도 너무하지 않아?" 피드백 — 미연결 협회라고 카드 자체를 숨기지
+      // 않는다. 대신 탭 불가·안내 문구로 상태를 표시하고, 기존 유도 체인은
+      // 카드 아래 그대로 유지한다.
+      await _pumpScreen(tester, rows: rows, links: const [], myOrgs: const []);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.textContaining('전적이 없거나 확인되지 않았습니다'), findsOneWidget);
+      // 탭 불가 상태라 거짓 어포던스인 화살표는 없어야 한다.
+      expect(find.byIcon(Icons.chevron_right), findsNothing);
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+    });
+
+    testWidgets('미연결 카드는 탭해도 아무 데도 가지 않는다', (tester) async {
+      // AppCard 는 onTap 이 null 이면 InkWell 자체를 만들지 않는다 — 탭해도
+      // 반응이 없어야 정상.
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(rows: rows, links: const [], myOrgs: const []),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child:
+              MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 기록 화면'), findsNothing);
+    });
+
+    testWidgets('협회를 바꾸면 내 기록도 그 협회 기준으로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+      expect(api.lastPlayerRankingsOrgCode, 'gj');
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 협회별로 내 기록이 다를 수 있다 — 카드 데이터도 새 협회로 재조회돼야 한다.
+      expect(api.lastPlayerRankingsOrgCode, 'jn');
+    });
+
+    testWidgets('카드를 탭하면 /rankings/me 로 간다', (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(
+                rows: rows,
+                links: confirmedLinks,
+                myRankings: [
+                  _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+                ],
+              ),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 기록 화면'), findsOneWidget);
+    });
   });
 }

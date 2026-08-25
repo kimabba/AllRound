@@ -25,4 +25,9 @@ void main() {
     final link = await api.myConfirmedLink();
     expect(link, isNull);
   });
+
+  test('연결이 없으면 myCurrentRankings 는 빈 목록이다(전체 순위를 긁지 않는다)', () async {
+    final api = _unauthenticatedApi();
+    expect(await api.myCurrentRankings(), isEmpty);
+  });
 }
