@@ -30,6 +30,23 @@ OrgRankingRow _row({
   );
 }
 
+PlayerResult _result({
+  required DateTime playedOn,
+  required int points,
+  int? resultRound,
+  String tournamentName = '대회',
+}) {
+  return PlayerResult(
+    orgCode: 'gj',
+    orgPlayerId: 'a',
+    tournamentName: tournamentName,
+    playedOn: playedOn,
+    resultRaw: resultRound?.toString() ?? '',
+    resultRound: resultRound,
+    points: points,
+  );
+}
+
 /// 기본 등록 상태 — 광주협회 남자골드부. 화면 기본 선택과 같아 registeredHere 가 참이다.
 /// UserTennisOrg 는 const 생성자가 아니라 최종 필드로 둔다.
 final _kDefaultMyOrgs = [
@@ -314,6 +331,66 @@ void main() {
     final resultText = tester.widget<Text>(find.text(rawResult));
     expect(resultText.maxLines, isNull);
     expect(resultText.overflow, isNot(TextOverflow.ellipsis));
+  });
+
+  testWidgets('연도 헤더에 우승·준우승·입상·포인트 요약이 표시된다', (tester) async {
+    final history = PlayerHistory(
+      results: [
+        _result(playedOn: DateTime(2026, 5), points: 1000, resultRound: 1),
+        _result(playedOn: DateTime(2026, 4), points: 246, resultRound: 4),
+        _result(playedOn: DateTime(2026, 3), points: 700, resultRound: 4),
+      ],
+      fetchedAt: DateTime.utc(2026, 8, 9),
+      isComplete: true,
+      wasCached: false,
+    );
+    final rows = [_row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a')];
+    await _pumpScreen(tester, rows: rows, links: const [], history: history);
+
+    await tester.tap(find.text('김평화').first);
+    await tester.pumpAndSettle();
+
+    // 준우승 0건은 생략, 우승·입상·포인트만 남는다.
+    expect(find.text('우승 1 · 입상 2 · 1,946점'), findsOneWidget);
+  });
+
+  test('연도별 성적 집계 - 우승/준우승/입상 횟수와 포인트 합산(라운드 없는 행 포함)', () {
+    final results = [
+      _result(playedOn: DateTime(2026, 5), points: 500, resultRound: 1),
+      _result(playedOn: DateTime(2026, 5), points: 500, resultRound: 1),
+      _result(playedOn: DateTime(2026, 4), points: 300, resultRound: 2),
+      _result(playedOn: DateTime(2026, 3), points: 200, resultRound: 4),
+      _result(playedOn: DateTime(2026, 3), points: 200, resultRound: 4),
+      // resultRound 가 없어도(협회 표기를 못 읽은 행) 포인트는 합산돼야 한다.
+      _result(playedOn: DateTime(2026, 2), points: 100, resultRound: null),
+      // 4강이 아닌 다른 라운드는 카운트되지 않지만 포인트는 합산된다.
+      _result(playedOn: DateTime(2026, 1), points: 50, resultRound: 8),
+    ];
+
+    final stats = computeYearlyStats(results);
+
+    expect(stats.wins, 2);
+    expect(stats.runnerUps, 1);
+    expect(stats.semiFinals, 2);
+    expect(stats.points, 500 + 500 + 300 + 200 + 200 + 100 + 50);
+  });
+
+  test('요약 라벨 - 우승/준우승/입상이 모두 있으면 전부 표시한다', () {
+    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '우승 3 · 준우승 1 · 입상 2 · 1,946점');
+  });
+
+  test('요약 라벨 - 횟수가 0인 항목은 생략한다', () {
+    const stats = YearlyStats(wins: 3, runnerUps: 0, semiFinals: 2, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '우승 3 · 입상 2 · 1,946점');
+  });
+
+  test('요약 라벨 - 셋 다 0이면 포인트만 표시한다', () {
+    const stats = YearlyStats(wins: 0, runnerUps: 0, semiFinals: 0, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '1,946점');
   });
 
   test('검색어는 이름과 소속 둘 다에서 부분일치로 거른다', () {
