@@ -48,6 +48,16 @@ const kMobileAdminPaths = {
   '/admin/drafts',
 };
 
+/// `/rankings/me?org=` 딥링크 쿼리 검증. [kRankingDivisions](미러 협회 SSOT)에
+/// 없으면(오타·공백·폐기 코드) null 로 강등해 [MyRecordScreen] 이 기존 기본
+/// 동작(정렬 1순위 협회)을 쓰게 한다 — 검증 없이 그대로 넘기면 "연결 안
+/// 됨"(ConnectPrompt)으로 오표시돼 사용자가 불필요한 재연결을 시도하게 된다.
+String? validatedRankingOrgCode(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || !kRankingDivisions.containsKey(trimmed)) return null;
+  return trimmed;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: kIsWeb && AppConfig.userDesignPreview
@@ -179,7 +189,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/rankings/me',
-            builder: (_, __) => catalogAware(MyRecordScreen.new),
+            builder: (_, state) => catalogAware(
+              () => MyRecordScreen(
+                orgCode: validatedRankingOrgCode(
+                  state.uri.queryParameters['org'],
+                ),
+              ),
+            ),
           ),
           GoRoute(
             path: '/profile',

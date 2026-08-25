@@ -164,8 +164,10 @@ mixin RankingApi on ApiBase {
   /// org_code/org_player_id 로 명시 필터한다 — RLS 에 기대면 관리자 계정은
   /// `org_player_results_admin_all` 정책 때문에 전체 선수 전적을 받는다.
   /// (RLS 는 그대로 방어선이고, 이건 앱이 "내 것만" 의도를 명시하는 것.)
-  Future<List<PlayerResult>> myPlayerResults() async {
-    final link = await myConfirmedLink();
+  ///
+  /// [orgCode] 를 주면 그 협회의 연결만 본다 — [myConfirmedLink] 참조.
+  Future<List<PlayerResult>> myPlayerResults({String? orgCode}) async {
+    final link = await myConfirmedLink(orgCode: orgCode);
     if (link == null) return const [];
     final rows = await supabase
         .from('org_player_results')
@@ -182,16 +184,23 @@ mixin RankingApi on ApiBase {
   ///
   /// DB 제약상 한 유저가 광주·전남 두 협회에 동시에 confirmed 될 수 있어
   /// org_code 로 정렬해 최소한 결과가 안정적이게 한다(어느 쪽이 나오든 매번 같다).
-  Future<Map<String, dynamic>?> myConfirmedLink() async {
+  ///
+  /// [orgCode] 를 주면 그 협회로 좁혀 찾는다 — 랭킹 화면이 지금 보는 협회의
+  /// 카드를 탭해 내 기록으로 들어올 때, 광주+전남 동시 confirmed 사용자가
+  /// 항상 정렬 1순위(광주)만 보게 되는 걸 막는다. 기본값 null 은 기존 동작(정렬
+  /// 1순위) 그대로다 — 기존 호출부는 전부 무수정으로 컴파일된다.
+  Future<Map<String, dynamic>?> myConfirmedLink({String? orgCode}) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return null;
-    final rows = await supabase
+    var query = supabase
         .from('org_player_links')
         .select('org_code, org_player_id')
         .eq('user_id', userId)
-        .eq('status', 'confirmed')
-        .order('org_code')
-        .limit(1);
+        .eq('status', 'confirmed');
+    if (orgCode != null) {
+      query = query.eq('org_code', orgCode);
+    }
+    final rows = await query.order('org_code').limit(1);
     final list = List<Map<String, dynamic>>.from(rows);
     return list.isEmpty ? null : list.first;
   }
@@ -241,8 +250,10 @@ mixin RankingApi on ApiBase {
 
   /// 연결된 내 현재 순위(부서별). 스펙 §7.2 블록 1 "지금".
   /// 한 선수가 여러 부서 랭킹에 오를 수 있어 목록으로 돌려준다.
-  Future<List<OrgRankingRow>> myCurrentRankings() async {
-    final link = await myConfirmedLink();
+  ///
+  /// [orgCode] 를 주면 그 협회의 연결만 본다 — [myConfirmedLink] 참조.
+  Future<List<OrgRankingRow>> myCurrentRankings({String? orgCode}) async {
+    final link = await myConfirmedLink(orgCode: orgCode);
     if (link == null) return const [];
     return playerRankings(
       orgCode: link['org_code'] as String,

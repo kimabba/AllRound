@@ -117,7 +117,8 @@ class _FakeRankingApi extends ApiService {
   Future<UserProfile?> myProfile() async => UserProfile(name: myName);
 
   @override
-  Future<List<PlayerResult>> myPlayerResults() async => const [];
+  Future<List<PlayerResult>> myPlayerResults({String? orgCode}) async =>
+      const [];
 
   @override
   Future<PlayerHistory> playerHistory(OrgRankingRow player) async {
@@ -1082,13 +1083,18 @@ void main() {
       expect(api.lastPlayerRankingsOrgCode, 'jn');
     });
 
-    testWidgets('카드를 탭하면 /rankings/me 로 간다', (tester) async {
+    testWidgets('카드를 탭하면 /rankings/me 로 가는데, 지금 보는 협회를 org 쿼리로 싣는다', (tester) async {
+      // "전남 내 기록" 카드를 탭했는데 광주 기록이 뜨는 불일치(myConfirmedLink()가
+      // org_code 정렬 1순위만 돌려줘 광주+전남 동시 confirmed 사용자는 항상
+      // 광주가 나옴) 재발 방지 — 카드가 지금 보는 협회를 쿼리로 실어 보내는지 검증.
       final router = GoRouter(
         routes: [
           GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
           GoRoute(
             path: '/rankings/me',
-            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+            builder: (_, state) => Scaffold(
+              body: Text('내 기록 화면 org=${state.uri.queryParameters['org']}'),
+            ),
           ),
         ],
       );
@@ -1122,7 +1128,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
       await tester.pumpAndSettle();
 
-      expect(find.text('내 기록 화면'), findsOneWidget);
+      // 화면 기본 협회가 광주(gj)다 — 드롭다운을 안 바꿨으니 그대로 실려야 한다.
+      expect(find.text('내 기록 화면 org=gj'), findsOneWidget);
     });
   });
 }
