@@ -348,7 +348,7 @@ class _HistoryContent extends StatelessWidget {
             ),
           )
         else
-          ..._buildYearGroups(context, results),
+          ..._buildYearGroups(context, results, complete: history.isComplete),
         if (!history.isComplete) ...[
           const SizedBox(height: AppSpacing.lg),
           Text(
@@ -368,8 +368,9 @@ class _HistoryContent extends StatelessWidget {
 
   List<Widget> _buildYearGroups(
     BuildContext context,
-    List<PlayerResult> results,
-  ) {
+    List<PlayerResult> results, {
+    required bool complete,
+  }) {
     // results 는 이미 최신순 정렬돼 들어온다 — 삽입 순서를 보존하는 맵으로
     // 묶으면 연도 구간이 흩어지지 않는다.
     final byYear = <int, List<PlayerResult>>{};
@@ -383,7 +384,11 @@ class _HistoryContent extends StatelessWidget {
         widgets.add(const SizedBox(height: AppSpacing.lg));
       }
       widgets.add(
-        _YearHeader(year: entry.key, stats: computeYearlyStats(entry.value)),
+        _YearHeader(
+          year: entry.key,
+          stats: computeYearlyStats(entry.value),
+          complete: complete,
+        ),
       );
       widgets.addAll(entry.value.map((r) => _PlayerResultRow(result: r)));
     }
@@ -432,22 +437,30 @@ YearlyStats computeYearlyStats(Iterable<PlayerResult> results) {
 }
 
 /// 횟수가 0인 항목은 생략한다. 셋 다 0이면 포인트만 보여준다.
-String yearlySummaryLabel(YearlyStats stats) {
+/// [complete]가 false면(협회 이력이 페이지 상한에서 잘린 경우) 실제보다
+/// 적은 합계가 확정 값처럼 보이지 않도록 접미사를 붙인다.
+String yearlySummaryLabel(YearlyStats stats, {bool complete = true}) {
   final parts = <String>[
     if (stats.wins > 0) '우승 ${stats.wins}',
     if (stats.runnerUps > 0) '준우승 ${stats.runnerUps}',
     if (stats.semiFinals > 0) '입상 ${stats.semiFinals}',
   ];
   final pointsLabel = '${NumberFormat('#,###').format(stats.points)}점';
-  if (parts.isEmpty) return pointsLabel;
-  return '${parts.join(' · ')} · $pointsLabel';
+  final summary =
+      parts.isEmpty ? pointsLabel : '${parts.join(' · ')} · $pointsLabel';
+  return complete ? summary : '$summary · 일부 기록';
 }
 
 class _YearHeader extends StatelessWidget {
-  const _YearHeader({required this.year, required this.stats});
+  const _YearHeader({
+    required this.year,
+    required this.stats,
+    this.complete = true,
+  });
 
   final int year;
   final YearlyStats stats;
+  final bool complete;
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +482,7 @@ class _YearHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              yearlySummaryLabel(stats),
+              yearlySummaryLabel(stats, complete: complete),
               textAlign: TextAlign.end,
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),

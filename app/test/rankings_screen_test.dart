@@ -393,6 +393,24 @@ void main() {
     expect(yearlySummaryLabel(stats), '1,946점');
   });
 
+  test('요약 라벨 - 이력이 완전하면 접미사가 붙지 않는다', () {
+    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(
+      yearlySummaryLabel(stats, complete: true),
+      '우승 3 · 준우승 1 · 입상 2 · 1,946점',
+    );
+  });
+
+  test('요약 라벨 - 이력이 잘렸으면 "일부 기록" 접미사가 붙는다', () {
+    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(
+      yearlySummaryLabel(stats, complete: false),
+      '우승 3 · 준우승 1 · 입상 2 · 1,946점 · 일부 기록',
+    );
+  });
+
   test('검색어는 이름과 소속 둘 다에서 부분일치로 거른다', () {
     final rows = [
       _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
