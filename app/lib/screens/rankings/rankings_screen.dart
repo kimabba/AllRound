@@ -735,12 +735,18 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     // 내 기록 요약용 — 지금 보는 부서의 rows 에는 내 행이 없을 수 있어
     // (내 부서 ≠ 보는 부서) 협회+선수로 따로 조회한다. 대표 부서는 홈 등급
     // 카드와 같은 기준(topDivisionRanking, 협회 공표 순서 = 상위 부서 우선).
+    // 요약 카드는 부가 기능이다 — 이 조회가 실패해도 순위표는 떠야 하므로
+    // 삼킨다. 카드는 '공표된 순위 없음'으로 강등된다.
     var myRows = const <OrgRankingRow>[];
     if (linkedOrgPlayerId != null) {
-      myRows = await api.playerRankings(
-        orgCode: _orgCode,
-        orgPlayerId: linkedOrgPlayerId,
-      );
+      try {
+        myRows = await api.playerRankings(
+          orgCode: _orgCode,
+          orgPlayerId: linkedOrgPlayerId,
+        );
+      } catch (_) {
+        myRows = const <OrgRankingRow>[];
+      }
     }
 
     // 신청 자격: 지금 보는 협회·부서를 내가 등록했고, 이름이 같은 행인가.

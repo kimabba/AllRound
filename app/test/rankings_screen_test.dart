@@ -52,6 +52,7 @@ class _FakeRankingApi extends ApiService {
     List<UserTennisOrg>? myOrgs,
     this.history,
     this.myRankings = const [],
+    this.playerRankingsThrows = false,
   })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
         super(
           SupabaseClient(
@@ -68,6 +69,7 @@ class _FakeRankingApi extends ApiService {
   final List<UserTennisOrg> myOrgs;
   final PlayerHistory? history;
   final List<OrgRankingRow> myRankings;
+  final bool playerRankingsThrows;
 
   /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
   String? lastOrgCode;
@@ -125,6 +127,7 @@ class _FakeRankingApi extends ApiService {
     required String orgPlayerId,
   }) async {
     lastPlayerRankingsOrgCode = orgCode;
+    if (playerRankingsThrows) throw Exception('boom');
     return myRankings;
   }
 }
@@ -140,6 +143,7 @@ Future<_FakeRankingApi> _pumpScreen(
   List<UserTennisOrg>? myOrgs,
   PlayerHistory? history,
   List<OrgRankingRow> myRankings = const [],
+  bool playerRankingsThrows = false,
 }) async {
   final api = _FakeRankingApi(
     rows: rows,
@@ -149,6 +153,7 @@ Future<_FakeRankingApi> _pumpScreen(
     myOrgs: myOrgs,
     history: history,
     myRankings: myRankings,
+    playerRankingsThrows: playerRankingsThrows,
   );
   await tester.pumpWidget(
     ProviderScope(
@@ -890,6 +895,21 @@ void main() {
       // /rankings/me 로 가는 유일한 진입점이다 — 사라지면 기록 화면이 고아가 된다.
       await _pumpScreen(tester, rows: rows, links: confirmedLinks);
 
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('내 기록 요약 조회가 실패해도 순위표는 정상적으로 뜬다', (tester) async {
+      // 부가 기능(요약 카드)이 핵심 기능(공개 순위표)을 죽이면 안 된다 —
+      // playerRankings() 가 예외를 던져도 _load() 전체가 실패해서는 안 된다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        playerRankingsThrows: true,
+      );
+
+      expect(find.text('김평화'), findsOneWidget);
       expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
       expect(find.text('공표된 순위 없음'), findsOneWidget);
     });
