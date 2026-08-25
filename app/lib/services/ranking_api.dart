@@ -215,19 +215,38 @@ mixin RankingApi on ApiBase {
     return list.isEmpty ? null : OrgRankingRow.fromJson(list.first);
   }
 
+  /// 한 협회 안에서 특정 선수의 현재 순위(오른 부서 전부).
+  ///
+  /// 랭킹 화면의 "내 기록 요약"이 쓴다 — 지금 보는 부서와 내가 연결된 부서가
+  /// 달라도 내 순위를 보여줘야 해서, 부서 필터 없이 협회+선수로 조회한다.
+  /// 대표 부서 선정은 호출부가 topDivisionRanking 으로 한다.
+  ///
+  /// order 는 ascending 을 명시하지 않는다(= 내림차순, 파일 상단 주석 참조) —
+  /// myCurrentRankings 가 위임하는데, myRankingHistoryProvider 가 결과의
+  /// first 에 의존하고 있어 순서를 바꾸면 내 기록 화면의 추이 부서가 바뀐다.
+  Future<List<OrgRankingRow>> playerRankings({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    final rows = await supabase
+        .from('org_rankings')
+        .select()
+        .eq('org_code', orgCode)
+        .eq('org_player_id', orgPlayerId)
+        .order('division_code');
+    return List<Map<String, dynamic>>.from(
+      rows,
+    ).map(OrgRankingRow.fromJson).toList();
+  }
+
   /// 연결된 내 현재 순위(부서별). 스펙 §7.2 블록 1 "지금".
   /// 한 선수가 여러 부서 랭킹에 오를 수 있어 목록으로 돌려준다.
   Future<List<OrgRankingRow>> myCurrentRankings() async {
     final link = await myConfirmedLink();
     if (link == null) return const [];
-    final rows = await supabase
-        .from('org_rankings')
-        .select()
-        .eq('org_code', link['org_code'] as String)
-        .eq('org_player_id', link['org_player_id'] as String)
-        .order('division_code');
-    return List<Map<String, dynamic>>.from(
-      rows,
-    ).map(OrgRankingRow.fromJson).toList();
+    return playerRankings(
+      orgCode: link['org_code'] as String,
+      orgPlayerId: link['org_player_id'] as String,
+    );
   }
 }
