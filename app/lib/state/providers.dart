@@ -163,6 +163,49 @@ final myRankingHistoryProvider =
   );
 });
 
+/// [MyRecordScreen] 이 협회를 지정받아 들어올 때(랭킹 화면의 "내 기록 요약"
+/// 카드 탭) 그 협회 기준으로 연결·전적·순위·순위추이를 한 번에 담는 묶음.
+///
+/// 기존 myConfirmedLinkProvider 체인(4개)은 건드리지 않는다 — 파라미터 없이
+/// 들어오는 기존 진입(알림 등)은 그대로 그 체인을 쓴다. 이 provider 는 독립
+/// 조회라 다른 화면에 영향이 없다.
+typedef MyRecordForOrg = ({
+  Map<String, dynamic>? link,
+  List<PlayerResult> results,
+  List<OrgRankingRow> rankings,
+  List<OrgRankingSnapshot> snapshots,
+});
+
+final myRecordForOrgProvider =
+    FutureProvider.family<MyRecordForOrg, String>((ref, orgCode) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  final link = await api.myConfirmedLink(orgCode: orgCode);
+  if (link == null) {
+    return (
+      link: null,
+      results: const <PlayerResult>[],
+      rankings: const <OrgRankingRow>[],
+      snapshots: const <OrgRankingSnapshot>[],
+    );
+  }
+  final results = await api.myPlayerResults(orgCode: orgCode);
+  final rankings = await api.myCurrentRankings(orgCode: orgCode);
+  var snapshots = const <OrgRankingSnapshot>[];
+  if (rankings.isNotEmpty) {
+    final primary = rankings.first;
+    final orgPlayerId = primary.orgPlayerId;
+    if (orgPlayerId != null) {
+      snapshots = await api.playerRankingHistory(
+        orgCode: primary.orgCode,
+        divisionCode: primary.divisionCode,
+        orgPlayerId: orgPlayerId,
+      );
+    }
+  }
+  return (link: link, results: results, rankings: rankings, snapshots: snapshots);
+});
+
 /// 홈 "내 등급 카드" 한 장에 필요한 값. 협회가 공표한 사실만 담는다.
 /// [top10Points] 는 그 부서 10위의 점수(그 부서에 10명이 안 되면 null).
 typedef MyGradeSummary = ({OrgRankingRow ranking, int? top10Points});

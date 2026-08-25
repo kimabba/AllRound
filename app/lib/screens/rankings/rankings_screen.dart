@@ -903,7 +903,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
           orgCode: _orgCode,
           ranking: data.myRanking,
           linked: linked,
-          onTap: linked ? () => context.push('/rankings/me') : null,
+          onTap: linked ? () => context.push('/rankings/me?org=$_orgCode') : null,
         ),
         if (!linked) ...[
           const SizedBox(height: AppSpacing.sm),

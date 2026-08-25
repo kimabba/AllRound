@@ -179,7 +179,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/rankings/me',
-            builder: (_, __) => catalogAware(MyRecordScreen.new),
+            builder: (_, state) => catalogAware(
+              () => MyRecordScreen(orgCode: state.uri.queryParameters['org']),
+            ),
           ),
           GoRoute(
             path: '/profile',
