@@ -309,11 +309,12 @@ class _RankingTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(width: 36, child: Text('순위', style: style)),
-          const SizedBox(width: AppSpacing.md),
+          SizedBox(width: 32, child: Text('순위', style: style)),
+          const SizedBox(width: AppSpacing.sm),
+          // 행의 아바타(지름 40) + 이름 앞 간격(md)과 정렬을 맞춘다.
+          const SizedBox(width: 40 + AppSpacing.md),
           Expanded(child: Text('선수 · 소속', style: style)),
           Text('누적 포인트', style: style),
-          const SizedBox(width: 24),
         ],
       ),
     );
@@ -953,22 +954,19 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         ),
                       )
                     else
-                      AppCard(
-                        variant: AppCardVariant.outlined,
-                        child: Column(
-                          children: [
-                            const _RankingTableHeader(),
-                            RankingList(
-                              rows: visibleRows,
-                              linkedOrgPlayerId: data.linkedOrgPlayerId,
-                              claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                              disputableOrgPlayerIds: data.disputableOrgPlayerIds,
-                              onClaim: _claim,
-                              onDispute: _dispute,
-                              onPlayerTap: _openPlayerHistory,
-                            ),
-                          ],
-                        ),
+                      Column(
+                        children: [
+                          const _RankingTableHeader(),
+                          RankingList(
+                            rows: visibleRows,
+                            linkedOrgPlayerId: data.linkedOrgPlayerId,
+                            claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                            disputableOrgPlayerIds: data.disputableOrgPlayerIds,
+                            onClaim: _claim,
+                            onDispute: _dispute,
+                            onPlayerTap: _openPlayerHistory,
+                          ),
+                        ],
                       ),
                   ],
                 );
