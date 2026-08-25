@@ -317,26 +317,30 @@ export interface SupabaseLike {
   from(table: 'org_rankings'): {
     select(columns: string): {
       eq(column: string, value: string): {
-        range(from: number, to: number): PromiseLike<
-          {
-            data: { org_player_id: string | null; total_points: number }[] | null;
-            error: { message: string } | null;
-          }
-        >;
+        order(column: string): {
+          range(from: number, to: number): PromiseLike<
+            {
+              data: { org_player_id: string | null; total_points: number }[] | null;
+              error: { message: string } | null;
+            }
+          >;
+        };
       };
     };
   };
   from(table: 'org_player_history_crawl_state'): {
     select(columns: string): {
       eq(column: string, value: string): {
-        range(from: number, to: number): PromiseLike<
-          {
-            data:
-              | { org_player_id: string; last_points: number; last_crawled_at: string }[]
-              | null;
-            error: { message: string } | null;
-          }
-        >;
+        order(column: string): {
+          range(from: number, to: number): PromiseLike<
+            {
+              data:
+                | { org_player_id: string; last_points: number; last_crawled_at: string }[]
+                | null;
+              error: { message: string } | null;
+            }
+          >;
+        };
       };
     };
   };
@@ -375,14 +379,15 @@ export async function crawlPlayerHistories(
 
   // org_rankings 는 gj 1,709 / jn 1,837명이라 PostgREST 기본 응답 상한(1,000행)을
   // 넘는다 — fetchAllRows 로 안 긁으면 뒤쪽 700~800여 명이 조용히 잘린다.
+  // 오프셋 페이지네이션은 순서가 고정돼야 페이지 사이 중복·누락이 없다 — ORDER BY
+  // 없는 결과 순서는 보장되지 않는다.
   let rankingRows: { org_player_id: string | null; total_points: number }[];
   try {
     const result = await fetchAllRows<{ org_player_id: string | null; total_points: number }>(
       (from, to) =>
-        db.from('org_rankings').select('org_player_id, total_points').eq('org_code', org).range(
-          from,
-          to,
-        ),
+        db.from('org_rankings').select('org_player_id, total_points').eq('org_code', org).order(
+          'org_player_id',
+        ).range(from, to),
       SUPABASE_PAGE_SIZE,
     );
     if (result.error) return [`랭킹 조회 실패: ${result.error}`];
@@ -399,7 +404,7 @@ export async function crawlPlayerHistories(
       (from, to) =>
         db.from('org_player_history_crawl_state').select(
           'org_player_id, last_points, last_crawled_at',
-        ).eq('org_code', org).range(from, to),
+        ).eq('org_code', org).order('org_player_id').range(from, to),
       SUPABASE_PAGE_SIZE,
     );
     if (result.error) return [`크롤 상태 조회 실패: ${result.error}`];

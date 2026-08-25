@@ -180,8 +180,12 @@ function makeDb(opts: {
             return {
               eq() {
                 return {
-                  range() {
-                    return Promise.resolve({ data: opts.rankings ?? [], error: null });
+                  order() {
+                    return {
+                      range() {
+                        return Promise.resolve({ data: opts.rankings ?? [], error: null });
+                      },
+                    };
                   },
                 };
               },
@@ -195,8 +199,12 @@ function makeDb(opts: {
           return {
             eq() {
               return {
-                range() {
-                  return Promise.resolve({ data: opts.state ?? [], error: null });
+                order() {
+                  return {
+                    range() {
+                      return Promise.resolve({ data: opts.state ?? [], error: null });
+                    },
+                  };
                 },
               };
             },

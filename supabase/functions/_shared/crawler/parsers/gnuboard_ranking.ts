@@ -16,8 +16,9 @@
 // 규약:
 //   - 0점 선수는 저장하지 않는다(개인정보 최소화). 순위는 협회 값을 그대로 쓰므로
 //     0점 구간을 버려도 남는 행의 rank 가 깨지지 않는다.
-//   - 개인 상세(sub4_6_rank.php)는 연결 승인자에 한해 fetch 한다(crawlPlayerHistories).
-//     요청 수 = 승인자 수라 선수 전체(수천 명) 순회 우려는 해당하지 않는다.
+//   - 개인 상세(sub4_6_rank.php)는 confirmed 연결자(항상) + 포인트가 바뀐/신규 랭커
+//     (회차당 상한, 기본 100명)를 fetch 한다 — 변경분 판정은
+//     org_player_history_crawl_state 가 담당한다(crawlPlayerHistories).
 //   - 협회가 시즌·공표일을 주지 않으므로 부서 단위 delete+insert 로 현재상태만 유지한다.
 //   - 앱은 점수를 계산하지 않는다. 협회 공표값을 그대로 옮긴다.
 //
@@ -239,9 +240,9 @@ export const gnuboardRankingParser: ParserFn = async (
     ctx.audit.inserted += scored.length;
   }
 
-  // 부서 교체가 끝난 뒤 연결 승인자의 개인 대회 이력을 수집한다.
-  // 요청 수 = 승인자 수라 부담이 작다(선행 설계가 이 크롤을 미룬 이유였던
-  // '선수당 1요청 × 수천 명'이 연결자 한정에는 해당하지 않는다).
+  // 부서 교체가 끝난 뒤 개인 대회 이력을 수집한다 — confirmed 연결자는 항상,
+  // 나머지는 포인트 변경분/신규만 회차당 상한(기본 100명) 안에서 돈다. 요청 간
+  // 딜레이(150ms)는 crawlPlayerHistories 쪽에 있다.
   // 이력 수집 실패가 랭킹 미러링 성공을 뒤집지 않게 failures 에만 합친다.
   // SupabaseClient 의 쿼리빌더 제네릭이 깊어 SupabaseLike 로의 구조적 할당 검사가
   // "Type instantiation is excessively deep" 로 죽는다(실측). db 는 실제로 이 최소
