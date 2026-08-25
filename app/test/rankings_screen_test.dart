@@ -882,11 +882,57 @@ void main() {
       expect(find.text('공표된 순위 없음'), findsOneWidget);
     });
 
-    testWidgets('확정 연결이 없으면 카드 대신 기존 연결 유도가 그 자리에 뜬다', (tester) async {
+    testWidgets('확정 연결이 없어도 카드가 뜨고, 그 아래 기존 연결 유도도 함께 뜬다', (tester) async {
+      // "이 화면도 너무하지 않아?" 피드백 — 미연결 협회라고 카드 자체를 숨기지
+      // 않는다. 대신 탭 불가·안내 문구로 상태를 표시하고, 기존 유도 체인은
+      // 카드 아래 그대로 유지한다.
       await _pumpScreen(tester, rows: rows, links: const [], myOrgs: const []);
 
-      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsNothing);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.textContaining('전적이 없거나 확인되지 않았습니다'), findsOneWidget);
+      // 탭 불가 상태라 거짓 어포던스인 화살표는 없어야 한다.
+      expect(find.byIcon(Icons.chevron_right), findsNothing);
       expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+    });
+
+    testWidgets('미연결 카드는 탭해도 아무 데도 가지 않는다', (tester) async {
+      // AppCard 는 onTap 이 null 이면 InkWell 자체를 만들지 않는다 — 탭해도
+      // 반응이 없어야 정상.
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(rows: rows, links: const [], myOrgs: const []),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child:
+              MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 기록 화면'), findsNothing);
     });
 
     testWidgets('협회를 바꾸면 내 기록도 그 협회 기준으로 다시 조회한다', (tester) async {

@@ -519,24 +519,31 @@ class RankingSourceNotice extends StatelessWidget {
 
 // ── 내 기록 요약 카드 ─────────────────────────────────────────────────────
 
-/// 드롭다운 바로 아래 "내 기록 요약". 지금 보는 협회에 confirmed 연결이
-/// 있을 때만 뜨고, 협회를 바꾸면 그 협회 기준으로 바뀐다.
+/// 드롭다운 바로 아래 "내 기록 요약". 어느 협회에서든 항상 뜬다 — "이 화면도
+/// 너무하지 않아?" 피드백(미연결 협회에선 안내문만 뜨던 것)에 대한 대응이다.
 ///
-/// [ranking] 이 null 이어도 카드는 뜬다 — "내 기록 보기" 링크를 없앤 자리라
-/// 이 카드가 /rankings/me 로 가는 유일한 진입점이다. 연결은 있는데 공표
-/// 표에 행이 없는 경우(연초 협회 포인트 리셋 등)에 사라지면 기록 화면이
-/// 고아가 된다.
+/// [linked] 가 지금 보는 협회에 confirmed 연결이 있는지를 가른다.
+/// - true: 기존과 동일 — 부서·순위·포인트를 보여주고 탭하면 /rankings/me.
+///   [ranking] 이 null 이어도 카드는 뜬다 — "내 기록 보기" 링크를 없앤 자리라
+///   이 카드가 /rankings/me 로 가는 유일한 진입점이다. 연결은 있는데 공표
+///   표에 행이 없는 경우(연초 협회 포인트 리셋 등)에 사라지면 기록 화면이
+///   고아가 된다.
+/// - false: 라벨은 같지만 본문은 고정 안내문. [onTap] 없이 렌더돼(AppCard 는
+///   onTap null 이면 InkWell 자체를 안 만든다) 탭이 안 되고, 화살표도 뺀다 —
+///   탭 안 되는데 화살표가 있으면 거짓 어포던스다.
 class MyRankingSummaryCard extends StatelessWidget {
   const MyRankingSummaryCard({
     super.key,
     required this.orgCode,
     required this.ranking,
-    required this.onTap,
+    required this.linked,
+    this.onTap,
   });
 
   final String orgCode;
   final OrgRankingRow? ranking;
-  final VoidCallback onTap;
+  final bool linked;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -569,10 +576,12 @@ class MyRankingSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  r == null
-                      ? '공표된 순위 없음'
-                      : '${divisionLabel(r.divisionCode)} ${r.rank}위 · '
-                          '${NumberFormat('#,###').format(r.totalPoints)}P',
+                  !linked
+                      ? '전적이 없거나 확인되지 않았습니다'
+                      : r == null
+                          ? '공표된 순위 없음'
+                          : '${divisionLabel(r.divisionCode)} ${r.rank}위 · '
+                              '${NumberFormat('#,###').format(r.totalPoints)}P',
                   style: tt.titleMedium?.copyWith(
                     color: cs.onPrimaryContainer,
                     fontWeight: FontWeight.w900,
@@ -581,7 +590,7 @@ class MyRankingSummaryCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
+          if (linked) Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
         ],
       ),
     );
@@ -868,21 +877,36 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     );
   }
 
-  /// 드롭다운 아래 고정 슬롯. 이 협회에 confirmed 연결이 있으면 내 기록 요약
-  /// 카드, 없으면 기존 연결 유도/후보 카드 체인이 같은 자리에 뜬다.
+  /// 드롭다운 아래 고정 슬롯. 내 기록 요약 카드는 어느 협회에서든 항상 뜬다
+  /// ("이 화면도 너무하지 않아?" 피드백 — 미연결 협회라고 카드를 숨기지
+  /// 않는다). confirmed 연결이 없으면 카드 아래에 기존 연결 유도/후보 카드
+  /// 체인이 그대로 이어진다.
   ///
   /// 연결이 있으면 pending 이 남아 있어도 카드가 이긴다 — 연결이 끝난 사람에게
   /// '확인 중입니다'는 틀린 정보다(협회당 1명 1선수라 남은 pending 은 승인될 수
   /// 없는 잔재다).
   Widget _buildStatusSlot(_RankingScreenData data) {
-    if (data.linkedOrgPlayerId != null) {
-      return MyRankingSummaryCard(
-        orgCode: _orgCode,
-        ranking: data.myRanking,
-        onTap: () => context.push('/rankings/me'),
-      );
-    }
-    // ↓ 기존 ListView 체인 그대로 (주석 포함 이동).
+    final linked = data.linkedOrgPlayerId != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MyRankingSummaryCard(
+          orgCode: _orgCode,
+          ranking: data.myRanking,
+          linked: linked,
+          onTap: linked ? () => context.push('/rankings/me') : null,
+        ),
+        if (!linked) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _buildLinkGuidance(data),
+        ],
+      ],
+    );
+  }
+
+  /// 미연결 협회에서 카드 아래에 붙는 기존 연결 유도/후보 카드 체인.
+  /// [_buildStatusSlot] 이 confirmed 연결이 있으면 아예 부르지 않는다.
+  Widget _buildLinkGuidance(_RankingScreenData data) {
     // 협회를 하나도 등록하지 않았으면 이게 최우선이다.
     // 등록을 지워도 pending 신청은 남으므로(org_player_links 는
     // user_tennis_orgs 와 별개 테이블), 이 분기가 뒤에 있으면
@@ -1050,16 +1074,6 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: FutureBuilder<_RankingScreenData>(
-              future: _future,
-              builder: (context, snap) => RankingSourceNotice(
-                orgLabel: tennisOrgLabel(_orgCode),
-                fetchedAt: _latestFetchedAt(snap.data?.rows),
-              ),
-            ),
-          ),
           Expanded(
             child: FutureBuilder<_RankingScreenData>(
               future: _future,
@@ -1104,6 +1118,13 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                           ),
                         ],
                       ),
+                    // 목록 아래 최하단 — 검색창 아래에 있던 것을 여기로 옮겼다
+                    // (위치만 변경, 문구·조건은 그대로: 법적 고지라 내용 무수정).
+                    const SizedBox(height: AppSpacing.md),
+                    RankingSourceNotice(
+                      orgLabel: tennisOrgLabel(_orgCode),
+                      fetchedAt: _latestFetchedAt(data.rows),
+                    ),
                   ],
                 );
               },
