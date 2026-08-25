@@ -180,6 +180,10 @@ final myRecordForOrgProvider =
     FutureProvider.family<MyRecordForOrg, String>((ref, orgCode) async {
   ref.watch(authStateProvider);
   final api = ref.watch(apiProvider);
+  // 링크는 한 번만 조회하고, 그 org_code/org_player_id로 아래 조회를 전부
+  // 직접 호출한다 — myPlayerResults/myCurrentRankings 를 부르면 각자
+  // 내부에서 링크를 다시 조회해 총 3회가 되고, 그 사이 링크가 바뀌면
+  // 화면 안에서 선수가 섞인다.
   final link = await api.myConfirmedLink(orgCode: orgCode);
   if (link == null) {
     return (
@@ -189,18 +193,40 @@ final myRecordForOrgProvider =
       snapshots: const <OrgRankingSnapshot>[],
     );
   }
-  final results = await api.myPlayerResults(orgCode: orgCode);
-  final rankings = await api.myCurrentRankings(orgCode: orgCode);
+  final linkedOrgCode = link['org_code'] as String;
+  final linkedOrgPlayerId = link['org_player_id'] as String;
+
+  // 핵심: 전적 조회는 실패하면 화면 전체 에러(기존 기본 화면과 동일하게).
+  final results = await api.playerResults(
+    orgCode: linkedOrgCode,
+    orgPlayerId: linkedOrgPlayerId,
+  );
+
+  // 보조: 순위·순위추이는 실패해도 전적 표시를 막으면 안 된다 — 빈 목록으로 강등.
+  var rankings = const <OrgRankingRow>[];
+  try {
+    rankings = await api.playerRankings(
+      orgCode: linkedOrgCode,
+      orgPlayerId: linkedOrgPlayerId,
+    );
+  } catch (_) {
+    rankings = const <OrgRankingRow>[];
+  }
+
   var snapshots = const <OrgRankingSnapshot>[];
   if (rankings.isNotEmpty) {
     final primary = rankings.first;
-    final orgPlayerId = primary.orgPlayerId;
-    if (orgPlayerId != null) {
-      snapshots = await api.playerRankingHistory(
-        orgCode: primary.orgCode,
-        divisionCode: primary.divisionCode,
-        orgPlayerId: orgPlayerId,
-      );
+    final primaryOrgPlayerId = primary.orgPlayerId;
+    if (primaryOrgPlayerId != null) {
+      try {
+        snapshots = await api.playerRankingHistory(
+          orgCode: primary.orgCode,
+          divisionCode: primary.divisionCode,
+          orgPlayerId: primaryOrgPlayerId,
+        );
+      } catch (_) {
+        snapshots = const <OrgRankingSnapshot>[];
+      }
     }
   }
   return (link: link, results: results, rankings: rankings, snapshots: snapshots);
