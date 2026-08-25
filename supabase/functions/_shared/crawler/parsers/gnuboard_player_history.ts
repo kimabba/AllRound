@@ -149,6 +149,63 @@ export function dedupeHistoryRows(rows: PlayerHistoryRow[]): PlayerHistoryRow[] 
   return [...byKey.values()];
 }
 
+export interface RankingTotal {
+  orgPlayerId: string;
+  totalPoints: number;
+}
+
+export interface HistoryCrawlStateRow {
+  orgPlayerId: string;
+  lastPoints: number;
+  lastCrawledAt: string;
+}
+
+/**
+ * 이번 회차에 개인 이력을 크롤할 선수 목록을 정한다.
+ *
+ * confirmed 연결자는 상한과 무관하게 항상 포함된다("내 기록" 화면이 직접
+ * 의존하므로 놓치면 안 된다). 나머지는 org_rankings 의 total_points 가 state 의
+ * last_points 와 다르거나(변경) state 가 아예 없으면(신규) 후보가 되고, cap 을
+ * 넘는 만큼은 이번 회차에서 빠진다 — last_crawled_at 이 오래된(또는 아예 없는)
+ * 순으로 우선권을 줘서, 상한에 밀린 선수가 다음 회차에 먼저 뽑히게 한다.
+ */
+export function selectHistoryCandidates(params: {
+  confirmedOrgPlayerIds: string[];
+  rankings: RankingTotal[];
+  state: HistoryCrawlStateRow[];
+  cap: number;
+}): string[] {
+  const { confirmedOrgPlayerIds, rankings, state, cap } = params;
+  const confirmed = new Set(confirmedOrgPlayerIds);
+  const stateByPlayer = new Map(state.map((s) => [s.orgPlayerId, s]));
+
+  const eligible = rankings.filter((r) => {
+    if (confirmed.has(r.orgPlayerId)) return false; // 이미 항상 포함되므로 중복 방지
+    const s = stateByPlayer.get(r.orgPlayerId);
+    return !s || s.lastPoints !== r.totalPoints;
+  });
+
+  eligible.sort((a, b) => {
+    const aAt = stateByPlayer.get(a.orgPlayerId)?.lastCrawledAt ?? '';
+    const bAt = stateByPlayer.get(b.orgPlayerId)?.lastCrawledAt ?? '';
+    if (aAt !== bAt) return aAt < bAt ? -1 : 1;
+    return a.orgPlayerId < b.orgPlayerId ? -1 : 1;
+  });
+
+  // org_rankings 는 (org, division, player) 유니크라 한 선수가 두 부서에 오르면 같은
+  // orgPlayerId 가 두 행으로 들어온다 — 정렬상 먼저 나온(첫 등장) 것만 남겨 중복
+  // fetch/upsert 와 cap 낭비를 막는다.
+  const seen = new Set<string>();
+  const deduped = eligible.filter((r) => {
+    if (seen.has(r.orgPlayerId)) return false;
+    seen.add(r.orgPlayerId);
+    return true;
+  });
+
+  const capped = deduped.slice(0, cap).map((r) => r.orgPlayerId);
+  return [...confirmedOrgPlayerIds, ...capped];
+}
+
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
 const COMMON_HEADERS: Record<string, string> = {
   'User-Agent': USER_AGENT,
@@ -172,6 +229,46 @@ export function playerHistoryUrl(
 // 상한은 폭주 방지용이다 — 46행짜리 선수가 4페이지였으니 20이면 300행까지 커버한다.
 const MAX_HISTORY_PAGES = 20;
 
+// 회차당 크롤 인원 상한. 상한을 넘는 변경분/신규 후보는 이번 회차에 빠지고
+// last_crawled_at 이 갱신되지 않아 다음 회차에 자연히 우선권을 갖는다(§2 결정3).
+// 잘못된/빈 환경변수는 NaN 이 될 수 있어 후보가 조용히 0명이 되는 걸 막는다.
+// 배포 후 crawl_audit 의 started_at~finished_at 실측으로 기본값을 튜닝할 것.
+const parsedHistoryCap = Number(Deno.env.get('ORG_PLAYER_HISTORY_CAP'));
+export const HISTORY_CANDIDATE_CAP = Number.isFinite(parsedHistoryCap) && parsedHistoryCap > 0
+  ? parsedHistoryCap
+  : 100;
+
+// 요청량이 확 늘어나므로(연결자 소수 → 전 선수) 협회 사이트에 대한 예의 차원의 딜레이.
+const REQUEST_DELAY_MS = 150;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// PostgREST 기본 응답 상한(1,000행) 회피용 페이지네이션. org_rankings 가
+// gj 1,709 / jn 1,837 명이라 한 번에 안 긁으면 뒤쪽 선수가 조용히 잘린다.
+export async function fetchAllRows<T>(
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize: number,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await fetchPage(from, from + pageSize - 1);
+    if (error) return { rows, error: error.message };
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return { rows, error: null };
+}
+
+const SUPABASE_PAGE_SIZE = 1000;
+
 export interface PlayerHistoryFetchResult {
   rows: PlayerHistoryRow[];
   reachedPageLimit: boolean;
@@ -186,6 +283,7 @@ export interface PlayerHistoryFetchResult {
 export async function fetchPlayerHistory(
   base: string,
   orgPlayerId: string,
+  pageDelayMs = 0,
 ): Promise<PlayerHistoryFetchResult> {
   const rows: PlayerHistoryRow[] = [];
 
@@ -196,6 +294,7 @@ export async function fetchPlayerHistory(
       const res = await fetch(url, { headers: COMMON_HEADERS });
       if (!res.ok) throw new Error(`p${page}: HTTP ${res.status}`);
       html = await res.text();
+      if (pageDelayMs > 0) await sleep(pageDelayMs);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       throw new Error(message.startsWith(`p${page}:`) ? message : `p${page}: ${message}`);
@@ -216,12 +315,42 @@ export async function fetchPlayerHistory(
 
 /** 이 파일이 DB 에 요구하는 최소 형태. supabase-js 클라이언트가 이걸 만족한다. */
 export interface SupabaseLike {
-  from(table: string): {
+  from(table: 'org_player_links'): {
     select(columns: string): {
       eq(column: string, value: string): {
         eq(column: string, value: string): PromiseLike<
           { data: { org_player_id: string }[] | null; error: { message: string } | null }
         >;
+      };
+    };
+  };
+  from(table: 'org_rankings'): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        order(column: string): {
+          range(from: number, to: number): PromiseLike<
+            {
+              data: { org_player_id: string | null; total_points: number }[] | null;
+              error: { message: string } | null;
+            }
+          >;
+        };
+      };
+    };
+  };
+  from(table: 'org_player_history_crawl_state'): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        order(column: string): {
+          range(from: number, to: number): PromiseLike<
+            {
+              data:
+                | { org_player_id: string; last_points: number; last_crawled_at: string }[]
+                | null;
+              error: { message: string } | null;
+            }
+          >;
+        };
       };
     };
   };
@@ -232,8 +361,33 @@ export interface SupabaseLike {
 }
 
 /**
- * 연결 승인(confirmed)된 선수의 대회 이력을 수집한다.
- * 요청 수 = 승인자 수. 승인자가 없으면 요청 0건으로 즉시 끝난다.
+ * 이력 크롤 상태 기록. 성공/0건 경로가 공유한다 — 실패해도 예외를 던지지 않고
+ * failures 에 쌓는다(호출자가 이어서 다음 선수로 진행할 수 있도록).
+ */
+async function recordHistoryCrawlState(
+  db: SupabaseLike,
+  org: string,
+  orgPlayerId: string,
+  points: number,
+  failures: string[],
+): Promise<void> {
+  try {
+    const { error } = await db.rpc('record_org_player_history_crawl_state', {
+      p_org: org,
+      p_org_player_id: orgPlayerId,
+      p_points: points,
+    });
+    if (error) failures.push(`이력 ${orgPlayerId}: 상태 기록 ${error.message}`);
+  } catch (e) {
+    failures.push(
+      `이력 ${orgPlayerId}: 상태 기록 예외 ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
+/**
+ * 개인 이력 크롤 대상: confirmed 연결자(항상) + 랭킹표 기준 변경분/신규(상한 적용).
+ * 상한에 걸려 밀린 후보는 상태가 안 갱신되므로 다음 회차에 자연히 다시 후보가 된다.
  * 한 명이 실패해도 나머지는 계속한다 — 실패는 메시지로 모아 돌려준다.
  */
 export async function crawlPlayerHistories(
@@ -243,7 +397,7 @@ export async function crawlPlayerHistories(
 ): Promise<string[]> {
   const failures: string[] = [];
 
-  let links: { org_player_id: string }[] | null;
+  let confirmedLinks: { org_player_id: string }[] | null;
   try {
     const { data, error } = await db
       .from('org_player_links')
@@ -251,40 +405,114 @@ export async function crawlPlayerHistories(
       .eq('org_code', org)
       .eq('status', 'confirmed');
     if (error) return [`연결 목록 조회 실패: ${error.message}`];
-    links = data;
+    confirmedLinks = data;
   } catch (e) {
     // supabase-js 가 에러 객체 대신 예외를 던지는 경로 — 여기서 막지 않으면
     // 랭킹 파서 전체(gnuboardRankingParser)를 뚫고 나가 부서 교체까지 죽인다.
     return [`연결 목록 조회 예외: ${e instanceof Error ? e.message : String(e)}`];
   }
-  if (!links || links.length === 0) return failures;
 
-  for (const link of links) {
+  // org_rankings 는 gj 1,709 / jn 1,837명이라 PostgREST 기본 응답 상한(1,000행)을
+  // 넘는다 — fetchAllRows 로 안 긁으면 뒤쪽 700~800여 명이 조용히 잘린다.
+  // 오프셋 페이지네이션은 순서가 고정돼야 페이지 사이 중복·누락이 없다 — ORDER BY
+  // 없는 결과 순서는 보장되지 않는다.
+  let rankingRows: { org_player_id: string | null; total_points: number }[];
+  try {
+    const result = await fetchAllRows<{ org_player_id: string | null; total_points: number }>(
+      (from, to) =>
+        db.from('org_rankings').select('org_player_id, total_points').eq('org_code', org).order(
+          'org_player_id',
+        ).range(from, to),
+      SUPABASE_PAGE_SIZE,
+    );
+    if (result.error) return [`랭킹 조회 실패: ${result.error}`];
+    rankingRows = result.rows;
+  } catch (e) {
+    return [`랭킹 조회 예외: ${e instanceof Error ? e.message : String(e)}`];
+  }
+
+  let stateRows: { org_player_id: string; last_points: number; last_crawled_at: string }[];
+  try {
+    const result = await fetchAllRows<
+      { org_player_id: string; last_points: number; last_crawled_at: string }
+    >(
+      (from, to) =>
+        db.from('org_player_history_crawl_state').select(
+          'org_player_id, last_points, last_crawled_at',
+        ).eq('org_code', org).order('org_player_id').range(from, to),
+      SUPABASE_PAGE_SIZE,
+    );
+    if (result.error) return [`크롤 상태 조회 실패: ${result.error}`];
+    stateRows = result.rows;
+  } catch (e) {
+    return [`크롤 상태 조회 예외: ${e instanceof Error ? e.message : String(e)}`];
+  }
+
+  const rankedRows = rankingRows.filter(
+    (r): r is { org_player_id: string; total_points: number } => r.org_player_id != null,
+  );
+  const pointsByPlayer = new Map(rankedRows.map((r) => [r.org_player_id, r.total_points]));
+
+  const candidateIds = selectHistoryCandidates({
+    confirmedOrgPlayerIds: (confirmedLinks ?? []).map((l) => l.org_player_id),
+    rankings: rankedRows.map((r) => ({
+      orgPlayerId: r.org_player_id,
+      totalPoints: r.total_points,
+    })),
+    state: stateRows.map((s) => ({
+      orgPlayerId: s.org_player_id,
+      lastPoints: s.last_points,
+      lastCrawledAt: s.last_crawled_at,
+    })),
+    cap: HISTORY_CANDIDATE_CAP,
+  });
+
+  if (candidateIds.length === 0) return failures;
+
+  for (const orgPlayerId of candidateIds) {
+    // 페이지 fetch·종료·레이아웃 검증은 온디맨드 경로와 공유하는
+    // fetchPlayerHistory 가 담당한다(#476). 크롤러만 페이지 간 딜레이를 준다.
     let fetched: PlayerHistoryFetchResult;
     try {
-      fetched = await fetchPlayerHistory(base, link.org_player_id);
+      fetched = await fetchPlayerHistory(base, orgPlayerId, REQUEST_DELAY_MS);
     } catch (e) {
+      // 실패한 선수는 상태를 갱신하지 않아 다음 회차에 다시 후보로 잡힌다(§3.1).
       failures.push(
-        `이력 ${link.org_player_id} ${e instanceof Error ? e.message : String(e)}`,
+        `이력 ${orgPlayerId} ${e instanceof Error ? e.message : String(e)}`,
       );
+      await sleep(REQUEST_DELAY_MS);
       continue;
     }
 
     // 상한까지 꽉 채우고 끝났다 — 데이터는 있는 만큼 적재하되(아래 계속) 잘렸다는
     // 사실을 알린다. 조용히 뒤쪽 이력이 사라지는 것보다 낫다.
+    // 트레이드오프: 상한 도달 시에도(아래 계속되는 upsert·상태 기록 경로로) 상태를
+    // 기록한다 — 안 남기면 그 선수가 매 회차 20페이지를 다시 긁으며 cap 을 점유한다.
+    // 실측 최대 4페이지(300행 커버)라 진짜 잘림은 이론적 엣지고, 발생하면 이 failures
+    // 신호로 관측된다.
     if (fetched.reachedPageLimit) {
       failures.push(
-        `이력 ${link.org_player_id}: ${MAX_HISTORY_PAGES}페이지 상한 도달 — 이후 이력 잘림 가능`,
+        `이력 ${orgPlayerId}: ${MAX_HISTORY_PAGES}페이지 상한 도달 — 이후 이력 잘림 가능`,
       );
     }
 
-    // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
-    if (fetched.rows.length === 0) continue;
+    // 0행도 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다. 다만 상태는
+    // 반드시 기록해야 한다: 안 남기면 무전적 선수가 "state 없음"(정렬 최우선)으로 영원히
+    // 남아 매 회차 cap 을 점유하고, 그런 선수가 cap 이상이면 다른 선수의 백필이 영구
+    // 정체된다. upsert 는 저장할 행이 없으므로 여전히 건너뛴다.
+    if (fetched.rows.length === 0) {
+      const currentPoints = pointsByPlayer.get(orgPlayerId);
+      if (currentPoints !== undefined) {
+        await recordHistoryCrawlState(db, org, orgPlayerId, currentPoints, failures);
+      }
+      await sleep(REQUEST_DELAY_MS);
+      continue;
+    }
 
     try {
       const { error: rpcErr } = await db.rpc('upsert_org_player_results', {
         p_org: org,
-        p_org_player_id: link.org_player_id,
+        p_org_player_id: orgPlayerId,
         p_rows: dedupeHistoryRows(fetched.rows).map((r) => ({
           tournament_name: r.tournamentName,
           played_on: r.playedOn,
@@ -294,13 +522,25 @@ export async function crawlPlayerHistories(
           points: r.points,
         })),
       });
-      if (rpcErr) failures.push(`이력 ${link.org_player_id}: upsert ${rpcErr.message}`);
+      if (rpcErr) {
+        failures.push(`이력 ${orgPlayerId}: upsert ${rpcErr.message}`);
+      } else {
+        // 성공한 선수만 상태를 갱신한다 — 실패한 선수는 손대지 않아 다음 회차에
+        // 다시 후보로 잡히게 한다(§3.1). 현재 랭킹표에 없는 선수(탈퇴·랭킹 제외
+        // 등)는 비교 기준(total_points)이 없어 기록하지 않는다.
+        const currentPoints = pointsByPlayer.get(orgPlayerId);
+        if (currentPoints !== undefined) {
+          await recordHistoryCrawlState(db, org, orgPlayerId, currentPoints, failures);
+        }
+      }
     } catch (e) {
       // db.rpc 도 예외를 던질 수 있다 — 여기서 막아 랭킹 파서 전체가 죽지 않게 한다.
       failures.push(
-        `이력 ${link.org_player_id}: upsert 예외 ${e instanceof Error ? e.message : String(e)}`,
+        `이력 ${orgPlayerId}: upsert 예외 ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+
+    await sleep(REQUEST_DELAY_MS);
   }
 
   return failures;
