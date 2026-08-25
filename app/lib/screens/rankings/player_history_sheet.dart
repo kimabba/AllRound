@@ -348,7 +348,7 @@ class _HistoryContent extends StatelessWidget {
             ),
           )
         else
-          ..._buildYearGroups(context, results),
+          ..._buildYearGroups(context, results, complete: history.isComplete),
         if (!history.isComplete) ...[
           const SizedBox(height: AppSpacing.lg),
           Text(
@@ -368,42 +368,126 @@ class _HistoryContent extends StatelessWidget {
 
   List<Widget> _buildYearGroups(
     BuildContext context,
-    List<PlayerResult> results,
-  ) {
-    final widgets = <Widget>[];
-    int? currentYear;
+    List<PlayerResult> results, {
+    required bool complete,
+  }) {
+    // results 는 이미 최신순 정렬돼 들어온다 — 삽입 순서를 보존하는 맵으로
+    // 묶으면 연도 구간이 흩어지지 않는다.
+    final byYear = <int, List<PlayerResult>>{};
     for (final result in results) {
-      if (result.playedOn.year != currentYear) {
-        currentYear = result.playedOn.year;
-        if (widgets.isNotEmpty) {
-          widgets.add(const SizedBox(height: AppSpacing.lg));
-        }
-        widgets.add(_YearHeader(year: currentYear));
+      byYear.putIfAbsent(result.playedOn.year, () => []).add(result);
+    }
+
+    final widgets = <Widget>[];
+    for (final entry in byYear.entries) {
+      if (widgets.isNotEmpty) {
+        widgets.add(const SizedBox(height: AppSpacing.lg));
       }
-      widgets.add(_PlayerResultRow(result: result));
+      widgets.add(
+        _YearHeader(
+          year: entry.key,
+          stats: computeYearlyStats(entry.value),
+          complete: complete,
+        ),
+      );
+      widgets.addAll(entry.value.map((r) => _PlayerResultRow(result: r)));
     }
     return widgets;
   }
 }
 
+/// 특정 연도 대회 이력의 성적 요약. 협회 공표 `resultRound` 기준 —
+/// 1=우승, 2=준우승, 4=4강(3·4위 입상)이고 나머지는 카운트하지 않는다.
+class YearlyStats {
+  const YearlyStats({
+    required this.wins,
+    required this.runnerUps,
+    required this.semiFinals,
+    required this.points,
+  });
+
+  final int wins;
+  final int runnerUps;
+  final int semiFinals;
+  final int points;
+}
+
+YearlyStats computeYearlyStats(Iterable<PlayerResult> results) {
+  var wins = 0;
+  var runnerUps = 0;
+  var semiFinals = 0;
+  var points = 0;
+  for (final result in results) {
+    switch (result.resultRound) {
+      case 1:
+        wins++;
+      case 2:
+        runnerUps++;
+      case 4:
+        semiFinals++;
+    }
+    points += result.points;
+  }
+  return YearlyStats(
+    wins: wins,
+    runnerUps: runnerUps,
+    semiFinals: semiFinals,
+    points: points,
+  );
+}
+
+/// 횟수가 0인 항목은 생략한다. 셋 다 0이면 포인트만 보여준다.
+/// [complete]가 false면(협회 이력이 페이지 상한에서 잘린 경우) 실제보다
+/// 적은 합계가 확정 값처럼 보이지 않도록 접미사를 붙인다.
+String yearlySummaryLabel(YearlyStats stats, {bool complete = true}) {
+  final parts = <String>[
+    if (stats.wins > 0) '우승 ${stats.wins}',
+    if (stats.runnerUps > 0) '준우승 ${stats.runnerUps}',
+    if (stats.semiFinals > 0) '입상 ${stats.semiFinals}',
+  ];
+  final pointsLabel = '${NumberFormat('#,###').format(stats.points)}점';
+  final summary =
+      parts.isEmpty ? pointsLabel : '${parts.join(' · ')} · $pointsLabel';
+  return complete ? summary : '$summary · 일부 기록';
+}
+
 class _YearHeader extends StatelessWidget {
-  const _YearHeader({required this.year});
+  const _YearHeader({
+    required this.year,
+    required this.stats,
+    this.complete = true,
+  });
 
   final int year;
+  final YearlyStats stats;
+  final bool complete;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: Text(
-        '$year년',
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            '$year년',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              yearlySummaryLabel(stats, complete: complete),
+              textAlign: TextAlign.end,
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
+          ),
+        ],
       ),
     );
   }
