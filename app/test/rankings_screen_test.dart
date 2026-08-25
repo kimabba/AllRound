@@ -10,6 +10,7 @@ import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 OrgRankingRow _row({
@@ -50,6 +51,7 @@ class _FakeRankingApi extends ApiService {
     this.myName = '김평화',
     List<UserTennisOrg>? myOrgs,
     this.history,
+    this.myRankings = const [],
   })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
         super(
           SupabaseClient(
@@ -65,6 +67,7 @@ class _FakeRankingApi extends ApiService {
   final String myName;
   final List<UserTennisOrg> myOrgs;
   final PlayerHistory? history;
+  final List<OrgRankingRow> myRankings;
 
   /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
   String? lastOrgCode;
@@ -114,6 +117,13 @@ class _FakeRankingApi extends ApiService {
     required String orgPlayerId,
   }) async =>
       const [];
+
+  @override
+  Future<List<OrgRankingRow>> playerRankings({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async =>
+      myRankings;
 }
 
 const _kTestUserId = 'me-uuid';
@@ -126,6 +136,7 @@ Future<_FakeRankingApi> _pumpScreen(
   String myName = '김평화',
   List<UserTennisOrg>? myOrgs,
   PlayerHistory? history,
+  List<OrgRankingRow> myRankings = const [],
 }) async {
   final api = _FakeRankingApi(
     rows: rows,
@@ -134,6 +145,7 @@ Future<_FakeRankingApi> _pumpScreen(
     myName: myName,
     myOrgs: myOrgs,
     history: history,
+    myRankings: myRankings,
   );
   await tester.pumpWidget(
     ProviderScope(
@@ -830,5 +842,91 @@ void main() {
     );
 
     expect(find.textContaining('본인'), findsOneWidget);
+  });
+
+  group('내 기록 요약 카드', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+    const confirmedLinks = [
+      {'org_player_id': 'a', 'status': 'confirmed', 'user_id': _kTestUserId},
+    ];
+
+    testWidgets('확정 연결이 있으면 요약 카드가 뜨고 "내 기록 보기" 링크는 없다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      // 부서(골드부)·순위(3위)·누적 포인트(2,649P)가 한 카드에 보인다.
+      expect(find.textContaining('골드부 3위'), findsOneWidget);
+      expect(find.textContaining('2,649P'), findsOneWidget);
+      // 진입점은 카드로 대체됐다 — 링크는 제거.
+      expect(find.text('내 기록 보기'), findsNothing);
+    });
+
+    testWidgets('연결은 있는데 공표 표에 내 행이 없어도 카드는 뜬다', (tester) async {
+      // 연초 협회 포인트 리셋 등으로 표가 비어도, 링크를 없앤 자리라 이 카드가
+      // /rankings/me 로 가는 유일한 진입점이다 — 사라지면 기록 화면이 고아가 된다.
+      await _pumpScreen(tester, rows: rows, links: confirmedLinks);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('확정 연결이 없으면 카드 대신 기존 연결 유도가 그 자리에 뜬다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const [], myOrgs: const []);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsNothing);
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+    });
+
+    testWidgets('카드를 탭하면 /rankings/me 로 간다', (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(
+                rows: rows,
+                links: confirmedLinks,
+                myRankings: [
+                  _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+                ],
+              ),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 기록 화면'), findsOneWidget);
+    });
   });
 }

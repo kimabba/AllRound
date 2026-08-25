@@ -517,6 +517,77 @@ class RankingSourceNotice extends StatelessWidget {
   }
 }
 
+// ── 내 기록 요약 카드 ─────────────────────────────────────────────────────
+
+/// 드롭다운 바로 아래 "내 기록 요약". 지금 보는 협회에 confirmed 연결이
+/// 있을 때만 뜨고, 협회를 바꾸면 그 협회 기준으로 바뀐다.
+///
+/// [ranking] 이 null 이어도 카드는 뜬다 — "내 기록 보기" 링크를 없앤 자리라
+/// 이 카드가 /rankings/me 로 가는 유일한 진입점이다. 연결은 있는데 공표
+/// 표에 행이 없는 경우(연초 협회 포인트 리셋 등)에 사라지면 기록 화면이
+/// 고아가 된다.
+class MyRankingSummaryCard extends StatelessWidget {
+  const MyRankingSummaryCard({
+    super.key,
+    required this.orgCode,
+    required this.ranking,
+    required this.onTap,
+  });
+
+  final String orgCode;
+  final OrgRankingRow? ranking;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final r = ranking;
+    // 내 랭킹 행과 같은 강조색(primaryContainer) — "내 것"의 색을 화면 안에서
+    // 하나로 유지한다.
+    return AppCard(
+      key: const ValueKey('my-ranking-summary-card'),
+      variant: AppCardVariant.outlined,
+      backgroundColor: cs.primaryContainer,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${tennisOrgShortLabel(orgCode)} 내 기록',
+                  style: tt.labelSmall?.copyWith(
+                    color: cs.onPrimaryContainer.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  r == null
+                      ? '공표된 순위 없음'
+                      : '${divisionLabel(r.divisionCode)} ${r.rank}위 · '
+                          '${NumberFormat('#,###').format(r.totalPoints)}P',
+                  style: tt.titleMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 본인 확인 카드 ────────────────────────────────────────────────────────
 
 /// my_ranking_candidates() 후보 1건에 대한 본인 확인 유도 카드.
@@ -572,6 +643,7 @@ class _RankingScreenData {
     required this.disputableOrgPlayerIds,
     required this.registeredHere,
     required this.hasNoOrgRegistered,
+    required this.myRanking,
   });
 
   final List<OrgRankingRow> rows;
@@ -596,6 +668,12 @@ class _RankingScreenData {
   /// 보고 있는 사람에게 "등록하러 가라"고 하면 자기 부서가 아닌 것을 등록하게
   /// 만든다(실측: gj_m_instructor 를 등록했지만 그 21명 명단에 없는 사례).
   final bool hasNoOrgRegistered;
+
+  /// 지금 보는 **협회**에서의 내 대표 부서 순위(confirmed 연결 기준).
+  /// 보는 부서와 내 부서가 달라도 채워진다 — 부서 조회(rows)와 별도로
+  /// playerRankings 로 얻는다. 연결이 없거나, 연결은 있는데 공표 표에
+  /// 행이 없으면(연초 리셋 등) null.
+  final OrgRankingRow? myRanking;
 }
 
 /// 협회 랭킹 화면. 협회(광주/전남)와 부서를 고르면 그 부서의 공표 순위표를 보여준다.
@@ -642,6 +720,17 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       if (isMine && status == 'pending') pendingIds.add(orgPlayerId);
     }
 
+    // 내 기록 요약용 — 지금 보는 부서의 rows 에는 내 행이 없을 수 있어
+    // (내 부서 ≠ 보는 부서) 협회+선수로 따로 조회한다. 대표 부서는 홈 등급
+    // 카드와 같은 기준(topDivisionRanking, 협회 공표 순서 = 상위 부서 우선).
+    var myRows = const <OrgRankingRow>[];
+    if (linkedOrgPlayerId != null) {
+      myRows = await api.playerRankings(
+        orgCode: _orgCode,
+        orgPlayerId: linkedOrgPlayerId,
+      );
+    }
+
     // 신청 자격: 지금 보는 협회·부서를 내가 등록했고, 이름이 같은 행인가.
     // 정본은 RLS(org_player_links_claim) 이고 여기서는 같은 조건을 화면에 반영만 한다.
     final registeredHere = myOrgs.any(
@@ -686,6 +775,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
       disputableOrgPlayerIds: disputable,
       registeredHere: registeredHere,
       hasNoOrgRegistered: myOrgs.isEmpty,
+      myRanking: topDivisionRanking(myRows),
     );
   }
 
@@ -778,6 +868,76 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     );
   }
 
+  /// 드롭다운 아래 고정 슬롯. 이 협회에 confirmed 연결이 있으면 내 기록 요약
+  /// 카드, 없으면 기존 연결 유도/후보 카드 체인이 같은 자리에 뜬다.
+  ///
+  /// 연결이 있으면 pending 이 남아 있어도 카드가 이긴다 — 연결이 끝난 사람에게
+  /// '확인 중입니다'는 틀린 정보다(협회당 1명 1선수라 남은 pending 은 승인될 수
+  /// 없는 잔재다).
+  Widget _buildStatusSlot(_RankingScreenData data) {
+    if (data.linkedOrgPlayerId != null) {
+      return MyRankingSummaryCard(
+        orgCode: _orgCode,
+        ranking: data.myRanking,
+        onTap: () => context.push('/rankings/me'),
+      );
+    }
+    // ↓ 기존 ListView 체인 그대로 (주석 포함 이동).
+    // 협회를 하나도 등록하지 않았으면 이게 최우선이다.
+    // 등록을 지워도 pending 신청은 남으므로(org_player_links 는
+    // user_tennis_orgs 와 별개 테이블), 이 분기가 뒤에 있으면
+    // '확인 중입니다'가 등록 안내를 영구히 가린다
+    // (codex 리뷰 2026-08-18). 등록이 0개면 후보도 0개다 —
+    // my_ranking_candidates() 가 user_tennis_orgs 를 조인한다.
+    if (data.hasNoOrgRegistered) {
+      return const _NotMyDivisionNotice(hasNoOrgRegistered: true);
+    }
+    if (data.candidate != null) {
+      return RankingClaimPrompt(
+        candidate: data.candidate!,
+        onClaim: () => _claim(data.candidate!),
+      );
+    }
+    if (data.hasPendingClaim) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text('확인 중입니다', style: Theme.of(context).textTheme.bodyMedium),
+      );
+    }
+    // 등록한 부서인데 신청할 행이 하나도 없는 경우. 이유를 안 알려
+    // 주면 "버튼이 왜 없지"로 끝난다. 원인은 여러 가지(이름 불일치가
+    // 가장 흔하고, 이미 신청·연결된 선수도 제외된다)라 단정하지 않는다.
+    if (data.registeredHere &&
+        data.claimableOrgPlayerIds.isEmpty &&
+        data.disputableOrgPlayerIds.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text(
+          '이 표에서 신청할 수 있는 줄이 없습니다. '
+          '가입할 때 넣은 이름이 협회 명단과 같아야 하고, '
+          '이미 신청했거나 연결된 선수는 제외됩니다.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+    // 등록하지 않은 협회·부서를 보는 중. 지금까지는 버튼만 조용히
+    // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
+    // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+    //
+    // 여기까지 왔으면 "등록은 했는데 다른 부서를 보는 중"이다
+    // (등록 0개는 위에서 이미 걸렀다). 맨 뒤인 것은 의도다 —
+    // 후보 카드와 '확인 중입니다'는 부서가 아니라 **협회 단위**로
+    // 뜬다. 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+    // 남자일반부 후보를 가진 사람은 탭을 옮기기 전엔 카드를
+    // 영영 못 본다. 진행 중인 신청이 있으면 그 소식이 먼저다.
+    if (!data.registeredHere) {
+      return const _NotMyDivisionNotice(hasNoOrgRegistered: false);
+    }
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     final orgCodes = kRankingDivisions.keys.toList();
@@ -851,14 +1011,20 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => context.push('/rankings/me'),
-                icon: const Icon(Icons.query_stats_rounded),
-                label: const Text('내 기록 보기'),
-              ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.sm,
+              AppSpacing.xl,
+              0,
+            ),
+            child: FutureBuilder<_RankingScreenData>(
+              future: _future,
+              builder: (context, snap) {
+                final data = snap.data;
+                // 로드 전·실패 시 빈 슬롯 — 로딩 표시는 목록 영역이 담당한다.
+                if (data == null) return const SizedBox.shrink();
+                return _buildStatusSlot(data);
+              },
             ),
           ),
           Padding(
@@ -909,66 +1075,6 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     vertical: AppSpacing.md,
                   ),
                   children: [
-                    // 협회를 하나도 등록하지 않았으면 이게 최우선이다.
-                    // 등록을 지워도 pending 신청은 남으므로(org_player_links 는
-                    // user_tennis_orgs 와 별개 테이블), 이 분기가 뒤에 있으면
-                    // '확인 중입니다'가 등록 안내를 영구히 가린다
-                    // (codex 리뷰 2026-08-18). 등록이 0개면 후보도 0개다 —
-                    // my_ranking_candidates() 가 user_tennis_orgs 를 조인한다.
-                    if (data.hasNoOrgRegistered &&
-                        data.linkedOrgPlayerId == null)
-                      const _NotMyDivisionNotice(hasNoOrgRegistered: true)
-                    else if (data.candidate != null)
-                      RankingClaimPrompt(
-                        candidate: data.candidate!,
-                        onClaim: () => _claim(data.candidate!),
-                      )
-                    else if (data.hasPendingClaim)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
-                        child: Text(
-                          '확인 중입니다',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      )
-                    // 등록한 부서인데 신청할 행이 하나도 없는 경우. 이유를 안 알려
-                    // 주면 "버튼이 왜 없지"로 끝난다. 원인은 여러 가지(이름 불일치가
-                    // 가장 흔하고, 이미 신청·연결된 선수도 제외된다)라 단정하지 않는다.
-                    else if (data.registeredHere &&
-                        data.claimableOrgPlayerIds.isEmpty &&
-                        data.disputableOrgPlayerIds.isEmpty &&
-                        data.linkedOrgPlayerId == null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
-                        child: Text(
-                          '이 표에서 신청할 수 있는 줄이 없습니다. '
-                          '가입할 때 넣은 이름이 협회 명단과 같아야 하고, '
-                          '이미 신청했거나 연결된 선수는 제외됩니다.',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        ),
-                      )
-                    // 등록하지 않은 협회·부서를 보는 중. 지금까지는 버튼만 조용히
-                    // 사라져 이유를 알 길이 없었다 — 본인 연결 진입이 0건인
-                    // 이유 중 하나다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
-                    //
-                    // 여기까지 왔으면 "등록은 했는데 다른 부서를 보는 중"이다
-                    // (등록 0개는 위에서 이미 걸렀다). 맨 뒤인 것은 의도다 —
-                    // 후보 카드와 '확인 중입니다'는 부서가 아니라 **협회 단위**로
-                    // 뜬다. 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
-                    // 남자일반부 후보를 가진 사람은 탭을 옮기기 전엔 카드를
-                    // 영영 못 본다. 진행 중인 신청이 있으면 그 소식이 먼저다.
-                    else if (!data.registeredHere &&
-                        data.linkedOrgPlayerId == null)
-                      const _NotMyDivisionNotice(hasNoOrgRegistered: false),
                     if (visibleRows.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(AppSpacing.xxl),
