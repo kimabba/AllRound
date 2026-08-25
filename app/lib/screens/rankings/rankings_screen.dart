@@ -156,10 +156,10 @@ class RankingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sm),
           _RankingRow(
             row: rows[i],
             isMine: rows[i].orgPlayerId != null &&
@@ -178,7 +178,6 @@ class RankingList extends StatelessWidget {
                 ? () => onDispute!(rows[i])
                 : null,
           ),
-          if (i < rows.length - 1) Divider(height: 1, color: cs.outlineVariant),
         ],
       ],
     );
@@ -204,74 +203,91 @@ class _RankingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return InkWell(
+    // 랭킹표는 협회 크롤 데이터라 프로필 사진이 없다 — 클럽 멤버 리스트와 같은
+    // 이니셜 폴백을 쓴다(app/lib/screens/clubs/club_detail_screen.dart 의
+    // CircleAvatar 패턴과 동일).
+    final trimmedName = row.playerName.trim();
+    final initial =
+        trimmedName.characters.isEmpty ? '?' : trimmedName.characters.first;
+    return AppCard(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
+      variant: AppCardVariant.outlined,
+      backgroundColor: isMine ? cs.primaryContainer : null,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       onTap: onTap,
-      child: Container(
-        color: isMine ? cs.primaryContainer : null,
-        padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-                width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.playerName,
-                    style:
-                        tt.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
-                    Text(
-                      row.clubRaw!,
-                      style:
-                          tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                ],
+      child: Row(
+        children: [
+          SizedBox(
+              width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
+          const SizedBox(width: AppSpacing.sm),
+          CircleAvatar(
+            // 내 행은 카드 배경 자체가 primaryContainer 라, 아바타도 같은 색이면
+            // 원이 배경에 묻혀 안 보인다 — 내 행일 때는 surface 로 대비를 준다.
+            backgroundColor: isMine ? cs.surface : cs.primaryContainer,
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: isMine ? cs.primary : cs.onPrimaryContainer,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            Text('${row.totalPoints}', style: tt.bodyLarge),
-            if (onClaim != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              OutlinedButton(
-                // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
-                // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
-                style: OutlinedButton.styleFrom(
-                  // 높이는 최소 터치 영역 48px 을 지킨다(pureform-sports-system.md).
-                  // 폭만 내용에 맞게 줄인다.
-                  minimumSize: const Size(0, AppSizes.control),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.playerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                onPressed: onClaim,
-                child: const Text('본인'),
-              ),
-            ],
-            // 신청 버튼이 사라지는 자리(이미 남과 연결된 줄)에 대신 붙는다.
-            // 둘이 같이 뜨는 경우는 없다 — 두 집합이 배타적이다.
-            if (onDispute != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              TextButton(
-                // 테마 기본 minimumSize 가 폭 무한이라 Row 안에서는 명시로
-                // 덮어써야 한다(theme-infinite-width-button-landmine).
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, AppSizes.control),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
+                if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
+                  Text(
+                    row.clubRaw!,
+                    style:
+                        tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
+              ],
+            ),
+          ),
+          Text('${row.totalPoints}', style: tt.bodyLarge),
+          if (onClaim != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton(
+              // 테마 기본 minimumSize 가 Size.fromHeight(폭 무한)라 Row 안에서는
+              // 명시로 덮어써야 한다(theme-infinite-width-button-landmine).
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, AppSizes.control),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
                 ),
-                onPressed: onDispute,
-                child: const Text('이의신청'),
               ),
-            ],
+              onPressed: onClaim,
+              child: const Text('본인'),
+            ),
           ],
-        ),
+          // 신청 버튼이 사라지는 자리(이미 남과 연결된 줄)에 대신 붙는다.
+          // 둘이 같이 뜨는 경우는 없다 — 두 집합이 배타적이다.
+          if (onDispute != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, AppSizes.control),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                ),
+              ),
+              onPressed: onDispute,
+              child: const Text('이의신청'),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -296,11 +312,12 @@ class _RankingTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(width: 36, child: Text('순위', style: style)),
-          const SizedBox(width: AppSpacing.md),
+          SizedBox(width: 32, child: Text('순위', style: style)),
+          const SizedBox(width: AppSpacing.sm),
+          // 행의 아바타(지름 40) + 이름 앞 간격(md)과 정렬을 맞춘다.
+          const SizedBox(width: 40 + AppSpacing.md),
           Expanded(child: Text('선수 · 소속', style: style)),
           Text('누적 포인트', style: style),
-          const SizedBox(width: 24),
         ],
       ),
     );
@@ -940,22 +957,19 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                         ),
                       )
                     else
-                      AppCard(
-                        variant: AppCardVariant.outlined,
-                        child: Column(
-                          children: [
-                            const _RankingTableHeader(),
-                            RankingList(
-                              rows: visibleRows,
-                              linkedOrgPlayerId: data.linkedOrgPlayerId,
-                              claimableOrgPlayerIds: data.claimableOrgPlayerIds,
-                              disputableOrgPlayerIds: data.disputableOrgPlayerIds,
-                              onClaim: _claim,
-                              onDispute: _dispute,
-                              onPlayerTap: _openPlayerHistory,
-                            ),
-                          ],
-                        ),
+                      Column(
+                        children: [
+                          const _RankingTableHeader(),
+                          RankingList(
+                            rows: visibleRows,
+                            linkedOrgPlayerId: data.linkedOrgPlayerId,
+                            claimableOrgPlayerIds: data.claimableOrgPlayerIds,
+                            disputableOrgPlayerIds: data.disputableOrgPlayerIds,
+                            onClaim: _claim,
+                            onDispute: _dispute,
+                            onPlayerTap: _openPlayerHistory,
+                          ),
+                        ],
                       ),
                   ],
                 );

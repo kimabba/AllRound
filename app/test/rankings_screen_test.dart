@@ -222,6 +222,33 @@ void main() {
     expect(find.byKey(const ValueKey('ranking-row-mine')), findsOneWidget);
   });
 
+  testWidgets('순위표 각 행에 아바타가 보인다 (탭 대상이 시각적으로 드러나야 한다)', (tester) async {
+    await _pump(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'vudghk2116'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'lkybks'),
+        ],
+        linkedOrgPlayerId: null,
+      ),
+    );
+
+    expect(find.byType(CircleAvatar), findsNWidgets(2));
+  });
+
+  testWidgets('이름이 공백뿐이면 아바타 이니셜이 물음표로 대체된다', (tester) async {
+    await _pump(
+      tester,
+      RankingList(
+        rows: [_row(rank: 1, name: '  ', points: 100, orgPlayerId: 'a')],
+        linkedOrgPlayerId: null,
+      ),
+    );
+
+    expect(find.text('?'), findsOneWidget);
+  });
+
   testWidgets('선수 행을 누르면 대회 이력을 보여준다', (tester) async {
     final history = PlayerHistory(
       results: [
