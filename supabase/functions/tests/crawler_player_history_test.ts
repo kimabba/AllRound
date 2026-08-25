@@ -244,12 +244,20 @@ Deno.test('1페이지가 0행 + 표 헤더 없으면 failures 에 기록한다 (
   });
 });
 
-Deno.test('1페이지가 0행이어도 표 헤더가 있으면 failures 에 남지 않는다 (아직 이력 없는 선수)', async () => {
+Deno.test('1페이지가 0행이어도 표 헤더가 있으면 failures 에 남지 않는다 (아직 이력 없는 선수) — upsert 는 없지만 상태는 기록한다', async () => {
   await withFetch(() => new Response(HEADER_ONLY_HTML, { status: 200 }), async () => {
-    const { db, rpcCalls } = makeDb({ links: [{ org_player_id: 'p1' }] });
+    // 상태 기록은 랭킹표에 현재 포인트가 있어야 나간다(§upsert 성공 경로와 같은 조건) —
+    // p1 이 랭킹표에도 있어야 이 무전적 선수의 상태 기록을 관측할 수 있다.
+    const { db, rpcCalls } = makeDb({
+      links: [{ org_player_id: 'p1' }],
+      rankings: [{ org_player_id: 'p1', total_points: 0 }],
+    });
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
     assertEquals(failures, []);
-    assertEquals(rpcCalls.length, 0);
+    const fns = rpcCalls.map((c) => c.fn);
+    assertEquals(fns.includes('upsert_org_player_results'), false); // 저장할 행이 없다
+    // 0건도 성공이다 — 기록하지 않으면 무전적 선수가 매 회차 cap 을 점유해 백필이 정체된다.
+    assertEquals(fns.includes('record_org_player_history_crawl_state'), true);
   });
 });
 
@@ -440,6 +448,25 @@ Deno.test('selectHistoryCandidates: 상한을 넘는 변경분은 last_crawled_a
     cap: 2,
   });
   assertEquals(result, ['brand-new', 'older']);
+});
+
+// org_rankings 는 (org, division, player) 유니크라 한 선수가 두 부서 랭킹에 오르면
+// 같은 orgPlayerId 가 rankings 에 두 행으로 들어온다 — dedupe 안 하면 반환 배열에
+// 중복이 남아 중복 fetch/upsert 와 cap 낭비가 생긴다.
+Deno.test('selectHistoryCandidates: 같은 선수가 두 부서 랭킹 행으로 들어와도 한 번만 반환된다 (cap 소모도 1)', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: [],
+    rankings: [
+      { orgPlayerId: 'dup', totalPoints: 100 }, // 예: 골드부 랭킹 행
+      { orgPlayerId: 'dup', totalPoints: 200 }, // 예: 실버부 랭킹 행 — 같은 orgPlayerId
+      { orgPlayerId: 'other', totalPoints: 50 },
+    ],
+    state: [],
+    cap: 1,
+  });
+  // cap 이 1이라 dup 이 중복 제거 안 됐다면 dup 이 둘 다 cap 을 채워 other 는 물론
+  // dup 자신도 두 번 나갔을 것 — 여기서는 dup 딱 한 번만, cap 1 을 혼자 다 쓴다.
+  assertEquals(result, ['dup']);
 });
 
 // ── fetchAllRows — PostgREST 1,000행 응답 상한 회피 페이지네이션 ──────

@@ -192,7 +192,17 @@ export function selectHistoryCandidates(params: {
     return a.orgPlayerId < b.orgPlayerId ? -1 : 1;
   });
 
-  const capped = eligible.slice(0, cap).map((r) => r.orgPlayerId);
+  // org_rankings 는 (org, division, player) 유니크라 한 선수가 두 부서에 오르면 같은
+  // orgPlayerId 가 두 행으로 들어온다 — 정렬상 먼저 나온(첫 등장) 것만 남겨 중복
+  // fetch/upsert 와 cap 낭비를 막는다.
+  const seen = new Set<string>();
+  const deduped = eligible.filter((r) => {
+    if (seen.has(r.orgPlayerId)) return false;
+    seen.add(r.orgPlayerId);
+    return true;
+  });
+
+  const capped = deduped.slice(0, cap).map((r) => r.orgPlayerId);
   return [...confirmedOrgPlayerIds, ...capped];
 }
 
@@ -351,6 +361,31 @@ export interface SupabaseLike {
 }
 
 /**
+ * 이력 크롤 상태 기록. 성공/0건 경로가 공유한다 — 실패해도 예외를 던지지 않고
+ * failures 에 쌓는다(호출자가 이어서 다음 선수로 진행할 수 있도록).
+ */
+async function recordHistoryCrawlState(
+  db: SupabaseLike,
+  org: string,
+  orgPlayerId: string,
+  points: number,
+  failures: string[],
+): Promise<void> {
+  try {
+    const { error } = await db.rpc('record_org_player_history_crawl_state', {
+      p_org: org,
+      p_org_player_id: orgPlayerId,
+      p_points: points,
+    });
+    if (error) failures.push(`이력 ${orgPlayerId}: 상태 기록 ${error.message}`);
+  } catch (e) {
+    failures.push(
+      `이력 ${orgPlayerId}: 상태 기록 예외 ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
+/**
  * 개인 이력 크롤 대상: confirmed 연결자(항상) + 랭킹표 기준 변경분/신규(상한 적용).
  * 상한에 걸려 밀린 후보는 상태가 안 갱신되므로 다음 회차에 자연히 다시 후보가 된다.
  * 한 명이 실패해도 나머지는 계속한다 — 실패는 메시지로 모아 돌려준다.
@@ -451,14 +486,25 @@ export async function crawlPlayerHistories(
 
     // 상한까지 꽉 채우고 끝났다 — 데이터는 있는 만큼 적재하되(아래 계속) 잘렸다는
     // 사실을 알린다. 조용히 뒤쪽 이력이 사라지는 것보다 낫다.
+    // 트레이드오프: 상한 도달 시에도(아래 계속되는 upsert·상태 기록 경로로) 상태를
+    // 기록한다 — 안 남기면 그 선수가 매 회차 20페이지를 다시 긁으며 cap 을 점유한다.
+    // 실측 최대 4페이지(300행 커버)라 진짜 잘림은 이론적 엣지고, 발생하면 이 failures
+    // 신호로 관측된다.
     if (fetched.reachedPageLimit) {
       failures.push(
         `이력 ${orgPlayerId}: ${MAX_HISTORY_PAGES}페이지 상한 도달 — 이후 이력 잘림 가능`,
       );
     }
 
-    // 0행은 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다.
+    // 0행도 그 자체로는 실패가 아니다 — 아직 출전 이력이 없는 선수가 있다. 다만 상태는
+    // 반드시 기록해야 한다: 안 남기면 무전적 선수가 "state 없음"(정렬 최우선)으로 영원히
+    // 남아 매 회차 cap 을 점유하고, 그런 선수가 cap 이상이면 다른 선수의 백필이 영구
+    // 정체된다. upsert 는 저장할 행이 없으므로 여전히 건너뛴다.
     if (fetched.rows.length === 0) {
+      const currentPoints = pointsByPlayer.get(orgPlayerId);
+      if (currentPoints !== undefined) {
+        await recordHistoryCrawlState(db, org, orgPlayerId, currentPoints, failures);
+      }
       await sleep(REQUEST_DELAY_MS);
       continue;
     }
@@ -484,14 +530,7 @@ export async function crawlPlayerHistories(
         // 등)는 비교 기준(total_points)이 없어 기록하지 않는다.
         const currentPoints = pointsByPlayer.get(orgPlayerId);
         if (currentPoints !== undefined) {
-          const { error: stateErr } = await db.rpc('record_org_player_history_crawl_state', {
-            p_org: org,
-            p_org_player_id: orgPlayerId,
-            p_points: currentPoints,
-          });
-          if (stateErr) {
-            failures.push(`이력 ${orgPlayerId}: 상태 기록 ${stateErr.message}`);
-          }
+          await recordHistoryCrawlState(db, org, orgPlayerId, currentPoints, failures);
         }
       }
     } catch (e) {
