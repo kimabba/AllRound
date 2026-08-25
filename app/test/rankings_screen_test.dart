@@ -208,6 +208,19 @@ Future<void> _pump(WidgetTester tester, Widget child) {
   );
 }
 
+/// [RankingList] 는 행별 지연 빌드를 위해 슬리버(SliverList)를 낸다 — 화면과
+/// 마찬가지로 [CustomScrollView] 안에서만 pump 할 수 있다.
+Future<void> _pumpRankingList(WidgetTester tester, RankingList list) {
+  return tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(body: CustomScrollView(slivers: [list])),
+      ),
+    ),
+  );
+}
+
 void main() {
   group('협회 드롭다운', () {
     final rows = [
@@ -239,7 +252,7 @@ void main() {
   });
 
   testWidgets('순위표 행이 렌더링된다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -252,6 +265,28 @@ void main() {
 
     expect(find.text('김평화'), findsOneWidget);
     expect(find.text('이기영'), findsOneWidget);
+  });
+
+  // 부서당 최대 871행(광주 남자일반부) — 행 전체를 한 번에 빌드하면 카드·
+  // 아바타 871개가 동시에 만들어진다. RankingList 가 SliverList 로 지연
+  // 빌드하는지 여기서 확인한다(위젯테스트 기본 뷰포트 600px 기준).
+  testWidgets('행이 많아도 화면에 보이는 행만 빌드된다 (지연 렌더링)', (tester) async {
+    final manyRows = [
+      for (var i = 1; i <= 500; i++)
+        _row(rank: i, name: '선수$i', points: 500 - i, orgPlayerId: 'p$i'),
+    ];
+    await _pumpRankingList(
+      tester,
+      RankingList(rows: manyRows, linkedOrgPlayerId: null),
+    );
+
+    // 행마다 아바타가 하나씩 붙으므로 빌드된 행 수와 정확히 일치한다.
+    final builtRows = find.byType(CircleAvatar).evaluate().length;
+    expect(builtRows, greaterThan(0));
+    expect(builtRows, lessThan(manyRows.length));
+    // 뷰포트에 다 안 들어가는 500행 중 소수만 빌드된다는 게 핵심 —
+    // 넉넉히 여유를 둔 상한.
+    expect(builtRows, lessThan(50));
   });
 
   testWidgets('출처 표기가 항상 보인다', (tester) async {
@@ -282,7 +317,7 @@ void main() {
   });
 
   testWidgets('내 계정과 연결된 행은 강조된다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -297,7 +332,7 @@ void main() {
   });
 
   testWidgets('순위표 각 행에 아바타가 보인다 (탭 대상이 시각적으로 드러나야 한다)', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -312,7 +347,7 @@ void main() {
   });
 
   testWidgets('이름이 공백뿐이면 아바타 이니셜이 물음표로 대체된다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [_row(rank: 1, name: '  ', points: 100, orgPlayerId: 'a')],
@@ -820,7 +855,7 @@ void main() {
 
   testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {
     OrgRankingRow? disputed;
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -841,7 +876,7 @@ void main() {
 
   testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {
     OrgRankingRow? claimed;
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -860,7 +895,7 @@ void main() {
   });
 
   testWidgets('신청 자격이 없으면(등록 부서 밖) 버튼이 하나도 안 뜬다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [_row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a')],
