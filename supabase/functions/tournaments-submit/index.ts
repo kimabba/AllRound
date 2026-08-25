@@ -353,6 +353,10 @@ async function handler(req: Request): Promise<Response> {
       source: 'user_submission',
       status: 'draft',
       submitted_by: user.id,
+      // 사용자 제보 대회는 크롤 원문(crawl_documents)이 없어 AI 요강 정형화 대상이
+      // 아니다. 지정 안 하면 DB 기본값 'pending' 이 되어 claim RPC 의
+      // exists(crawl_documents) 조건에 영구 탈락(고아 pending)한다.
+      format_status: 'skipped',
     })
     .select()
     .single();
