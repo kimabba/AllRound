@@ -149,6 +149,53 @@ export function dedupeHistoryRows(rows: PlayerHistoryRow[]): PlayerHistoryRow[] 
   return [...byKey.values()];
 }
 
+export interface RankingTotal {
+  orgPlayerId: string;
+  totalPoints: number;
+}
+
+export interface HistoryCrawlStateRow {
+  orgPlayerId: string;
+  lastPoints: number;
+  lastCrawledAt: string;
+}
+
+/**
+ * 이번 회차에 개인 이력을 크롤할 선수 목록을 정한다.
+ *
+ * confirmed 연결자는 상한과 무관하게 항상 포함된다("내 기록" 화면이 직접
+ * 의존하므로 놓치면 안 된다). 나머지는 org_rankings 의 total_points 가 state 의
+ * last_points 와 다르거나(변경) state 가 아예 없으면(신규) 후보가 되고, cap 을
+ * 넘는 만큼은 이번 회차에서 빠진다 — last_crawled_at 이 오래된(또는 아예 없는)
+ * 순으로 우선권을 줘서, 상한에 밀린 선수가 다음 회차에 먼저 뽑히게 한다.
+ */
+export function selectHistoryCandidates(params: {
+  confirmedOrgPlayerIds: string[];
+  rankings: RankingTotal[];
+  state: HistoryCrawlStateRow[];
+  cap: number;
+}): string[] {
+  const { confirmedOrgPlayerIds, rankings, state, cap } = params;
+  const confirmed = new Set(confirmedOrgPlayerIds);
+  const stateByPlayer = new Map(state.map((s) => [s.orgPlayerId, s]));
+
+  const eligible = rankings.filter((r) => {
+    if (confirmed.has(r.orgPlayerId)) return false; // 이미 항상 포함되므로 중복 방지
+    const s = stateByPlayer.get(r.orgPlayerId);
+    return !s || s.lastPoints !== r.totalPoints;
+  });
+
+  eligible.sort((a, b) => {
+    const aAt = stateByPlayer.get(a.orgPlayerId)?.lastCrawledAt ?? '';
+    const bAt = stateByPlayer.get(b.orgPlayerId)?.lastCrawledAt ?? '';
+    if (aAt !== bAt) return aAt < bAt ? -1 : 1;
+    return a.orgPlayerId < b.orgPlayerId ? -1 : 1;
+  });
+
+  const capped = eligible.slice(0, cap).map((r) => r.orgPlayerId);
+  return [...confirmedOrgPlayerIds, ...capped];
+}
+
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
 const COMMON_HEADERS: Record<string, string> = {
   'User-Agent': USER_AGENT,

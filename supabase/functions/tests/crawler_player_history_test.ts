@@ -6,6 +6,7 @@ import {
   normalizeResultRound,
   parsePlayerHistoryRows,
   playerHistoryUrl,
+  selectHistoryCandidates,
   type SupabaseLike,
 } from '../_shared/crawler/parsers/gnuboard_player_history.ts';
 
@@ -337,4 +338,64 @@ Deno.test('crawlPlayerHistories: 중복 행이 있어도 upsert 를 1번만 부�
     const args = rpcCalls[0] as { p_rows: unknown[] };
     assertEquals(args.p_rows.length, 2); // 4행 → 중복 2행 제거 → 2행만 upsert
   });
+});
+
+// ── selectHistoryCandidates — confirmed 항상 포함 + 변경분/신규 상한 이월 ──────
+
+Deno.test('selectHistoryCandidates: 신규(상태 없음) 선수는 포함된다', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: [],
+    rankings: [{ orgPlayerId: 'p1', totalPoints: 100 }],
+    state: [],
+    cap: 10,
+  });
+  assertEquals(result, ['p1']);
+});
+
+Deno.test('selectHistoryCandidates: 포인트가 바뀐 선수는 포함된다', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: [],
+    rankings: [{ orgPlayerId: 'p1', totalPoints: 200 }],
+    state: [{ orgPlayerId: 'p1', lastPoints: 100, lastCrawledAt: '2026-08-20T00:00:00Z' }],
+    cap: 10,
+  });
+  assertEquals(result, ['p1']);
+});
+
+Deno.test('selectHistoryCandidates: 포인트가 그대로면 제외된다', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: [],
+    rankings: [{ orgPlayerId: 'p1', totalPoints: 100 }],
+    state: [{ orgPlayerId: 'p1', lastPoints: 100, lastCrawledAt: '2026-08-20T00:00:00Z' }],
+    cap: 10,
+  });
+  assertEquals(result, []);
+});
+
+Deno.test('selectHistoryCandidates: confirmed 연결자는 변경 여부·상한과 무관하게 항상 포함된다', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: ['pinned'],
+    rankings: [{ orgPlayerId: 'pinned', totalPoints: 100 }],
+    state: [{ orgPlayerId: 'pinned', lastPoints: 100, lastCrawledAt: '2026-08-20T00:00:00Z' }],
+    cap: 0, // 상한을 0으로 줘도 confirmed 는 빠지지 않는다
+  });
+  assertEquals(result, ['pinned']);
+});
+
+Deno.test('selectHistoryCandidates: 상한을 넘는 변경분은 last_crawled_at 이 오래된(또는 없는) 순으로 남긴다', () => {
+  const result = selectHistoryCandidates({
+    confirmedOrgPlayerIds: [],
+    rankings: [
+      { orgPlayerId: 'newer', totalPoints: 200 },
+      { orgPlayerId: 'older', totalPoints: 300 },
+      { orgPlayerId: 'brand-new', totalPoints: 50 },
+    ],
+    state: [
+      { orgPlayerId: 'newer', lastPoints: 100, lastCrawledAt: '2026-08-24T00:00:00Z' },
+      { orgPlayerId: 'older', lastPoints: 100, lastCrawledAt: '2026-08-01T00:00:00Z' },
+      // brand-new 는 state 자체가 없다 — 가장 오래된 것으로 취급해 최우선.
+    ],
+    cap: 2,
+  });
+  assertEquals(result, ['brand-new', 'older']);
 });
