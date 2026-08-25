@@ -2,6 +2,7 @@ import { assertEquals, assertStringIncludes } from 'std/assert/mod.ts';
 import {
   crawlPlayerHistories,
   dedupeHistoryRows,
+  fetchAllRows,
   looksLikeHistoryPage,
   normalizeResultRound,
   parsePlayerHistoryRows,
@@ -149,20 +150,53 @@ const NO_HEADER_HTML = `<html><body>로그인이 필요합니다</body></html>`;
 
 function makeDb(opts: {
   links?: { org_player_id: string }[];
+  rankings?: { org_player_id: string | null; total_points: number }[];
+  state?: { org_player_id: string; last_points: number; last_crawled_at: string }[];
   fromThrows?: boolean;
   rpcThrows?: boolean;
-}): { db: SupabaseLike; rpcCalls: unknown[] } {
-  const rpcCalls: unknown[] = [];
-  const db: SupabaseLike = {
-    from() {
+}): { db: SupabaseLike; rpcCalls: { fn: string; args: unknown }[] } {
+  const rpcCalls: { fn: string; args: unknown }[] = [];
+  const db = {
+    from(table: string) {
       if (opts.fromThrows) throw new Error('boom: from');
+      if (table === 'org_player_links') {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  eq() {
+                    return Promise.resolve({ data: opts.links ?? [], error: null });
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+      if (table === 'org_rankings') {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  range() {
+                    return Promise.resolve({ data: opts.rankings ?? [], error: null });
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+      // org_player_history_crawl_state
       return {
         select() {
           return {
             eq() {
               return {
-                eq() {
-                  return Promise.resolve({ data: opts.links ?? [], error: null });
+                range() {
+                  return Promise.resolve({ data: opts.state ?? [], error: null });
                 },
               };
             },
@@ -170,12 +204,12 @@ function makeDb(opts: {
         },
       };
     },
-    rpc(_fn, args) {
+    rpc(fn: string, args: Record<string, unknown>) {
       if (opts.rpcThrows) throw new Error('boom: rpc');
-      rpcCalls.push(args);
+      rpcCalls.push({ fn, args });
       return Promise.resolve({ error: null });
     },
-  };
+  } as unknown as SupabaseLike;
   return { db, rpcCalls };
 }
 
@@ -335,7 +369,7 @@ Deno.test('crawlPlayerHistories: 중복 행이 있어도 upsert 를 1번만 부�
     const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
     assertEquals(failures, []);
     assertEquals(rpcCalls.length, 1);
-    const args = rpcCalls[0] as { p_rows: unknown[] };
+    const args = rpcCalls[0].args as { p_rows: unknown[] };
     assertEquals(args.p_rows.length, 2); // 4행 → 중복 2행 제거 → 2행만 upsert
   });
 });
@@ -398,4 +432,74 @@ Deno.test('selectHistoryCandidates: 상한을 넘는 변경분은 last_crawled_a
     cap: 2,
   });
   assertEquals(result, ['brand-new', 'older']);
+});
+
+// ── fetchAllRows — PostgREST 1,000행 응답 상한 회피 페이지네이션 ──────
+
+Deno.test('fetchAllRows: pageSize 보다 작은 페이지를 받으면 멈춘다 (전체 5건, 페이지 2건씩)', async () => {
+  const all = ['a', 'b', 'c', 'd', 'e'];
+  let calls = 0;
+  const { rows, error } = await fetchAllRows<string>((from, to) => {
+    calls++;
+    return Promise.resolve({ data: all.slice(from, to + 1), error: null });
+  }, 2);
+  assertEquals(error, null);
+  assertEquals(rows, all);
+  assertEquals(calls, 3); // 2+2+1
+});
+
+Deno.test('fetchAllRows: 에러가 나면 그때까지 모은 것과 에러 메시지를 함께 돌려준다', async () => {
+  let calls = 0;
+  const { rows, error } = await fetchAllRows<string>((_from, _to) => {
+    calls++;
+    if (calls === 2) return Promise.resolve({ data: null, error: { message: 'boom' } });
+    return Promise.resolve({ data: ['a', 'b'], error: null });
+  }, 2);
+  assertEquals(rows, ['a', 'b']);
+  assertEquals(error, 'boom');
+  assertEquals(calls, 2);
+});
+
+// ── crawlPlayerHistories 통합 — 랭킹표 기준 변경분/불변분 판정이 실제로 동작한다 ──
+
+Deno.test('통합: 포인트가 바뀐 비연결 선수도 후보에 포함되어 크롤되고 상태가 기록된다', async () => {
+  await withFetch((url) => {
+    const page = new URL(url).searchParams.get('page');
+    return new Response(page === '1' ? ONE_ROW_HTML : HEADER_ONLY_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({
+      links: [],
+      rankings: [{ org_player_id: 'newp', total_points: 500 }],
+      state: [],
+    });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    const fns = rpcCalls.map((c) => c.fn);
+    assertEquals(fns.includes('upsert_org_player_results'), true);
+    assertEquals(fns.includes('record_org_player_history_crawl_state'), true);
+    const stateCall = rpcCalls.find((c) => c.fn === 'record_org_player_history_crawl_state');
+    const stateArgs = stateCall?.args as { p_org_player_id: string; p_points: number };
+    assertEquals(stateArgs.p_org_player_id, 'newp');
+    assertEquals(stateArgs.p_points, 500);
+  });
+});
+
+Deno.test('통합: 포인트가 그대로인 비연결 선수는 크롤되지 않는다(fetch 호출 없음)', async () => {
+  let fetchCalls = 0;
+  await withFetch(() => {
+    fetchCalls++;
+    return new Response(ONE_ROW_HTML, { status: 200 });
+  }, async () => {
+    const { db, rpcCalls } = makeDb({
+      links: [],
+      rankings: [{ org_player_id: 'samep', total_points: 100 }],
+      state: [
+        { org_player_id: 'samep', last_points: 100, last_crawled_at: '2026-08-20T00:00:00Z' },
+      ],
+    });
+    const failures = await crawlPlayerHistories(db, 'gj', 'https://gjtennis.kr');
+    assertEquals(failures, []);
+    assertEquals(fetchCalls, 0);
+    assertEquals(rpcCalls.length, 0);
+  });
 });
