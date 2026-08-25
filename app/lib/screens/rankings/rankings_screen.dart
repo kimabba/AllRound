@@ -800,29 +800,54 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
               AppSpacing.xl,
               0,
             ),
-            child: SegmentedButton<String>(
-              segments: [
-                for (final org in orgCodes)
-                  ButtonSegment(
-                      value: org, label: Text(tennisOrgShortLabel(org))),
+            // 협회·부서를 한 줄 두 칸으로. 협회는 계속 추가될 예정이라
+            // (kRankingDivisions 에 미러 협회를 넣으면 자동 반영) 세그먼트로는
+            // 폭이 감당이 안 된다 — 부서와 같은 드롭다운 스타일로 맞춘다.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _orgCode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '협회'),
+                    items: [
+                      for (final org in orgCodes)
+                        DropdownMenuItem(
+                          value: org,
+                          child: Text(
+                            tennisOrgShortLabel(org),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) _changeOrg(v);
+                    },
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    // 협회가 바뀌면 부서 items 가 통째로 바뀐다. initialValue 는
+                    // 최초 빌드에만 적용돼(tournament_submit_screen 의 회귀 주석
+                    // 참조) 옛 부서 값이 남으면 assert 가 터진다 — 키로 필드를
+                    // 재생성해 새 협회의 첫 부서로 리셋한다.
+                    key: ValueKey('division-$_orgCode'),
+                    initialValue: _divisionCode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '부서'),
+                    items: [
+                      for (final code in divisions)
+                        DropdownMenuItem(
+                            value: code, child: Text(divisionLabel(code))),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) _changeDivision(v);
+                    },
+                  ),
+                ),
               ],
-              selected: {_orgCode},
-              onSelectionChanged: (s) => _changeOrg(s.first),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: DropdownButtonFormField<String>(
-              initialValue: _divisionCode,
-              decoration: const InputDecoration(labelText: '부서'),
-              items: [
-                for (final code in divisions)
-                  DropdownMenuItem(
-                      value: code, child: Text(divisionLabel(code))),
-              ],
-              onChanged: (v) {
-                if (v != null) _changeDivision(v);
-              },
             ),
           ),
           Padding(

@@ -66,12 +66,19 @@ class _FakeRankingApi extends ApiService {
   final List<UserTennisOrg> myOrgs;
   final PlayerHistory? history;
 
+  /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
+  String? lastOrgCode;
+  String? lastDivisionCode;
+
   @override
   Future<List<OrgRankingRow>> orgRankings({
     required String orgCode,
     required String divisionCode,
-  }) async =>
-      rows;
+  }) async {
+    lastOrgCode = orgCode;
+    lastDivisionCode = divisionCode;
+    return rows;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> orgPlayerLinks(String orgCode) async =>
@@ -111,7 +118,7 @@ class _FakeRankingApi extends ApiService {
 
 const _kTestUserId = 'me-uuid';
 
-Future<void> _pumpScreen(
+Future<_FakeRankingApi> _pumpScreen(
   WidgetTester tester, {
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
@@ -120,19 +127,18 @@ Future<void> _pumpScreen(
   List<UserTennisOrg>? myOrgs,
   PlayerHistory? history,
 }) async {
+  final api = _FakeRankingApi(
+    rows: rows,
+    links: links,
+    candidates: candidates,
+    myName: myName,
+    myOrgs: myOrgs,
+    history: history,
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        apiProvider.overrideWithValue(
-          _FakeRankingApi(
-            rows: rows,
-            links: links,
-            candidates: candidates,
-            myName: myName,
-            myOrgs: myOrgs,
-            history: history,
-          ),
-        ),
+        apiProvider.overrideWithValue(api),
         currentUserProvider.overrideWithValue(
           User(
             id: _kTestUserId,
@@ -150,6 +156,7 @@ Future<void> _pumpScreen(
     ),
   );
   await tester.pumpAndSettle();
+  return api;
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) {
@@ -164,6 +171,35 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 }
 
 void main() {
+  group('협회 드롭다운', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('세그먼트 대신 드롭다운이 뜨고, 부서 드롭다운과 한 줄에 나란하다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      // 협회가 계속 추가될 예정이라 세그먼트는 확장이 안 된다 — 드롭다운으로 교체.
+      expect(find.byType(SegmentedButton<String>), findsNothing);
+      expect(find.text('광주협회'), findsOneWidget);
+      expect(find.text('협회'), findsOneWidget); // labelText
+      expect(find.text('부서'), findsOneWidget); // labelText
+    });
+
+    testWidgets('협회를 바꾸면 그 협회의 첫 부서로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(tester, rows: rows, links: const []);
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 부서 items 가 통째로 바뀌어도 크래시 없이(ValueKey 재생성) 첫 부서로 리셋.
+      expect(api.lastOrgCode, 'jn');
+      expect(api.lastDivisionCode, 'jn_m_gold');
+    });
+  });
+
   testWidgets('순위표 행이 렌더링된다', (tester) async {
     await _pump(
       tester,
