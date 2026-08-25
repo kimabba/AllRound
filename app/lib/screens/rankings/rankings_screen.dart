@@ -1000,7 +1000,12 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                     items: [
                       for (final code in divisions)
                         DropdownMenuItem(
-                            value: code, child: Text(divisionLabel(code))),
+                          value: code,
+                          child: Text(
+                            divisionLabel(code),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                     ],
                     onChanged: (v) {
                       if (v != null) _changeDivision(v);

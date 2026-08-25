@@ -72,6 +72,7 @@ class _FakeRankingApi extends ApiService {
   /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
   String? lastOrgCode;
   String? lastDivisionCode;
+  String? lastPlayerRankingsOrgCode;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
@@ -122,8 +123,10 @@ class _FakeRankingApi extends ApiService {
   Future<List<OrgRankingRow>> playerRankings({
     required String orgCode,
     required String orgPlayerId,
-  }) async =>
-      myRankings;
+  }) async {
+    lastPlayerRankingsOrgCode = orgCode;
+    return myRankings;
+  }
 }
 
 const _kTestUserId = 'me-uuid';
@@ -884,6 +887,26 @@ void main() {
 
       expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsNothing);
       expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+    });
+
+    testWidgets('협회를 바꾸면 내 기록도 그 협회 기준으로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+      expect(api.lastPlayerRankingsOrgCode, 'gj');
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 협회별로 내 기록이 다를 수 있다 — 카드 데이터도 새 협회로 재조회돼야 한다.
+      expect(api.lastPlayerRankingsOrgCode, 'jn');
     });
 
     testWidgets('카드를 탭하면 /rankings/me 로 간다', (tester) async {
