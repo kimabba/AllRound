@@ -164,31 +164,58 @@ final myRankingHistoryProvider =
 });
 
 /// [MyRecordScreen] 이 협회를 지정받아 들어올 때(랭킹 화면의 "내 기록 요약"
-/// 카드 탭) 그 협회 기준으로 연결·전적·순위·순위추이를 한 번에 담는 묶음.
+/// 카드 탭) 그 협회 기준의 연결·전적. 화면 표시 여부(로딩/에러/ConnectPrompt)의
+/// 기준이 되는 핵심 조회라 [myRecordForOrgAuxProvider](순위·순위추이)와 분리했다
+/// — 보조 조회가 느려도(예: 순위추이 지연) 전적 표시가 막히면 안 된다.
+///
+/// autoDispose: 협회 연결은 화면 밖(관리자 승인)에서 바뀐다. non-autoDispose 로
+/// 두면 "연결 없음"(link: null) 결과가 세션 내내 캐시돼, 승인 후 화면을 다시
+/// 열어도 옛 null 이 남아 ConnectPrompt 가 계속 뜬다.
 ///
 /// 기존 myConfirmedLinkProvider 체인(4개)은 건드리지 않는다 — 파라미터 없이
 /// 들어오는 기존 진입(알림 등)은 그대로 그 체인을 쓴다. 이 provider 는 독립
 /// 조회라 다른 화면에 영향이 없다.
-typedef MyRecordForOrg = ({
+typedef MyRecordForOrgCore = ({
   Map<String, dynamic>? link,
   List<PlayerResult> results,
+});
+
+final myRecordForOrgCoreProvider =
+    FutureProvider.autoDispose.family<MyRecordForOrgCore, String>(
+        (ref, orgCode) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  final link = await api.myConfirmedLink(orgCode: orgCode);
+  if (link == null) {
+    return (link: null, results: const <PlayerResult>[]);
+  }
+  final linkedOrgCode = link['org_code'] as String;
+  final linkedOrgPlayerId = link['org_player_id'] as String;
+  final results = await api.playerResults(
+    orgCode: linkedOrgCode,
+    orgPlayerId: linkedOrgPlayerId,
+  );
+  return (link: link, results: results);
+});
+
+/// [myRecordForOrgCoreProvider] 와 짝을 이루는 보조 조회(순위·순위추이).
+/// 실패·지연은 화면 전적 표시를 막지 않는다 — 개별 실패는 빈 목록으로 강등.
+///
+/// 링크는 core provider 결과를 그대로 재사용한다(자체 재조회 금지) — 안 그러면
+/// myConfirmedLink 가 두 번 불려 그 사이 링크가 바뀌면 화면 안에서 선수가 섞인다.
+typedef MyRecordForOrgAux = ({
   List<OrgRankingRow> rankings,
   List<OrgRankingSnapshot> snapshots,
 });
 
-final myRecordForOrgProvider =
-    FutureProvider.family<MyRecordForOrg, String>((ref, orgCode) async {
-  ref.watch(authStateProvider);
+final myRecordForOrgAuxProvider =
+    FutureProvider.autoDispose.family<MyRecordForOrgAux, String>(
+        (ref, orgCode) async {
   final api = ref.watch(apiProvider);
-  // 링크는 한 번만 조회하고, 그 org_code/org_player_id로 아래 조회를 전부
-  // 직접 호출한다 — myPlayerResults/myCurrentRankings 를 부르면 각자
-  // 내부에서 링크를 다시 조회해 총 3회가 되고, 그 사이 링크가 바뀌면
-  // 화면 안에서 선수가 섞인다.
-  final link = await api.myConfirmedLink(orgCode: orgCode);
+  final core = await ref.watch(myRecordForOrgCoreProvider(orgCode).future);
+  final link = core.link;
   if (link == null) {
     return (
-      link: null,
-      results: const <PlayerResult>[],
       rankings: const <OrgRankingRow>[],
       snapshots: const <OrgRankingSnapshot>[],
     );
@@ -196,13 +223,6 @@ final myRecordForOrgProvider =
   final linkedOrgCode = link['org_code'] as String;
   final linkedOrgPlayerId = link['org_player_id'] as String;
 
-  // 핵심: 전적 조회는 실패하면 화면 전체 에러(기존 기본 화면과 동일하게).
-  final results = await api.playerResults(
-    orgCode: linkedOrgCode,
-    orgPlayerId: linkedOrgPlayerId,
-  );
-
-  // 보조: 순위·순위추이는 실패해도 전적 표시를 막으면 안 된다 — 빈 목록으로 강등.
   var rankings = const <OrgRankingRow>[];
   try {
     rankings = await api.playerRankings(
@@ -213,6 +233,9 @@ final myRecordForOrgProvider =
     rankings = const <OrgRankingRow>[];
   }
 
+  // 순위추이는 순위표의 부서 코드가 있어야 조회할 수 있어(rankings.first) 이
+  // 둘만은 순차가 불가피하다 — 대신 core(전적)와는 완전히 독립된 provider라
+  // 이 지연이 전적 렌더를 막지 않는다.
   var snapshots = const <OrgRankingSnapshot>[];
   if (rankings.isNotEmpty) {
     final primary = rankings.first;
@@ -229,7 +252,7 @@ final myRecordForOrgProvider =
       }
     }
   }
-  return (link: link, results: results, rankings: rankings, snapshots: snapshots);
+  return (rankings: rankings, snapshots: snapshots);
 });
 
 /// 홈 "내 등급 카드" 한 장에 필요한 값. 협회가 공표한 사실만 담는다.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:allround/models/org_ranking.dart';
 import 'package:allround/models/org_ranking_snapshot.dart';
 import 'package:allround/models/player_result.dart';
@@ -58,6 +60,7 @@ class _FakeOrgRecordApi extends ApiService {
     this.snapshots = const [],
     this.rankingsThrows = false,
     this.rankingHistoryThrows = false,
+    this.rankingsPending,
   }) : super(
           SupabaseClient(
             'http://127.0.0.1:54321',
@@ -72,6 +75,9 @@ class _FakeOrgRecordApi extends ApiService {
   final List<OrgRankingSnapshot> snapshots;
   final bool rankingsThrows;
   final bool rankingHistoryThrows;
+  // 설정되면 playerRankings 가 이 Completer 가 완료될 때까지 절대 끝나지
+  // 않는다 — aux(보조)가 pending 상태여도 core(전적)가 먼저 렌더되는지 검증용.
+  final Completer<List<OrgRankingRow>>? rankingsPending;
 
   int confirmedLinkCalls = 0;
   int playerResultsCalls = 0;
@@ -99,6 +105,7 @@ class _FakeOrgRecordApi extends ApiService {
     required String orgPlayerId,
   }) async {
     playerRankingsCalls++;
+    if (rankingsPending != null) return rankingsPending!.future;
     if (rankingsThrows) throw Exception('rankings boom');
     return rankings;
   }
@@ -195,6 +202,36 @@ void main() {
       expect(find.text('기록을 불러오지 못했습니다.'), findsNothing);
       // 순위 조회가 실패했으니(빈 목록 강등) 추이는 시도조차 하지 않는다.
       expect(api.playerRankingHistoryCalls, 0);
+    });
+
+    testWidgets('순위(보조) 조회가 pending 이어도 전적은 먼저 렌더된다', (tester) async {
+      final rankingsPending = Completer<List<OrgRankingRow>>();
+      final api = _FakeOrgRecordApi(
+        link: const {'org_code': _kOrgCode, 'org_player_id': _kOrgPlayerId},
+        results: [_result()],
+        rankingsPending: rankingsPending,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [apiProvider.overrideWithValue(api)],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const MyRecordScreen(orgCode: _kOrgCode),
+          ),
+        ),
+      );
+      // pumpAndSettle 은 안 쓴다 — aux(순위) 조회가 절대 안 끝나므로 core(전적)만
+      // 뜨는 걸 확인할 만큼만 프레임을 민다.
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 10));
+
+      expect(find.text('광주시장배'), findsWidgets);
+      expect(find.text('기록을 불러오지 못했습니다.'), findsNothing);
+
+      // 테스트 종료 후 미완료 Future 로 인한 pending timer 누수를 막는다.
+      rankingsPending.complete(const []);
+      await tester.pump();
     });
   });
 

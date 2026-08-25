@@ -55,16 +55,19 @@ class MyRecordScreen extends ConsumerWidget {
   }
 
   Widget _buildOrgBody(WidgetRef ref, String org) {
-    final record = ref.watch(myRecordForOrgProvider(org));
-    return record.when(
+    final core = ref.watch(myRecordForOrgCoreProvider(org));
+    // 보조(순위·순위추이)는 로딩·에러여도 빈 목록으로 렌더한다 — 전적(core)이
+    // 먼저 뜨고 순위추이가 나중에 채워지는 걸 허용하기 위해서다.
+    final aux = ref.watch(myRecordForOrgAuxProvider(org));
+    return core.when(
       loading: () => const RecordSkeleton(),
       error: (_, __) => const RecordMessage('기록을 불러오지 못했습니다.'),
-      data: (r) => r.link == null
+      data: (c) => c.link == null
           ? const ConnectPrompt()
           : RecordContent(
-              results: r.results,
-              rankings: r.rankings,
-              snapshots: r.snapshots,
+              results: c.results,
+              rankings: aux.value?.rankings ?? const [],
+              snapshots: aux.value?.snapshots ?? const [],
             ),
     );
   }
