@@ -336,6 +336,26 @@ Deno.test('KATO 부서별 장소 면제 회귀: 접수 개시 후 tab2 정상 �
   assertEquals(regulation.schedules.length, 4);
 });
 
+Deno.test('KATO 부서별 장소 면제 예외: #tab2 요소 자체가 없으면(마크업 드리프트) 면제하지 않는다', () => {
+  const withoutTab2Element = KATO_IMSIL_HTML.replace('<div id="tab2"></div>', '');
+  const regulation = parseKatoRegulation(withoutTab2Element);
+  assert(regulation);
+  assertEquals(regulation.coverage.expectedDivisionCount, 3);
+  assertEquals(regulation.coverage.parsedDivisionCount, 0);
+  assert(regulation.coverage.missingSections.includes('부서별 장소'));
+});
+
+Deno.test('KATO 부서별 장소 면제 예외: #tab2에 tr이 있는데 전부 파싱 실패면 면제하지 않는다', () => {
+  const withUnparsableRows = KATO_IMSIL_HTML.replace(
+    '<div id="tab2"></div>',
+    '<div id="tab2"><table><tr><td>준비중</td></tr></table></div>',
+  );
+  const regulation = parseKatoRegulation(withUnparsableRows);
+  assert(regulation);
+  assertEquals(regulation.coverage.parsedDivisionCount, 0);
+  assert(regulation.coverage.missingSections.includes('부서별 장소'));
+});
+
 Deno.test('KATO 부서별 장소 면제 예외: tab1 요강 자체가 미기재(서천군수배)면 여전히 검수 대상', () => {
   const regulation = parseKatoRegulation(KATO_SEOCHEON_HTML);
   assert(regulation);
