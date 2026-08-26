@@ -2,12 +2,12 @@ import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cor
 import { requireVerifiedUser } from '../_shared/auth.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 import { assertKnownOrgs, fetchActiveOrgCodes } from '../_shared/orgs.ts';
+import { assertKnownRegions, fetchActiveRegionCodes } from '../_shared/regions.ts';
 import { sendTournamentSubmissionEmail } from '../_shared/tournament_submission_email.ts';
 import {
   EntryFeeUnit,
   isValidEntryFeeUnit,
   isValidGrade,
-  isValidRegionCode,
   RegionCode,
   resolveRegionCode,
   Sport,
@@ -309,8 +309,15 @@ async function handler(req: Request): Promise<Response> {
   }
 
   // Phase 2 신규 필드 검증
-  if (body.region_code && !isValidRegionCode(body.region_code)) {
-    return errorResponse(`Invalid region_code: ${body.region_code}`);
+  if (body.region_code) {
+    // 지역 정본도 DB regions 다(P7) — 협회(#330)·등급(#319)과 같은 원칙. 정적 목록으로
+    // 검증하면 지역을 DB 에 추가해도 제보가 거절된다.
+    const regionCatalog = await fetchActiveRegionCodes(supabase);
+    if ('status' in regionCatalog) {
+      return errorResponse(regionCatalog.message, regionCatalog.status);
+    }
+    const regionError = assertKnownRegions([body.region_code], regionCatalog.codes);
+    if (regionError) return errorResponse(regionError.message, regionError.status);
   }
   if (body.host_orgs) {
     if (!Array.isArray(body.host_orgs)) {
