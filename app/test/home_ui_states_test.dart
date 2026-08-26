@@ -8,7 +8,6 @@ import 'package:allround/state/providers.dart';
 import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/theme/app_theme.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -79,8 +78,8 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.textContaining('올라운드 '), findsOneWidget);
-    // 지역·검색은 대회 목록의 로딩 여부와 관계없이 항상 사용할 수 있다.
-    expect(find.text('대회명 또는 지역을 검색해보세요'), findsOneWidget);
+    // 지역 선택은 대회 목록의 로딩 여부와 관계없이 항상 사용할 수 있다.
+    expect(find.text('전국'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -370,66 +369,6 @@ void main() {
     // 지역 선택 버튼의 '전국'만 남고 섹션 제목 옆에는 반복하지 않는다.
     expect(find.text('전국'), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
-
-  // 겉모습만 입력창이고 실제로는 화면을 여는 버튼이다. 입력창으로 읽히면
-  // 화면낭독기 사용자는 타이핑을 시도하다 아무것도 안 되는 상태에 갇힌다.
-  testWidgets('홈 검색창은 화면낭독기에 버튼으로 읽힌다', (tester) async {
-    final handle = tester.ensureSemantics();
-
-    await pumpHome(tester, load: () async => const []);
-    await tester.pumpAndSettle();
-
-    final node = tester.getSemantics(find.bySemanticsLabel('대회 검색'));
-    expect(node.flagsCollection.isButton, isTrue);
-    expect(node.flagsCollection.isTextField, isFalse);
-    // 버튼으로 읽히는 것만으로는 부족하다 — 실제로 실행돼야 한다.
-    expect(
-      node.getSemanticsData().hasAction(SemanticsAction.tap),
-      isTrue,
-      reason: '탭 액션이 없으면 화면낭독기에서 눌러도 아무 일도 일어나지 않는다',
-    );
-    expect(tester.takeException(), isNull);
-    handle.dispose();
-  });
-
-  // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
-  // 이제는 서버가 전수 검색하는 전체 대회 화면의 입구다.
-  testWidgets('홈 검색창을 누르면 전체 대회 검색으로 넘어간다', (tester) async {
-    final router = GoRouter(
-      initialLocation: '/',
-      routes: [
-        GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-        GoRoute(
-          path: '/tournaments',
-          builder: (_, state) => Scaffold(
-            body: Text('검색 열림=${state.uri.queryParameters['search']}'),
-          ),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        retry: (_, __) => null,
-        overrides: [
-          homeTournamentsProvider.overrideWith((ref) async => const []),
-          myTournamentRecordsProvider.overrideWith((ref) async => const []),
-          unreadNotificationCountProvider.overrideWith((ref) async => 0),
-        ],
-        child: MaterialApp.router(
-          theme: AppTheme.light(),
-          routerConfig: router,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.bySemanticsLabel('대회 검색'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('검색 열림=1'), findsOneWidget);
   });
 
   testWidgets('퀴즈는 배너를 누른 뒤 보기 선택과 정답 확인으로 푼다', (tester) async {
