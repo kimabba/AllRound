@@ -78,8 +78,6 @@ void main() {
     expect(find.byKey(AllRoundE2EKeys.homeLoadingState), findsOneWidget);
     expect(find.text('대회'), findsOneWidget);
     expect(find.textContaining('올라운드 '), findsOneWidget);
-    // 지역 선택은 대회 목록의 로딩 여부와 관계없이 항상 사용할 수 있다.
-    expect(find.text('전국'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -186,129 +184,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  group('홈 지역 필터', () {
-    Tournament tennisAt(String id, String? region, int days) => Tournament(
-          id: id,
+  // 목록 카드 배지가 지역 문자열의 첫 조각만 보면 선행 구분자('·서울')에서
+  // "전국"으로 잘못 읽는다. 빈 조각을 건너뛰고 실제 지역을 보여줘야 한다.
+  testWidgets('지역 배지는 선행 구분자를 건너뛰고 실제 지역을 보여준다', (tester) async {
+    await pumpHome(
+      tester,
+      load: () async => [
+        Tournament(
+          id: 'seoul-1',
           sport: 'tennis',
-          title: '$id 대회',
+          title: 'seoul-1 대회',
           organizer: 'QA',
-          startDate: DateTime.now().add(Duration(days: days)),
-          region: region,
+          startDate: DateTime.now().add(const Duration(days: 3)),
+          region: '·서울',
           eligibleGrades: const ['open'],
           status: 'published',
-        );
+        ),
+      ],
+      activeSport: 'tennis',
+    );
+    await tester.pumpAndSettle();
 
-    // 지역 값이 실제 데이터에서 나오는지 확인한다. 하드코딩하던 시절에는
-    // 대회가 가장 많은 전남이 목록에서 빠지고 0건인 서울이 남아 있었다.
-    testWidgets('지역 메뉴는 대회가 있는 지역만 건수와 함께 보여준다', (tester) async {
-      await pumpHome(
-        tester,
-        load: () async => [
-          tennisAt('jeonnam-1', '전남', 3),
-          tennisAt('jeonnam-2', '전남', 5),
-          tennisAt('gwangju-1', '광주', 7),
-          tennisAt('national-1', null, 9),
-        ],
-        activeSport: 'tennis',
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byIcon(Icons.location_on_outlined));
-      await tester.pumpAndSettle();
-
-      // 숫자는 그 지역을 골랐을 때 실제로 보일 개수여야 한다.
-      // 전국대회 1건이 모든 지역에 함께 나오므로 지역 건수에 더해진다.
-      expect(find.text('전남 3'), findsOneWidget);
-      expect(find.text('광주 2'), findsOneWidget);
-      expect(find.text('전국 4'), findsOneWidget);
-      expect(find.text('서울'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
-
-    // 대회가 하나도 없을 때 "전국 0" 은 세는 대상이 없다는 뜻인데 0건짜리
-    // 지역처럼 읽힌다. 숫자 없이 "전국"만 남긴다.
-    testWidgets('보여줄 대회가 없으면 지역 메뉴에 숫자를 붙이지 않는다', (tester) async {
-      await pumpHome(
-        tester,
-        load: () async => const [],
-        activeSport: 'tennis',
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byIcon(Icons.location_on_outlined));
-      await tester.pumpAndSettle();
-
-      expect(find.text('전국'), findsWidgets);
-      expect(find.text('전국 0'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
-
-    // 메뉴 숫자와 실제 목록이 어긋나면 "광주 7"을 눌렀는데 21개가 나온다.
-    testWidgets('지역 메뉴 숫자는 선택 후 목록 개수와 일치한다', (tester) async {
-      await pumpHome(
-        tester,
-        load: () async => [
-          tennisAt('gwangju-1', '광주', 3),
-          tennisAt('national-1', null, 5),
-          tennisAt('national-2', null, 7),
-        ],
-        activeSport: 'tennis',
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byIcon(Icons.location_on_outlined));
-      await tester.pumpAndSettle();
-      expect(find.text('광주 3'), findsOneWidget);
-
-      await tester.tap(find.text('광주 3'));
-      await tester.pumpAndSettle();
-
-      // 광주 1건 + 전국대회 2건 = 3건이 목록에 나온다.
-      for (final id in ['gwangju-1', 'national-1', 'national-2']) {
-        expect(find.textContaining(id), findsWidgets, reason: id);
-      }
-      expect(tester.takeException(), isNull);
-    });
-
-    // 광주를 고른 사용자에게 광주에서 열리는 전국대회가 사라지면 안 된다.
-    testWidgets('지역을 골라도 전국대회는 함께 남는다', (tester) async {
-      await pumpHome(
-        tester,
-        load: () async => [
-          tennisAt('gwangju-1', '광주', 3),
-          tennisAt('national-1', null, 5),
-          tennisAt('jeonnam-1', '전남', 7),
-        ],
-        activeSport: 'tennis',
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byIcon(Icons.location_on_outlined));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('광주 2'));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('national-1'), findsWidgets);
-      expect(find.textContaining('jeonnam-1'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
-
-    // 지역 필터 개수(_regionCounts)는 빈 조각을 건너뛰고 세는데, 목록 카드
-    // 배지가 같은 문자열의 첫 조각만 보면 선행 구분자('·서울')에서 badge가
-    // "전국"으로, 필터는 "서울"로 서로 다른 답을 낸다.
-    testWidgets('지역 배지는 선행 구분자를 건너뛰고 실제 지역을 보여준다', (tester) async {
-      await pumpHome(
-        tester,
-        load: () async => [tennisAt('seoul-1', '·서울', 3)],
-        activeSport: 'tennis',
-      );
-      await tester.pumpAndSettle();
-
-      // 지역 드롭다운 버튼은 선택값("전국")을 항상 보여주므로 "전국"이
-      // 아예 없다고는 단언하지 않는다 — 배지 자리에 "서울"이 뜨는지만 본다.
-      expect(find.text('서울'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    expect(find.text('서울'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   // 예전에는 종목 선택이 홈 화면 안에서만 살아 있어서, 홈에서 풋살로 바꿔도
@@ -366,8 +264,6 @@ void main() {
     expect(find.text(title), findsNWidgets(2));
     expect(find.text('접수 마감 임박'), findsOneWidget);
     expect(find.text('다가오는 대회'), findsOneWidget);
-    // 지역 선택 버튼의 '전국'만 남고 섹션 제목 옆에는 반복하지 않는다.
-    expect(find.text('전국'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
