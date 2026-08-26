@@ -314,10 +314,27 @@ export function parseKatoRegulation(html: string): KatoRegulationResult | null {
   if (prizeAdjustment) notes.push(prizeAdjustment.replace(/^[*※]\s*/, '').trim());
 
   const expectedDivisionCount = main.schedules.length || applicationSchedules.length;
-  const parsedDivisionCount = schedules.filter((schedule) => Boolean(schedule.venue)).length;
+  let parsedDivisionCount = schedules.filter((schedule) => Boolean(schedule.venue)).length;
   const missingSections: string[] = [];
   if (expectedDivisionCount === 0) missingSections.push('부서별 일정');
-  if (expectedDivisionCount > 0 && parsedDivisionCount !== expectedDivisionCount) {
+
+  // KATO는 부서별 장소를 접수 개시 후에만 #tab2(참가신청 표)에 게시한다. 접수 개시 전에는
+  // tab2가 완전히 비어 있어(#tab2 내 tr 0건) 부서별 장소가 원문에 아예 존재하지 않는다 —
+  // 이는 파싱 실패가 아니라 "미공개"다. tab1 '장 소'(전체 장소)가 채워진, 즉 요강 자체는
+  // 완성된 공고에 한해 '부서별 장소' 요구를 면제한다.
+  // 면제는 "#tab2 요소가 존재하는데 내부 tr이 0건"(진짜 미오픈)에만 적용한다. #tab2 요소
+  // 자체가 없거나(마크업 드리프트) tr은 있는데 전부 파싱에 실패한 경우, tab2가 일부만 열려
+  // 일부 부서 장소가 빠진 경우는 기존처럼 그대로 missing 판정한다.
+  const applicationTab = root.querySelector('#tab2');
+  const applicationTabUnopened = applicationTab !== null &&
+    applicationTab.querySelectorAll('tr').length === 0;
+  const exemptDivisionVenue = applicationTabUnopened && meaningful(main.values.get('장소'));
+  if (exemptDivisionVenue) {
+    // index.ts의 kato_division_coverage(parsed/expected 비교) flag를 index.ts 무수정으로
+    // 함께 해소하기 위한 정규화. 이 줄을 되돌리면 missingSections는 비어도 coverage
+    // 불일치로 reject되는 오탐이 재발한다.
+    parsedDivisionCount = expectedDivisionCount;
+  } else if (expectedDivisionCount > 0 && parsedDivisionCount !== expectedDivisionCount) {
     missingSections.push('부서별 장소');
   }
   if (accountInfo.accounts.length === 0) missingSections.push('입금계좌');

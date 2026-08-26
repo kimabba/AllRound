@@ -54,7 +54,27 @@ function digitsOnly(s: string): string {
 // 계좌 정규식(\d{2,}-\d{2,}-\d{2,})이 전화번호(010-2409-6100 등)와도 매칭되는데,
 // 크롤된 원문 스냅샷에는 사이트 공용 "경기규정문의" 섹션이 자주 빠져 있어
 // 실재하는 정상 연락처가 not_in_source로 오탐되는 사례가 다수(운영 확인, 검토 대기 건 100%가 이 케이스).
-const CONTACT_LABEL = /문의|연락|전화|담당|사무국|contact|tel/i;
+// 대회 임원 직책 라벨(사무장/총무/재무/경기이사/감독관 등)도 같은 사유로 전화번호가 오탐되어
+// 함께 제외한다(광주오픈 0f5c291d 실증 — #f43e679 후속).
+const CONTACT_LABEL =
+  /문의|연락|전화|담당|사무국|contact|tel|이사|총무|재무|사무장|감독관|회장|본부석|안내/i;
+// CONTACT_LABEL이 '안내'처럼 넓은 단어를 포함해 라벨만으로는 과잉 매칭될 수 있으므로
+// (예: "입금계좌 안내", "납부 안내"), 계좌류 키워드가 라벨이나 값에 함께 있으면
+// 문의처 필드로 취급하지 않는다. 전화번호 모양 계좌(휴대폰 평생계좌 등)도 있어
+// 값 형태 가드만으로는 부족하다. 계좌 검증이 항상 우선한다(검증 완화 금지 결정, 7월).
+const ACCOUNT_HINT = /계좌|통장|입금|납부|송금|예금주|이체/;
+
+// 위 라벨 확장이 실제 계좌·금액 값을 가리는 일이 없도록, 라벨이 매칭돼도 값 토큰이
+// 전화번호일 때만 대조를 제외한다. 판정은 두 겹:
+// 1) 표기 형태 — 0으로 시작하고 구분자는 하이픈/공백/점만(또는 무구분). 쉼표·'원' 등
+//    비전화 표기는 배제한다. digitsOnly만 보면 '010,000,000원' 같은 0-prefix 조작 금액이
+//    전화로 위장해 원문 대조를 우회한다(금액 검증 우회 방지 — Codex 교차 리뷰).
+// 2) 자릿수 — 0으로 시작하는 9~11자리. 국내 계좌번호는 보통 0으로 시작하지 않아
+//    (예: 1107-021-677837, 302-1234-5678) 구분된다.
+function isPhoneToken(token: string): boolean {
+  if (!/^0[\d\-. ]*\d$/.test(token)) return false;
+  return /^0\d{8,10}$/.test(token.replace(/[^0-9]/g, ''));
+}
 
 export function verifyAgainstSource(
   result: RegulationResult,
@@ -74,10 +94,15 @@ export function verifyAgainstSource(
     ? [...result.regulation_fields, { label: '시상', value: result.prize }]
     : result.regulation_fields;
   for (const f of checked) {
-    if (CONTACT_LABEL.test(f.label)) continue; // 문의처/전화 필드는 원문 대조 검증 제외(과탐 방지)
+    // 문의처/전화/임원 직책 라벨이면서 계좌류 키워드가 라벨·값 어디에도 없을 때만 대조 제외 후보.
+    // (예: label "총무", value "기업은행 계좌 010-…" 같은 전화 모양 계좌를 가리지 않기 위함)
+    const isContactField = CONTACT_LABEL.test(f.label) &&
+      !ACCOUNT_HINT.test(f.label) && !ACCOUNT_HINT.test(f.value);
     for (const tok of sensitiveTokens(f.value)) {
       const d = digitsOnly(tok);
       if (d.length === 0) continue;
+      // 문의처류 라벨이라도 토큰이 전화번호 표기·자릿수일 때만 제외(계좌·금액 검증 완화 금지).
+      if (isContactField && isPhoneToken(tok)) continue;
       const key = `${f.label}|${d}`;
       if (seen.has(key)) continue; // 중복 flag 방지(계좌/날짜 정규식 겹침)
       seen.add(key);
