@@ -370,6 +370,57 @@ Deno.test('KATO 부서별 장소 면제 예외: tab1 요강 자체가 미기재(
   );
 });
 
+// 문경에이스배(d0cdec6a-46bf-4aac-a8c3-d57e4fc18140) 실측(2026-08-26) 축약. 계좌·전화는
+// 더미값으로 치환하되 카카오뱅크(3333 시작 13자리)·토스뱅크(12자리) 형태는 유지 —
+// 하이픈 없는 계좌가 '입금계좌' missing으로 오탐되던 문제(D조 검수 리포트)의 회귀 픽스처.
+const KATO_MUNGYEONG_HTML = `
+<div class="group-title">제1회 문경에이스배 전국동호인테니스대회</div>
+<div id="tab1">
+  <table class="table-bordered">
+    <tr><td rowspan="3">일 시</td><td>개나리부</td><td>2026년 10월 04일 (일) 09:00</td></tr>
+    <tr><td>챌린저부</td><td>2026년 10월 05일 (월) 09:00</td></tr>
+    <tr><td>국화부</td><td>2026년 10월 05일 (월) 09:00</td></tr>
+    <tr><td>장 소</td><td colspan="2">문경 영강테니스장 외</td></tr>
+    <tr><td>접수개시 및<br>환불마감</td><td colspan="2">▣ 접수개시일 : 9월 4일(금) 12시 ▣ 환불마감 : 2026년 09월 30일(수) 18시</td></tr>
+    <tr><td>신청안내 및<br>입금계좌</td><td colspan="2">
+      KATO 홈페이지 신청접수 www.kato.kr<br>
+      참가자격문의: KATO사무국 02-401-7979<br>
+      ◈ 참가 접수 후 참가비 바로 입금 (대기자 절대 입금 금지!!)◈<br>
+      개나리부(120팀)  3333000000001  (홍길동) 카카오뱅크<br>
+      챌린저부(100팀) 3333000000002 (김철수) 카카오뱅크<br>
+      국화부(80팀) 100000000001 (이영희) 토스뱅크
+    </td></tr>
+    <tr><td>참가비</td><td colspan="2">개인복식 팀당 54,000원</td></tr>
+    <tr><td>시 상</td><td colspan="2">◈ 우 승 : 트로피, 상금 120만원</td></tr>
+  </table>
+</div>
+<div id="tab2"></div>`;
+
+const KATO_PHONE_ONLY_ACCOUNT_HTML = KATO_MUNGYEONG_HTML.replace(
+  `      개나리부(120팀)  3333000000001  (홍길동) 카카오뱅크<br>
+      챌린저부(100팀) 3333000000002 (김철수) 카카오뱅크<br>
+      국화부(80팀) 100000000001 (이영희) 토스뱅크`,
+  '      참가자격문의: 농협 01012345678',
+);
+
+Deno.test('KATO 하이픈 없는 계좌(카카오뱅크·토스뱅크식) 인식: 입금계좌 missing 오탐 해소', () => {
+  const regulation = parseKatoRegulation(KATO_MUNGYEONG_HTML);
+  assert(regulation);
+  assertEquals(regulation.coverage.accountCount, 3);
+  assert(!regulation.coverage.missingSections.includes('입금계좌'));
+  const accountField = regulation.fields.find((field) => field.label === '입금계좌');
+  assert(accountField?.value.includes('3333000000001'));
+  assert(accountField?.value.includes('3333000000002'));
+  assert(accountField?.value.includes('100000000001'));
+});
+
+Deno.test('KATO 전화번호(010 연속 11자리)만 있으면 계좌로 인정하지 않는다 (오인 방지)', () => {
+  const regulation = parseKatoRegulation(KATO_PHONE_ONLY_ACCOUNT_HTML);
+  assert(regulation);
+  assertEquals(regulation.coverage.accountCount, 0);
+  assert(regulation.coverage.missingSections.includes('입금계좌'));
+});
+
 Deno.test('KATO 부서 매핑: span.parts 텍스트 → kato_* codes', () => {
   // seed 와 동일한 최소 사전(부분)으로 매핑 동작 확인.
   const dict = [
