@@ -240,6 +240,23 @@ Deno.test('verifyAgainstSource: 임원 직책 라벨이라도 값에 계좌류 �
   assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === '총무'));
 });
 
+Deno.test('verifyAgainstSource: 값에 "예금주" 병기된 전화 모양 계좌는 임원 라벨이라도 검증됨', () => {
+  // 계좌 표기의 표준 관행("… 예금주 홍길동")이 계좌·입금 키워드를 모두 피해가는 변형을 막는다.
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '총무', value: 'IBK 010-1234-5678 예금주 홍길동' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, false);
+  assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === '총무'));
+});
+
 Deno.test('verifyAgainstSource: prize의 지어낸 상금도 원문 대조 flag (검증 우회 방지)', () => {
   // 참고: '30만원' 같은 한글 단위 금액은 sensitiveTokens가 추출하지 않는 기존 한계
   // (전 필드 공통, HANDOFF §3 보류 항목) — 여기서는 숫자원 표기로 배선 자체를 검증.
