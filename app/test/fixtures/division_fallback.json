@@ -391,6 +391,16 @@
     "isActive": true,
     "isRankingGrade": true
   },
+  {"org": "jb", "code": "jb_gukhwa", "label": "국화부", "isActive": true, "isRankingGrade": true},
+  {"org": "jb", "code": "jb_m_dong", "label": "남자동배부", "isActive": true, "isRankingGrade": true},
+  {"org": "jb", "code": "jb_m_geumdong", "label": "남자금동배부", "isActive": true, "isRankingGrade": false},
+  {"org": "jb", "code": "jb_m_geumeun", "label": "남자금은배부", "isActive": true, "isRankingGrade": true},
+  {"org": "jb", "code": "jb_m_hapsan", "label": "남자합산대회", "isActive": true, "isRankingGrade": false},
+  {"org": "jb", "code": "jb_mixed", "label": "혼합복식부", "isActive": true, "isRankingGrade": false},
+  {"org": "jb", "code": "jb_team", "label": "단체전", "isActive": true, "isRankingGrade": false},
+  {"org": "jb", "code": "jb_w_dong", "label": "여자동배부", "isActive": true, "isRankingGrade": true},
+  {"org": "jb", "code": "jb_w_geumeun", "label": "여자금은배부", "isActive": true, "isRankingGrade": true},
+  {"org": "jb", "code": "jb_w_hapsan", "label": "여자합산대회", "isActive": true, "isRankingGrade": false},
   {
     "org": "local",
     "code": "local_general",

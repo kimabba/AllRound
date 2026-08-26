@@ -416,6 +416,63 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '여자우승자부',
       gender: 'female'),
 
+  // 전북(JBSTA) — 금·은·동배(메달) 체계. 통합 이벤트(금동배)·혼합복식·단체전·
+  // 합산대회는 출전 종목 전용(isRankingGrade: false).
+  TennisDivision(
+      code: 'jb_gukhwa',
+      org: 'jb',
+      label: '국화부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_m_dong',
+      org: 'jb',
+      label: '남자동배부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_geumdong',
+      org: 'jb',
+      label: '남자금동배부',
+      isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_geumeun',
+      org: 'jb',
+      label: '남자금은배부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_hapsan',
+      org: 'jb',
+      label: '남자합산대회',
+      isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_mixed',
+      org: 'jb',
+      label: '혼합복식부',
+      isRankingGrade: false,
+      gender: 'mixed'),
+  TennisDivision(
+      code: 'jb_team',
+      org: 'jb',
+      label: '단체전',
+      isRankingGrade: false),
+  TennisDivision(
+      code: 'jb_w_dong',
+      org: 'jb',
+      label: '여자동배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_w_geumeun',
+      org: 'jb',
+      label: '여자금은배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_w_hapsan',
+      org: 'jb',
+      label: '여자합산대회',
+      isRankingGrade: false,
+      gender: 'female'),
+
   // 시·군/클럽 자체 — 임시 등급(비활성)
   TennisDivision(
       code: 'local_general',
@@ -687,6 +744,7 @@ const _kFallbackOrgEntries = <TennisOrgEntry>[
   TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
   TennisOrgEntry(code: 'gj', label: '광주광역시테니스협회 (GJTA)', shortLabel: '광주협회', isActive: true),
   TennisOrgEntry(code: 'jn', label: '전라남도테니스협회 (JNTA)', shortLabel: '전남협회', isActive: true),
+  TennisOrgEntry(code: 'jb', label: '전북특별자치도테니스협회 (JBSTA)', shortLabel: '전북협회', isActive: true),
   TennisOrgEntry(code: 'local', label: '시·군 또는 클럽 자체', shortLabel: '시·군/클럽', isActive: true),
 ];
 
