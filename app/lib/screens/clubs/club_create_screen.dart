@@ -1475,8 +1475,13 @@ class _RegionPickerSheet extends StatelessWidget {
 
   final String selectedRegion;
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서, 열려 있는 동안 지역 카탈로그 로드가 도착하면
+  // 이 시트만 폴백 목록으로 남는다. 여기서 감싼다(tournaments_screen 필터 시트 선례).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -1544,9 +1549,11 @@ class _RegionPickerSheet extends StatelessWidget {
   }
 }
 
-final _regionOptions = [
-  for (final code in regionCodes) _RegionOption(regionLabel(code)),
-];
+// getter 여야 한다 — top-level final 로 캐시하면 카탈로그 로드 전(폴백) 값으로
+// 한 번 굳어 catalogRevision 리빌드에도 갱신되지 않는다.
+List<_RegionOption> get _regionOptions => [
+      for (final code in regionCodes) _RegionOption(regionLabel(code)),
+    ];
 
 typedef _PlaceSearchCallback = Future<List<PlaceSearchResult>> Function(
   String query,

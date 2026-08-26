@@ -91,13 +91,6 @@ final myClubsProvider = FutureProvider<List<Club>>((ref) async {
   return api.myClubs();
 });
 
-/// 권역 목록 (regions 테이블 — 8개 시드)
-final regionsProvider = FutureProvider<List<Region>>((ref) async {
-  ref.watch(authStateProvider);
-  final api = ref.watch(apiProvider);
-  return api.listRegions();
-});
-
 /// 즐겨찾기 ID 집합
 final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   ref.watch(authStateProvider);
