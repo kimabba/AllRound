@@ -175,8 +175,9 @@ def main() -> int:
     #
     # 지역(regions)의 정본도 DB 다(P7). Dart 하드코딩(regionCodes)은 RegionCatalog
     # 폴백으로 옮겨갔고, 폴백↔DB 대조는 check_region_parity.py 가 실제 DB 로 한다
-    # (협회 #330 과 같은 스냅샷 다리). TS REGION_CODES 는 아직 하드코딩으로 남아
-    # 있으며 별도 PR 에서 카탈로그화한다 — 그때까지 TS 쪽은 이 검사 대상이 아니다.
+    # (협회 #330 과 같은 스냅샷 다리). TS 쪽 검증(submit/search)도 DB 위임으로
+    # 전환됐다(_shared/regions.ts, P7 마지막 조각). 남은 REGION_CODES 는 intent
+    # 별칭·라벨 표시용 정적 사본이라 이 검사 대상이 아니다.
     assert_same(
         "entry fee units",
         ("TypeScript ENTRY_FEE_UNITS", ts_const_array(ts, "ENTRY_FEE_UNITS")),
