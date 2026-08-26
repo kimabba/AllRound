@@ -6,6 +6,305 @@ import '../../models/regulation_body_lines.dart';
 import '../../models/regulation_document.dart';
 import '../../theme/tokens.dart';
 
+enum _RegulationTabKey {
+  eligibility,
+  schedule,
+  registration,
+  match,
+  guidance,
+}
+
+class _RegulationTabGroup {
+  const _RegulationTabGroup({
+    required this.key,
+    required this.label,
+    required this.sectionCodes,
+  });
+
+  final _RegulationTabKey key;
+  final String label;
+  final List<RegulationSectionCode> sectionCodes;
+}
+
+const _regulationTabGroups = <_RegulationTabGroup>[
+  _RegulationTabGroup(
+    key: _RegulationTabKey.eligibility,
+    label: '참가',
+    sectionCodes: [RegulationSectionCode.eligibility],
+  ),
+  _RegulationTabGroup(
+    key: _RegulationTabKey.schedule,
+    label: '일정',
+    sectionCodes: [RegulationSectionCode.scheduleVenue],
+  ),
+  _RegulationTabGroup(
+    key: _RegulationTabKey.registration,
+    label: '신청',
+    sectionCodes: [
+      RegulationSectionCode.registrationPayment,
+      RegulationSectionCode.refundChanges,
+    ],
+  ),
+  _RegulationTabGroup(
+    key: _RegulationTabKey.match,
+    label: '경기',
+    sectionCodes: [
+      RegulationSectionCode.matchOperations,
+      RegulationSectionCode.awards,
+    ],
+  ),
+  _RegulationTabGroup(
+    key: _RegulationTabKey.guidance,
+    label: '안내',
+    sectionCodes: [
+      RegulationSectionCode.noticesContact,
+      RegulationSectionCode.other,
+    ],
+  ),
+];
+
+/// 대회 상세에서 요강을 자주 찾는 5개 묶음으로 나눠 표시한다.
+///
+/// 저장된 [RegulationDocument]는 바꾸지 않고, 현재 탭에 해당하는
+/// 섹션만 [RegulationDocumentView]에 넘긴다. 명시적인 미공지·해당 없음
+/// 상태는 내용이 비어 있어도 탭을 유지한다.
+class RegulationTabbedDocumentView extends StatefulWidget {
+  const RegulationTabbedDocumentView({
+    super.key,
+    required this.document,
+    this.hidePublicMetadata = false,
+  });
+
+  final RegulationDocument document;
+  final bool hidePublicMetadata;
+
+  @override
+  State<RegulationTabbedDocumentView> createState() =>
+      _RegulationTabbedDocumentViewState();
+}
+
+class _RegulationTabbedDocumentViewState
+    extends State<RegulationTabbedDocumentView> {
+  _RegulationTabKey? _selectedKey;
+  bool _showAll = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final visibleSections = widget.document.sections
+        .where(
+          (section) =>
+              !widget.hidePublicMetadata || _hasVisiblePublicContent(section),
+        )
+        .toList(growable: false);
+    final availableGroups = _regulationTabGroups
+        .where(
+          (group) => visibleSections.any(
+            (section) => group.sectionCodes.contains(section.code),
+          ),
+        )
+        .toList(growable: false);
+    final selectedGroup = availableGroups.isEmpty
+        ? null
+        : _effectiveSelectedGroup(availableGroups);
+    void showAll() => setState(() => _showAll = true);
+
+    final header = Row(
+      children: [
+        Expanded(
+          child: Text(
+            '대회 요강',
+            style: textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (availableGroups.isNotEmpty)
+          Semantics(
+            excludeSemantics: true,
+            button: true,
+            selected: _showAll,
+            label: _showAll ? '전체 요강 보기, 선택됨' : '전체 요강 보기',
+            onTap: showAll,
+            child: TextButton(
+              onPressed: showAll,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, AppSizes.touchTarget),
+                foregroundColor: _showAll
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+              child: Text(
+                '전체보기',
+                style: TextStyle(
+                  fontWeight: _showAll ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (selectedGroup == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '상세 요강이 아직 공지되지 않았습니다.',
+            style: textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        const SizedBox(height: AppSpacing.sm),
+        _RegulationTabBar(
+          groups: availableGroups,
+          selectedKey: _showAll ? null : selectedGroup.key,
+          onSelected: (key) {
+            setState(() {
+              _selectedKey = key;
+              _showAll = false;
+            });
+          },
+        ),
+        if (widget.document.summary != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            widget.document.summary!,
+            style: textTheme.bodyLarge?.copyWith(height: 1.55),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        RegulationDocumentView(
+          key: ValueKey(_showAll ? 'all' : selectedGroup.key),
+          document: RegulationDocument(
+            schemaVersion: widget.document.schemaVersion,
+            sections: _showAll
+                ? visibleSections
+                : visibleSections
+                    .where(
+                      (section) =>
+                          selectedGroup.sectionCodes.contains(section.code),
+                    )
+                    .toList(growable: false),
+          ),
+          showSummary: false,
+          hidePublicMetadata: widget.hidePublicMetadata,
+        ),
+      ],
+    );
+  }
+
+  _RegulationTabGroup _effectiveSelectedGroup(
+    List<_RegulationTabGroup> availableGroups,
+  ) {
+    final selectedKey = _selectedKey;
+    if (selectedKey != null) {
+      for (final group in availableGroups) {
+        if (group.key == selectedKey) return group;
+      }
+    }
+    return availableGroups.first;
+  }
+}
+
+class _RegulationTabBar extends StatelessWidget {
+  const _RegulationTabBar({
+    required this.groups,
+    required this.selectedKey,
+    required this.onSelected,
+  });
+
+  final List<_RegulationTabGroup> groups;
+  final _RegulationTabKey? selectedKey;
+  final ValueChanged<_RegulationTabKey> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return SizedBox(
+      height: AppSizes.touchTarget,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Row(
+            children: [
+              for (final group in groups)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: selectedKey == group.key,
+                    label:
+                        '${group.label} 요강 탭${selectedKey == group.key ? ', 선택됨' : ''}',
+                    child: Material(
+                      color: selectedKey == group.key
+                          ? colorScheme.primaryContainer
+                          : Colors.transparent,
+                      child: InkWell(
+                        onTap: () => onSelected(group.key),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                width: 2,
+                                color: selectedKey == group.key
+                                    ? colorScheme.primary
+                                    : Colors.transparent,
+                              ),
+                            ),
+                          ),
+                          child: Center(
+                            child: ExcludeSemantics(
+                              child: Text(
+                                group.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: textTheme.labelLarge?.copyWith(
+                                  color: selectedKey == group.key
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant,
+                                  fontWeight: selectedKey == group.key
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: IgnorePointer(
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: colorScheme.outlineVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class RegulationDocumentView extends StatelessWidget {
   const RegulationDocumentView({
     super.key,

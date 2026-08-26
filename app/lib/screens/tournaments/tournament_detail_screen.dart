@@ -361,14 +361,9 @@ class _DetailBody extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
 
               // ── 대회 요강 (구조화 요강 → 폴백: 평문 description) ──
-              _AccordionSection(
-                icon: Icons.article_rounded,
-                title: '대회 요강',
-                initiallyExpanded: false,
-                children: _buildRegulationChildren(
-                  context,
-                  hasDescription: hasDescription,
-                ),
+              _buildRegulationSection(
+                context,
+                hasDescription: hasDescription,
               ),
 
               const SizedBox(height: AppSpacing.lg),
@@ -446,31 +441,44 @@ class _DetailBody extends StatelessWidget {
     return _RegulationFieldRow(label: f.label, value: f.value);
   }
 
-  /// 대회 요강 아코디언 본문.
-  /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
-  /// 그것도 없으면 "아직 공지되지 않았습니다".
-  List<Widget> _buildRegulationChildren(
+  /// 구조화 요강은 5개 탭으로 나누고, 레거시 평문은 원문을 그대로 보여준다.
+  Widget _buildRegulationSection(
     BuildContext context, {
     required bool hasDescription,
   }) {
     final document = t.regulationDocument;
     if (document != null && !document.isEmpty) {
-      return [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: RegulationDocumentView(
-            document: document,
-            hidePublicMetadata: true,
-          ),
-        ),
-      ];
+      return RegulationTabbedDocumentView(
+        key: ValueKey('regulation-${t.id}'),
+        document: document,
+        hidePublicMetadata: true,
+      );
     }
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '대회 요강',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ..._buildLegacyRegulationChildren(
+          context,
+          hasDescription: hasDescription,
+        ),
+      ],
+    );
+  }
+
+  /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
+  /// 그것도 없으면 "아직 공지되지 않았습니다".
+  List<Widget> _buildLegacyRegulationChildren(
+    BuildContext context, {
+    required bool hasDescription,
+  }) {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = t.regulationFields
@@ -884,51 +892,7 @@ class _TournamentDetailError extends StatelessWidget {
   }
 }
 
-class _AccordionSection extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool initiallyExpanded;
-  final List<Widget> children;
-
-  const _AccordionSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-    this.initiallyExpanded = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: cs.outlineVariant),
-            bottom: BorderSide(color: cs.outlineVariant),
-          ),
-        ),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.md),
-          shape: const Border(),
-          collapsedShape: const Border(),
-          leading: Icon(icon, size: 20, color: cs.primary),
-          title: Text(
-            title,
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
-/// 구조화 요강 한 줄 (라벨 + 값). 아코디언 내부 들여쓰기 스타일은
+/// 구조화 요강 한 줄 (라벨 + 값).
 /// 기존 _InfoRow 와 동일하게 유지한다.
 /// 요강 한 필드(라벨 + 값).
 ///
