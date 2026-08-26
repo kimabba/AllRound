@@ -376,12 +376,13 @@ class _MainShell extends ConsumerWidget {
 
   final Widget child;
 
-  static const _tabs = <String>['/', '/clubs', '/profile'];
+  static const _tabs = <String>['/', '/clubs'];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
   /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
   static const _untabbedPaths = [
     '/more',
+    '/profile',
     '/notifications',
     '/favorites',
     '/blocked-users',
