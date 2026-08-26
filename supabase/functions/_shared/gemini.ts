@@ -222,14 +222,22 @@ export function parseStructuredResponse<T>(json: unknown): T {
   return JSON.parse(text) as T;
 }
 
-export async function generateStructured<T>(
-  prompt: string,
+/** inline 이미지 입력(base64, data: 접두어 없이). Gemini inlineData 파트로 전송된다. */
+export interface InlineImage {
+  mimeType: string;
+  data: string;
+}
+
+type StructuredPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+
+async function generateStructuredFromParts<T>(
+  parts: StructuredPart[],
   responseSchema: Record<string, unknown>,
   opts: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number } = {},
 ): Promise<T> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
   const body: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: opts.temperature ?? 0.1,
       maxOutputTokens: opts.maxOutputTokens ?? 4096,
@@ -248,4 +256,30 @@ export async function generateStructured<T>(
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   return parseStructuredResponse<T>(await res.json());
+}
+
+export function generateStructured<T>(
+  prompt: string,
+  responseSchema: Record<string, unknown>,
+  opts: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number } = {},
+): Promise<T> {
+  return generateStructuredFromParts<T>([{ text: prompt }], responseSchema, opts);
+}
+
+/**
+ * 이미지 1장 + 지시문으로 structured 응답을 받는다 (P6 포스터 판독).
+ * 기존 텍스트 호출(generateStructured) 시그니처는 불변 — 이미지 경로만 추가.
+ * Gemini 3 계열은 이미지 1장이 media_resolution 고정 토큰(기본 1,120)으로 계산된다.
+ */
+export function generateStructuredWithImage<T>(
+  prompt: string,
+  image: InlineImage,
+  responseSchema: Record<string, unknown>,
+  opts: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number } = {},
+): Promise<T> {
+  return generateStructuredFromParts<T>(
+    [{ inlineData: { mimeType: image.mimeType, data: image.data } }, { text: prompt }],
+    responseSchema,
+    opts,
+  );
 }

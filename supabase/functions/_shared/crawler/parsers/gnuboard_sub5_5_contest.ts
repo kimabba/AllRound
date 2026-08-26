@@ -30,6 +30,7 @@ import {
   upsertTournament,
 } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
+import { extractPosterUrl } from '../poster.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
@@ -259,6 +260,11 @@ export async function fetchDetail(
     dom.querySelector('body');
   const bodyText = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+  // 본문 컨테이너 안의 첫 유효 이미지를 포스터로 수집한다(P6). 노이즈 요소는 위에서
+  // 이미 제거됐으므로 로고·배너가 아닌 협회 업로드 포스터가 잡힌다. 없으면 undefined
+  // 로 남겨 upsert 가 기존 poster_url 을 보존한다(KTA 와 동일 규칙).
+  const posterUrl = extractPosterUrl(contentRoot?.innerHTML ?? null, detailUrl);
+
   // ── 테이블 기반 추출 (참가부서 / 신청기간 / 경기일시) ──
   // 테이블 헤더: 참가부서 | 구분 | 신청기간 | 경기일시 | ...
   //
@@ -486,6 +492,7 @@ export async function fetchDetail(
     eligible_grades: gradeCodes,
     division_label_local: hasExplicitUnknownDivision ? '부서추후공지' : divisionLabel,
     clear_eligible_grades: hasExplicitUnknownDivision || undefined,
+    poster_url: posterUrl ?? undefined,
     source_url: detailUrl,
     organizer,
     entry_fee: entryFee,

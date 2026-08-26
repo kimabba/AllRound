@@ -21,6 +21,7 @@
 import { DOMParser } from 'deno-dom';
 import { type CrawlerTournament, markListingSeen, upsertTournament } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
+import { extractPosterUrl } from '../poster.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 import { parseKatoRegulation } from './kato_regulation.ts';
 
@@ -134,6 +135,7 @@ export interface KatoDetailFields {
   location?: string;
   organizer?: string;
   entryFee?: number;
+  posterUrl?: string;
 }
 
 // 라벨 td(전각공백 무시) → 다음 td 값. 없으면 undefined.
@@ -162,7 +164,11 @@ function cleanVenue(v: string | undefined): string | undefined {
   return cut || undefined;
 }
 
-export function parseKatoDetail(html: string, titleHint: string): KatoDetailFields | null {
+export function parseKatoDetail(
+  html: string,
+  titleHint: string,
+  baseUrl = 'https://kato.kr',
+): KatoDetailFields | null {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   if (!dom) return null;
   const root = dom as unknown as El;
@@ -186,7 +192,10 @@ export function parseKatoDetail(html: string, titleHint: string): KatoDetailFiel
       if (amount > 0 && amount < 1_000_000) entryFee = amount;
     }
   }
-  return { title, location, organizer, entryFee };
+  // 공고에 포스터 이미지가 붙은 대회는 URL 만 수집한다(P6). 전체 HTML 을 훑지만
+  // UI 이미지(로고 등)는 extractPosterUrl 이 걸러내고 업로드 경로를 우선한다.
+  const posterUrl = extractPosterUrl(html, baseUrl) ?? undefined;
+  return { title, location, organizer, entryFee, posterUrl };
 }
 
 // =============================================================================
@@ -224,6 +233,7 @@ export function buildTournament(
     location: detail.location,
     eligible_grades: codes,
     division_label_local: label || undefined,
+    poster_url: detail.posterUrl,
     source_url: item.url,
     organizer: detail.organizer,
     entry_fee: detail.entryFee,
@@ -304,7 +314,7 @@ export const katoOpenListParser: ParserFn = async (
       const res = await fetch(item.url, { headers: COMMON_HEADERS });
       if (!res.ok) continue; // 원본 자체가 없음
       const html = await res.text();
-      const detail = parseKatoDetail(html, item.title);
+      const detail = parseKatoDetail(html, item.title, item.url);
       if (detail) {
         await upsertTournament(
           ctx.audit,

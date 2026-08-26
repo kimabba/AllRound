@@ -33,6 +33,7 @@
 
 import { type CrawlerTournament, markListingSeen, upsertTournament } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
+import { extractPosterUrl as extractPosterUrlFrom } from '../poster.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
@@ -105,17 +106,11 @@ function buildDetailPageUrl(cmptEvntCd: string): string {
   return u.toString();
 }
 
-// 요강 본문 HTML에서 첫 포스터 이미지 URL만 뽑는다(OCR 안 함 — 관리자가 검수 화면에서
-// 직접 보도록 URL만 남긴다). 상대경로(/upload/...)는 사이트 기준으로 절대경로화한다.
+// 요강 본문 HTML에서 첫 포스터 이미지 URL만 뽑는다. 상대경로(/upload/...)는 사이트
+// 기준으로 절대경로화한다. 추출 로직은 _shared/crawler/poster.ts 로 승격해 공용화했다
+// (P6 — gj/jn·KATO 파서도 같은 규칙으로 수집).
 export function extractPosterUrl(html: string | null | undefined): string | null {
-  if (!html) return null;
-  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (!m) return null;
-  try {
-    return new URL(m[1], 'https://join.kortennis.or.kr').toString();
-  } catch {
-    return null;
-  }
+  return extractPosterUrlFrom(html, 'https://join.kortennis.or.kr');
 }
 
 // KTA 필드는 값 뒤에 탭/개행이 여러 개 붙어 나온다("포항시 뱃머리테니스장 외 보조경기장\t\t\t...").
