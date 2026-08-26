@@ -26,9 +26,6 @@ import '../widgets/tournament_section_bar.dart';
 
 enum _HomeTournamentFilter { recommended, thisWeek, all }
 
-/// 지역 필터의 "전체" 항목. 지역 이름과 같은 자리에서 쓰이므로 상수로 둔다.
-const String _allRegions = '전국';
-
 /// 홈에서 한 번에 보여주는 대회 수. 풋살과 테니스에 같은 기준을 적용한다.
 const int homeTournamentDisplayLimit = 3;
 
@@ -40,8 +37,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String _selectedRegion = _allRegions;
-
   Future<void> _refresh() async {
     ref.invalidate(homeTournamentsProvider);
     ref.invalidate(favoriteIdsProvider);
@@ -51,10 +46,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await ref.read(homeTournamentsProvider.future);
   }
 
+  /// 홈은 전국 기준으로 다가오는 대회를 보여준다. 지역별 조회는 전체보기
+  /// (전체 대회 화면)의 상세검색이 담당한다 — 홈의 지역 드롭다운은 검색창과
+  /// 함께 그쪽으로 일원화하며 뺐다.
   List<Tournament> _visibleTournaments(
     List<Tournament> source,
     String selectedSport,
-    String selectedRegion,
   ) {
     final sorted = [...source]
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
@@ -64,64 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           (item) =>
               item.sport == selectedSport &&
               !item.startDate.isBefore(today) &&
-              !item.isRegistrationClosed &&
-              _matchesRegion(item, selectedRegion),
+              !item.isRegistrationClosed,
         )
         .toList(growable: false);
     return upcoming;
-  }
-
-  /// 지역을 골라도 전국대회(지역 값이 비어 있는 대회)는 함께 보여준다.
-  /// 광주를 고른 사용자에게 광주에서 열리는 전국대회가 사라지면 안 된다.
-  bool _matchesRegion(Tournament item, String selectedRegion) {
-    if (selectedRegion == _allRegions) return true;
-    final region = (item.region ?? '').trim();
-    if (region.isEmpty) return true;
-    return region.contains(selectedRegion);
-  }
-
-  /// 지역 선택지는 실제로 불러온 대회에서 뽑는다.
-  /// 하드코딩하면 대회가 없는 지역이 남고(서울 0건) 대회가 가장 많은 지역이
-  /// 빠지는(전남 15건) 어긋남이 반복된다.
-  Map<String, int> _regionCounts(
-    List<Tournament> source,
-    String selectedSport,
-  ) {
-    final today = kstTodayDate(DateTime.now());
-    final counts = <String, int>{};
-    var nationwide = 0;
-    var total = 0;
-    for (final item in source) {
-      if (item.sport != selectedSport) continue;
-      if (item.startDate.isBefore(today)) continue;
-      if (item.isRegistrationClosed) continue;
-      total += 1;
-      final names = (item.region ?? '')
-          .split('·')
-          .map((part) => part.trim())
-          .where((part) => part.isNotEmpty);
-      // 전국대회는 지역 항목을 만들지 않고, 모든 지역의 개수에 더해진다.
-      if (names.isEmpty) {
-        nationwide += 1;
-        continue;
-      }
-      for (final name in names) {
-        counts[name] = (counts[name] ?? 0) + 1;
-      }
-    }
-    final names = counts.keys.toList()
-      ..sort((a, b) {
-        final byCount = counts[b]!.compareTo(counts[a]!);
-        return byCount != 0 ? byCount : a.compareTo(b);
-      });
-    // 보여줄 대회가 없으면 "전국 0" 대신 숫자 없는 "전국"만 남긴다.
-    if (total == 0) return const {};
-    // 지역을 골라도 전국대회는 함께 보이므로 개수에 포함한다. 포함하지 않으면
-    // "광주 7"을 눌렀는데 목록에 21개가 나오는 어긋남이 생긴다.
-    return {
-      _allRegions: total,
-      for (final name in names) name: counts[name]! + nationwide,
-    };
   }
 
   Future<void> _toggleFavorite(Tournament tournament, bool saved) async {
@@ -149,12 +92,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final gradeSummary = selectedSport == 'tennis'
         ? ref.watch(myGradeSummaryProvider).value
         : null;
-    final regionCounts = _regionCounts(source.value ?? const [], selectedSport);
-    // 종목을 바꾸면 이전 종목에만 있던 지역이 남을 수 있어 전국으로 되돌린다.
-    final selectedRegion = regionCounts.containsKey(_selectedRegion)
-        ? _selectedRegion
-        : _allRegions;
-
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
@@ -207,22 +144,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xxl,
-                AppSpacing.md,
-                AppSpacing.xxl,
-                0,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: _TournamentHomeControls(
-                  selectedRegion: selectedRegion,
-                  regionCounts: regionCounts,
-                  onRegionSelected: (value) =>
-                      setState(() => _selectedRegion = value),
-                ),
-              ),
-            ),
             source.when(
               loading: () => const _HomeTournamentSkeleton(
                 key: AllRoundE2EKeys.homeLoadingState,
@@ -241,11 +162,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               data: (items) {
-                final visible = _visibleTournaments(
-                  items,
-                  selectedSport,
-                  selectedRegion,
-                );
+                final visible = _visibleTournaments(items, selectedSport);
                 return SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.xxl,
@@ -547,104 +464,6 @@ class _Top10Progress extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _TournamentHomeControls extends StatelessWidget {
-  const _TournamentHomeControls({
-    required this.selectedRegion,
-    required this.regionCounts,
-    required this.onRegionSelected,
-  });
-
-  final String selectedRegion;
-  final Map<String, int> regionCounts;
-  final ValueChanged<String> onRegionSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    // 종목 버튼이 AppBar 타이틀로 올라가 이 줄에는 지역 선택만 남는다.
-    // 홈 검색창은 뒀다가 뺐다 — 받아둔 목록만 훑어 "있는 대회가 안 나오는"
-    // 결과를 만들었고, 검색은 전체보기(전체 대회 화면)의 서버 전수 검색이
-    // 담당하면 충분하기 때문이다.
-    final region = _HomeMenuButton(
-      icon: Icons.location_on_outlined,
-      label: selectedRegion,
-      values: {
-        _allRegions: _allRegions,
-        for (final entry in regionCounts.entries)
-          entry.key: '${entry.key} ${entry.value}',
-      },
-      selectedValue: selectedRegion,
-      onSelected: onRegionSelected,
-    );
-    // 큰 글씨에서는 라벨이 잘리지 않게 전폭을 쓰고, 평소에는 검색창과
-    // 나란히 있던 시절의 고정폭을 유지해 좌측에 둔다(전폭 버튼은 어색하다).
-    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
-    if (largeText) return region;
-    final compact = MediaQuery.sizeOf(context).width < 360;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: SizedBox(width: compact ? 108 : 120, child: region),
-    );
-  }
-}
-
-class _HomeMenuButton extends StatelessWidget {
-  const _HomeMenuButton({
-    required this.icon,
-    required this.label,
-    required this.values,
-    required this.selectedValue,
-    required this.onSelected,
-    this.emphasized = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final Map<String, String> values;
-  final String selectedValue;
-  final ValueChanged<String> onSelected;
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return PopupMenuButton<String>(
-      initialValue: selectedValue,
-      onSelected: onSelected,
-      itemBuilder: (_) => [
-        for (final entry in values.entries)
-          PopupMenuItem(value: entry.key, child: Text(entry.value)),
-      ],
-      child: Container(
-        constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          border: Border.all(
-            color: emphasized ? cs.primary : cs.outlineVariant,
-            width: emphasized ? 1.5 : 1,
-          ),
-          borderRadius: AppRadius.card,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: emphasized ? cs.primary : null),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 19),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1102,7 +921,7 @@ class _TournamentListCard extends StatelessWidget {
   /// 배지에 넣을 지역 한 단어. 여러 지역 공동개최는 첫 지역만, 지역이 없는
   /// 대회(전국대회)는 '전국'으로 읽는다.
   String get _regionBadge {
-    // _regionCounts 와 같은 규칙: 빈 조각(선행 구분자 등)은 건너뛴다.
+    // 빈 조각(선행 구분자 등)은 건너뛴다.
     final region = (tournament.region ?? '')
         .split('·')
         .map((part) => part.trim())
