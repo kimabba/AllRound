@@ -25,18 +25,20 @@ on conflict (code) do update set
   sort_order = excluded.sort_order;
 
 -- 2) tennis_divisions — 전북 부서 사전 (파서의 mapDivisionsByDict 가 사용)
+-- is_ranking_grade: 개인이 자기 등급으로 속할 수 있는 부서만 true (온보딩 칩 노출).
+-- 금동배(금+동 통합 이벤트)·혼합복식·단체전·합산대회는 출전 종목 전용 → false.
 insert into public.tennis_divisions
-  (code, org_code, label_ko, synonyms, skill_tier, gender, age_min, champion_only, event_type, equiv_group) values
-  ('jb_m_dong',     'jb', '남자동배부',   '{남자동배부}',        'rookie',   'male',   null, false, 'doubles', null),
-  ('jb_m_geumeun',  'jb', '남자금은배부', '{남자금은배부}',      'advanced', 'male',   null, false, 'doubles', null),
-  ('jb_m_geumdong', 'jb', '남자금동배부', '{남자금동배부}',      null,       'male',   null, false, 'doubles', null),
-  ('jb_w_dong',     'jb', '여자동배부',   '{여자동배부}',        'rookie',   'female', null, false, 'doubles', null),
-  ('jb_w_geumeun',  'jb', '여자금은배부', '{여자금은배부}',      'advanced', 'female', null, false, 'doubles', null),
-  ('jb_gukhwa',     'jb', '국화부',       '{국화부}',            'advanced', 'female', null, false, 'doubles', null),
-  ('jb_mixed',      'jb', '혼합복식부',   '{혼합복식부,혼합복식}', null,      'mixed',  null, false, 'mixed',   null),
-  ('jb_team',       'jb', '단체전',       '{단체전}',            null,       'all',    null, false, 'team',    null),
-  ('jb_m_hapsan',   'jb', '남자합산대회', '{남자합산}',          null,       'male',   null, false, 'doubles', null),
-  ('jb_w_hapsan',   'jb', '여자합산대회', '{여자합산}',          null,       'female', null, false, 'doubles', null)
+  (code, org_code, label_ko, synonyms, skill_tier, gender, age_min, champion_only, event_type, equiv_group, is_ranking_grade) values
+  ('jb_m_dong',     'jb', '남자동배부',   '{남자동배부}',        'rookie',   'male',   null, false, 'doubles', null, true),
+  ('jb_m_geumeun',  'jb', '남자금은배부', '{남자금은배부}',      'advanced', 'male',   null, false, 'doubles', null, true),
+  ('jb_m_geumdong', 'jb', '남자금동배부', '{남자금동배부}',      null,       'male',   null, false, 'doubles', null, false),
+  ('jb_w_dong',     'jb', '여자동배부',   '{여자동배부}',        'rookie',   'female', null, false, 'doubles', null, true),
+  ('jb_w_geumeun',  'jb', '여자금은배부', '{여자금은배부}',      'advanced', 'female', null, false, 'doubles', null, true),
+  ('jb_gukhwa',     'jb', '국화부',       '{국화부}',            'advanced', 'female', null, false, 'doubles', null, true),
+  ('jb_mixed',      'jb', '혼합복식부',   '{혼합복식부,혼합복식}', null,      'mixed',  null, false, 'mixed',   null, false),
+  ('jb_team',       'jb', '단체전',       '{단체전}',            null,       'all',    null, false, 'team',    null, false),
+  ('jb_m_hapsan',   'jb', '남자합산대회', '{남자합산}',          null,       'male',   null, false, 'doubles', null, false),
+  ('jb_w_hapsan',   'jb', '여자합산대회', '{여자합산}',          null,       'female', null, false, 'doubles', null, false)
 on conflict (code) do update set
   org_code = excluded.org_code,
   label_ko = excluded.label_ko,
@@ -46,7 +48,8 @@ on conflict (code) do update set
   age_min = excluded.age_min,
   champion_only = excluded.champion_only,
   event_type = excluded.event_type,
-  equiv_group = excluded.equiv_group;
+  equiv_group = excluded.equiv_group,
+  is_ranking_grade = excluded.is_ranking_grade;
 
 -- 3) crawl_sources — 전북 대회일정 게시판 (parser_module = registry 키)
 -- enabled=false 초기값 — KATO 선례. 배포·라이브 검증(force 크롤로 draft 수집 확인) 후
