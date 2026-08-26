@@ -1,7 +1,11 @@
 import { requireServiceRoleOrAdmin } from '../_shared/auth.ts';
 import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { serviceClient } from '../_shared/supabase.ts';
-import { GEMINI_MODEL, generateStructured } from '../_shared/gemini.ts';
+import {
+  GEMINI_MODEL,
+  generateStructured,
+  generateStructuredWithImage,
+} from '../_shared/gemini.ts';
 import { capRegulationBody, normalizeRegulationFields } from '../_shared/regulation.ts';
 import {
   mergeRegulationDocuments,
@@ -16,10 +20,21 @@ import {
 import { isKatoSource, parseKatoRegulation } from '../_shared/crawler/parsers/kato_regulation.ts';
 import {
   extractPlainText,
+  type FormatFlag,
   type RegulationResult,
   RESPONSE_SCHEMA,
   verifyAgainstSource,
 } from './logic.ts';
+import {
+  appendPosterSection,
+  extractPosterFields,
+  fetchPosterImage,
+  POSTER_RESPONSE_SCHEMA,
+  type PosterExtraction,
+  posterFlags,
+  type PosterStageDeps,
+  posterTargetsMissing,
+} from './poster.ts';
 
 const BATCH_SIZE = 4;
 const LEASE_MINUTES = 15;
@@ -80,6 +95,33 @@ Deno.serve(withCors(async (req) => {
     status: string;
     formatted_at: string | null;
   }>;
+
+  // 포스터 보완 단계(P6) 판정용 부가 정보. claim RPC 반환에 없어서 따로 읽는다.
+  interface PosterExtra {
+    id: string;
+    poster_url: string | null;
+    entry_fee: number | null;
+    location: string | null;
+    poster_vision_at: string | null;
+  }
+  const posterExtras = new Map<string, PosterExtra>();
+  if (rows.length > 0) {
+    const { data: extraRows, error: extraErr } = await supabase
+      .from('tournaments')
+      .select('id, poster_url, entry_fee, location, poster_vision_at')
+      .in('id', rows.map((r) => r.tournament_id));
+    // 실패해도 배치 자체는 계속한다(포스터 단계만 건너뜀) — 관측용 로그만 남긴다.
+    if (extraErr) console.error('poster extras select failed:', extraErr.message);
+    for (const row of (extraRows ?? []) as PosterExtra[]) posterExtras.set(row.id, row);
+  }
+  const posterDeps: PosterStageDeps = {
+    fetchImage: (url) => fetchPosterImage(url),
+    generate: (prompt, image) =>
+      generateStructuredWithImage<PosterExtraction>(prompt, image, POSTER_RESPONSE_SCHEMA, {
+        maxOutputTokens: 1024,
+      }),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
 
   for (const c of rows) {
     try {
@@ -153,8 +195,8 @@ Deno.serve(withCors(async (req) => {
       const deterministicDocument = katoRegulation
         ? regulationDocumentFromLegacy(katoRegulation.fields, katoRegulation.notes)
         : null;
-      const document = mergeRegulationDocuments(deterministicDocument, aiDocument);
-      const fields = normalizeRegulationFields(regulationDocumentToFields(document));
+      let document = mergeRegulationDocuments(deterministicDocument, aiDocument);
+      let fields = normalizeRegulationFields(regulationDocumentToFields(document));
       const effective: RegulationResult = {
         regulation_fields: regulationDocumentVerificationFields(document),
         regulation_notes: regulationDocumentToNotes(document),
@@ -178,8 +220,40 @@ Deno.serve(withCors(async (req) => {
         continue;
       }
 
+      // ── 포스터 보완 단계 (P6) ──
+      // 원문 텍스트에서 참가비/장소가 확보되지 않았고 포스터가 있으면 이미지에서
+      // 보충 추출한다. 원문 대조(verifyAgainstSource)를 통과한 문서에만 덧붙인다 —
+      // 포스터 항목은 대조가 불가능하므로 verdict 이후에 붙이고, 아래에서 스테이징을
+      // 강제해 검수함(needs_review) 경유로만 반영한다.
+      let posterFlagList: FormatFlag[] = [];
+      const extra = posterExtras.get(c.tournament_id);
+      if (
+        extra?.poster_url && !extra.poster_vision_at &&
+        posterTargetsMissing(fields, extra.entry_fee, extra.location)
+      ) {
+        const poster = await extractPosterFields(posterDeps, c.title, extra.poster_url);
+        // 대회당 1회 호출 보장: 성공/실패와 무관하게 시도를 기록해 재큐 시 재호출을 막는다.
+        const { error: markErr } = await supabase
+          .from('tournaments')
+          .update({ poster_vision_at: new Date().toISOString() })
+          .eq('id', c.tournament_id);
+        if (markErr) result.errors.push(`poster mark ${c.tournament_id}: ${markErr.message}`);
+        if (poster.ok && poster.entries.length > 0) {
+          document = appendPosterSection(document, poster.entries);
+          fields = normalizeRegulationFields(regulationDocumentToFields(document));
+          effective.regulation_notes = regulationDocumentToNotes(document);
+          effective.regulation_body = regulationDocumentToBody(document);
+          posterFlagList = posterFlags(poster.entries);
+        } else if (!poster.ok) {
+          result.errors.push(`poster ${c.tournament_id}: ${poster.reason}`);
+        }
+      }
+
       // 스테이징 판정: 이미 노출 중(published/closed)인데 최초 정형화면 검수 스테이징.
-      const stage = (c.status === 'published' || c.status === 'closed') && c.formatted_at === null;
+      // 포스터 추출이 섞였으면 원문 대조가 불가능하므로 **무조건** 스테이징한다.
+      const stage = ((c.status === 'published' || c.status === 'closed') &&
+        c.formatted_at === null) || posterFlagList.length > 0;
+      const allFlags = [...verdict.flags, ...posterFlagList];
       const { error: compErr } = await supabase.rpc('format_pending_complete_v2', {
         p_tid: c.tournament_id,
         p_token: c.claim_token,
@@ -194,7 +268,7 @@ Deno.serve(withCors(async (req) => {
         p_format: effective.format || null,
         p_description: effective.description || null,
         p_model: GEMINI_MODEL,
-        p_flags: verdict.flags.length ? verdict.flags : null,
+        p_flags: allFlags.length ? allFlags : null,
         p_stage: stage,
       });
       if (compErr) {
