@@ -39,6 +39,11 @@ const KBS: Array<{ json: string; seed: string; org: string }> = [
     seed: '../../migrations/20260713042834_seed_kato_divisions.sql',
     org: 'kato',
   },
+  {
+    json: '../../../docs/kb/grades/jb.divisions.json',
+    seed: '../../migrations/20260826050000_seed_jb_divisions.sql',
+    org: 'jb',
+  },
 ];
 
 for (const kb of KBS) {
@@ -81,7 +86,7 @@ for (const kb of KBS) {
     const seedLines = seed.split('\n');
 
     // seed 의 INSERT value 행 수 == JSON 부서 수 (양방향).
-    const seedCodeMatches = seed.match(/\(\s*'kato_[a-z0-9_]+'/g) ?? [];
+    const seedCodeMatches = seed.match(new RegExp(`\\(\\s*'${kb.org}_[a-z0-9_]+'`, 'g')) ?? [];
     assertEquals(
       seedCodeMatches.length,
       data.divisions.length,
