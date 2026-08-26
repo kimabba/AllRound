@@ -205,6 +205,41 @@ Deno.test('verifyAgainstSource: 라벨에 "계좌"가 함께 있으면 임원 �
   assertEquals(r.ok, false);
 });
 
+Deno.test('verifyAgainstSource: 계좌류 라벨("입금 안내")의 전화 모양 계좌는 여전히 검증됨', () => {
+  // 휴대폰 평생계좌처럼 010 번호 자체가 계좌인 실사례 — 라벨의 입금/납부/송금/통장
+  // 키워드가 CONTACT_LABEL('안내')보다 우선해야 한다(검증 완화 회귀 방지).
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '입금 안내', value: 'IBK 010-9999-8888' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, false);
+  assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === '입금 안내'));
+});
+
+Deno.test('verifyAgainstSource: 임원 직책 라벨이라도 값에 계좌류 키워드가 있으면 전화 모양도 검증됨', () => {
+  // 실측 사례: label "총무", value "기업은행 계좌 010-…" — 값의 계좌 키워드가 제외를 무효화.
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  const r = verifyAgainstSource({
+    regulation_fields: [{ label: '총무', value: '기업은행 계좌 010-1234-5678' }],
+    regulation_notes: [],
+    regulation_body: '',
+    prize: '',
+    format: '',
+    description: '',
+    confidence: 0.9,
+    unusual: false,
+  }, src);
+  assertEquals(r.ok, false);
+  assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === '총무'));
+});
+
 Deno.test('verifyAgainstSource: prize의 지어낸 상금도 원문 대조 flag (검증 우회 방지)', () => {
   // 참고: '30만원' 같은 한글 단위 금액은 sensitiveTokens가 추출하지 않는 기존 한계
   // (전 필드 공통, HANDOFF §3 보류 항목) — 여기서는 숫자원 표기로 배선 자체를 검증.

@@ -59,9 +59,10 @@ function digitsOnly(s: string): string {
 const CONTACT_LABEL =
   /문의|연락|전화|담당|사무국|contact|tel|이사|총무|재무|사무장|감독관|회장|본부석|안내/i;
 // CONTACT_LABEL이 '안내'처럼 넓은 단어를 포함해 라벨만으로는 과잉 매칭될 수 있으므로
-// (예: "입금계좌 안내"), 라벨에 '계좌'가 함께 있으면 문의처 라벨로 취급하지 않는다.
-// 계좌 검증이 항상 우선한다(검증 완화 금지 결정, 7월).
-const ACCOUNT_LABEL_HINT = /계좌/;
+// (예: "입금계좌 안내", "납부 안내"), 계좌류 키워드가 라벨이나 값에 함께 있으면
+// 문의처 필드로 취급하지 않는다. 전화번호 모양 계좌(휴대폰 평생계좌 등)도 있어
+// 값 형태 가드만으로는 부족하다. 계좌 검증이 항상 우선한다(검증 완화 금지 결정, 7월).
+const ACCOUNT_HINT = /계좌|통장|입금|납부|송금/;
 
 // 위 라벨 확장이 실제 계좌 값을 가리는 일이 없도록, 라벨이 매칭돼도 값이 전화번호
 // 형태(0으로 시작하는 9~11자리)일 때만 대조를 제외한다. 국내 계좌번호는 보통 0으로
@@ -88,8 +89,10 @@ export function verifyAgainstSource(
     ? [...result.regulation_fields, { label: '시상', value: result.prize }]
     : result.regulation_fields;
   for (const f of checked) {
-    // 문의처/전화/임원 직책 라벨이면서 '계좌'가 라벨에 없을 때만 대조 제외 후보.
-    const isContactField = CONTACT_LABEL.test(f.label) && !ACCOUNT_LABEL_HINT.test(f.label);
+    // 문의처/전화/임원 직책 라벨이면서 계좌류 키워드가 라벨·값 어디에도 없을 때만 대조 제외 후보.
+    // (예: label "총무", value "기업은행 계좌 010-…" 같은 전화 모양 계좌를 가리지 않기 위함)
+    const isContactField = CONTACT_LABEL.test(f.label) &&
+      !ACCOUNT_HINT.test(f.label) && !ACCOUNT_HINT.test(f.value);
     for (const tok of sensitiveTokens(f.value)) {
       const d = digitsOnly(tok);
       if (d.length === 0) continue;
