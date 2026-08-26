@@ -200,6 +200,16 @@ export function parseKatoDetail(
   return { title, location, organizer, entryFee, posterUrl };
 }
 
+export function katoCanonicalContent(
+  html: string,
+  detail: KatoDetailFields,
+): string {
+  return JSON.stringify({
+    detail,
+    regulation: parseKatoRegulation(html),
+  });
+}
+
 // =============================================================================
 // listing 컨텐츠 해시 (서버 ETag 없을 때 변경 감지용)
 // =============================================================================
@@ -322,7 +332,7 @@ export const katoOpenListParser: ParserFn = async (
           ctx.audit,
           'tennis',
           buildTournament(item, detail, dict, source.region),
-          html,
+          { rawHtml: html, canonicalContent: katoCanonicalContent(html, detail) },
         );
       } else {
         ctx.audit.fetched++;

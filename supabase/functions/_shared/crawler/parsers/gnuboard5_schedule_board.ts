@@ -449,7 +449,10 @@ export const gnuboard5ScheduleBoardParser: ParserFn = async (
           ctx.audit,
           'tennis',
           buildTournament(item, detail, dict, source.region),
-          html,
+          {
+            rawHtml: html,
+            canonicalContent: JSON.stringify(detail),
+          },
         );
       } else {
         // 파싱 가드 미통과: 원본을 failed 로 보관해 파서 수정 후 재처리 가능하게 한다.

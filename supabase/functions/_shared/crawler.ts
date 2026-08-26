@@ -27,6 +27,16 @@ export interface CrawlerTournament {
   source_url: string;
 }
 
+/**
+ * rawHtml은 재처리·감사용 원본이고 canonicalContent는 변경 감지 전용 본문이다.
+ * 페이지 조회수·광고·세션 토큰처럼 대회 내용과 무관한 HTML은 canonicalContent에
+ * 넣지 않는다. 파서가 본문 경계를 가장 정확히 알기 때문에 파서가 직접 만든다.
+ */
+export interface CrawlerDocument {
+  rawHtml: string;
+  canonicalContent: string;
+}
+
 export interface AuditHandle {
   id: string;
   source: string;
@@ -78,6 +88,11 @@ async function sha256Hex(text: string): Promise<string> {
     .join('');
 }
 
+export async function crawlerDocumentHash(document: CrawlerDocument): Promise<string> {
+  const normalized = document.canonicalContent.replace(/\s+/g, ' ').trim();
+  return `v2:${await sha256Hex(normalized)}`;
+}
+
 export async function saveRawDocument(
   audit: AuditHandle,
   sourceUrl: string,
@@ -85,8 +100,11 @@ export async function saveRawDocument(
   tournamentId: string | null,
   parseStatus: 'parsed' | 'failed' | 'pending' = 'parsed',
   parseError?: string,
+  canonicalContent?: string,
 ): Promise<void> {
-  const contentHash = await sha256Hex(rawHtml);
+  const contentHash = canonicalContent === undefined
+    ? await sha256Hex(rawHtml)
+    : await crawlerDocumentHash({ rawHtml, canonicalContent });
   // 파싱 실패 등으로 tournamentId 가 없을 때, 같은 게시글이 과거에 파싱 성공해
   // 연결돼 있었다면 그 연결(tournament_id)을 끊지 않도록 기존 값을 보존한다.
   // (일시적 파싱 실패가 멀쩡한 대회와의 링크를 지우는 데이터 손상 방지)
@@ -148,7 +166,7 @@ export async function upsertTournament(
   audit: AuditHandle,
   sport: Sport,
   t: CrawlerTournament,
-  rawHtml?: string,
+  document?: CrawlerDocument,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
   // region_code 는 서버사이드 지역 필터(정확매칭)의 키다. 두 출처를 구분해서 다룬다.
@@ -221,11 +239,11 @@ export async function upsertTournament(
     // 필요하다 — 드문 경우라 지금은 두고, 검수에서 바로잡는다.
     if (labelCode) updatePayload.region_code = labelCode;
     else if (guessedCode && !existing.region_code) updatePayload.region_code = guessedCode;
-    // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
-    // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
-    // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
-    if (rawHtml) {
-      const newHash = await sha256Hex(rawHtml);
+    // 재크롤 재큐(P2 AI 정형화 파이프라인): 대회 본문 content_hash 가 마지막 정형화
+    // 시점의 format_source_hash 와 달라졌으면 실제 요강이 바뀐 것이므로 AI 재정형화
+    // 대상으로 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
+    if (document) {
+      const newHash = await crawlerDocumentHash(document);
       // 원문이 같아도 파서 개선으로 장소 추출값이 달라질 수 있다. 이런 경우 기존
       // format_staged를 그대로 두지 않고 새 파서 결과로 다시 정형화한다.
       const parserLocationChanged = existing.location !== (t.location ?? null);
@@ -255,7 +273,17 @@ export async function upsertTournament(
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
-    if (rawHtml) await saveRawDocument(audit, t.source_url, rawHtml, existing.id, 'parsed');
+    if (document) {
+      await saveRawDocument(
+        audit,
+        t.source_url,
+        document.rawHtml,
+        existing.id,
+        'parsed',
+        undefined,
+        document.canonicalContent,
+      );
+    }
     audit.updated++;
     return 'updated';
   }
@@ -285,13 +313,21 @@ export async function upsertTournament(
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',
-      format_status: rawHtml ? 'pending' : 'skipped',
+      format_status: document ? 'pending' : 'skipped',
     })
     .select('id')
     .single();
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
-  if (rawHtml) {
-    await saveRawDocument(audit, t.source_url, rawHtml, insertedRow?.id ?? null, 'parsed');
+  if (document) {
+    await saveRawDocument(
+      audit,
+      t.source_url,
+      document.rawHtml,
+      insertedRow?.id ?? null,
+      'parsed',
+      undefined,
+      document.canonicalContent,
+    );
   }
   audit.inserted++;
   return 'inserted';

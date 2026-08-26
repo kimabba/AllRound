@@ -10,7 +10,12 @@
 // saveRawDocument 경로를 타지 않아 read/update 체인만 모킹하면 충분)
 
 import { assert, assertEquals } from 'std/assert/mod.ts';
-import { type AuditHandle, type CrawlerTournament, upsertTournament } from '../_shared/crawler.ts';
+import {
+  type AuditHandle,
+  crawlerDocumentHash,
+  type CrawlerTournament,
+  upsertTournament,
+} from '../_shared/crawler.ts';
 
 type Row = Record<string, unknown>;
 
@@ -210,13 +215,40 @@ Deno.test('upsert: 재크롤로 content_hash 바뀌면 format_status=pending 재
     eligible_grades: [],
     source_url: 'https://x/1',
   };
-  await upsertTournament(audit, 'tennis', t, '<html>바뀐 원문</html>');
+  await upsertTournament(audit, 'tennis', t, {
+    rawHtml: '<html>바뀐 원문</html>',
+    canonicalContent: '바뀐 대회 본문',
+  });
   const p = captured[0].payload;
   assertEquals(p.format_status, 'pending');
   assertEquals(p.format_claim_token, null);
   assertEquals(p.claimed_at, null);
   // 큐 조건이 format_attempts < 3 이라, 리셋하지 않으면 pending 인 채로 영영 안 집힌다.
   assertEquals(p.format_attempts, 0);
+});
+
+Deno.test('content hash: 조회수 등 원본 HTML만 바뀌면 같은 해시를 유지한다', async () => {
+  const first = await crawlerDocumentHash({
+    rawHtml: '<span>조회 10</span><main>대회 요강</main>',
+    canonicalContent: '대회 요강',
+  });
+  const second = await crawlerDocumentHash({
+    rawHtml: '<span>조회 11</span><main>대회 요강</main>',
+    canonicalContent: '대회 요강',
+  });
+  assertEquals(first, second);
+});
+
+Deno.test('content hash: 정규화한 대회 본문이 바뀌면 새 해시가 된다', async () => {
+  const first = await crawlerDocumentHash({
+    rawHtml: '<main>장소 A</main>',
+    canonicalContent: '장소 A',
+  });
+  const second = await crawlerDocumentHash({
+    rawHtml: '<main>장소 B</main>',
+    canonicalContent: '장소 B',
+  });
+  assert(first !== second);
 });
 
 Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정형화 대기', async () => {
@@ -233,7 +265,10 @@ Deno.test('upsert: 원문이 같아도 파서 장소 결과가 바뀌면 재정�
       ...BASE_TOURNAMENT,
       location: '공주시립테니스코트 외 3곳',
     },
-    '<html>동일한 원문</html>',
+    {
+      rawHtml: '<html>동일한 원문</html>',
+      canonicalContent: '동일한 대회 본문',
+    },
   );
 
   const p = captured[0].payload;
