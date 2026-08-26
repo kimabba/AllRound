@@ -8,5 +8,6 @@
   {"code": "kasta", "label": "단식 테니스 (KASTA / 단테매)", "shortLabel": "KASTA", "isActive": true},
   {"code": "gj", "label": "광주광역시테니스협회 (GJTA)", "shortLabel": "광주협회", "isActive": true},
   {"code": "jn", "label": "전라남도테니스협회 (JNTA)", "shortLabel": "전남협회", "isActive": true},
+  {"code": "jb", "label": "전북특별자치도테니스협회 (JBSTA)", "shortLabel": "전북협회", "isActive": true},
   {"code": "local", "label": "시·군 또는 클럽 자체", "shortLabel": "시·군/클럽", "isActive": true}
 ]

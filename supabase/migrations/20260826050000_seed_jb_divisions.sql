@@ -8,15 +8,21 @@
 -- 전제: 20260710030000_regions_17sido_crawl_source_cols.sql (regions 'jeonbuk' 존재, FK)
 
 -- 1) tennis_orgs — 전북 협회 등록 (기존 20260710020000 시드에 없음)
-insert into public.tennis_orgs (code, name_ko, short_label, org_type, region_code, division_scheme, is_active) values
-  ('jb', '전북특별자치도테니스협회', 'JBSTA', 'sido', 'jeonbuk', 'jb_medal', true)
+-- label_ko/short_label/sort_order 는 표시 정본(JY-135). sort_order 95 = 전남(90)과
+-- 시·군/클럽(100) 사이. 이 값은 app/test/fixtures/org_fallback.json 스냅샷·Dart 폴백과
+-- check_org_parity.py + Flutter 스냅샷 테스트로 일치가 강제된다.
+insert into public.tennis_orgs
+  (code, name_ko, label_ko, short_label, org_type, region_code, division_scheme, is_active, sort_order) values
+  ('jb', '전북특별자치도테니스협회', '전북특별자치도테니스협회 (JBSTA)', '전북협회', 'sido', 'jeonbuk', 'jb_medal', true, 95)
 on conflict (code) do update set
   name_ko = excluded.name_ko,
+  label_ko = excluded.label_ko,
   short_label = excluded.short_label,
   org_type = excluded.org_type,
   region_code = excluded.region_code,
   division_scheme = excluded.division_scheme,
-  is_active = excluded.is_active;
+  is_active = excluded.is_active,
+  sort_order = excluded.sort_order;
 
 -- 2) tennis_divisions — 전북 부서 사전 (파서의 mapDivisionsByDict 가 사용)
 insert into public.tennis_divisions
