@@ -7,6 +7,7 @@ import 'package:allround/screens/rankings/rankings_screen.dart';
 import 'package:allround/services/api.dart';
 import 'package:allround/state/providers.dart';
 import 'package:allround/theme/app_theme.dart';
+import 'package:allround/widgets/app_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -267,8 +268,8 @@ void main() {
     expect(find.text('이기영'), findsOneWidget);
   });
 
-  // 부서당 최대 871행(광주 남자일반부) — 행 전체를 한 번에 빌드하면 카드·
-  // 아바타 871개가 동시에 만들어진다. RankingList 가 SliverList 로 지연
+  // 부서당 최대 871행(광주 남자일반부) — 행 전체를 한 번에 빌드하면 카드
+  // 871개가 동시에 만들어진다. RankingList 가 SliverList 로 지연
   // 빌드하는지 여기서 확인한다(위젯테스트 기본 뷰포트 600px 기준).
   testWidgets('행이 많아도 화면에 보이는 행만 빌드된다 (지연 렌더링)', (tester) async {
     final manyRows = [
@@ -280,8 +281,8 @@ void main() {
       RankingList(rows: manyRows, linkedOrgPlayerId: null),
     );
 
-    // 행마다 아바타가 하나씩 붙으므로 빌드된 행 수와 정확히 일치한다.
-    final builtRows = find.byType(CircleAvatar).evaluate().length;
+    // 행마다 카드(AppCard)가 하나씩이므로 빌드된 행 수와 정확히 일치한다.
+    final builtRows = find.byType(AppCard).evaluate().length;
     expect(builtRows, greaterThan(0));
     expect(builtRows, lessThan(manyRows.length));
     // 뷰포트에 다 안 들어가는 500행 중 소수만 빌드된다는 게 핵심 —
@@ -331,7 +332,9 @@ void main() {
     expect(find.byKey(const ValueKey('ranking-row-mine')), findsOneWidget);
   });
 
-  testWidgets('순위표 각 행에 아바타가 보인다 (탭 대상이 시각적으로 드러나야 한다)', (tester) async {
+  // 이름 첫 글자 원형 아바타는 정보가 없는 장식이라 제거했다(kimabba 결정
+  // 2026-08-26). 소속은 협회 원문('어등산/')이 아니라 다듬은 라벨로 보여준다.
+  testWidgets('행에 아바타는 없고, 소속은 꼬리 슬래시 없이 표시된다', (tester) async {
     await _pumpRankingList(
       tester,
       RankingList(
@@ -343,19 +346,10 @@ void main() {
       ),
     );
 
-    expect(find.byType(CircleAvatar), findsNWidgets(2));
-  });
-
-  testWidgets('이름이 공백뿐이면 아바타 이니셜이 물음표로 대체된다', (tester) async {
-    await _pumpRankingList(
-      tester,
-      RankingList(
-        rows: [_row(rank: 1, name: '  ', points: 100, orgPlayerId: 'a')],
-        linkedOrgPlayerId: null,
-      ),
-    );
-
-    expect(find.text('?'), findsOneWidget);
+    expect(find.byType(CircleAvatar), findsNothing);
+    // _row 의 clubRaw 는 협회 원문 그대로 '어등산/' — 화면에는 '어등산'만.
+    expect(find.text('어등산'), findsNWidgets(2));
+    expect(find.text('어등산/'), findsNothing);
   });
 
   testWidgets('선수 행을 누르면 대회 이력을 보여준다', (tester) async {
