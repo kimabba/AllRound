@@ -15,6 +15,7 @@
 //   하나로 처리. 옛 'tennis-gwangju-board' / 'tennis-jeonnam-board' / 'tennis-korea-board'
 //   parser 와 thin wrapper edge functions 제거 (migration 024 참고).
 
+import { gnuboard5ScheduleBoardParser } from './parsers/gnuboard5_schedule_board.ts';
 import { gnuboardRankingParser } from './parsers/gnuboard_ranking.ts';
 import { gnuboardSub5_5ContestParser } from './parsers/gnuboard_sub5_5_contest.ts';
 import { katoOpenListParser } from './parsers/kato_openlist.ts';
@@ -23,6 +24,7 @@ import type { ParserFn } from './types.ts';
 
 export const PARSER_REGISTRY: Record<string, ParserFn> = {
   'gnuboard-sub5-5-contest': gnuboardSub5_5ContestParser,
+  'gnuboard5-schedule-board': gnuboard5ScheduleBoardParser,
   'kato-openlist': katoOpenListParser,
   'gnuboard-ranking': gnuboardRankingParser,
   'kta-sportsforall': ktaSportsForAllParser,
