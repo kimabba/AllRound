@@ -5,6 +5,7 @@
 import { assert, assertEquals } from 'std/assert/mod.ts';
 import {
   buildTournament,
+  katoCanonicalContent,
   type KatoDetailFields,
   type KatoListItem,
   parseKatoDetail,
@@ -78,6 +79,18 @@ const DETAIL_HTML = `
   <tr><td>주 관</td><td colspan="2">(사)한국테니스발전협의회(KATO)</td></tr>
   <tr><td>참가비</td><td colspan="2">개인복식 팀당 64,000원 [팀당 4천원 - 꿈나무육성기금]</td></tr>
 </table>`;
+
+Deno.test('KATO canonical content: 조회수만 바뀌면 변경으로 보지 않는다', () => {
+  const firstHtml = `${DETAIL_HTML}<span class="view-count">조회 10</span>`;
+  const secondHtml = `${DETAIL_HTML}<span class="view-count">조회 11</span>`;
+  const firstDetail = parseKatoDetail(firstHtml, '힌트제목') as KatoDetailFields;
+  const secondDetail = parseKatoDetail(secondHtml, '힌트제목') as KatoDetailFields;
+
+  assertEquals(
+    katoCanonicalContent(firstHtml, firstDetail),
+    katoCanonicalContent(secondHtml, secondDetail),
+  );
+});
 
 Deno.test('parseKatoDetail: group-title·장소·주최·참가비 추출 (전각공백 라벨)', () => {
   const d = parseKatoDetail(DETAIL_HTML, '힌트제목') as KatoDetailFields;
