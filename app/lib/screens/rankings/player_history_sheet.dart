@@ -5,6 +5,7 @@ import '../../models/org_ranking.dart';
 import '../../models/org_ranking_snapshot.dart';
 import '../../models/player_result.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_label.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/rankings/rank_trend_sparkline.dart';
 
@@ -129,7 +130,8 @@ class _PlayerSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final club = player.clubRaw?.replaceAll('/', '').trim();
+    // 원문의 '/' 구분·빈 꼬리를 표시용으로 다듬는다 — 순위표 행과 같은 규칙.
+    final club = clubLabel(player.clubRaw);
 
     return Container(
       width: double.infinity,

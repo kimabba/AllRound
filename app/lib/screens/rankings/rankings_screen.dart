@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/org_ranking.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../utils/club_label.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/tournament_section_bar.dart';
@@ -205,12 +206,8 @@ class _RankingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    // 랭킹표는 협회 크롤 데이터라 프로필 사진이 없다 — 클럽 멤버 리스트와 같은
-    // 이니셜 폴백을 쓴다(app/lib/screens/clubs/club_detail_screen.dart 의
-    // CircleAvatar 패턴과 동일).
-    final trimmedName = row.playerName.trim();
-    final initial =
-        trimmedName.characters.isEmpty ? '?' : trimmedName.characters.first;
+    // 원문(clubRaw)은 '어등산/' 처럼 협회 표기 그대로다 — 표시할 때만 다듬는다.
+    final club = clubLabel(row.clubRaw);
     return AppCard(
       key: isMine ? const ValueKey('ranking-row-mine') : null,
       variant: AppCardVariant.outlined,
@@ -224,19 +221,6 @@ class _RankingRow extends StatelessWidget {
         children: [
           SizedBox(
               width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
-          const SizedBox(width: AppSpacing.sm),
-          CircleAvatar(
-            // 내 행은 카드 배경 자체가 primaryContainer 라, 아바타도 같은 색이면
-            // 원이 배경에 묻혀 안 보인다 — 내 행일 때는 surface 로 대비를 준다.
-            backgroundColor: isMine ? cs.surface : cs.primaryContainer,
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: isMine ? cs.primary : cs.onPrimaryContainer,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -249,9 +233,9 @@ class _RankingRow extends StatelessWidget {
                   style:
                       tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                if (row.clubRaw != null && row.clubRaw!.isNotEmpty)
+                if (club != null)
                   Text(
-                    row.clubRaw!,
+                    club,
                     style:
                         tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
@@ -314,10 +298,9 @@ class _RankingTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // 행의 순위 칸(고정폭 32) + 이름 앞 간격(md)과 정렬을 맞춘다.
           SizedBox(width: 32, child: Text('순위', style: style)),
-          const SizedBox(width: AppSpacing.sm),
-          // 행의 아바타(지름 40) + 이름 앞 간격(md)과 정렬을 맞춘다.
-          const SizedBox(width: 40 + AppSpacing.md),
+          const SizedBox(width: AppSpacing.md),
           Expanded(child: Text('선수 · 소속', style: style)),
           Text('누적 포인트', style: style),
         ],
@@ -617,8 +600,8 @@ class RankingClaimPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = candidate.clubRaw?.replaceAll('/', '').trim();
-    final clubSuffix = (club != null && club.isNotEmpty) ? '($club)' : '';
+    final club = clubLabel(candidate.clubRaw);
+    final clubSuffix = club != null ? '($club)' : '';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
