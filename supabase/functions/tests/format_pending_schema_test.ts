@@ -1,5 +1,5 @@
 import { assert } from 'std/assert/mod.ts';
-import { RESPONSE_SCHEMA } from '../format-pending/logic.ts';
+import { buildRegulationPrompt, RESPONSE_SCHEMA } from '../format-pending/logic.ts';
 
 /**
  * Gemini 는 response_schema 의 enum 값을 문자열로만 받는다. 숫자가 하나라도 있으면
@@ -31,4 +31,11 @@ Deno.test('format-pending 응답 스키마의 enum 값은 전부 문자열이다
       );
     }
   }
+});
+
+Deno.test('등급·부서별 참가 자격은 비교 표로 정리하도록 지시한다', () => {
+  const prompt = buildRegulationPrompt('테스트 대회', '원본 요강');
+  assert(prompt.includes('등급·부서별 참가 자격'));
+  assert(prompt.includes('paragraph로 합치지 말고 table'));
+  assert(prompt.includes('출전 기준'));
 });

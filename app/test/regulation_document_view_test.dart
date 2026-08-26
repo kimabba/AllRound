@@ -238,6 +238,82 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('참가 자격 key-value는 기준과 내용을 나란히 비교한다', (tester) async {
+    final document = RegulationDocument.tryFromJson({
+      'schema_version': 1,
+      'sections': [
+        {
+          'code': 'eligibility',
+          'availability': 'present',
+          'blocks': [
+            {
+              'type': 'key_values',
+              'entries': [
+                {'label': '개나리부', 'value': 'KATO 1.0~2.0 등급'},
+                {'label': '국화부', 'value': 'KATO 3.0 이상'},
+              ],
+            },
+          ],
+        },
+      ],
+    })!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RegulationDocumentView(document: document),
+        ),
+      ),
+    );
+
+    expect(find.byType(Table), findsOneWidget);
+    expect(find.text('개나리부'), findsOneWidget);
+    expect(find.text('KATO 1.0~2.0 등급'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('개나리부')).dx,
+      lessThan(tester.getTopLeft(find.text('KATO 1.0~2.0 등급')).dx),
+    );
+  });
+
+  testWidgets('기존 부서별 일정·장소 평문도 비교 표로 바꿔 표시한다', (tester) async {
+    final document = RegulationDocument.tryFromJson({
+      'schema_version': 1,
+      'sections': [
+        {
+          'code': 'schedule_venue',
+          'availability': 'present',
+          'blocks': [
+            {
+              'type': 'key_values',
+              'entries': [
+                {
+                  'label': '부서별 일정·장소',
+                  'value':
+                      '개나리부(서산,태안) · 2026년 08월 07일 (금) 09:00 · 서산종합운동장\n국화부 · 2026년 08월 08일 (토) 10:00 · 공주시립코트',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RegulationDocumentView(document: document),
+        ),
+      ),
+    );
+
+    for (final heading in ['부서', '일정', '지역', '장소']) {
+      expect(find.text(heading), findsOneWidget);
+    }
+    expect(find.text('개나리부'), findsOneWidget);
+    expect(find.text('서산·태안'), findsOneWidget);
+    expect(find.text('서산종합운동장'), findsOneWidget);
+  });
+
   testWidgets('320px·200% 글자에서도 긴 표와 부서별 정보가 오버플로우하지 않는다', (tester) async {
     tester.view.physicalSize = const Size(320, 900);
     tester.view.devicePixelRatio = 1;

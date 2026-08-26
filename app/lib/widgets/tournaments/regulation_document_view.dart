@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/regulation_body_lines.dart';
 import '../../models/regulation_document.dart';
+import '../../models/tournament_schedule.dart';
 import '../../theme/tokens.dart';
 
 enum _RegulationTabKey {
@@ -397,6 +398,7 @@ class _RegulationSectionView extends StatelessWidget {
             if (index > 0) const SizedBox(height: AppSpacing.md),
             _RegulationBlockView(
               block: blocks[index],
+              sectionCode: section.code,
               hidePublicMetadata: hidePublicMetadata,
             ),
           ],
@@ -408,10 +410,12 @@ class _RegulationSectionView extends StatelessWidget {
 class _RegulationBlockView extends StatelessWidget {
   const _RegulationBlockView({
     required this.block,
+    required this.sectionCode,
     required this.hidePublicMetadata,
   });
 
   final RegulationBlock block;
+  final RegulationSectionCode sectionCode;
   final bool hidePublicMetadata;
 
   @override
@@ -419,11 +423,24 @@ class _RegulationBlockView extends StatelessWidget {
         RegulationBlockType.paragraph => _Paragraph(text: block.text!),
         RegulationBlockType.subheading => _Subheading(text: block.text!),
         RegulationBlockType.bullets => _BulletList(items: block.items),
-        RegulationBlockType.keyValues => _KeyValueList(
-            entries: hidePublicMetadata
-                ? _visiblePublicEntries(block.entries)
-                : block.entries,
-          ),
+        RegulationBlockType.keyValues =>
+          sectionCode == RegulationSectionCode.eligibility
+              ? _EligibilityCriteriaTable(
+                  entries: hidePublicMetadata
+                      ? _visiblePublicEntries(block.entries)
+                      : block.entries,
+                )
+              : sectionCode == RegulationSectionCode.scheduleVenue
+                  ? _ScheduleKeyValues(
+                      entries: hidePublicMetadata
+                          ? _visiblePublicEntries(block.entries)
+                          : block.entries,
+                    )
+                  : _KeyValueList(
+                      entries: hidePublicMetadata
+                          ? _visiblePublicEntries(block.entries)
+                          : block.entries,
+                    ),
         RegulationBlockType.table => _RegulationTable(
             columns: block.columns,
             rows: block.rows,
@@ -552,6 +569,110 @@ class _KeyValueList extends StatelessWidget {
   }
 }
 
+/// 참가 자격은 항목을 위아래로 읽는 설명문보다 기준과 내용을 나란히 놓아야
+/// 등급별 차이를 빠르게 비교할 수 있다. 긴 값은 같은 셀 안에서 자연스럽게 줄바꿈한다.
+class _EligibilityCriteriaTable extends StatelessWidget {
+  const _EligibilityCriteriaTable({required this.entries});
+
+  final List<RegulationEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Table(
+        columnWidths: const {
+          0: FixedColumnWidth(104),
+          1: FlexColumnWidth(),
+        },
+        border: TableBorder(
+          horizontalInside: BorderSide(color: colorScheme.outlineVariant),
+          verticalInside: BorderSide(color: colorScheme.outlineVariant),
+          top: BorderSide(color: colorScheme.outlineVariant),
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+          left: BorderSide(color: colorScheme.outlineVariant),
+          right: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        defaultVerticalAlignment: TableCellVerticalAlignment.top,
+        children: [
+          for (final entry in entries)
+            TableRow(
+              children: [
+                ColoredBox(
+                  color: colorScheme.surfaceContainerLow,
+                  child: _TableCell(
+                    text: entry.label,
+                    style: textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                _TableCell(
+                  text: entry.value,
+                  style: textTheme.bodySmall?.copyWith(height: 1.5),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleKeyValues extends StatelessWidget {
+  const _ScheduleKeyValues({required this.entries});
+
+  final List<RegulationEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduleIndex = entries.indexWhere(
+      (entry) => entry.label.replaceAll(' ', '') == '부서별일정·장소',
+    );
+    if (scheduleIndex < 0) return _KeyValueList(entries: entries);
+
+    final days = parseTournamentSchedule(entries[scheduleIndex].value);
+    if (days.isEmpty) return _KeyValueList(entries: entries);
+    final rows = <RegulationTableRow>[];
+    for (final day in days) {
+      final date = '${day.date.month}월 ${day.date.day}일 (${day.weekday})';
+      for (final division in day.divisions) {
+        for (final place in division.places) {
+          rows.add(
+            RegulationTableRow(
+              cells: [
+                division.division,
+                '$date ${division.time}',
+                place.area ?? '-',
+                place.venue,
+              ],
+            ),
+          );
+        }
+      }
+    }
+    final remaining = [
+      for (var index = 0; index < entries.length; index++)
+        if (index != scheduleIndex) entries[index],
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RegulationTable(
+          columns: const ['부서', '일정', '지역', '장소'],
+          rows: rows,
+        ),
+        if (remaining.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _KeyValueList(entries: remaining),
+        ],
+      ],
+    );
+  }
+}
+
 class _RegulationTable extends StatelessWidget {
   const _RegulationTable({required this.columns, required this.rows});
 
@@ -664,41 +785,28 @@ class _DivisionSchedule extends StatelessWidget {
   final List<RegulationDivisionItem> items;
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < items.length; index++) ...[
-            if (index > 0) const SizedBox(height: AppSpacing.lg),
-            _DivisionItem(item: items[index]),
-          ],
-        ],
-      );
-}
-
-class _DivisionItem extends StatelessWidget {
-  const _DivisionItem({required this.item});
-
-  final RegulationDivisionItem item;
-
-  @override
   Widget build(BuildContext context) {
-    final facts = <RegulationEntry>[
-      if (item.date != null) RegulationEntry(label: '일정', value: item.date!),
-      if (item.venue != null) RegulationEntry(label: '장소', value: item.venue!),
-      if (item.fee != null) RegulationEntry(label: '참가비', value: item.fee!),
-      if (item.account != null)
-        RegulationEntry(label: '입금계좌', value: item.account!),
-      if (item.capacity != null)
-        RegulationEntry(label: '모집 규모', value: item.capacity!),
+    final facts =
+        <({String label, String? Function(RegulationDivisionItem) value})>[
+      (label: '일정', value: (item) => item.date),
+      (label: '장소', value: (item) => item.venue),
+      (label: '참가비', value: (item) => item.fee),
+      (label: '입금계좌', value: (item) => item.account),
+      (label: '모집 규모', value: (item) => item.capacity),
     ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Subheading(text: item.name),
-        if (facts.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          _KeyValueList(entries: facts),
-        ],
+    final visibleFacts = facts
+        .where((fact) => items.any((item) => fact.value(item) != null))
+        .toList(growable: false);
+    return _RegulationTable(
+      columns: ['부서', ...visibleFacts.map((fact) => fact.label)],
+      rows: [
+        for (final item in items)
+          RegulationTableRow(
+            cells: [
+              item.name,
+              ...visibleFacts.map((fact) => fact.value(item) ?? '-'),
+            ],
+          ),
       ],
     );
   }
