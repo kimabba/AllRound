@@ -106,10 +106,12 @@ Deno.serve(withCors(async (req) => {
   }
   const posterExtras = new Map<string, PosterExtra>();
   if (rows.length > 0) {
-    const { data: extraRows } = await supabase
+    const { data: extraRows, error: extraErr } = await supabase
       .from('tournaments')
       .select('id, poster_url, entry_fee, location, poster_vision_at')
       .in('id', rows.map((r) => r.tournament_id));
+    // 실패해도 배치 자체는 계속한다(포스터 단계만 건너뜀) — 관측용 로그만 남긴다.
+    if (extraErr) console.error('poster extras select failed:', extraErr.message);
     for (const row of (extraRows ?? []) as PosterExtra[]) posterExtras.set(row.id, row);
   }
   const posterDeps: PosterStageDeps = {

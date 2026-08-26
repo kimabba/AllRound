@@ -192,9 +192,11 @@ export function parseKatoDetail(
       if (amount > 0 && amount < 1_000_000) entryFee = amount;
     }
   }
-  // 공고에 포스터 이미지가 붙은 대회는 URL 만 수집한다(P6). 전체 HTML 을 훑지만
-  // UI 이미지(로고 등)는 extractPosterUrl 이 걸러내고 업로드 경로를 우선한다.
-  const posterUrl = extractPosterUrl(html, baseUrl) ?? undefined;
+  // 공고에 포스터 이미지가 붙은 대회는 URL 만 수집한다(P6). 상세는 본문 컨테이너로
+  // 범위를 못 좁혀 전체 HTML 을 훑으므로 **업로드 경로 이미지만** 인정한다 —
+  // 실측(openGame 0299/0311/0315/0318)상 페이지에는 로고(logox3)·그룹 배지·협찬배너
+  // (/uploads/commercials/*)뿐이라, 폴백을 열어두면 로고가 포스터로 잡힌다.
+  const posterUrl = extractPosterUrl(html, baseUrl, { requireUploadPath: true }) ?? undefined;
   return { title, location, organizer, entryFee, posterUrl };
 }
 

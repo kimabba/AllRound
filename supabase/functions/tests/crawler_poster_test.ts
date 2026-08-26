@@ -37,6 +37,28 @@ Deno.test('extractPosterUrl: 업로드 경로 이미지를 사이트 chrome 이�
   const html = '<img src="/assets/images/system/groupma_60.png">' +
     '<img src="/upload/editor/2026/poster.png">';
   assertEquals(extractPosterUrl(html, BASE), 'https://example.or.kr/upload/editor/2026/poster.png');
+  // uploads 복수형(kato.kr 실측 경로 형태)도 업로드 경로로 인정한다.
+  assertEquals(
+    extractPosterUrl('<img src="/img/x.png"><img src="/uploads/games/p.jpg">', BASE),
+    'https://example.or.kr/uploads/games/p.jpg',
+  );
+});
+
+Deno.test('extractPosterUrl: 로고 변형(logox3)·협찬배너(commercials)는 걸러진다', () => {
+  // kato.kr 실측 회귀: /static/images/logox3.png 가 포스터로 잡혔던 하자(#489 검수).
+  const html = '<img src="/static/images/logox3.png">' +
+    '<img src="/uploads/commercials/99a34c706052e4fff255222bc56a1f62.jpg">';
+  assertEquals(extractPosterUrl(html, BASE), null);
+});
+
+Deno.test('extractPosterUrl: requireUploadPath 면 업로드 경로 이미지가 없을 때 null', () => {
+  const chromeOnly = '<img src="/assets/images/system/groupgm_60.png">';
+  assertEquals(extractPosterUrl(chromeOnly, BASE, { requireUploadPath: true }), null);
+  // 폴백 모드(gj/jn 본문 컨테이너용)에서는 같은 입력도 후보로 남는다.
+  assertEquals(
+    extractPosterUrl(chromeOnly, BASE),
+    'https://example.or.kr/assets/images/system/groupgm_60.png',
+  );
 });
 
 Deno.test('extractPosterUrl: 구분자 없는 단어(naver 등)는 UI 패턴으로 오인하지 않는다', () => {
@@ -56,14 +78,45 @@ Deno.test('extractPosterUrl: http(s) 이외 프로토콜·깨진 URL 은 무시�
 // KATO 상세 — parseKatoDetail 이 posterUrl 을 채운다
 // =============================================================================
 
-Deno.test('parseKatoDetail: 공고 내 업로드 이미지를 posterUrl 로 수집한다', () => {
-  const html = `
-<img src="/assets/logo_kato.png">
-<div class="group-title">제1회 테스트배</div>
-<table><tr><td>주 최</td><td>협회</td></tr></table>
-<p><img src="/upload/2026/poster_final.jpg"></p>`;
-  const d = parseKatoDetail(html, '힌트', 'https://kato.kr/openGame/0299') as KatoDetailFields;
-  assertEquals(d.posterUrl, 'https://kato.kr/upload/2026/poster_final.jpg');
+// kato.kr/openGame/0299 실측 HTML(2026-08-26 curl)을 이미지 구조만 남기고 축약한
+// 픽스처. 상단 로고(logox3) + 그룹 배지 + 협찬배너 carousel + 푸터 로고 — 즉
+// **포스터는 없다**. 예전 가짜 픽스처(/upload/ 단수, logo_kato.png)가 이 실제 형태를
+// 못 잡아 로고가 poster_url 로 수집됐던 회귀(#489 검수)를 굳힌다.
+const KATO_0299_REAL_CHROME = `
+<div class="row">
+  <div class="col-sm-2 col-xs-12">
+    <div id="gtco-logo"><a href="/"><img src="/static/images/logox3.png" alt="사단법인 한국테니스발전협의회"></a></div>
+  </div>
+</div>
+<div class="competition-title">
+  <div class="group-flag"><img src="/assets/images/system/groupgm_60.png" class="flag-border" /></div>
+  <div class="group-title">2026 낫소 KATO 회장배 전국동호인테니스대회</div>
+</div>
+<table><tr><td>주 최</td><td colspan="2">(사)한국테니스발전협의회</td></tr></table>
+<ul id="sponsor-banner" class="owl-carousel owl-theme">
+  <li class="items"><a href="https://nassaushop.com/" target="_blank"><img src="/uploads/commercials/99a34c706052e4fff255222bc56a1f62.jpg" style="width: 280px; height: 77px;" /></a></li>
+  <li class="items"><a href="http://nasara.co.kr/" target="_blank"><img src="/uploads/commercials/9a518672d5599c6711372114ef7fda32.jpg" style="width: 280px; height: 77px;" /></a></li>
+</ul>
+<div class="footLogo"><img src="/static/images/logox3.png" /></div>`;
+
+Deno.test('parseKatoDetail: 실측 0299 페이지(로고·배지·협찬배너뿐)는 posterUrl undefined', () => {
+  const d = parseKatoDetail(
+    KATO_0299_REAL_CHROME,
+    '힌트',
+    'https://kato.kr/openGame/0299',
+  ) as KatoDetailFields;
+  assertEquals(d.posterUrl, undefined);
+});
+
+Deno.test('parseKatoDetail: 진짜 업로드 포스터가 있으면 chrome 을 제치고 수집한다', () => {
+  const withPoster = KATO_0299_REAL_CHROME +
+    '\n<p><img src="/uploads/games/2026/poster_final.jpg"></p>';
+  const d = parseKatoDetail(
+    withPoster,
+    '힌트',
+    'https://kato.kr/openGame/0299',
+  ) as KatoDetailFields;
+  assertEquals(d.posterUrl, 'https://kato.kr/uploads/games/2026/poster_final.jpg');
 });
 
 Deno.test('parseKatoDetail: 이미지 없는 공고는 posterUrl undefined (기존 필드 보존용)', () => {

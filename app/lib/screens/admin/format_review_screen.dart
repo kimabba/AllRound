@@ -538,4 +538,5 @@ const _flagLabels = <String, String>{
   'kato_missing_section': 'KATO 요강에서 섹션을 찾지 못함',
   'kato_division_coverage': 'KATO 부서 정보 파싱 불완전',
   'kato_parse_failed': 'KATO 요강 파싱 실패',
+  'poster_extracted': '포스터에서 추출됨 (원문 대조 불가 — 포스터와 대조 필요)',
 };
