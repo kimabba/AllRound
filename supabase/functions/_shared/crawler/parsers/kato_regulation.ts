@@ -183,6 +183,10 @@ function mergeSchedules(
 
 const BANK_NAME = /농협|은행|신협|수협|우체국|새마을|카카오|토스|국민|기업|신한|우리|하나/;
 const ACCOUNT_NUMBER = /\d{2,}-\d{2,}-\d{2,}/;
+// 카카오뱅크(3333 시작 13자리)·토스뱅크처럼 하이픈 없이 붙여 쓰는 계좌 표기.
+// 전화번호(010-, 02- 등 0으로 시작)·사업자번호와 혼동하지 않도록 "0으로 시작하지
+// 않는 10~14자리 연속 숫자"로 좁혔다. BANK_NAME과 함께써야만 계좌로 인정한다.
+const ACCOUNT_NUMBER_PLAIN = /(?<!\d)[1-9]\d{9,13}(?!\d)/;
 
 function splitApplicationInfo(value: string | undefined): {
   application: string[];
@@ -212,7 +216,7 @@ function splitApplicationInfo(value: string | undefined): {
       flushNote();
       continue;
     }
-    if (BANK_NAME.test(line) && ACCOUNT_NUMBER.test(line)) {
+    if (BANK_NAME.test(line) && (ACCOUNT_NUMBER.test(line) || ACCOUNT_NUMBER_PLAIN.test(line))) {
       flushNote();
       accounts.push(line.replace(/^[◑●]\s*/, '').trim());
       continue;
