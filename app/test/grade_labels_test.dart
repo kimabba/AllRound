@@ -615,4 +615,81 @@ void main() {
       });
     });
   });
+
+  group('RegionCatalog', () {
+    tearDown(() => RegionCatalog.instance.reset());
+
+    // check_region_parity.py 가 DB 와 대조하는 JSON 스냅샷(test/fixtures/region_fallback.json)이
+    // 이 폴백과 같은지 확인한다(협회 #330 과 같은 스냅샷 다리). regions 엔 sort_order 가
+    // 없어 표시 순서는 폴백이 정하므로, 순서가 아니라 값을 대조한다 — 양쪽을 code 순으로
+    // 정렬해 비교한다(check_region_parity.py 의 DB 쿼리와 같은 규칙).
+    test('폴백 전체가 JSON 스냅샷과 값 일치한다(code 순 정렬, 스냅샷 다리)', () {
+      RegionCatalog.instance.reset();
+      final snapshot = jsonDecode(
+        File('test/fixtures/region_fallback.json').readAsStringSync(),
+      ) as List<dynamic>;
+      final actual = ([...RegionCatalog.instance.fallbackSnapshot]
+            ..sort((a, b) => a.code.compareTo(b.code)))
+          .map((e) => {
+                'code': e.code,
+                'label': e.label,
+                'isActive': e.isActive,
+              })
+          .toList();
+      expect(actual, snapshot);
+    });
+
+    test('미로드 시 폴백 목록·라벨을 쓴다 — 순서는 지도상 순서', () {
+      expect(RegionCatalog.instance.isLoaded, isFalse);
+      expect(regionCodes.first, 'seoul');
+      expect(regionCodes.last, 'jeju');
+      expect(regionCodes.length, 17);
+      expect(regionLabel('gwangju'), '광주');
+    });
+
+    test('ingestRows 는 폴백 순서로 정렬하고 비활성은 목록에서 뺀다', () {
+      RegionCatalog.instance.ingestRows([
+        {'code': 'gwangju', 'display_name_ko': '광주', 'is_active': true},
+        {'code': 'seoul_metro', 'display_name_ko': '수도권', 'is_active': false},
+        {'code': 'seoul', 'display_name_ko': '서울', 'is_active': true},
+      ]);
+      // DB 가 code 순으로 줘도 표시 순서는 폴백(지도상 순서)을 따른다.
+      expect(regionCodes, ['seoul', 'gwangju']);
+      expect(regionLabel('seoul'), '서울');
+    });
+
+    test('폴백에 없는 신규 지역은 목록 끝에 나타난다 — INSERT 만으로 반영', () {
+      RegionCatalog.instance.ingestRows([
+        {'code': 'dokdo', 'display_name_ko': '독도', 'is_active': true},
+        {'code': 'seoul', 'display_name_ko': '서울', 'is_active': true},
+      ]);
+      expect(regionCodes, ['seoul', 'dokdo']);
+      expect(regionLabel('dokdo'), '독도');
+    });
+
+    test('비활성(deprecated 묶음 코드)도 라벨 해석은 된다', () {
+      // backfill 이전 데이터 화면에 'seoul_metro' 코드 원문이 뜨면 안 된다.
+      expect(regionCodes, isNot(contains('seoul_metro')));
+      expect(isValidRegionCode('seoul_metro'), isFalse);
+      expect(regionLabel('seoul_metro'), '수도권');
+      expect(regionLabel('busan_ulsan_gn'), '부산·울산·경남');
+    });
+
+    test('빈 응답은 무시한다(권한·필터 사고 방어)', () {
+      RegionCatalog.instance.ingestRows([]);
+      expect(RegionCatalog.instance.isLoaded, isFalse);
+      expect(regionCodes.length, 17);
+    });
+
+    test('reset 후 폴백으로 복귀한다', () {
+      RegionCatalog.instance.ingestRows([
+        {'code': 'seoul', 'display_name_ko': '서울특별시', 'is_active': true},
+      ]);
+      expect(RegionCatalog.instance.isLoaded, isTrue);
+      expect(regionLabel('seoul'), '서울특별시');
+      RegionCatalog.instance.reset();
+      expect(RegionCatalog.instance.isLoaded, isFalse);
+      expect(regionLabel('seoul'), '서울');
+    });
+  });
 }

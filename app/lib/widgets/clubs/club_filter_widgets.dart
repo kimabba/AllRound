@@ -213,9 +213,11 @@ class ClubFilterSheet extends StatefulWidget {
 }
 
 class _ClubFilterSheetState extends State<ClubFilterSheet> {
-  static final _regions = [
-    for (final code in regionCodes) regionLabel(code),
-  ];
+  // getter 여야 한다 — static final 로 캐시하면 카탈로그 로드 전(폴백) 값으로
+  // 한 번 굳어 catalogRevision 리빌드에도 갱신되지 않는다.
+  List<String> get _regions => [
+        for (final code in regionCodes) regionLabel(code),
+      ];
   static const _genders = ['여성', '남성', '혼성'];
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -236,8 +238,13 @@ class _ClubFilterSheetState extends State<ClubFilterSheet> {
     super.dispose();
   }
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서, 열려 있는 동안 지역 카탈로그 로드가 도착하면
+  // 이 시트만 폴백 목록으로 남는다. 여기서 감싼다(tournaments_screen 필터 시트 선례).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 

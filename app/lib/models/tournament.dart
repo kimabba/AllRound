@@ -258,34 +258,6 @@ class Tournament {
   }
 }
 
-class Region {
-  final String code;
-  final String displayNameKo;
-  final List<String> governingAssociations;
-  final bool usesKato;
-  final bool usesKata;
-  final String? notes;
-
-  Region({
-    required this.code,
-    required this.displayNameKo,
-    this.governingAssociations = const [],
-    this.usesKato = false,
-    this.usesKata = false,
-    this.notes,
-  });
-
-  factory Region.fromJson(Map<String, dynamic> j) => Region(
-        code: j['code'] as String,
-        displayNameKo: j['display_name_ko'] as String,
-        governingAssociations:
-            (j['governing_associations'] as List?)?.cast<String>() ?? const [],
-        usesKato: (j['uses_kato'] as bool?) ?? false,
-        usesKata: (j['uses_kata'] as bool?) ?? false,
-        notes: j['notes'] as String?,
-      );
-}
-
 class UserTennisOrg {
   final String org; // 'kta'|'kato'|...|'gj'|'jn'|'local'
   final String division; // text NOT NULL (PK의 일부) — 표시용 라벨
