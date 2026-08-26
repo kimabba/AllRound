@@ -213,9 +213,11 @@ class ClubFilterSheet extends StatefulWidget {
 }
 
 class _ClubFilterSheetState extends State<ClubFilterSheet> {
-  static final _regions = [
-    for (final code in regionCodes) regionLabel(code),
-  ];
+  // getter 여야 한다 — static final 로 캐시하면 카탈로그 로드 전(폴백) 값으로
+  // 한 번 굳어 catalogRevision 리빌드에도 갱신되지 않는다.
+  List<String> get _regions => [
+        for (final code in regionCodes) regionLabel(code),
+      ];
   static const _genders = ['여성', '남성', '혼성'];
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 

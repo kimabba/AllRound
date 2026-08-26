@@ -1544,9 +1544,11 @@ class _RegionPickerSheet extends StatelessWidget {
   }
 }
 
-final _regionOptions = [
-  for (final code in regionCodes) _RegionOption(regionLabel(code)),
-];
+// getter 여야 한다 — top-level final 로 캐시하면 카탈로그 로드 전(폴백) 값으로
+// 한 번 굳어 catalogRevision 리빌드에도 갱신되지 않는다.
+List<_RegionOption> get _regionOptions => [
+      for (final code in regionCodes) _RegionOption(regionLabel(code)),
+    ];
 
 typedef _PlaceSearchCallback = Future<List<PlaceSearchResult>> Function(
   String query,

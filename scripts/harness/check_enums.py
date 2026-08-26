@@ -17,7 +17,6 @@ TS_ENUMS = ROOT / "supabase/functions/_shared/enums.ts"
 SQL_USERS = ROOT / "supabase/migrations/002_init_users_sports.sql"
 SQL_MIGRATIONS = ROOT / "supabase/migrations"
 SQL_ORGS = ROOT / "supabase/migrations/009_regions_and_multi_org.sql"
-SQL_SEED = ROOT / "supabase/seed.sql"
 
 
 def read(path: Path) -> str:
@@ -29,14 +28,6 @@ def read(path: Path) -> str:
 
 def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
-
-
-def dart_const_list(text: str, name: str) -> list[str]:
-    pattern = rf"const\s+{re.escape(name)}\s*=\s*(?:<String>)?\s*\[(.*?)\];"
-    match = re.search(pattern, text, re.S)
-    if not match:
-        raise AssertionError(f"Dart const list not found: {name}")
-    return quoted_values(match.group(1))
 
 
 def dart_enum(text: str, name: str) -> list[str]:
@@ -131,13 +122,6 @@ def sql_entry_fee_units(text: str) -> list[str]:
     return quoted_values(match.group(1))
 
 
-def seed_region_codes(text: str) -> list[str]:
-    match = re.search(r"insert\s+into\s+public\.regions\s*\([^)]*\)\s*values\s*(.*?);", text, re.I | re.S)
-    if not match:
-        raise AssertionError("seed insert for public.regions not found")
-    return re.findall(r"\(\s*'([^']+)'", match.group(1))
-
-
 def assert_same(name: str, *values: tuple[str, list[str]]) -> None:
     baseline_label, baseline = values[0]
     failures: list[str] = []
@@ -158,7 +142,6 @@ def main() -> int:
     ts = read(TS_ENUMS)
     sql_users = read(SQL_USERS)
     sql_orgs = read(SQL_ORGS)
-    seed = read(SQL_SEED)
 
     assert_same(
         "sports",
@@ -178,12 +161,11 @@ def main() -> int:
     # 20260711002939 에서 이미 삭제됐다 — 이 검사는 죽은 타입 텍스트를 파싱하고
     # 있었다. 등급이 JY-321 에서 실제 DB 조회로 옮겨간 것과 같은 방향이다.
     # 후속: 폴백↔DB 대조를 check_grades_parity.py 방식으로 추가.
-    assert_same(
-        "region codes",
-        ("Dart regionCodes", dart_const_list(dart, "regionCodes")),
-        ("TypeScript REGION_CODES", ts_const_array(ts, "REGION_CODES")),
-        ("seed public.regions", seed_region_codes(seed)),
-    )
+    #
+    # 지역(regions)의 정본도 DB 다(P7). Dart 하드코딩(regionCodes)은 RegionCatalog
+    # 폴백으로 옮겨갔고, 폴백↔DB 대조는 check_region_parity.py 가 실제 DB 로 한다
+    # (협회 #330 과 같은 스냅샷 다리). TS REGION_CODES 는 아직 하드코딩으로 남아
+    # 있으며 별도 PR 에서 카탈로그화한다 — 그때까지 TS 쪽은 이 검사 대상이 아니다.
     assert_same(
         "entry fee units",
         ("TypeScript ENTRY_FEE_UNITS", ts_const_array(ts, "ENTRY_FEE_UNITS")),
