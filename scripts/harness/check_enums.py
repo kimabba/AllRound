@@ -30,6 +30,17 @@ def quoted_values(text: str) -> list[str]:
     return re.findall(r"'([^']+)'", text)
 
 
+# 이 파일 안에서는 호출부가 없지만 check_grades_parity.py 가 `import check_enums` 로
+# 재사용한다(_kFallbackTennisGrades/_kFallbackFutsalGrades 추출). 지우면 CI Database
+# 잡이 AttributeError 로 죽는다 — P7 에서 지역 검사를 걷어내며 한 번 겪었다.
+def dart_const_list(text: str, name: str) -> list[str]:
+    pattern = rf"const\s+{re.escape(name)}\s*=\s*(?:<String>)?\s*\[(.*?)\];"
+    match = re.search(pattern, text, re.S)
+    if not match:
+        raise AssertionError(f"Dart const list not found: {name}")
+    return quoted_values(match.group(1))
+
+
 def dart_enum(text: str, name: str) -> list[str]:
     match = re.search(rf"enum\s+{re.escape(name)}\s*\{{(.*?)\}}", text, re.S)
     if not match:
