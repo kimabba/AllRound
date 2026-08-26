@@ -64,11 +64,16 @@ const CONTACT_LABEL =
 // 값 형태 가드만으로는 부족하다. 계좌 검증이 항상 우선한다(검증 완화 금지 결정, 7월).
 const ACCOUNT_HINT = /계좌|통장|입금|납부|송금|예금주|이체/;
 
-// 위 라벨 확장이 실제 계좌 값을 가리는 일이 없도록, 라벨이 매칭돼도 값이 전화번호
-// 형태(0으로 시작하는 9~11자리)일 때만 대조를 제외한다. 국내 계좌번호는 보통 0으로
-// 시작하지 않아(예: 1107-021-677837, 302-1234-5678) 이 값 형태 가드로 구분된다.
-function isPhoneShaped(digits: string): boolean {
-  return /^0\d{8,10}$/.test(digits);
+// 위 라벨 확장이 실제 계좌·금액 값을 가리는 일이 없도록, 라벨이 매칭돼도 값 토큰이
+// 전화번호일 때만 대조를 제외한다. 판정은 두 겹:
+// 1) 표기 형태 — 0으로 시작하고 구분자는 하이픈/공백/점만(또는 무구분). 쉼표·'원' 등
+//    비전화 표기는 배제한다. digitsOnly만 보면 '010,000,000원' 같은 0-prefix 조작 금액이
+//    전화로 위장해 원문 대조를 우회한다(금액 검증 우회 방지 — Codex 교차 리뷰).
+// 2) 자릿수 — 0으로 시작하는 9~11자리. 국내 계좌번호는 보통 0으로 시작하지 않아
+//    (예: 1107-021-677837, 302-1234-5678) 구분된다.
+function isPhoneToken(token: string): boolean {
+  if (!/^0[\d\-. ]*\d$/.test(token)) return false;
+  return /^0\d{8,10}$/.test(token.replace(/[^0-9]/g, ''));
 }
 
 export function verifyAgainstSource(
@@ -96,8 +101,8 @@ export function verifyAgainstSource(
     for (const tok of sensitiveTokens(f.value)) {
       const d = digitsOnly(tok);
       if (d.length === 0) continue;
-      // 문의처류 라벨이라도 값이 전화번호 형태일 때만 제외(계좌 검증 완화 금지).
-      if (isContactField && isPhoneShaped(d)) continue;
+      // 문의처류 라벨이라도 토큰이 전화번호 표기·자릿수일 때만 제외(계좌·금액 검증 완화 금지).
+      if (isContactField && isPhoneToken(tok)) continue;
       const key = `${f.label}|${d}`;
       if (seen.has(key)) continue; // 중복 flag 방지(계좌/날짜 정규식 겹침)
       seen.add(key);

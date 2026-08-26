@@ -257,6 +257,31 @@ Deno.test('verifyAgainstSource: 값에 "예금주" 병기된 전화 모양 계�
   assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === '총무'));
 });
 
+Deno.test('verifyAgainstSource: 0-prefix 조작 금액은 문의처류 라벨에서도 전화로 위장 못 함', () => {
+  // digitsOnly가 '010,000,000원' → 010000000(0 시작 9자리)이라 전화 자릿수와 겹치지만,
+  // 쉼표·'원' 표기는 전화가 아니므로 원문 대조가 유지돼야 한다(금액 검증 우회 방지).
+  const src = '참가비 64,000원 농협 302-1234-5678 입금';
+  for (
+    const [label, value] of [
+      ['시상 안내', '상금 010,000,000원'],
+      ['문의 안내', '010,234,567원'],
+    ]
+  ) {
+    const r = verifyAgainstSource({
+      regulation_fields: [{ label, value }],
+      regulation_notes: [],
+      regulation_body: '',
+      prize: '',
+      format: '',
+      description: '',
+      confidence: 0.9,
+      unusual: false,
+    }, src);
+    assertEquals(r.ok, false, `${label}의 0-prefix 금액이 전화로 위장해 검증을 우회함`);
+    assert(r.flags.some((f) => f.code === 'not_in_source' && f.field === label));
+  }
+});
+
 Deno.test('verifyAgainstSource: prize의 지어낸 상금도 원문 대조 flag (검증 우회 방지)', () => {
   // 참고: '30만원' 같은 한글 단위 금액은 sensitiveTokens가 추출하지 않는 기존 한계
   // (전 필드 공통, HANDOFF §3 보류 항목) — 여기서는 숫자원 표기로 배선 자체를 검증.
