@@ -220,7 +220,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   regionCounts: regionCounts,
                   onRegionSelected: (value) =>
                       setState(() => _selectedRegion = value),
-                  onSearch: () => context.push('/tournaments?search=1'),
                 ),
               ),
             ),
@@ -557,19 +556,18 @@ class _TournamentHomeControls extends StatelessWidget {
     required this.selectedRegion,
     required this.regionCounts,
     required this.onRegionSelected,
-    required this.onSearch,
   });
 
   final String selectedRegion;
   final Map<String, int> regionCounts;
   final ValueChanged<String> onRegionSelected;
-  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    // 종목 버튼이 AppBar 타이틀로 올라가 이 줄에는 지역과 검색만 남는다.
-    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    // 종목 버튼이 AppBar 타이틀로 올라가 이 줄에는 지역 선택만 남는다.
+    // 홈 검색창은 뒀다가 뺐다 — 받아둔 목록만 훑어 "있는 대회가 안 나오는"
+    // 결과를 만들었고, 검색은 전체보기(전체 대회 화면)의 서버 전수 검색이
+    // 담당하면 충분하기 때문이다.
     final region = _HomeMenuButton(
       icon: Icons.location_on_outlined,
       label: selectedRegion,
@@ -581,48 +579,14 @@ class _TournamentHomeControls extends StatelessWidget {
       selectedValue: selectedRegion,
       onSelected: onRegionSelected,
     );
-    // 홈 검색은 받아둔 목록만 훑어서 "있는 대회가 안 나오는" 결과를 만들었다.
-    // 입력창이 아니라 서버가 전수 검색하는 전체 대회 화면의 입구로 쓴다.
-    // 겉모습은 입력창이지만 동작은 버튼이므로, 화면낭독기에도 버튼으로 알린다
-    // (입력창으로 읽히면 타이핑을 시도하다 아무것도 안 되는 상태가 된다).
-    final search = Semantics(
-      button: true,
-      textField: false,
-      label: '대회 검색',
-      hint: '전체 대회 검색을 엽니다',
-      // 버튼이라고 알리는 것만으로는 부족하다. excludeSemantics 가 자식의 액션까지
-      // 버리므로 여기서 탭 액션을 직접 등록해야 화면낭독기로 실제 실행된다.
-      onTap: onSearch,
-      excludeSemantics: true,
-      child: TextField(
-        readOnly: true,
-        canRequestFocus: false,
-        onTap: onSearch,
-        decoration: InputDecoration(
-          hintText: '대회명 또는 지역을 검색해보세요',
-          prefixIcon: const Icon(Icons.search_rounded),
-          filled: true,
-          fillColor: cs.surfaceContainerLowest,
-        ),
-      ),
-    );
-    // 큰 글씨에서는 한 줄에 두 요소가 들어가지 않아 세로로 쌓는다.
-    if (largeText) {
-      return Column(
-        children: [
-          region,
-          const SizedBox(height: AppSpacing.md),
-          search,
-        ],
-      );
-    }
+    // 큰 글씨에서는 라벨이 잘리지 않게 전폭을 쓰고, 평소에는 검색창과
+    // 나란히 있던 시절의 고정폭을 유지해 좌측에 둔다(전폭 버튼은 어색하다).
+    final largeText = MediaQuery.textScalerOf(context).scale(16) >= 24;
+    if (largeText) return region;
     final compact = MediaQuery.sizeOf(context).width < 360;
-    return Row(
-      children: [
-        SizedBox(width: compact ? 108 : 120, child: region),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(child: search),
-      ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(width: compact ? 108 : 120, child: region),
     );
   }
 }
