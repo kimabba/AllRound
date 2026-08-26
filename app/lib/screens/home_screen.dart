@@ -537,7 +537,7 @@ class _TournamentHomeContent extends StatelessWidget {
             key: AllRoundE2EKeys.homeEmptyState,
             icon: Icons.calendar_month_outlined,
             title: '예정된 대회가 없습니다',
-            description: '지역을 전국으로 바꾸거나 전체 대회에서 찾아보세요.',
+            description: '전체 대회에서 찾아보세요.',
             actionLabel: '전체 대회 보기',
             onAction: onBrowse,
           )
