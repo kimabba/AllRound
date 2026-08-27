@@ -10,6 +10,15 @@ Map<String, dynamic> _baseJson() => {
     };
 
 void main() {
+  test('description 평문만 있으면 구조화 요강으로 억지 분류하지 않는다', () {
+    final tournament = Tournament.fromJson(
+      _baseJson()..['description'] = '원문 요강을 그대로 표시합니다.',
+    );
+
+    expect(tournament.regulationDocument, isNull);
+    expect(tournament.description, '원문 요강을 그대로 표시합니다.');
+  });
+
   group('Tournament.fromJson — regulation_fields', () {
     test('정상: [{label, value}] 배열을 순서 보존하여 파싱', () {
       final j = _baseJson()
