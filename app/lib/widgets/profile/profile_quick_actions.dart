@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/grade_labels.dart';
@@ -13,143 +14,185 @@ class ProfileQuickActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final sports = ref.watch(userSportsProvider);
+    final orgs = ref.watch(userTennisOrgsProvider);
     final favorites = ref.watch(myTournamentRecordsProvider).value;
     final clubs = ref.watch(myClubsProvider).value;
-    final sports = ref.watch(userSportsProvider).value;
-    final primarySport =
-        sports?.where((item) => item.isPrimary).firstOrNull?.sport;
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-
-    final actions = [
-      _QuickActionData(
-        icon: Icons.manage_accounts_outlined,
-        title: '프로필 수정',
-        subtitle: primarySport == null
-            ? '종목과 내 정보 등록'
-            : '${sportLabelFromString(primarySport)} · 내 정보',
-        onTap: () => context.push('/onboarding'),
-      ),
-      _QuickActionData(
-        icon: Icons.favorite_border_rounded,
-        title: '관심 대회',
-        subtitle: favorites == null ? '불러오는 중' : '${favorites.length}개 저장',
-        onTap: () => context.push('/favorites'),
-      ),
-      _QuickActionData(
-        icon: Icons.groups_2_outlined,
-        title: '내 클럽',
-        subtitle: clubs == null ? '불러오는 중' : '${clubs.length}개 가입',
-        onTap: () => context.push('/clubs'),
-      ),
-      _QuickActionData(
-        icon: Icons.menu_book_outlined,
-        title: '룰북',
-        subtitle: primarySport == null
-            ? '종목별 규칙 확인'
-            : '${sportLabelFromString(primarySport)} 규칙',
-        onTap: () => context.push(
-          primarySport == null ? '/rules' : '/rules?sport=$primarySport',
-        ),
-      ),
-    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'MY 바로가기'),
+        SectionHeader(
+          title: '내 스포츠',
+          action: SectionActionButton(
+            label: '수정',
+            onTap: () => context.push('/onboarding'),
+          ),
+        ),
         const SizedBox(height: AppSpacing.md),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final singleColumn = constraints.maxWidth < 340 || textScale > 1.5;
-            final itemWidth = singleColumn
-                ? constraints.maxWidth
-                : (constraints.maxWidth - AppSpacing.sm) / 2;
-            return Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                for (final action in actions)
-                  SizedBox(
-                    width: itemWidth,
-                    child: _ProfileQuickAction(action: action),
-                  ),
-              ],
-            );
-          },
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SportsSummary(sports: sports),
+              orgs.maybeWhen(
+                data: (items) => items.isEmpty
+                    ? const SizedBox.shrink()
+                    : Column(
+                        children: [
+                          const _ProfileDivider(),
+                          for (var index = 0;
+                              index < items.length;
+                              index++) ...[
+                            _OrgSummary(org: items[index]),
+                            if (index < items.length - 1)
+                              const _ProfileDivider(),
+                          ],
+                        ],
+                      ),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        const SectionHeader(title: '내 활동'),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _ActivityRow(
+                icon: Icons.favorite_border_rounded,
+                title: '관심 대회',
+                value: favorites == null ? '불러오는 중' : '${favorites.length}개',
+                onTap: () => context.push('/favorites'),
+              ),
+              const _ProfileDivider(),
+              _ActivityRow(
+                icon: Icons.groups_2_outlined,
+                title: '내 클럽',
+                value: clubs == null ? '불러오는 중' : '${clubs.length}개',
+                onTap: () => context.push('/clubs'),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _QuickActionData {
-  const _QuickActionData({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _SportsSummary extends StatelessWidget {
+  const _SportsSummary({required this.sports});
+  final AsyncValue<List<UserSport>> sports;
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return sports.when(
+      loading: () =>
+          const _InfoRow(icon: Icons.sports_rounded, title: '종목 정보를 불러오는 중'),
+      error: (_, __) => const _InfoRow(
+          icon: Icons.error_outline_rounded, title: '종목 정보를 불러오지 못했습니다'),
+      data: (items) {
+        if (items.isEmpty) {
+          return const _InfoRow(
+              icon: Icons.add_circle_outline_rounded,
+              title: '등록된 종목이 없습니다',
+              subtitle: '수정을 눌러 종목을 등록해 주세요');
+        }
+        final primary =
+            items.where((item) => item.isPrimary).firstOrNull ?? items.first;
+        final extraCount = items.length - 1;
+        return _InfoRow(
+          icon: primary.sport == 'tennis'
+              ? Icons.sports_tennis_rounded
+              : Icons.sports_soccer_rounded,
+          title: '${sportLabelFromString(primary.sport)} · 기본 종목',
+          subtitle: [
+            gradeLabel(primary.grade),
+            if (extraCount > 0) '외 $extraCount개 종목'
+          ].join(' · '),
+        );
+      },
+    );
+  }
 }
 
-class _ProfileQuickAction extends StatelessWidget {
-  const _ProfileQuickAction({required this.action});
+class _OrgSummary extends StatelessWidget {
+  const _OrgSummary({required this.org});
+  final UserTennisOrg org;
 
-  final _QuickActionData action;
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[
+      if (org.division.trim().isNotEmpty) org.division,
+      if (org.regionCode != null) regionLabel(org.regionCode!),
+    ];
+    return _InfoRow(
+      icon: Icons.workspace_premium_outlined,
+      title: tennisOrgLabel(org.org),
+      subtitle: details.isEmpty ? null : details.join(' · '),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.title, this.subtitle});
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow(
+      {required this.icon,
+      required this.title,
+      required this.value,
+      required this.onTap});
+  final IconData icon;
+  final String title;
+  final String value;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return AppCard(
-      onTap: action.onTap,
-      variant: AppCardVariant.filled,
-      backgroundColor: cs.surfaceContainerLow,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: cs.primary),
+      title: Text(title),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: AppSizes.touchTarget,
-            height: AppSizes.touchTarget,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: AppRadius.hero,
-            ),
-            alignment: Alignment.center,
-            child: Icon(action.icon, color: cs.primary, size: 22),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  action.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  action.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: cs.onSurfaceVariant,
-            size: 20,
-          ),
+          Text(value, style: TextStyle(color: cs.onSurfaceVariant)),
+          const SizedBox(width: AppSpacing.xs),
+          Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileDivider extends StatelessWidget {
+  const _ProfileDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      indent: AppSpacing.xl,
+      endIndent: AppSpacing.md,
+      color: Theme.of(context).colorScheme.outlineVariant,
     );
   }
 }

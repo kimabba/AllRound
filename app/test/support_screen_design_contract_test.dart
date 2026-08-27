@@ -143,7 +143,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('MY 요약 카드와 빠른 메뉴는 320px 200% 글자에서 넘치지 않는다', (tester) async {
+  testWidgets('MY 스포츠와 활동 목록은 320px 200% 글자에서 넘치지 않는다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     final sports = [
       UserSport(sport: 'futsal', grade: 'beginner', isPrimary: true),
@@ -154,6 +154,7 @@ void main() {
           myTournamentRecordsProvider.overrideWith((ref) async => const []),
           myClubsProvider.overrideWith((ref) async => const []),
           userSportsProvider.overrideWith((ref) async => sports),
+          userTennisOrgsProvider.overrideWith((ref) async => const []),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -189,11 +190,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('MY 바로가기'), findsOneWidget);
-    expect(find.text('프로필 수정'), findsOneWidget);
+    expect(find.text('내 스포츠'), findsOneWidget);
+    expect(find.text('풋살 · 기본 종목'), findsOneWidget);
+    expect(find.text('내 활동'), findsOneWidget);
     expect(find.text('관심 대회'), findsOneWidget);
     expect(find.text('내 클럽'), findsOneWidget);
-    expect(find.text('룰북'), findsOneWidget);
+    expect(find.text('룰북'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
