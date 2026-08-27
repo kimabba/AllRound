@@ -7,6 +7,7 @@ import '../../services/api.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
+import 'admin_shell.dart';
 
 final formatReviewQueueProvider =
     FutureProvider.autoDispose<List<FormatReviewItem>>((ref) async {
@@ -44,7 +45,10 @@ class FormatReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queue = ref.watch(formatReviewQueueProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('요강 검수')),
+      appBar: AppBar(
+        leading: adminShellLeading(context),
+        title: const Text('요강 검수'),
+      ),
       body: queue.when(
         loading: () => const _ReviewLoading(),
         error: (_, __) => _ReviewStateMessage(

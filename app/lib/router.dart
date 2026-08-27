@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'config.dart';
+import 'screens/admin/admin_operations_home_screen.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
@@ -60,9 +61,10 @@ String? validatedRankingOrgCode(String? raw) {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: kIsWeb && AppConfig.userDesignPreview
-        ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
-        : '/',
+    initialLocation:
+        kIsWeb && (AppConfig.userDesignPreview || AppConfig.adminDesignPreview)
+            ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
+            : '/',
     refreshListenable: GoRouterRefreshStream(ref),
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
@@ -258,6 +260,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/admin',
+            builder: (_, __) => catalogAware(AdminOperationsHomeScreen.new),
+          ),
+          GoRoute(
+            path: '/admin/crawl-status',
             builder: (_, __) => catalogAware(AdminScreen.new),
           ),
           GoRoute(
@@ -458,7 +464,10 @@ class _AdminTournamentListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final supabase = ref.read(supabaseProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('대회 편집')),
+      appBar: AppBar(
+        leading: adminShellLeading(context),
+        title: const Text('대회 편집'),
+      ),
       body: FutureBuilder(
         future: supabase
             .from('tournaments')
