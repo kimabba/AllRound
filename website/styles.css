@@ -93,7 +93,8 @@ h1 { max-width: 700px; margin: 18px 0 24px; font-size: clamp(44px, 6.8vw, 88px);
 .legal-main table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
 .legal-main th, .legal-main td { padding: 11px 12px; vertical-align: top; text-align: left; border: 1px solid var(--border); }
 .legal-main th { background: var(--canvas); font-weight: 800; }
-.scroll-x { overflow-x: auto; border: 1px solid var(--border); }
+.scroll-x { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); }
+.scroll-x:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 .scroll-x table { min-width: 660px; margin: 0; border: 0; }
 .support-main { width: min(calc(100% - 40px), 860px); margin: 0 auto; padding: 80px 0 112px; }
 .support-main h1 { font-size: clamp(42px, 6vw, 68px); }
@@ -126,7 +127,6 @@ h1 { max-width: 700px; margin: 18px 0 24px; font-size: clamp(44px, 6.8vw, 88px);
   .support-band .button { justify-self: start; }
   .legal-main { padding-top: 42px; }
   .legal-main table { min-width: 570px; }
-  .legal-main > table { display: block; overflow-x: auto; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
