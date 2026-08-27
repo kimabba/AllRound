@@ -9,6 +9,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../utils/grade_labels.dart';
+import 'admin_shell.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
@@ -680,16 +681,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     return Scaffold(
       key: AllRoundE2EKeys.adminScreen,
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: '뒤로가기',
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/profile');
-            }
-          },
-          icon: const Icon(Icons.arrow_back_rounded),
+        leading: adminShellLeading(
+          context,
+          fallback: IconButton(
+            tooltip: '뒤로가기',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/profile');
+              }
+            },
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
         ),
         title: const Text('관리자'),
         bottom: TabBar(
@@ -797,45 +801,66 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Checkbox(
-                value: allSelected,
-                tristate: true,
-                // tristate: 일부만 선택된 경우 null → 한 번 더 누르면 전체 선택.
-                onChanged: filtered.isEmpty
-                    ? null
-                    : (v) => _toggleSelectAll(v ?? true),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: allSelected,
+                    tristate: true,
+                    // tristate: 일부만 선택된 경우 null → 한 번 더 누르면 전체 선택.
+                    onChanged: filtered.isEmpty
+                        ? null
+                        : (v) => _toggleSelectAll(v ?? true),
+                  ),
+                  Text(
+                    '선택 $selectedInView / ${filtered.length}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
-              Text(
-                '선택 $selectedInView / ${filtered.length}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                // 전역 테마 minimumSize: Size.fromHeight(52) = Size(∞, 52)를 오버라이드.
-                // Row 안에서 무한 너비 constraint 에러 방지.
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                    ? null
-                    : _bulkApprove,
-                icon: _bulkActionInFlight
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: const Text('일괄 승인'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                    ? null
-                    : _bulkReject,
-                icon: const Icon(Icons.close, color: Colors.red),
-                label: const Text('일괄 거부', style: TextStyle(color: Colors.red)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton.icon(
+                    // 전역 테마 minimumSize: Size.fromHeight(52) = Size(∞, 52)를 오버라이드.
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
+                    onPressed:
+                        (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                            ? null
+                            : _bulkApprove,
+                    icon: _bulkActionInFlight
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: const Text('일괄 승인'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
+                    onPressed:
+                        (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                            ? null
+                            : _bulkReject,
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    label: const Text(
+                      '일괄 거부',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
