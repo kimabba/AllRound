@@ -94,9 +94,11 @@ void main() {
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('파울'));
+    // 왼쪽 카테고리 레일에도 같은 이름의 항목이 생겨 '파울'이 두 번
+    // 매치된다 — 아코디언 헤더(뒤에 있는 쪽)를 골라 탭한다.
+    await tester.ensureVisible(find.text('파울').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('파울'));
+    await tester.tap(find.text('파울').last);
     await tester.pumpAndSettle();
 
     expect(find.text('직접 프리킥'), findsOneWidget);

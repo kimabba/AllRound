@@ -741,6 +741,33 @@ mixin ClubApi on ApiBase {
         .toList();
   }
 
+  /// 로그인한 사용자가 올해 "참석" 응답한, 이미 끝난 클럽 모임 수.
+  /// 날짜 범위는 서버가 아니라 여기서 걸러 embedded-filter 문법 위험을 피한다.
+  Future<int> myClubEventAttendanceCountThisYear() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return 0;
+    final rows = await supabase
+        .from('club_event_attendees')
+        .select('status, club_events(starts_at)')
+        .eq('user_id', uid)
+        .eq('status', 'going');
+    final now = DateTime.now();
+    final yearStart = DateTime(now.year, 1, 1);
+    var count = 0;
+    for (final row in List<Map<String, dynamic>>.from(rows)) {
+      final event = row['club_events'] as Map<String, dynamic>?;
+      final startsAt = event == null
+          ? null
+          : DateTime.tryParse(event['starts_at'] as String? ?? '');
+      if (startsAt != null &&
+          !startsAt.isBefore(yearStart) &&
+          !startsAt.isAfter(now)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   Future<void> endClubEvent(String clubId, String eventId) async {
     await _manageClubEvent(clubId, eventId, 'end');
   }

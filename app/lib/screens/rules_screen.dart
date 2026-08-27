@@ -29,9 +29,8 @@ class RulesScreen extends ConsumerStatefulWidget {
   ConsumerState<RulesScreen> createState() => _RulesScreenState();
 }
 
-class _RulesScreenState extends ConsumerState<RulesScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
+class _RulesScreenState extends ConsumerState<RulesScreen> {
+  String _selectedSport = 'tennis';
   late final TextEditingController _search;
   Map<String, List<RuleArticle>>? _tennisByCat;
   Map<String, List<RuleArticle>>? _futsalByCat;
@@ -51,7 +50,6 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     super.initState();
     _search = TextEditingController(text: widget.initialCategory ?? '');
     _query = _search.text.trim();
-    _tab = TabController(length: 2, vsync: this);
     _search.addListener(() {
       setState(() => _query = _search.text.trim());
     });
@@ -60,7 +58,6 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
 
   @override
   void dispose() {
-    _tab.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -243,48 +240,49 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       appBar: AppBar(
         title: const Text('룰북'),
         actions: _rulesAppBarActions,
-        bottom: _rulesSectionAndSportTabs(
-          TabBar(
-            controller: _tab,
-            tabs: [
-              Tab(
-                icon: const Icon(Icons.sports_tennis_rounded),
-                text: sportLabel(Sport.tennis),
-              ),
-              Tab(
-                icon: const Icon(Icons.sports_soccer_rounded),
-                text: sportLabel(Sport.futsal),
-              ),
-            ],
-            indicatorColor: cs.primary,
-            labelColor: cs.primary,
-            unselectedLabelColor: cs.onSurfaceVariant,
-          ),
-        ),
+        bottom: _tournamentSectionBar(),
       ),
       backgroundColor: cs.surface,
       body: KeyedSubtree(
         key: AllRoundE2EKeys.rulesReady,
-        child: TabBarView(
-          controller: _tab,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _RuleBookBody(
-              grouped: _tennisByCat,
-              sport: 'tennis',
-              query: _query,
-              searchController: _search,
-              highlight: _tennisHighlight,
-              error: _tennisError,
-              onRetry: _load,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, AppSpacing.md, 0, 0),
+              child: _SportRailToggle(
+                selected: _selectedSport,
+                onSelected: (sport) =>
+                    setState(() => _selectedSport = sport),
+              ),
             ),
-            _RuleBookBody(
-              grouped: _futsalByCat,
-              sport: 'futsal',
-              query: _query,
-              searchController: _search,
-              highlight: _futsalHighlight,
-              error: _futsalError,
-              onRetry: _load,
+            const SizedBox(height: AppSpacing.xs),
+            Expanded(
+              // 종목을 바꿔도 각자 검색·아코디언 상태를 유지하도록 두 종목의
+              // 본문을 계속 살려둔다(예전 TabBarView와 동일한 keep-alive 성격).
+              child: IndexedStack(
+                index: _selectedSport == 'tennis' ? 0 : 1,
+                children: [
+                  _RuleBookBody(
+                    grouped: _tennisByCat,
+                    sport: 'tennis',
+                    query: _query,
+                    searchController: _search,
+                    highlight: _tennisHighlight,
+                    error: _tennisError,
+                    onRetry: _load,
+                  ),
+                  _RuleBookBody(
+                    grouped: _futsalByCat,
+                    sport: 'futsal',
+                    query: _query,
+                    searchController: _search,
+                    highlight: _futsalHighlight,
+                    error: _futsalError,
+                    onRetry: _load,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -296,19 +294,6 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     return TournamentSectionBar(
       selected: TournamentSection.rules,
       showRankings: ref.watch(activeSportProvider) == 'tennis',
-    );
-  }
-
-  PreferredSizeWidget _rulesSectionAndSportTabs(TabBar sportTabs) {
-    final sectionBar = _tournamentSectionBar();
-    return PreferredSize(
-      preferredSize: Size.fromHeight(
-        sectionBar.preferredSize.height + sportTabs.preferredSize.height,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [sectionBar, sportTabs],
-      ),
     );
   }
 
@@ -411,16 +396,45 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
     final scaleExtra = ((textScale - 1) * AppSpacing.xxxl)
         .clamp(0.0, AppSpacing.lg)
         .toDouble();
+    const searchBarHeight = 44.0;
     final headerExtent = showHighlight
         ? AppSpacing.lg +
             AppSizes.control * 2 +
             AppSpacing.huge +
             AppSpacing.md +
-            AppSizes.control +
+            searchBarHeight +
             AppSpacing.md +
             scaleExtra
-        : AppSpacing.lg + AppSizes.control + AppSpacing.md;
+        : AppSpacing.lg + searchBarHeight + AppSpacing.md;
 
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RuleCategoryRail(
+          categories: hasQuery
+              ? const []
+              : widget.grouped!.keys.toList(growable: false),
+          expandedCategory: _expandedCategory,
+          onTap: (category) {
+            setState(() {
+              _expandedCategory =
+                  _expandedCategory == category ? null : category;
+            });
+          },
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: _buildContent(context, hasQuery, filtered, headerExtent)),
+      ],
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    bool hasQuery,
+    Map<String, List<RuleArticle>> filtered,
+    double headerExtent,
+  ) {
+    final showHighlight = !hasQuery && widget.highlight != null;
     return CustomScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
@@ -431,9 +445,9 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
             backgroundColor: Theme.of(context).colorScheme.surface,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
+                0,
+                AppSpacing.md,
                 AppSpacing.lg,
-                AppSpacing.xl,
                 AppSpacing.md,
               ),
               child: Column(
@@ -451,7 +465,7 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
                     const SizedBox(height: AppSpacing.md),
                   ],
                   SizedBox(
-                    height: AppSizes.control,
+                    height: 44,
                     child: _RuleSearchCard(
                       controller: widget.searchController,
                       sport: widget.sport,
@@ -464,9 +478,9 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
+            0,
             AppSpacing.md,
-            AppSpacing.xl,
+            AppSpacing.lg,
             AppSpacing.xxxl,
           ),
           sliver: SliverList.list(
@@ -530,6 +544,143 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
       if (article.id == articleId) return article;
     }
     return null;
+  }
+}
+
+/// 상단 종목 탭을 대신하는 종목 전환 레일 항목(테니스/풋살). 종목별 본문이
+/// 오류·빈 상태여도 항상 떠 있어야 해서 `_RuleBookBody` 밖(화면 레벨)에 둔다.
+class _SportRailToggle extends StatelessWidget {
+  const _SportRailToggle({required this.selected, required this.onSelected});
+
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RuleRailItem(
+            icon: Icons.sports_tennis_rounded,
+            label: sportLabel(Sport.tennis),
+            selected: selected == 'tennis',
+            onTap: () => onSelected('tennis'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _RuleRailItem(
+            icon: Icons.sports_soccer_rounded,
+            label: sportLabel(Sport.futsal),
+            selected: selected == 'futsal',
+            onTap: () => onSelected('futsal'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 아코디언 카테고리를 대신 고를 수 있는 왼쪽 레일. 종목 전환 레일 바로 아래
+/// 이어 붙어 하나의 세로 레일처럼 보이도록 같은 폭(72)·같은 항목 스타일을 쓴다.
+class _RuleCategoryRail extends StatelessWidget {
+  const _RuleCategoryRail({
+    required this.categories,
+    required this.expandedCategory,
+    required this.onTap,
+  });
+
+  final List<String> categories;
+  final String? expandedCategory;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          for (final category in categories) ...[
+            _RuleRailItem(
+              icon: _iconForCategory(category),
+              label: category,
+              selected: expandedCategory == category,
+              onTap: () => onTap(category),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RuleRailItem extends StatelessWidget {
+  const _RuleRailItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = selected ? cs.primary : cs.onSurfaceVariant;
+    const radius = BorderRadius.only(
+      topRight: Radius.circular(AppRadius.md),
+      bottomRight: Radius.circular(AppRadius.md),
+    );
+
+    return Material(
+      color: selected ? cs.primaryContainer : Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: selected ? cs.primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: color),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -723,8 +874,15 @@ class _RuleSearchCard extends StatelessWidget {
 
     return TextField(
       controller: controller,
+      style: const TextStyle(fontSize: 15),
       decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
         hintText: '룰 검색하기...',
+        hintStyle: const TextStyle(fontSize: 15),
         prefixIcon: Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
         suffixIcon: Icon(
           sport == 'tennis'
@@ -1067,7 +1225,8 @@ class _ExpandedRuleCategory extends StatelessWidget {
         ),
         child: Column(
           children: [
-            for (final article in visible) _AccordionRuleRow(article: article),
+            for (var i = 0; i < visible.length; i++)
+              _AccordionRuleRow(article: visible[i], index: i),
             _OpenCategoryRow(
               count: articles.length,
               onTap: () => _showCategorySheet(context, title, articles, sport),
@@ -1080,14 +1239,14 @@ class _ExpandedRuleCategory extends StatelessWidget {
 }
 
 class _AccordionRuleRow extends ConsumerWidget {
-  const _AccordionRuleRow({required this.article});
+  const _AccordionRuleRow({required this.article, required this.index});
 
   final RuleArticle article;
+  final int index;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1097,25 +1256,40 @@ class _AccordionRuleRow extends ConsumerWidget {
           }
           _showArticle(context, article);
         },
-        child: ConstrainedBox(
+        child: Container(
           constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: cs.outlineVariant)),
+          ),
           child: Row(
             children: [
-              Icon(Icons.circle, size: AppSpacing.xs, color: cs.primary),
-              const SizedBox(width: AppSpacing.md),
+              SizedBox(
+                width: 20,
+                child: Text(
+                  '${index + 1}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: cs.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   _displayRuleTitle(article.title),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.45,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: cs.onSurfaceVariant,
-              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: cs.outline),
             ],
           ),
         ),
@@ -1217,8 +1391,8 @@ class _PopularRulesList extends StatelessWidget {
           style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
-        for (final article in articles) ...[
-          _ArticleRow(article: article),
+        for (var i = 0; i < articles.length; i++) ...[
+          _ArticleRow(article: articles[i], index: i),
           const SizedBox(height: AppSpacing.sm),
         ],
       ],
@@ -1227,15 +1401,15 @@ class _PopularRulesList extends StatelessWidget {
 }
 
 class _ArticleRow extends ConsumerWidget {
-  const _ArticleRow({required this.article, this.onOpen});
+  const _ArticleRow({required this.article, this.index, this.onOpen});
 
   final RuleArticle article;
+  final int? index;
   final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1253,23 +1427,38 @@ class _ArticleRow extends ConsumerWidget {
           constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+            border: Border(top: BorderSide(color: cs.outlineVariant)),
           ),
           child: Row(
             children: [
+              if (index != null) ...[
+                SizedBox(
+                  width: 20,
+                  child: Text(
+                    '${index! + 1}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Expanded(
                 child: Text(
                   _displayRuleTitle(article.title),
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.45,
+                    color: cs.onSurface,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: cs.onSurfaceVariant,
-              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: cs.outline),
             ],
           ),
         ),
@@ -1360,10 +1549,12 @@ class _CategorySheetState extends State<_CategorySheet> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          for (final article in widget.articles) ...[
+          for (var i = 0; i < widget.articles.length; i++) ...[
             _ArticleRow(
-              article: article,
-              onOpen: () => setState(() => _selectedArticle = article),
+              article: widget.articles[i],
+              index: i,
+              onOpen: () =>
+                  setState(() => _selectedArticle = widget.articles[i]),
             ),
             const SizedBox(height: AppSpacing.sm),
           ],

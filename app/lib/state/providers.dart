@@ -91,6 +91,13 @@ final myClubsProvider = FutureProvider<List<Club>>((ref) async {
   return api.myClubs();
 });
 
+/// 홈 풋살 등급 카드용 — 올해 참석 확정한 클럽 모임 수.
+final myFutsalAttendanceCountThisYearProvider = FutureProvider<int>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myClubEventAttendanceCountThisYear();
+});
+
 /// 즐겨찾기 ID 집합
 final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   ref.watch(authStateProvider);
