@@ -67,18 +67,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('MY 화면 설정은 작은 화면과 큰 글자에서 세 선택지를 유지한다', (tester) async {
+  testWidgets('MY 앱 설정은 알림과 세 화면 모드를 함께 보여준다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
           theme: AppTheme.dark(),
-          home: const MediaQuery(
-            data: MediaQueryData(textScaler: TextScaler.linear(1.3)),
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
             child: Scaffold(
               body: Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: SingleChildScrollView(child: AppearanceSection()),
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: SingleChildScrollView(
+                  child: AppSettingsSection(
+                    tournamentNotificationsEnabled: true,
+                    clubNotificationsEnabled: true,
+                    coachNotificationsEnabled: false,
+                    onNotificationTap: () {},
+                  ),
+                ),
               ),
             ),
           ),
@@ -90,6 +97,9 @@ void main() {
       find.byKey(AllRoundE2EKeys.profileAppearanceSection),
       findsOneWidget,
     );
+    expect(find.text('앱 설정'), findsOneWidget);
+    expect(find.text('알림 설정'), findsOneWidget);
+    expect(find.text('2개 알림 켜짐'), findsOneWidget);
     expect(find.text('자동'), findsOneWidget);
     expect(find.text('라이트'), findsOneWidget);
     expect(find.text('다크'), findsOneWidget);
@@ -143,7 +153,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('MY 요약 카드와 빠른 메뉴는 320px 200% 글자에서 넘치지 않는다', (tester) async {
+  testWidgets('MY 스포츠와 활동 목록은 320px 200% 글자에서 넘치지 않는다', (tester) async {
     _setViewport(tester, const Size(320, 568));
     final sports = [
       UserSport(sport: 'futsal', grade: 'beginner', isPrimary: true),
@@ -154,6 +164,7 @@ void main() {
           myTournamentRecordsProvider.overrideWith((ref) async => const []),
           myClubsProvider.overrideWith((ref) async => const []),
           userSportsProvider.overrideWith((ref) async => sports),
+          userTennisOrgsProvider.overrideWith((ref) async => const []),
         ],
         child: MaterialApp(
           theme: AppTheme.dark(),
@@ -189,11 +200,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('MY 바로가기'), findsOneWidget);
-    expect(find.text('프로필 수정'), findsOneWidget);
+    expect(find.text('내 스포츠'), findsOneWidget);
+    expect(find.text('풋살 · 기본 종목'), findsOneWidget);
+    expect(find.text('내 활동'), findsOneWidget);
     expect(find.text('관심 대회'), findsOneWidget);
     expect(find.text('내 클럽'), findsOneWidget);
-    expect(find.text('룰북'), findsOneWidget);
+    expect(find.text('룰북'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

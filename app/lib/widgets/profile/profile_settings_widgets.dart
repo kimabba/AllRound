@@ -44,32 +44,58 @@ class ProfileServiceSection extends StatelessWidget {
 }
 
 // ────────────────────────────────────────────────────────────
-// 화면 설정 섹션 (다크모드 토글)
+// 앱 설정 (알림 + 화면 모드)
 // ────────────────────────────────────────────────────────────
 
-class AppearanceSection extends ConsumerWidget {
-  const AppearanceSection({super.key});
+class AppSettingsSection extends ConsumerWidget {
+  const AppSettingsSection({
+    super.key,
+    required this.tournamentNotificationsEnabled,
+    required this.clubNotificationsEnabled,
+    required this.coachNotificationsEnabled,
+    required this.onNotificationTap,
+  });
+
+  final bool tournamentNotificationsEnabled;
+  final bool clubNotificationsEnabled;
+  final bool coachNotificationsEnabled;
+  final VoidCallback onNotificationTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final mode = ref.watch(themeModeProvider);
+    final activeCount = [
+      tournamentNotificationsEnabled,
+      clubNotificationsEnabled,
+      coachNotificationsEnabled,
+    ].where((enabled) => enabled).length;
 
     return Column(
       key: AllRoundE2EKeys.profileAppearanceSection,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: '화면 설정'),
+        const SectionHeader(title: '앱 설정'),
         const SizedBox(height: AppSpacing.sm),
         const Divider(height: 1),
+        ActionRow(
+          icon: Icons.notifications_outlined,
+          label: '알림 설정',
+          subtitle: activeCount == 0 ? '모든 알림 꺼짐' : '$activeCount개 알림 켜짐',
+          onTap: onNotificationTap,
+        ),
+        Divider(
+          height: 1,
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '다크 모드',
+                '화면 모드',
                 style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -109,68 +135,28 @@ class AppearanceSection extends ConsumerWidget {
 }
 
 // ────────────────────────────────────────────────────────────
-// 계정 섹션 (알림 + 로그아웃)
+// 계정 관리
 // ────────────────────────────────────────────────────────────
 
 class AccountSection extends StatelessWidget {
   final WidgetRef ref;
-  final int unreadNotificationCount;
-  final bool tournamentNotificationsEnabled;
-  final bool clubNotificationsEnabled;
-  final bool coachNotificationsEnabled;
-  final VoidCallback onNotificationInboxTap;
-  final VoidCallback onNotificationTap;
 
   const AccountSection({
     super.key,
     required this.ref,
-    required this.unreadNotificationCount,
-    required this.tournamentNotificationsEnabled,
-    required this.clubNotificationsEnabled,
-    required this.coachNotificationsEnabled,
-    required this.onNotificationInboxTap,
-    required this.onNotificationTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final activeCount = [
-      tournamentNotificationsEnabled,
-      clubNotificationsEnabled,
-      coachNotificationsEnabled,
-    ].where((enabled) => enabled).length;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: '계정'),
+        const SectionHeader(title: '계정 관리'),
         const SizedBox(height: AppSpacing.sm),
         Divider(height: 1, color: cs.outlineVariant),
         Column(
           children: [
-            ActionRow(
-              icon: Icons.notifications_active_outlined,
-              label: '알림함',
-              subtitle: unreadNotificationCount == 0
-                  ? '새 알림 없음'
-                  : '읽지 않은 알림 $unreadNotificationCount개',
-              onTap: onNotificationInboxTap,
-            ),
-            Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-            ),
-            ActionRow(
-              icon: Icons.notifications_outlined,
-              label: '알림 설정',
-              subtitle: activeCount == 0 ? '모든 알림 꺼짐' : '$activeCount개 알림 켜짐',
-              onTap: onNotificationTap,
-            ),
-            Divider(
-              height: 1,
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-            ),
             ActionRow(
               icon: Icons.logout_rounded,
               label: '로그아웃',

@@ -16,9 +16,7 @@ import '../utils/club_image_upload.dart';
 import '../utils/customer_support.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_quick_actions.dart';
-import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
-import '../widgets/profile/profile_sports_widgets.dart';
 import '../widgets/app_card.dart';
 
 const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
@@ -335,8 +333,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final sports = ref.watch(userSportsProvider);
-    final tennisOrgs = ref.watch(userTennisOrgsProvider);
     final profile = ref.watch(myProfileProvider).value;
     final isAdmin = ref.watch(isAdminProvider).value ?? false;
     final unreadNotificationCount =
@@ -367,14 +363,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             title: displayName,
             subtitle: email,
             infoLine: infoLine,
-            sports: sports,
-            tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
             avatarUrl: profile?.avatarUrl,
             onAvatarTap: _showProfilePhotoSheet,
             onNotificationsTap: () => context.push('/notifications'),
             unreadNotificationCount: unreadNotificationCount,
-            onMoreTap: () => context.push('/more'),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -401,19 +394,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ],
                 const SizedBox(height: AppSpacing.xxl),
-                const MyClubsSection(),
-                tennisOrgs.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (orgs) => orgs.isEmpty
-                      ? const SizedBox.shrink()
-                      : Column(
-                          children: [
-                            const SizedBox(height: AppSpacing.xxl),
-                            TennisOrgsSection(orgs: orgs),
-                          ],
-                        ),
-                ),
                 const SizedBox(height: AppSpacing.xxl),
                 ProfileServiceSection(
                   onCustomerSupportTap: _openCustomerSupport,
@@ -421,16 +401,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       context.push('/tournaments/submit'),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                AppearanceSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                AccountSection(
-                  ref: ref,
-                  unreadNotificationCount: unreadNotificationCount,
+                AppSettingsSection(
                   tournamentNotificationsEnabled: _notifyTournament,
                   clubNotificationsEnabled: _notifyClub,
                   coachNotificationsEnabled: _notifyCoach,
-                  onNotificationInboxTap: () => context.push('/notifications'),
                   onNotificationTap: _showNotificationSettings,
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                AccountSection(
+                  ref: ref,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),
               ]),
