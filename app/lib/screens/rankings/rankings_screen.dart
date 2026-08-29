@@ -11,6 +11,7 @@ import '../../utils/club_label.dart';
 import '../../utils/grade_labels.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/tournament_section_bar.dart';
+import '../../widgets/notification_inbox_action.dart';
 import 'player_history_sheet.dart';
 
 // ── 순위표 ────────────────────────────────────────────────────────────────
@@ -219,8 +220,7 @@ class _RankingRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          SizedBox(
-              width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
+          SizedBox(width: 32, child: Text('${row.rank}', style: tt.bodyLarge)),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -230,14 +230,12 @@ class _RankingRow extends StatelessWidget {
                   row.playerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 if (club != null)
                   Text(
                     club,
-                    style:
-                        tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
               ],
             ),
@@ -888,7 +886,8 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
           orgCode: _orgCode,
           ranking: data.myRanking,
           linked: linked,
-          onTap: linked ? () => context.push('/rankings/me?org=$_orgCode') : null,
+          onTap:
+              linked ? () => context.push('/rankings/me?org=$_orgCode') : null,
         ),
         if (!linked) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -964,6 +963,11 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('협회 랭킹'),
+        actions: const [
+          NotificationInboxAction(),
+          ProfileAction(),
+          SizedBox(width: 4),
+        ],
         bottom: TournamentSectionBar(
           selected: TournamentSection.rankings,
           showRankings: ref.watch(activeSportProvider) == 'tennis',
@@ -1115,8 +1119,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                             RankingList(
                               rows: visibleRows,
                               linkedOrgPlayerId: data.linkedOrgPlayerId,
-                              claimableOrgPlayerIds:
-                                  data.claimableOrgPlayerIds,
+                              claimableOrgPlayerIds: data.claimableOrgPlayerIds,
                               disputableOrgPlayerIds:
                                   data.disputableOrgPlayerIds,
                               onClaim: _claim,

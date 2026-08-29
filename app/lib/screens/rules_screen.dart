@@ -189,23 +189,29 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     if (_loading) {
       return Scaffold(
         key: AllRoundE2EKeys.rulesScreen,
-        appBar: AppBar(title: const Text('룰북'), actions: _rulesAppBarActions),
-        body: _withTournamentSectionBar(const _RulesLoadingState()),
+        appBar: AppBar(
+          title: const Text('룰북'),
+          actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
+        ),
+        body: const _RulesLoadingState(),
       );
     }
 
     if (_error != null) {
       return Scaffold(
         key: AllRoundE2EKeys.rulesScreen,
-        appBar: AppBar(title: const Text('룰북'), actions: _rulesAppBarActions),
-        body: _withTournamentSectionBar(
-          AppEmptyState(
-            icon: Icons.menu_book_outlined,
-            title: '룰북을 불러올 수 없어요',
-            description: _error,
-            actionLabel: '다시 시도',
-            onAction: _load,
-          ),
+        appBar: AppBar(
+          title: const Text('룰북'),
+          actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
+        ),
+        body: AppEmptyState(
+          icon: Icons.menu_book_outlined,
+          title: '룰북을 불러올 수 없어요',
+          description: _error,
+          actionLabel: '다시 시도',
+          onAction: _load,
         ),
       );
     }
@@ -216,18 +222,17 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         appBar: AppBar(
           title: Text(_titleForSport(_activeSport!)),
           actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
         ),
         backgroundColor: cs.surface,
-        body: _withTournamentSectionBar(
-          KeyedSubtree(
-            key: AllRoundE2EKeys.rulesReady,
-            child: _RuleBookBody(
-              grouped: _activeByCat,
-              sport: _activeSport!,
-              query: _query,
-              searchController: _search,
-              highlight: _activeHighlight,
-            ),
+        body: KeyedSubtree(
+          key: AllRoundE2EKeys.rulesReady,
+          child: _RuleBookBody(
+            grouped: _activeByCat,
+            sport: _activeSport!,
+            query: _query,
+            searchController: _search,
+            highlight: _activeHighlight,
           ),
         ),
       );
@@ -238,64 +243,72 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       appBar: AppBar(
         title: const Text('룰북'),
         actions: _rulesAppBarActions,
-        bottom: TabBar(
-          controller: _tab,
-          tabs: [
-            Tab(
-              icon: const Icon(Icons.sports_tennis_rounded),
-              text: sportLabel(Sport.tennis),
-            ),
-            Tab(
-              icon: const Icon(Icons.sports_soccer_rounded),
-              text: sportLabel(Sport.futsal),
-            ),
-          ],
-          indicatorColor: cs.primary,
-          labelColor: cs.primary,
-          unselectedLabelColor: cs.onSurfaceVariant,
+        bottom: _rulesSectionAndSportTabs(
+          TabBar(
+            controller: _tab,
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.sports_tennis_rounded),
+                text: sportLabel(Sport.tennis),
+              ),
+              Tab(
+                icon: const Icon(Icons.sports_soccer_rounded),
+                text: sportLabel(Sport.futsal),
+              ),
+            ],
+            indicatorColor: cs.primary,
+            labelColor: cs.primary,
+            unselectedLabelColor: cs.onSurfaceVariant,
+          ),
         ),
       ),
       backgroundColor: cs.surface,
-      body: _withTournamentSectionBar(
-        KeyedSubtree(
-          key: AllRoundE2EKeys.rulesReady,
-          child: TabBarView(
-            controller: _tab,
-            children: [
-              _RuleBookBody(
-                grouped: _tennisByCat,
-                sport: 'tennis',
-                query: _query,
-                searchController: _search,
-                highlight: _tennisHighlight,
-                error: _tennisError,
-                onRetry: _load,
-              ),
-              _RuleBookBody(
-                grouped: _futsalByCat,
-                sport: 'futsal',
-                query: _query,
-                searchController: _search,
-                highlight: _futsalHighlight,
-                error: _futsalError,
-                onRetry: _load,
-              ),
-            ],
-          ),
+      body: KeyedSubtree(
+        key: AllRoundE2EKeys.rulesReady,
+        child: TabBarView(
+          controller: _tab,
+          children: [
+            _RuleBookBody(
+              grouped: _tennisByCat,
+              sport: 'tennis',
+              query: _query,
+              searchController: _search,
+              highlight: _tennisHighlight,
+              error: _tennisError,
+              onRetry: _load,
+            ),
+            _RuleBookBody(
+              grouped: _futsalByCat,
+              sport: 'futsal',
+              query: _query,
+              searchController: _search,
+              highlight: _futsalHighlight,
+              error: _futsalError,
+              onRetry: _load,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _withTournamentSectionBar(Widget child) {
-    return Column(
-      children: [
-        TournamentSectionBar(
-          selected: TournamentSection.rules,
-          showRankings: ref.watch(activeSportProvider) == 'tennis',
-        ),
-        Expanded(child: child),
-      ],
+  TournamentSectionBar _tournamentSectionBar() {
+    return TournamentSectionBar(
+      selected: TournamentSection.rules,
+      showRankings: ref.watch(activeSportProvider) == 'tennis',
+    );
+  }
+
+  PreferredSizeWidget _rulesSectionAndSportTabs(TabBar sportTabs) {
+    final sectionBar = _tournamentSectionBar();
+    return PreferredSize(
+      preferredSize: Size.fromHeight(
+        sectionBar.preferredSize.height + sportTabs.preferredSize.height,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [sectionBar, sportTabs],
+      ),
     );
   }
 

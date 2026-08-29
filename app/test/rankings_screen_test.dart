@@ -7,7 +7,9 @@ import 'package:allround/screens/rankings/rankings_screen.dart';
 import 'package:allround/services/api.dart';
 import 'package:allround/state/providers.dart';
 import 'package:allround/theme/app_theme.dart';
+import 'package:allround/testing/e2e_keys.dart';
 import 'package:allround/widgets/app_card.dart';
+import 'package:allround/widgets/tournament_section_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -223,6 +225,20 @@ Future<void> _pumpRankingList(WidgetTester tester, RankingList list) {
 }
 
 void main() {
+  testWidgets('랭킹 상단에 알림과 MY 메뉴를 모두 표시한다', (tester) async {
+    await _pumpScreen(tester, rows: const [], links: const []);
+
+    expect(find.byTooltip('알림함'), findsOneWidget);
+    expect(find.byKey(AllRoundE2EKeys.navProfile), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byType(TournamentSectionBar),
+      ),
+      findsOneWidget,
+    );
+  });
+
   group('협회 드롭다운', () {
     final rows = [
       _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
@@ -383,8 +399,7 @@ void main() {
     expect(find.text('우승'), findsOneWidget);
   });
 
-  testWidgets('선수 기록 시트는 320px 200% 글자에서도 긴 협회 원문을 모두 표시한다',
-      (tester) async {
+  testWidgets('선수 기록 시트는 320px 200% 글자에서도 긴 협회 원문을 모두 표시한다', (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -489,25 +504,29 @@ void main() {
   });
 
   test('요약 라벨 - 우승/준우승/입상이 모두 있으면 전부 표시한다', () {
-    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
 
     expect(yearlySummaryLabel(stats), '우승 3 · 준우승 1 · 입상 2 · 1,946점');
   });
 
   test('요약 라벨 - 횟수가 0인 항목은 생략한다', () {
-    const stats = YearlyStats(wins: 3, runnerUps: 0, semiFinals: 2, points: 1946);
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 0, semiFinals: 2, points: 1946);
 
     expect(yearlySummaryLabel(stats), '우승 3 · 입상 2 · 1,946점');
   });
 
   test('요약 라벨 - 셋 다 0이면 포인트만 표시한다', () {
-    const stats = YearlyStats(wins: 0, runnerUps: 0, semiFinals: 0, points: 1946);
+    const stats =
+        YearlyStats(wins: 0, runnerUps: 0, semiFinals: 0, points: 1946);
 
     expect(yearlySummaryLabel(stats), '1,946점');
   });
 
   test('요약 라벨 - 이력이 완전하면 접미사가 붙지 않는다', () {
-    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
 
     expect(
       yearlySummaryLabel(stats, complete: true),
@@ -516,7 +535,8 @@ void main() {
   });
 
   test('요약 라벨 - 이력이 잘렸으면 "일부 기록" 접미사가 붙는다', () {
-    const stats = YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
 
     expect(
       yearlySummaryLabel(stats, complete: false),
@@ -1007,7 +1027,8 @@ void main() {
         ],
       );
 
-      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
       // 부서(골드부)·순위(3위)·누적 포인트(2,649P)가 한 카드에 보인다.
       expect(find.textContaining('골드부 3위'), findsOneWidget);
       expect(find.textContaining('2,649P'), findsOneWidget);
@@ -1020,7 +1041,8 @@ void main() {
       // /rankings/me 로 가는 유일한 진입점이다 — 사라지면 기록 화면이 고아가 된다.
       await _pumpScreen(tester, rows: rows, links: confirmedLinks);
 
-      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
       expect(find.text('공표된 순위 없음'), findsOneWidget);
     });
 
@@ -1035,7 +1057,8 @@ void main() {
       );
 
       expect(find.text('김평화'), findsOneWidget);
-      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
       expect(find.text('공표된 순위 없음'), findsOneWidget);
     });
 
@@ -1045,7 +1068,8 @@ void main() {
       // 카드 아래 그대로 유지한다.
       await _pumpScreen(tester, rows: rows, links: const [], myOrgs: const []);
 
-      expect(find.byKey(const ValueKey('my-ranking-summary-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
       expect(find.textContaining('전적이 없거나 확인되지 않았습니다'), findsOneWidget);
       // 탭 불가 상태라 거짓 어포던스인 화살표는 없어야 한다.
       expect(find.byIcon(Icons.chevron_right), findsNothing);
@@ -1112,7 +1136,8 @@ void main() {
       expect(api.lastPlayerRankingsOrgCode, 'jn');
     });
 
-    testWidgets('카드를 탭하면 /rankings/me 로 가는데, 지금 보는 협회를 org 쿼리로 싣는다', (tester) async {
+    testWidgets('카드를 탭하면 /rankings/me 로 가는데, 지금 보는 협회를 org 쿼리로 싣는다',
+        (tester) async {
       // "전남 내 기록" 카드를 탭했는데 광주 기록이 뜨는 불일치(myConfirmedLink()가
       // org_code 정렬 1순위만 돌려줘 광주+전남 동시 confirmed 사용자는 항상
       // 광주가 나옴) 재발 방지 — 카드가 지금 보는 협회를 쿼리로 실어 보내는지 검증.
@@ -1149,7 +1174,8 @@ void main() {
               ),
             ),
           ],
-          child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+          child:
+              MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
