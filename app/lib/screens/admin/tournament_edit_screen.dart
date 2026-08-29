@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/session_security.dart';
 import '../../state/providers.dart';
+import 'admin_shell.dart';
 
 class TournamentEditScreen extends ConsumerStatefulWidget {
   const TournamentEditScreen({super.key, required this.tournamentId});
@@ -144,12 +145,16 @@ class _TournamentEditScreenState extends ConsumerState<TournamentEditScreen> {
     }
     if (_data == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('대회 편집')),
+        appBar: AppBar(
+          leading: adminShellLeading(context),
+          title: const Text('대회 편집'),
+        ),
         body: const Center(child: Text('대회를 찾을 수 없습니다')),
       );
     }
     return Scaffold(
       appBar: AppBar(
+        leading: adminShellLeading(context),
         title: const Text('대회 편집'),
         actions: [
           OutlinedButton.icon(

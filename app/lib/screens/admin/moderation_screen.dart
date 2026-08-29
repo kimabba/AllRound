@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/moderation.dart';
 import '../../state/providers.dart';
+import 'admin_shell.dart';
 
 class ModerationScreen extends ConsumerStatefulWidget {
   const ModerationScreen({super.key});
@@ -46,6 +47,7 @@ class _ModerationScreenState extends ConsumerState<ModerationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: adminShellLeading(context),
         title: const Text('신고 · 제재 관리'),
         actions: [
           IconButton(
