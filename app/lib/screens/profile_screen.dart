@@ -401,16 +401,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       context.push('/tournaments/submit'),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                AppearanceSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                AccountSection(
-                  ref: ref,
-                  unreadNotificationCount: unreadNotificationCount,
+                AppSettingsSection(
                   tournamentNotificationsEnabled: _notifyTournament,
                   clubNotificationsEnabled: _notifyClub,
                   coachNotificationsEnabled: _notifyCoach,
-                  onNotificationInboxTap: () => context.push('/notifications'),
                   onNotificationTap: _showNotificationSettings,
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                AccountSection(
+                  ref: ref,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),
               ]),
