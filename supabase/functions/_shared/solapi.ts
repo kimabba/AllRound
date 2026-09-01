@@ -18,6 +18,8 @@ export interface SolapiConfig {
 /** 솔라피 발송 응답 중 실패 판정에 쓰는 부분만 정의한다. */
 interface SendResponse {
   failedMessageList?: Array<{ statusCode?: string; statusMessage?: string }>;
+  // 반려가 목록 대신 집계로만 잡히는 경우가 있어 함께 본다.
+  groupInfo?: { count?: { registeredFailed?: number } };
 }
 
 function requireEnv(name: string): string {
@@ -85,8 +87,20 @@ export async function sendSms(
   // 솔라피는 개별 메시지가 반려돼도 HTTP 200 을 준다(잔액 부족, 미등록 발신번호 등).
   // 여기서 보지 않으면 "보냈다고 믿었는데 안 나간" 상태가 조용히 성공으로 기록된다.
   const body = (await res.json().catch(() => null)) as SendResponse | null;
-  const failed = body?.failedMessageList;
+  if (!body || typeof body !== 'object') {
+    // 200 인데 우리가 아는 응답이 아니면 발송 여부를 확인할 수 없다.
+    // 확인 못 한 것을 성공으로 넘기지 않는다(fail-closed).
+    throw new Error('SOLAPI 200: unparsable body');
+  }
+
+  const failed = body.failedMessageList;
   if (Array.isArray(failed) && failed.length > 0) {
     throw new Error(`SOLAPI send failed: ${failed[0]?.statusCode ?? 'unknown'}`);
+  }
+
+  // 반려가 목록 없이 집계로만 오는 경우를 막는다. 1건 발송이므로 1 이상이면 그 1건이다.
+  const registeredFailed = body.groupInfo?.count?.registeredFailed ?? 0;
+  if (registeredFailed > 0) {
+    throw new Error(`SOLAPI send failed: registeredFailed=${registeredFailed}`);
   }
 }
