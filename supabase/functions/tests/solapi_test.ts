@@ -28,6 +28,14 @@ async function hmacHex(secret: string, message: string): Promise<string> {
     .join('');
 }
 
+/** 공식 문서 기준의 정상 접수 응답(1건 성공). */
+function okBody(): string {
+  return JSON.stringify({
+    failedMessageList: [],
+    groupInfo: { count: { total: 1, registeredSuccess: 1, registeredFailed: 0 } },
+  });
+}
+
 function stubFetch(response: Response): { calls: Array<{ url: string; init?: RequestInit }> } {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
@@ -39,9 +47,7 @@ function stubFetch(response: Response): { calls: Array<{ url: string; init?: Req
 
 Deno.test('sendSms: Authorization 은 hex 서명을 담은 HMAC-SHA256 형식이다', async () => {
   const originalFetch = globalThis.fetch;
-  const { calls } = stubFetch(
-    new Response(JSON.stringify({ failedMessageList: [] }), { status: 200 }),
-  );
+  const { calls } = stubFetch(new Response(okBody(), { status: 200 }));
   try {
     await sendSms(CFG, '01012345678', '[올라운드] 인증번호 123456');
 
@@ -125,8 +131,54 @@ Deno.test('sendSms: 실패 목록이 비어도 registeredFailed 가 있으면 �
       Error,
     );
     assert(
-      err.message.includes('registeredFailed'),
+      err.message.includes('rejected'),
       `집계 실패를 못 잡았다: ${err.message}`,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('sendSms: 접수 성공 증거가 없는 200 응답은 전부 실패로 본다', async () => {
+  const originalFetch = globalThis.fetch;
+  // JSON 문법만 맞고 우리가 아는 형태가 아닌 응답들. 성공의 증거가 없으면 성공이 아니다.
+  const shapes = ['[]', '{}', '{"unexpected":true}', 'null', '{"groupInfo":{}}'];
+  try {
+    for (const s of shapes) {
+      stubFetch(new Response(s, { status: 200 }));
+      await assertRejects(
+        () => sendSms(CFG, '01012345678', '[올라운드] 인증번호 123456'),
+        Error,
+        undefined,
+        `이 응답을 성공으로 처리했다: ${s}`,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('sendSms: 집계 필드 타입이 다르면 실패로 보고 값을 노출하지 않는다', async () => {
+  const originalFetch = globalThis.fetch;
+  // 숫자 자리에 문자열이 오면 비교가 엉뚱하게 통과한다. 게다가 그 문자열이 전화번호면
+  // 예외 메시지를 타고 로그로 샌다. 타입부터 막고, 값은 어떤 경우에도 밖으로 내지 않는다.
+  stubFetch(
+    new Response(
+      JSON.stringify({
+        failedMessageList: [],
+        groupInfo: { count: { registeredSuccess: '01012345678', registeredFailed: '0' } },
+      }),
+      { status: 200 },
+    ),
+  );
+  try {
+    const err = await assertRejects(
+      () => sendSms(CFG, '01012345678', '[올라운드] 인증번호 123456'),
+      Error,
+    );
+    assert(
+      !err.message.includes('01012345678'),
+      `응답값이 예외로 샜다: ${err.message}`,
     );
   } finally {
     globalThis.fetch = originalFetch;

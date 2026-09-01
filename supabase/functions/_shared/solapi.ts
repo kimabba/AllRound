@@ -18,8 +18,9 @@ export interface SolapiConfig {
 /** 솔라피 발송 응답 중 실패 판정에 쓰는 부분만 정의한다. */
 interface SendResponse {
   failedMessageList?: Array<{ statusCode?: string; statusMessage?: string }>;
-  // 반려가 목록 대신 집계로만 잡히는 경우가 있어 함께 본다.
-  groupInfo?: { count?: { registeredFailed?: number } };
+  // 공식 문서상 count 의 registeredSuccess/registeredFailed 는 항상 오는 숫자 필드다.
+  // 접수 결과가 목록이 아니라 이 집계로만 표현되기도 한다.
+  groupInfo?: { count?: { registeredSuccess?: number; registeredFailed?: number } };
 }
 
 function requireEnv(name: string): string {
@@ -95,12 +96,23 @@ export async function sendSms(
 
   const failed = body.failedMessageList;
   if (Array.isArray(failed) && failed.length > 0) {
-    throw new Error(`SOLAPI send failed: ${failed[0]?.statusCode ?? 'unknown'}`);
+    // 본문에는 수신번호가 들어 있다. 상태코드만, 그것도 문자열일 때만 밖으로 낸다.
+    const code = failed[0]?.statusCode;
+    throw new Error(`SOLAPI send failed: ${typeof code === 'string' ? code : 'unknown'}`);
   }
 
-  // 반려가 목록 없이 집계로만 오는 경우를 막는다. 1건 발송이므로 1 이상이면 그 1건이다.
-  const registeredFailed = body.groupInfo?.count?.registeredFailed ?? 0;
-  if (registeredFailed > 0) {
-    throw new Error(`SOLAPI send failed: registeredFailed=${registeredFailed}`);
+  // 성공은 "성공했다는 증거"가 있을 때만 인정한다. 필드가 빠졌거나 타입이 다르면
+  // 발송 여부를 모르는 것이고, 모르는 것은 실패로 본다(fail-closed).
+  const count = body.groupInfo?.count;
+  if (
+    typeof count?.registeredSuccess !== 'number' ||
+    typeof count?.registeredFailed !== 'number'
+  ) {
+    throw new Error('SOLAPI 200: unexpected body shape');
+  }
+  // 1건 발송이므로 접수 성공이 1 미만이거나 실패가 잡히면 나가지 않은 것이다.
+  // 값 자체는 노출하지 않는다 — 응답값이 그대로 로그로 흘러가는 경로를 만들지 않는다.
+  if (count.registeredFailed > 0 || count.registeredSuccess < 1) {
+    throw new Error('SOLAPI send rejected');
   }
 }
