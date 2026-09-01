@@ -114,26 +114,33 @@ Deno.test('sendSms: HTTP 200 이어도 본문을 해석 못 하면 실패로 본
   }
 });
 
-Deno.test('sendSms: 실패 목록이 비어도 registeredFailed 가 있으면 실패로 본다', async () => {
+Deno.test('sendSms: 실패 목록이 비어도 접수 집계가 성공 1건이 아니면 실패로 본다', async () => {
   const originalFetch = globalThis.fetch;
-  stubFetch(
-    new Response(
-      JSON.stringify({
-        failedMessageList: [],
-        groupInfo: { count: { total: 1, registeredSuccess: 0, registeredFailed: 1 } },
-      }),
-      { status: 200 },
-    ),
-  );
+  // 1건 발송의 정상 결과는 성공 1 / 실패 0 뿐이다. 그 밖은 전부 "나가지 않았다"로 본다.
+  const counts = [
+    { total: 1, registeredSuccess: 0, registeredFailed: 1 }, // 반려
+    { total: 1, registeredSuccess: 0, registeredFailed: 0 }, // 성공도 실패도 아님
+    { total: 1, registeredSuccess: 1, registeredFailed: -1 }, // 음수 — 아는 값이 아니다
+  ];
   try {
-    const err = await assertRejects(
-      () => sendSms(CFG, '01012345678', '[올라운드] 인증번호 123456'),
-      Error,
-    );
-    assert(
-      err.message.includes('rejected'),
-      `집계 실패를 못 잡았다: ${err.message}`,
-    );
+    for (const count of counts) {
+      stubFetch(
+        new Response(
+          JSON.stringify({ failedMessageList: [], groupInfo: { count } }),
+          { status: 200 },
+        ),
+      );
+      const err = await assertRejects(
+        () => sendSms(CFG, '01012345678', '[올라운드] 인증번호 123456'),
+        Error,
+        undefined,
+        `이 집계를 성공으로 처리했다: ${JSON.stringify(count)}`,
+      );
+      assert(
+        err.message.includes('rejected'),
+        `집계 실패를 못 잡았다: ${err.message}`,
+      );
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

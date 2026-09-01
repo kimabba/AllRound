@@ -110,9 +110,10 @@ export async function sendSms(
   ) {
     throw new Error('SOLAPI 200: unexpected body shape');
   }
-  // 1건 발송이므로 접수 성공이 1 미만이거나 실패가 잡히면 나가지 않은 것이다.
+  // 1건 발송이므로 접수 성공이 1 미만이거나 실패가 0 이 아니면 나가지 않은 것이다.
+  // `> 0` 이 아니라 `!== 0` 인 이유: 음수 같은 이상값도 우리가 아는 응답이 아니다.
   // 값 자체는 노출하지 않는다 — 응답값이 그대로 로그로 흘러가는 경로를 만들지 않는다.
-  if (count.registeredFailed > 0 || count.registeredSuccess < 1) {
+  if (count.registeredFailed !== 0 || count.registeredSuccess < 1) {
     throw new Error('SOLAPI send rejected');
   }
 }
