@@ -52,6 +52,48 @@ Future<void> _pumpHome(
   await tester.pumpAndSettle();
 }
 
+Future<void> _pumpHomeFutsal(
+  WidgetTester tester, {
+  required String grade,
+  int? clubCount,
+  int? attendCount,
+  double textScale = 1,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      retry: (_, __) => null,
+      overrides: [
+        homeTournamentsProvider.overrideWith((ref) async => const <Tournament>[]),
+        myTournamentRecordsProvider
+            .overrideWith((ref) async => const <Tournament>[]),
+        unreadNotificationCountProvider.overrideWith((ref) async => 0),
+        activeSportProvider.overrideWith((ref) => 'futsal'),
+        userSportsProvider.overrideWith(
+          (ref) async => [UserSport(sport: 'futsal', grade: grade)],
+        ),
+        myClubsProvider.overrideWith(
+          (ref) async => clubCount == null
+              ? const <Club>[]
+              : List.generate(
+                  clubCount,
+                  (i) => Club(id: 'club-$i', sport: 'futsal', name: '클럽 $i'),
+                ),
+        ),
+        myFutsalAttendanceCountThisYearProvider
+            .overrideWith((ref) async => attendCount ?? 0),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: const HomeScreen(),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('ko');
@@ -181,6 +223,40 @@ void main() {
     );
 
     expect(find.text('시즌 포인트'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('풋살 등급 카드가 통계와 함께 뜬다', (tester) async {
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubCount: 3,
+      attendCount: 7,
+    );
+
+    expect(find.text('내 등급'), findsOneWidget);
+    expect(find.text('가입한 클럽'), findsOneWidget);
+    expect(find.text('이번 시즌 참가'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('7회'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('작은 화면 200% 글자에서도 풋살 카드가 넘치지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubCount: 12,
+      attendCount: 48,
+      textScale: 2,
+    );
+
+    expect(find.text('내가 설정한 등급 · '), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

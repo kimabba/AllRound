@@ -320,7 +320,10 @@ class _FutsalGradeCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Row(
+                  // Row 대신 Wrap — 200% 글자 크기에서 캡션이 넓어져도
+                  // 옆으로 밀려나가지 않고 다음 줄로 접힌다.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         '내가 설정한 등급 · ',

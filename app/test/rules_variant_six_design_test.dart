@@ -134,4 +134,33 @@ void main() {
     expect(tester.getTopLeft(card).dy, closeTo(before, 0.5));
     expect(find.text('룰 검색하기...'), findsOneWidget);
   });
+
+  testWidgets('작은 화면 200% 글자에서도 카테고리 레일이 넘치지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiProvider.overrideWithValue(_VariantSixRulesApi()),
+          activeSportProvider.overrideWithValue('futsal'),
+          unreadNotificationCountProvider.overrideWith((ref) async => 0),
+          currentUserProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: const RulesScreen(initialSport: 'futsal'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('경기 진행'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 }

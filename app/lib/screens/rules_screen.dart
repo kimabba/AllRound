@@ -393,8 +393,11 @@ class _RuleBookBodyState extends State<_RuleBookBody> {
     final showHighlight = !hasQuery && widget.highlight != null;
     final textScale =
         MediaQuery.textScalerOf(context).scale(AppSpacing.lg) / AppSpacing.lg;
-    final scaleExtra = ((textScale - 1) * AppSpacing.xxxl)
-        .clamp(0.0, AppSpacing.lg)
+    // 인기 카드 제목이 2줄(maxLines:2)까지 커질 수 있어, 200% 글자에서도
+    // 안 잘리게 상한을 넉넉히 둔다(레일이 생겨 폭이 좁아진 만큼 더 잘 접혀서
+    // 이 카드의 세로 길이가 늘어난다).
+    final scaleExtra = ((textScale - 1) * (AppSpacing.huge * 2.5))
+        .clamp(0.0, AppSpacing.huge * 3)
         .toDouble();
     const searchBarHeight = 44.0;
     final headerExtent = showHighlight
@@ -958,6 +961,8 @@ class _DailyPopularRuleCard extends ConsumerWidget {
                           Expanded(
                             child: Text(
                               '오늘 가장 많이 받은 클릭',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: tt.labelMedium?.copyWith(
                                 color: AppPalette.photoForeground,
                                 fontWeight: FontWeight.w800,
@@ -1035,9 +1040,16 @@ class _RuleBookSummary extends StatelessWidget {
             style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
         ),
-        Text(
-          '${grouped.length}개 분류 · $articleCount개 규칙',
-          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+        // 레일이 생기면서 이 줄이 쓸 수 있는 폭이 좁아졌다 — 200% 글자에서
+        // "N개 분류 · N개 규칙"이 안 들어갈 수 있어 줄여 쓰게 한다.
+        Flexible(
+          child: Text(
+            '${grouped.length}개 분류 · $articleCount개 규칙',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
         ),
       ],
     );
