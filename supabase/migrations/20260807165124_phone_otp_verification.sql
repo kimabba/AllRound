@@ -320,8 +320,11 @@ comment on table public.phone_verification_log is
   '전화번호 해시 인증·탈퇴 이력(어뷰징 추적). RLS 정책 없음(전면 거부) — service_role 전용.';
 
 -- ── cleanup: 기존 pg_cron 재사용 (하루 1회 만료 OTP·오래된 일일카운터 정리) ─
+-- 인증·탈퇴 이력은 보유기간 1년. 처리방침에 고지한 기간이며, 기간이 지나면 파기해야 한다
+-- (개인정보보호법 §21). 지우는 주체가 없으면 무기한 보관이 되므로 여기서 함께 정리한다.
 select cron.schedule('phone-otp-cleanup', '17 4 * * *', $$
   delete from public.phone_otp where expires_at < now() - interval '1 day';
   delete from public.phone_otp_daily where day < current_date - 7;
   delete from public.phone_otp_user_daily where day < current_date - 7;
+  delete from public.phone_verification_log where created_at < now() - interval '1 year';
 $$);

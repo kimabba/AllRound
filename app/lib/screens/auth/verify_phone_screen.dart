@@ -9,6 +9,8 @@ import '../../services/api_base.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/consent_row.dart';
+import '../../utils/legal_urls.dart';
 
 /// 전화번호 SMS 인증(필수). 온보딩 완료 후 이 게이트를 통과해야 앱에 진입한다.
 /// 성공 시 서버가 users.phone_verified_at 을 기록하고, 프로필을 무효화하면
@@ -26,6 +28,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
 
   bool _busy = false;
   bool _sent = false; // 발송 완료 → 코드 입력 단계
+  bool _consent = false; // 번호 수집·위탁 동의(필수)
   String? _error;
   int _cooldown = 0; // 재발송 쿨다운(초)
   Timer? _timer;
@@ -64,7 +67,8 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
   }
 
   Future<void> _send() async {
-    if (_busy || !_phoneLooksValid || _cooldown > 0) return;
+    // 재발송도 이 함수를 쓴다. 동의 없이 번호가 나가는 경로를 만들지 않는다.
+    if (_busy || !_phoneLooksValid || !_consent || _cooldown > 0) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -143,13 +147,40 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              if (!_sent)
+              if (!_sent) ...[
+                // 번호를 받기 전에 동의를 받는다. 수집 시점에 목적·보유기간·수탁자를
+                // 알리는 자리이고, 처리방침 4항(위탁)·1항(수집 항목)과 말이 맞아야 한다.
+                ConsentRow(
+                  checkboxKey: AllRoundE2EKeys.verifyPhoneConsent,
+                  value: _consent,
+                  label: '휴대폰 번호 수집·이용 및 문자 발송 위탁 동의 (필수)',
+                  onChanged: (v) => setState(() => _consent = v ?? false),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 4, bottom: 4),
+                  child: Text(
+                    '본인 확인과 중복 가입 방지를 위해 휴대폰 번호를 수집합니다. '
+                    '번호 원문은 저장하지 않고 암호화한 값만 보관하며 탈퇴 시 파기합니다. '
+                    '인증·탈퇴 이력은 부정 가입 방지를 위해 1년간 보관합니다. '
+                    '인증 문자 발송은 솔라피(주)에 위탁합니다.',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: LegalLinkButton(
+                    label: '개인정보 처리방침',
+                    url: kPrivacyPolicyUrl,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 AppPrimaryButton(
                   key: AllRoundE2EKeys.verifyPhoneSendButton,
                   label: '인증번호 받기',
                   loading: _busy,
-                  onPressed: _phoneLooksValid ? _send : null,
-                )
+                  onPressed: (_phoneLooksValid && _consent) ? _send : null,
+                ),
+              ]
               else ...[
                 TextField(
                   key: AllRoundE2EKeys.verifyPhoneCodeField,

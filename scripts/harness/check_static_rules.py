@@ -165,6 +165,34 @@ def check_ai_disclosure_present() -> None:
     print("✓ 생성형 AI 고지 — 챗봇 화면 · 이용약관 · 처리방침 3곳 존재")
 
 
+def check_phone_collection_disclosure() -> None:
+    """전화번호 수집 고지가 처리방침 **두 사본 모두**에 있는지 본다.
+
+    처리방침이 `docs/legal/privacy-policy.html`(앱이 여는 원문)과
+    `website/privacy/index.html`(공식 홈페이지) 두 벌로 존재하고 수동 동기화다.
+    한쪽만 고치면 "어느 쪽이 진짜냐"가 생기고, 실제 처리와 고지가 어긋나면
+    개인정보보호법 §30(처리방침 공개) 위반이 된다.
+
+    한계: 이 검사는 문자열만 본다. "화면에 실제로 보이는지"는
+    `app/test/verify_phone_screen_test.dart` 의 렌더 테스트가 맡는다.
+    이 검사의 몫은 조항이 통째로 사라지거나 한쪽 사본만 갱신되는 경우다.
+    """
+    for relative in ("docs/legal/privacy-policy.html", "website/privacy/index.html"):
+        body = read(relative)
+        for needle, what in (
+            ("휴대폰 번호", "수집 항목의 전화번호"),
+            ("솔라피", "문자 발송 수탁자(솔라피)"),
+        ):
+            if needle not in body:
+                fail(
+                    f"{relative}: {what} 고지가 없다.\n"
+                    "전화번호를 받아 외부 수탁자에게 넘기면서 처리방침에 적지 않으면 "
+                    "실제 처리와 고지가 어긋난다(개인정보보호법 §30)."
+                )
+
+    print("✓ 전화번호 수집·위탁 고지 — 처리방침 두 사본 모두 존재")
+
+
 def check_pureform_literal_contracts() -> None:
     roots = [ROOT / "app/lib/screens", ROOT / "app/lib/widgets"]
     excluded_parts = {"admin"}
@@ -727,6 +755,7 @@ def main() -> int:
     check_no_shell_background_wrappers_in_harness()
     check_tournament_closed_is_automation_only()
     check_ai_disclosure_present()
+    check_phone_collection_disclosure()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
     check_no_device_local_today()

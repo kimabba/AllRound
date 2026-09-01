@@ -26,6 +26,7 @@ class AllRoundE2EKeys {
   static const onboardingPrimaryAction = Key('e2e-onboarding-primary-action');
   static const verifyPhoneScreen = Key('e2e-verify-phone-screen');
   static const verifyPhoneNumberField = Key('e2e-verify-phone-number-field');
+  static const verifyPhoneConsent = Key('e2e-verify-phone-consent');
   static const verifyPhoneSendButton = Key('e2e-verify-phone-send-button');
   static const verifyPhoneCodeField = Key('e2e-verify-phone-code-field');
   static const verifyPhoneConfirmButton = Key('e2e-verify-phone-confirm-button');
