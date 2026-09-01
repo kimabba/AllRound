@@ -25,10 +25,12 @@ import {
   extractApplicationDeadline,
   extractDate,
   extractVenue,
+  markListingSeen,
   saveRawDocument,
   upsertTournament,
 } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
+import { extractPosterUrl } from '../poster.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 
 const USER_AGENT = 'MatchUpBot/1.0 (+https://matchup.app)';
@@ -206,14 +208,20 @@ export async function fetchDetail(
   region: string,
   titleHint: string,
   dict: DivisionDictRow[],
-): Promise<{ rawHtml: string; tournament: CrawlerTournament | null } | null> {
+): Promise<
+  {
+    rawHtml: string;
+    canonicalContent: string;
+    tournament: CrawlerTournament | null;
+  } | null
+> {
   const res = await fetch(detailUrl, { headers: COMMON_HEADERS });
   if (!res.ok) return null; // fetch 실패 — 보관할 원본 자체가 없음
   const html = await res.text();
   // 이 지점부터는 원본(html)을 확보했으므로, 파싱 가드 실패 시에도
   // { rawHtml, tournament: null } 로 반환해 dispatch 가 raw 를 failed 로 보관한다.
   const dom = new DOMParser().parseFromString(html, 'text/html');
-  if (!dom) return { rawHtml: html, tournament: null };
+  if (!dom) return { rawHtml: html, canonicalContent: '', tournament: null };
 
   // 제목: h3 우선, 없으면 listing 링크 텍스트(titleHint) 사용.
   //
@@ -235,7 +243,7 @@ export async function fetchDetail(
     if (docTitle && title && !docTitle.includes(title)) title = docTitle;
     else if (docTitle && !title) title = docTitle;
   }
-  if (!title) return { rawHtml: html, tournament: null };
+  if (!title) return { rawHtml: html, canonicalContent: '', tournament: null };
 
   // 노이즈 태그 제거 후 대회 콘텐츠 영역의 텍스트만 추출한다. 광주 협회
   // 페이지의 푸터는 <footer>가 아니라 <div class="footer">라서, body 전체를
@@ -257,6 +265,11 @@ export async function fetchDetail(
     dom.querySelector('main') ??
     dom.querySelector('body');
   const bodyText = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  // 본문 컨테이너 안의 첫 유효 이미지를 포스터로 수집한다(P6). 노이즈 요소는 위에서
+  // 이미 제거됐으므로 로고·배너가 아닌 협회 업로드 포스터가 잡힌다. 없으면 undefined
+  // 로 남겨 upsert 가 기존 poster_url 을 보존한다(KTA 와 동일 규칙).
+  const posterUrl = extractPosterUrl(contentRoot?.innerHTML ?? null, detailUrl);
 
   // ── 테이블 기반 추출 (참가부서 / 신청기간 / 경기일시) ──
   // 테이블 헤더: 참가부서 | 구분 | 신청기간 | 경기일시 | ...
@@ -431,7 +444,7 @@ export async function fetchDetail(
 
   // 테이블 파싱 실패 시 기존 fallback
   const startDate = tableStartDate ?? extractDate(bodyText) ?? extractDate(title);
-  if (!startDate) return { rawHtml: html, tournament: null };
+  if (!startDate) return { rawHtml: html, canonicalContent: bodyText, tournament: null };
 
   const { codes: gradeCodes, label: divisionLabel } = mapDivisionsByDict(
     divisionCells.length > 0 ? divisionCells.join(' ') : `${title} ${bodyText}`,
@@ -485,11 +498,23 @@ export async function fetchDetail(
     eligible_grades: gradeCodes,
     division_label_local: hasExplicitUnknownDivision ? '부서추후공지' : divisionLabel,
     clear_eligible_grades: hasExplicitUnknownDivision || undefined,
+    poster_url: posterUrl ?? undefined,
     source_url: detailUrl,
     organizer,
     entry_fee: entryFee,
   };
-  return { rawHtml: html, tournament };
+  return {
+    rawHtml: html,
+    canonicalContent: JSON.stringify({
+      title,
+      bodyText,
+      startDate,
+      tableLastStartDate,
+      tableDeadline,
+      divisionCells,
+    }),
+    tournament,
+  };
 }
 
 // =============================================================================
@@ -540,6 +565,10 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
     };
   }
 
+  // 목록이탈 만료 판정 기준 — "목록에 있음"을 상세 파싱 성공이 아니라 여기서
+  // 확정한다(CAP·상세 실패로 상세를 안 가는 항목도 목록엔 있다).
+  await markListingSeen(ctx.audit, items.map((it) => it.url));
+
   if (items.length === 0) {
     const hash = await listingContentHash(items);
     return {
@@ -587,7 +616,10 @@ export const gnuboardSub5_5ContestParser: ParserFn = async (
       if (!result) continue; // fetch 실패 — 보관할 원본 자체가 없음
       if (result.tournament) {
         // 파싱 성공: tournaments upsert + 원본을 parsed 로 보관·연결
-        await upsertTournament(ctx.audit, 'tennis', result.tournament, result.rawHtml);
+        await upsertTournament(ctx.audit, 'tennis', result.tournament, {
+          rawHtml: result.rawHtml,
+          canonicalContent: result.canonicalContent,
+        });
       } else {
         // 파싱 가드 미통과: 원본을 failed 로 보관해 파서 수정 후 재처리 가능하게 한다.
         // (raw zone 이 존재하는 핵심 목적 — 파서가 깨진 케이스를 놓치지 않는다.)

@@ -115,7 +115,7 @@ class NearbyNewClubsSheet extends StatelessWidget {
                     child: AppEmptyState(
                       icon: Icons.groups_2_rounded,
                       title: '주변 클럽이 없습니다',
-                      description: '반경을 넓히거나 지역을 직접 선택해보세요.',
+                      description: '현재 위치 주변에 등록된 클럽이 없습니다.',
                     ),
                   ),
                 )
@@ -492,7 +492,10 @@ class SimpleClubAvatar extends StatelessWidget {
     super.key,
     required this.club,
     required this.size,
+    this.circular = false,
   });
+
+  final bool circular;
 
   @override
   Widget build(BuildContext context) {
@@ -504,13 +507,15 @@ class SimpleClubAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: spec.background,
-        borderRadius: BorderRadius.circular(size * 0.22),
+        shape: circular ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circular ? null : BorderRadius.circular(size * 0.22),
       ),
       child: _ClubAvatarImage(
         logoUrl: club.logoUrl,
         fallbackIcon: spec.icon,
         fallbackColor: spec.foreground,
         iconSize: size * 0.48,
+        fit: circular ? BoxFit.cover : BoxFit.contain,
       ),
     );
   }
@@ -536,12 +541,14 @@ class _ClubAvatarImage extends StatelessWidget {
   final IconData fallbackIcon;
   final Color fallbackColor;
   final double iconSize;
+  final BoxFit fit;
 
   const _ClubAvatarImage({
     required this.logoUrl,
     required this.fallbackIcon,
     required this.fallbackColor,
     required this.iconSize,
+    required this.fit,
   });
 
   @override
@@ -555,10 +562,44 @@ class _ClubAvatarImage extends StatelessWidget {
 
     if (url == null || url.isEmpty) return fallback;
 
+    return ClubMediaImage(
+      source: url,
+      fit: fit,
+      fallback: fallback,
+    );
+  }
+}
+
+/// 클럽 미디어는 운영 DB의 Storage URL과 로컬 디자인 프리뷰용 asset URL을
+/// 같은 카드에서 렌더링한다. `asset://`은 seed/프리뷰 전용이며 네트워크 요청을
+/// 만들지 않는다.
+class ClubMediaImage extends StatelessWidget {
+  const ClubMediaImage({
+    super.key,
+    required this.source,
+    required this.fit,
+    required this.fallback,
+  });
+
+  final String source;
+  final BoxFit fit;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = source.trim();
+    if (value.startsWith('asset://')) {
+      final assetPath = value.substring('asset://'.length);
+      return Image.asset(
+        assetPath,
+        fit: fit,
+        errorBuilder: (_, __, ___) => fallback,
+      );
+    }
+
     return Image.network(
-      url,
-      // 로고 전체가 정사각형 프레임 안에 보여야 하므로 가장자리를 자르지 않는다.
-      fit: BoxFit.contain,
+      value,
+      fit: fit,
       errorBuilder: (_, __, ___) => fallback,
     );
   }

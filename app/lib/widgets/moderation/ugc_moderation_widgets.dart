@@ -9,9 +9,9 @@ import '../../models/moderation.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_image_upload.dart';
+import '../../utils/legal_urls.dart';
 
-const _termsUrl =
-    'https://kimabba.github.io/AllRound/legal/terms-of-service.html';
+const _termsUrl = kTermsOfServiceUrl;
 
 enum UgcActionKind { comment, clubJoin, community }
 

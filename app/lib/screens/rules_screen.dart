@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config.dart';
+import '../models/rule_popularity.dart';
 import '../models/tournament.dart';
 import '../state/providers.dart';
 import '../testing/e2e_keys.dart';
+import '../theme/color_schemes.dart';
+import '../theme/motion.dart';
 import '../theme/tokens.dart';
 import '../utils/grade_labels.dart';
 import '../widgets/app_empty_state.dart';
@@ -15,9 +20,10 @@ import '../widgets/notification_inbox_action.dart';
 import '../widgets/tournament_section_bar.dart';
 
 class RulesScreen extends ConsumerStatefulWidget {
-  const RulesScreen({super.key, this.initialSport});
+  const RulesScreen({super.key, this.initialSport, this.initialCategory});
 
   final String? initialSport;
+  final String? initialCategory;
 
   @override
   ConsumerState<RulesScreen> createState() => _RulesScreenState();
@@ -26,19 +32,25 @@ class RulesScreen extends ConsumerStatefulWidget {
 class _RulesScreenState extends ConsumerState<RulesScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
-  final _search = TextEditingController();
+  late final TextEditingController _search;
   Map<String, List<RuleArticle>>? _tennisByCat;
   Map<String, List<RuleArticle>>? _futsalByCat;
   Map<String, List<RuleArticle>>? _activeByCat;
+  RulePopularityHighlight? _tennisHighlight;
+  RulePopularityHighlight? _futsalHighlight;
+  RulePopularityHighlight? _activeHighlight;
   String? _activeSport;
   String? _error;
+  String? _tennisError;
+  String? _futsalError;
   bool _loading = true;
-  bool _usingPreviewData = false;
   String _query = '';
 
   @override
   void initState() {
     super.initState();
+    _search = TextEditingController(text: widget.initialCategory ?? '');
+    _query = _search.text.trim();
     _tab = TabController(length: 2, vsync: this);
     _search.addListener(() {
       setState(() => _query = _search.text.trim());
@@ -57,6 +69,8 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     setState(() {
       _loading = true;
       _error = null;
+      _tennisError = null;
+      _futsalError = null;
     });
 
     final api = ref.read(apiProvider);
@@ -69,11 +83,13 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       setState(() {
         if (sport != null) {
           _activeByCat = _previewRulesFor(sport);
+          _activeHighlight = _previewHighlightFor(sport);
         } else {
           _tennisByCat = _previewRulesFor('tennis');
           _futsalByCat = _previewRulesFor('futsal');
+          _tennisHighlight = _previewHighlightFor('tennis');
+          _futsalHighlight = _previewHighlightFor('futsal');
         }
-        _usingPreviewData = true;
         _loading = false;
       });
       return;
@@ -82,20 +98,50 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
     try {
       if (sport != null) {
         final rules = await api.listRules(sport);
+        RulePopularityHighlight? highlight;
+        try {
+          highlight = await api.popularRuleHighlight24h(sport);
+        } catch (_) {
+          // 인기 집계가 실패해도 전체 룰북은 정상적으로 열려야 한다.
+        }
         if (!mounted) return;
         setState(() {
           _activeByCat = _groupByCategory(rules);
-          _usingPreviewData = false;
+          _activeHighlight = highlight;
           _loading = false;
         });
       } else {
-        final tennis = await api.listRules('tennis');
-        final futsal = await api.listRules('futsal');
+        Future<_SportRulesLoadResult> loadSportRules(String value) async {
+          try {
+            final rules = await api.listRules(value);
+            RulePopularityHighlight? highlight;
+            try {
+              highlight = await api.popularRuleHighlight24h(value);
+            } catch (_) {
+              // 인기 집계가 실패해도 해당 종목 규칙 목록은 그대로 표시한다.
+            }
+            return _SportRulesLoadResult(rules: rules, highlight: highlight);
+          } catch (_) {
+            return const _SportRulesLoadResult.failed();
+          }
+        }
+
+        final results = await Future.wait([
+          loadSportRules('tennis'),
+          loadSportRules('futsal'),
+        ]);
+        final tennis = results[0];
+        final futsal = results[1];
         if (!mounted) return;
         setState(() {
-          _tennisByCat = _groupByCategory(tennis);
-          _futsalByCat = _groupByCategory(futsal);
-          _usingPreviewData = false;
+          _tennisByCat =
+              tennis.rules == null ? null : _groupByCategory(tennis.rules!);
+          _futsalByCat =
+              futsal.rules == null ? null : _groupByCategory(futsal.rules!);
+          _tennisHighlight = tennis.highlight;
+          _futsalHighlight = futsal.highlight;
+          _tennisError = tennis.failed ? _sportLoadError('tennis') : null;
+          _futsalError = futsal.failed ? _sportLoadError('futsal') : null;
           _loading = false;
         });
       }
@@ -105,11 +151,13 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         setState(() {
           if (sport != null) {
             _activeByCat = _previewRulesFor(sport);
+            _activeHighlight = _previewHighlightFor(sport);
           } else {
             _tennisByCat = _previewRulesFor('tennis');
             _futsalByCat = _previewRulesFor('futsal');
+            _tennisHighlight = _previewHighlightFor('tennis');
+            _futsalHighlight = _previewHighlightFor('futsal');
           }
-          _usingPreviewData = true;
           _error = null;
           _loading = false;
         });
@@ -125,7 +173,6 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
   Map<String, List<RuleArticle>> _groupByCategory(List<RuleArticle> list) {
     final out = <String, List<RuleArticle>>{};
     for (final article in list) {
-      if (_shouldHideRuleCategory(article.sport, article.category)) continue;
       out.putIfAbsent(article.category, () => []).add(article);
     }
     return out;
@@ -145,8 +192,9 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         appBar: AppBar(
           title: const Text('룰북'),
           actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
         ),
-        body: _withTournamentSectionBar(const _RulesLoadingState()),
+        body: const _RulesLoadingState(),
       );
     }
 
@@ -156,15 +204,14 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         appBar: AppBar(
           title: const Text('룰북'),
           actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
         ),
-        body: _withTournamentSectionBar(
-          AppEmptyState(
-            icon: Icons.menu_book_outlined,
-            title: '룰북을 불러올 수 없어요',
-            description: _error,
-            actionLabel: '다시 시도',
-            onAction: _load,
-          ),
+        body: AppEmptyState(
+          icon: Icons.menu_book_outlined,
+          title: '룰북을 불러올 수 없어요',
+          description: _error,
+          actionLabel: '다시 시도',
+          onAction: _load,
         ),
       );
     }
@@ -175,18 +222,17 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
         appBar: AppBar(
           title: Text(_titleForSport(_activeSport!)),
           actions: _rulesAppBarActions,
+          bottom: _tournamentSectionBar(),
         ),
         backgroundColor: cs.surface,
-        body: _withTournamentSectionBar(
-          KeyedSubtree(
-            key: AllRoundE2EKeys.rulesReady,
-            child: _RuleBookBody(
-              grouped: _activeByCat,
-              sport: _activeSport!,
-              query: _query,
-              searchController: _search,
-              usingPreviewData: _usingPreviewData,
-            ),
+        body: KeyedSubtree(
+          key: AllRoundE2EKeys.rulesReady,
+          child: _RuleBookBody(
+            grouped: _activeByCat,
+            sport: _activeSport!,
+            query: _query,
+            searchController: _search,
+            highlight: _activeHighlight,
           ),
         ),
       );
@@ -197,83 +243,144 @@ class _RulesScreenState extends ConsumerState<RulesScreen>
       appBar: AppBar(
         title: const Text('룰북'),
         actions: _rulesAppBarActions,
-        bottom: TabBar(
-          controller: _tab,
-          tabs: [
-            Tab(
-              icon: const Icon(Icons.sports_tennis_rounded),
-              text: sportLabel(Sport.tennis),
-            ),
-            Tab(
-              icon: const Icon(Icons.sports_soccer_rounded),
-              text: sportLabel(Sport.futsal),
-            ),
-          ],
-          indicatorColor: cs.primary,
-          labelColor: cs.primary,
-          unselectedLabelColor: cs.onSurfaceVariant,
+        bottom: _rulesSectionAndSportTabs(
+          TabBar(
+            controller: _tab,
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.sports_tennis_rounded),
+                text: sportLabel(Sport.tennis),
+              ),
+              Tab(
+                icon: const Icon(Icons.sports_soccer_rounded),
+                text: sportLabel(Sport.futsal),
+              ),
+            ],
+            indicatorColor: cs.primary,
+            labelColor: cs.primary,
+            unselectedLabelColor: cs.onSurfaceVariant,
+          ),
         ),
       ),
       backgroundColor: cs.surface,
-      body: _withTournamentSectionBar(
-        KeyedSubtree(
-          key: AllRoundE2EKeys.rulesReady,
-          child: TabBarView(
-            controller: _tab,
-            children: [
-              _RuleBookBody(
-                grouped: _tennisByCat,
-                sport: 'tennis',
-                query: _query,
-                searchController: _search,
-                usingPreviewData: _usingPreviewData,
-              ),
-              _RuleBookBody(
-                grouped: _futsalByCat,
-                sport: 'futsal',
-                query: _query,
-                searchController: _search,
-                usingPreviewData: _usingPreviewData,
-              ),
-            ],
-          ),
+      body: KeyedSubtree(
+        key: AllRoundE2EKeys.rulesReady,
+        child: TabBarView(
+          controller: _tab,
+          children: [
+            _RuleBookBody(
+              grouped: _tennisByCat,
+              sport: 'tennis',
+              query: _query,
+              searchController: _search,
+              highlight: _tennisHighlight,
+              error: _tennisError,
+              onRetry: _load,
+            ),
+            _RuleBookBody(
+              grouped: _futsalByCat,
+              sport: 'futsal',
+              query: _query,
+              searchController: _search,
+              highlight: _futsalHighlight,
+              error: _futsalError,
+              onRetry: _load,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _withTournamentSectionBar(Widget child) {
-    return Column(
-      children: [
-        const TournamentSectionBar(selected: TournamentSection.rules),
-        Expanded(child: child),
-      ],
+  TournamentSectionBar _tournamentSectionBar() {
+    return TournamentSectionBar(
+      selected: TournamentSection.rules,
+      showRankings: ref.watch(activeSportProvider) == 'tennis',
+    );
+  }
+
+  PreferredSizeWidget _rulesSectionAndSportTabs(TabBar sportTabs) {
+    final sectionBar = _tournamentSectionBar();
+    return PreferredSize(
+      preferredSize: Size.fromHeight(
+        sectionBar.preferredSize.height + sportTabs.preferredSize.height,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [sectionBar, sportTabs],
+      ),
     );
   }
 
   String _titleForSport(String sport) => '${sportLabelFromString(sport)} 룰북';
 }
 
-class _RuleBookBody extends StatelessWidget {
+class _RuleBookBody extends StatefulWidget {
   const _RuleBookBody({
     required this.grouped,
     required this.sport,
     required this.query,
     required this.searchController,
-    required this.usingPreviewData,
+    required this.highlight,
+    this.error,
+    this.onRetry,
   });
 
   final Map<String, List<RuleArticle>>? grouped;
   final String sport;
   final String query;
   final TextEditingController searchController;
-  final bool usingPreviewData;
+  final RulePopularityHighlight? highlight;
+  final String? error;
+  final VoidCallback? onRetry;
+
+  @override
+  State<_RuleBookBody> createState() => _RuleBookBodyState();
+}
+
+class _RuleBookBodyState extends State<_RuleBookBody> {
+  String? _expandedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _expandedCategory = widget.grouped?.keys.firstOrNull;
+  }
+
+  @override
+  void didUpdateWidget(covariant _RuleBookBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.grouped != widget.grouped &&
+        (widget.grouped?.containsKey(_expandedCategory) ?? false) == false) {
+      _expandedCategory = widget.grouped?.keys.firstOrNull;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered(grouped, query);
+    if (widget.error != null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          AppEmptyState(
+            icon: Icons.menu_book_outlined,
+            title: '${sportLabelFromString(widget.sport)} 룰북을 불러올 수 없어요',
+            description: widget.error,
+            actionLabel: '다시 시도',
+            onAction: widget.onRetry,
+          ),
+        ],
+      );
+    }
 
-    if (grouped == null || grouped!.isEmpty) {
+    final filtered = _filtered(widget.grouped, widget.query);
+
+    if (widget.grouped == null || widget.grouped!.isEmpty) {
       return ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(
@@ -283,13 +390,10 @@ class _RuleBookBody extends StatelessWidget {
           AppSpacing.xxxl,
         ),
         children: [
-          _RuleSearchCard(controller: searchController, sport: sport),
-          if (usingPreviewData) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const _PreviewRulesBanner(),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          _DailyRuleQuizCard(sport: sport),
+          _RuleSearchCard(
+            controller: widget.searchController,
+            sport: widget.sport,
+          ),
           const SizedBox(height: AppSpacing.xl),
           const AppEmptyState(
             icon: Icons.menu_book_outlined,
@@ -300,37 +404,96 @@ class _RuleBookBody extends StatelessWidget {
       );
     }
 
-    final hasQuery = query.isNotEmpty;
+    final hasQuery = widget.query.isNotEmpty;
+    final showHighlight = !hasQuery && widget.highlight != null;
+    final textScale =
+        MediaQuery.textScalerOf(context).scale(AppSpacing.lg) / AppSpacing.lg;
+    final scaleExtra = ((textScale - 1) * AppSpacing.xxxl)
+        .clamp(0.0, AppSpacing.lg)
+        .toDouble();
+    final headerExtent = showHighlight
+        ? AppSpacing.lg +
+            AppSizes.control * 2 +
+            AppSpacing.huge +
+            AppSpacing.md +
+            AppSizes.control +
+            AppSpacing.md +
+            scaleExtra
+        : AppSpacing.lg + AppSizes.control + AppSpacing.md;
 
-    return ListView(
+    return CustomScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
-        AppSpacing.xxxl,
-      ),
-      children: [
-        _RuleSearchCard(controller: searchController, sport: sport),
-        if (usingPreviewData) ...[
-          const SizedBox(height: AppSpacing.sm),
-          const _PreviewRulesBanner(),
-        ],
-        if (!hasQuery) ...[
-          const SizedBox(height: AppSpacing.lg),
-          _DailyRuleQuizCard(sport: sport),
-          const SizedBox(height: AppSpacing.xl),
-          _CategoryGrid(grouped: grouped!, sport: sport),
-        ],
-        const SizedBox(height: AppSpacing.xl),
-        _PopularRulesList(
-          // 검색 결과는 잘리면 원하는 룰을 놓칠 수 있어 전체 표시, 기본은 상위 8개.
-          articles: _popularArticles(
-            hasQuery ? filtered : grouped!,
-            limit: hasQuery ? null : 8,
+      slivers: [
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _RuleBookHeaderDelegate(
+            extent: headerExtent,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.lg,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: Column(
+                children: [
+                  if (showHighlight) ...[
+                    Expanded(
+                      child: _DailyPopularRuleCard(
+                        highlight: widget.highlight!,
+                        article: _articleById(
+                          widget.grouped!,
+                          widget.highlight!.articleId,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  SizedBox(
+                    height: AppSizes.control,
+                    child: _RuleSearchCard(
+                      controller: widget.searchController,
+                      sport: widget.sport,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          sport: sport,
-          title: hasQuery ? '검색 결과' : '자주 찾는 룰',
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.md,
+            AppSpacing.xl,
+            AppSpacing.xxxl,
+          ),
+          sliver: SliverList.list(
+            children: [
+              if (!hasQuery) ...[
+                _RuleBookSummary(grouped: widget.grouped!),
+                const SizedBox(height: AppSpacing.sm),
+                _RuleCategoryAccordion(
+                  grouped: widget.grouped!,
+                  sport: widget.sport,
+                  expandedCategory: _expandedCategory,
+                  onToggle: (category) {
+                    setState(() {
+                      _expandedCategory =
+                          _expandedCategory == category ? null : category;
+                    });
+                  },
+                ),
+              ] else
+                _PopularRulesList(
+                  // 사용자가 직접 검색한 결과는 원하는 룰을 놓치지 않도록 전체 표시한다.
+                  articles: _allArticles(filtered),
+                  sport: widget.sport,
+                  title: '검색 결과',
+                ),
+            ],
+          ),
         ),
       ],
     );
@@ -356,14 +519,71 @@ class _RuleBookBody extends StatelessWidget {
     return out;
   }
 
-  List<RuleArticle> _popularArticles(
-    Map<String, List<RuleArticle>> source, {
-    int? limit,
-  }) {
-    final all = source.values.expand((items) => items).toList();
-    return limit == null ? all : all.take(limit).toList();
+  List<RuleArticle> _allArticles(Map<String, List<RuleArticle>> source) =>
+      source.values.expand((items) => items).toList();
+
+  RuleArticle? _articleById(
+    Map<String, List<RuleArticle>> source,
+    String articleId,
+  ) {
+    for (final article in source.values.expand((items) => items)) {
+      if (article.id == articleId) return article;
+    }
+    return null;
   }
 }
+
+class _RuleBookHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _RuleBookHeaderDelegate({
+    required this.extent,
+    required this.backgroundColor,
+    required this.child,
+  });
+
+  final double extent;
+  final Color backgroundColor;
+  final Widget child;
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return ColoredBox(color: backgroundColor, child: child);
+  }
+
+  @override
+  bool shouldRebuild(covariant _RuleBookHeaderDelegate oldDelegate) {
+    return extent != oldDelegate.extent ||
+        backgroundColor != oldDelegate.backgroundColor ||
+        child != oldDelegate.child;
+  }
+}
+
+class _SportRulesLoadResult {
+  const _SportRulesLoadResult({required this.rules, this.highlight})
+      : failed = false;
+
+  const _SportRulesLoadResult.failed()
+      : rules = null,
+        highlight = null,
+        failed = true;
+
+  final List<RuleArticle>? rules;
+  final RulePopularityHighlight? highlight;
+  final bool failed;
+}
+
+String _sportLoadError(String sport) =>
+    '${sportLabelFromString(sport)} 규칙만 불러오지 못했습니다. '
+    '다른 종목 규칙은 계속 볼 수 있습니다.';
 
 /// 룰북 화면의 앱바 액션. 화면이 로딩·오류·단일종목·탭 4갈래로 갈라지므로
 /// 한 곳에만 넣으면 분기에 따라 마이 진입점이 사라진다(실제로 그랬다).
@@ -401,17 +621,12 @@ class _RulesLoadingState extends StatelessWidget {
             Container(
               height: AppSizes.listRow,
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: cs.outlineVariant),
-                ),
+                border: Border(bottom: BorderSide(color: cs.outlineVariant)),
               ),
               alignment: Alignment.centerLeft,
               child: FractionallySizedBox(
                 widthFactor: index.isEven ? 0.72 : 0.56,
-                child: Container(
-                  height: 14,
-                  color: cs.surfaceContainerHighest,
-                ),
+                child: Container(height: 14, color: cs.surfaceContainerHighest),
               ),
             ),
           ],
@@ -425,24 +640,32 @@ Map<String, List<RuleArticle>> _previewRulesFor(String sport) {
   final data = sport == 'futsal' ? _previewFutsalRules : _previewTennisRules;
   return {
     for (final entry in data.entries)
-      if (!_shouldHideRuleCategory(sport, entry.key))
-        entry.key: [
-          for (var i = 0; i < entry.value.length; i++)
-            RuleArticle(
-              id: 'preview-$sport-${entry.key}-$i',
-              sport: sport,
-              category: entry.key,
-              title: entry.value[i].$1,
-              body: entry.value[i].$2,
-              orderIdx: i,
-              published: true,
-            ),
-        ],
+      entry.key: [
+        for (var i = 0; i < entry.value.length; i++)
+          RuleArticle(
+            id: 'preview-$sport-${entry.key}-$i',
+            sport: sport,
+            category: entry.key,
+            title: entry.value[i].$1,
+            body: entry.value[i].$2,
+            orderIdx: i,
+            published: true,
+          ),
+      ],
   };
 }
 
-bool _shouldHideRuleCategory(String sport, String category) {
-  return sport == 'futsal' && category.contains('연맹');
+RulePopularityHighlight _previewHighlightFor(String sport) {
+  final isFutsal = sport == 'futsal';
+  return RulePopularityHighlight(
+    articleId: isFutsal ? 'preview-futsal-경기 진행-0' : 'preview-tennis-경기 진행-0',
+    sport: sport,
+    category: '경기 진행',
+    title: isFutsal ? '풋살 경기 시간' : '타이브레이크는 언제 하나요?',
+    articleClickCount: isFutsal ? 18 : 24,
+    categoryClickCount: isFutsal ? 31 : 42,
+    windowStartedAt: DateTime.now().subtract(const Duration(hours: 24)),
+  );
 }
 
 const _previewTennisRules = <String, List<(String, String)>>{
@@ -514,478 +737,453 @@ class _RuleSearchCard extends StatelessWidget {
   }
 }
 
-class _PreviewRulesBanner extends StatelessWidget {
-  const _PreviewRulesBanner();
+class _DailyPopularRuleCard extends ConsumerWidget {
+  const _DailyPopularRuleCard({required this.highlight, required this.article});
+
+  final RulePopularityHighlight highlight;
+  final RuleArticle? article;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tt = Theme.of(context).textTheme;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.visibility_rounded,
-            size: 18,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              '백엔드 연결 전 디자인 미리보기 룰북입니다.',
-              style: tt.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w800,
-              ),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: AppRadius.hero,
+      child: InkWell(
+        onTap: article == null
+            ? null
+            : () {
+                if (!AppConfig.userDesignPreview) {
+                  unawaited(_recordRuleClick(ref, article!.id));
+                }
+                _showArticle(context, article!);
+              },
+        borderRadius: AppRadius.hero,
+        child: Ink(
+          decoration: const BoxDecoration(
+            borderRadius: AppRadius.hero,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppPalette.accentPressed, AppPalette.accent],
             ),
           ),
-        ],
+          child: ClipRRect(
+            borderRadius: AppRadius.hero,
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -AppSpacing.xxxl,
+                  bottom: -AppSpacing.huge,
+                  child: Container(
+                    width: AppSizes.touchTarget * 3,
+                    height: AppSizes.touchTarget * 3,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppPalette.photoForeground.withValues(
+                          alpha: 0.12,
+                        ),
+                        width: AppSpacing.xxl,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '오늘 가장 많이 받은 클릭',
+                              style: tt.labelMedium?.copyWith(
+                                color: AppPalette.photoForeground,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '최근 24시간',
+                            style: tt.labelSmall?.copyWith(
+                              color: AppPalette.photoForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Text(
+                        _displayRuleTitle(highlight.title),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleLarge?.copyWith(
+                          color: AppPalette.photoForeground,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${highlight.category} · '
+                              '${highlight.articleClickCount}회 클릭',
+                              style: tt.bodySmall?.copyWith(
+                                color: AppPalette.photoForeground,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 18,
+                            color: AppPalette.photoForeground,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _DailyRuleQuizCard extends StatelessWidget {
-  const _DailyRuleQuizCard({required this.sport});
+class _RuleBookSummary extends StatelessWidget {
+  const _RuleBookSummary({required this.grouped});
 
+  final Map<String, List<RuleArticle>> grouped;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final articleCount = grouped.values.fold<int>(
+      0,
+      (total, articles) => total + articles.length,
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '전체 룰북',
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+        Text(
+          '${grouped.length}개 분류 · $articleCount개 규칙',
+          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _RuleCategoryAccordion extends StatelessWidget {
+  const _RuleCategoryAccordion({
+    required this.grouped,
+    required this.sport,
+    required this.expandedCategory,
+    required this.onToggle,
+  });
+
+  final Map<String, List<RuleArticle>> grouped;
   final String sport;
+  final String? expandedCategory;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = grouped.entries.toList(growable: false);
+    return Column(
+      children: [
+        for (var index = 0; index < entries.length; index++)
+          _RuleCategorySection(
+            index: index,
+            title: entries[index].key,
+            articles: entries[index].value,
+            sport: sport,
+            expanded: expandedCategory == entries[index].key,
+            onToggle: () => onToggle(entries[index].key),
+          ),
+      ],
+    );
+  }
+}
+
+class _RuleCategorySection extends StatelessWidget {
+  const _RuleCategorySection({
+    required this.index,
+    required this.title,
+    required this.articles,
+    required this.sport,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final int index;
+  final String title;
+  final List<RuleArticle> articles;
+  final String sport;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final quiz = _quizForToday(sport);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showQuiz(context, quiz),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 112),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: cs.outline),
-              bottom: BorderSide(color: cs.outline),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: Column(
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onToggle,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: AppSizes.listRow + AppSpacing.lg,
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      '오늘의 룰 퀴즈',
-                      style: tt.labelMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w800,
+                    SizedBox(
+                      width: AppSizes.touchTarget,
+                      height: AppSizes.touchTarget,
+                      child: Center(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            child: Text(
+                              (index + 1).toString().padLeft(2, '0'),
+                              style: tt.labelMedium?.copyWith(
+                                color: cs.onPrimaryContainer,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: tt.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            _descriptionForCategory(title),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Text(
-                      quiz.question,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleMedium,
+                      '${articles.length}',
+                      style: tt.labelMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: cs.onSurfaceVariant,
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_rounded, color: cs.primary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RuleQuiz {
-  const _RuleQuiz({
-    required this.question,
-    required this.options,
-    required this.correctIndex,
-    required this.explanation,
-  });
-
-  final String question;
-  final List<String> options;
-  final int correctIndex;
-  final String explanation;
-}
-
-_RuleQuiz _quizForToday(String sport) {
-  final quizzes = sport == 'futsal' ? _futsalQuizzes : _tennisQuizzes;
-  final today = DateTime.now();
-  final day = today.difference(DateTime(today.year, 1, 1)).inDays;
-  return quizzes[day % quizzes.length];
-}
-
-const _futsalQuizzes = [
-  _RuleQuiz(
-    question: '풋살에서 골키퍼가 볼을 컨트롤할 수 있는 제한 시간은?',
-    options: ['2초', '4초', '6초', '제한 없음'],
-    correctIndex: 1,
-    explanation: '풋살에서 골키퍼는 자기 진영에서 볼을 4초 넘게 컨트롤할 수 없습니다.',
-  ),
-  _RuleQuiz(
-    question: '풋살 경기 중 선수 교체 횟수는 몇 번까지 가능할까요?',
-    options: ['3번', '5번', '무제한', '7번'],
-    correctIndex: 2,
-    explanation: '풋살은 지정된 절차와 교체 구역을 지키면 경기 중 무제한 교체가 가능합니다.',
-  ),
-  _RuleQuiz(
-    question: '볼이 터치라인을 넘었을 때 풋살의 재개 방법은?',
-    options: ['스로인', '킥-인', '드롭 볼', '골 클리어런스'],
-    correctIndex: 1,
-    explanation: '풋살에서는 볼이 터치라인을 넘으면 손으로 던지지 않고 킥-인으로 재개합니다.',
-  ),
-];
-
-const _tennisQuizzes = [
-  _RuleQuiz(
-    question: '테니스에서 세트 게임 스코어가 6-6이면 일반적으로 무엇을 할까요?',
-    options: ['듀스', '타이브레이크', '렛', '세트 종료'],
-    correctIndex: 1,
-    explanation: '일반적인 세트에서는 6-6이 되면 타이브레이크로 세트 승자를 정합니다.',
-  ),
-  _RuleQuiz(
-    question: '첫 서브와 두 번째 서브가 모두 폴트가 되면?',
-    options: ['렛', '다시 서브', '상대 포인트', '게임 종료'],
-    correctIndex: 2,
-    explanation: '두 번의 서브 기회를 모두 실패한 더블 폴트는 상대방의 포인트가 됩니다.',
-  ),
-  _RuleQuiz(
-    question: '공이 라인에 조금이라도 닿은 경우의 판정은?',
-    options: ['아웃', '인', '렛', '재경기'],
-    correctIndex: 1,
-    explanation: '테니스에서는 공이 라인에 닿으면 인으로 판정합니다.',
-  ),
-];
-
-void _showQuiz(BuildContext context, _RuleQuiz quiz) {
-  var selectedIndex = -1;
-  var revealed = false;
-
-  showDialog<void>(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setDialogState) {
-        final cs = Theme.of(context).colorScheme;
-        final tt = Theme.of(context).textTheme;
-
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                color: cs.primary,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  '오늘의 룰 퀴즈',
-                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  quiz.question,
-                  style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                for (var index = 0; index < quiz.options.length; index++) ...[
-                  _QuizOption(
-                    number: index + 1,
-                    label: quiz.options[index],
-                    selected: selectedIndex == index,
-                    correct: revealed && quiz.correctIndex == index,
-                    wrong: revealed &&
-                        selectedIndex == index &&
-                        quiz.correctIndex != index,
-                    onTap: revealed
-                        ? null
-                        : () => setDialogState(() => selectedIndex = index),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                ],
-                if (revealed) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: selectedIndex == quiz.correctIndex
-                          ? cs.primaryContainer
-                          : cs.errorContainer,
-                      borderRadius: BorderRadius.circular(AppRadius.xl),
-                    ),
-                    child: Text(
-                      quiz.explanation,
-                      style: tt.bodySmall?.copyWith(height: 1.45),
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(revealed ? '닫기' : '취소'),
-            ),
-            if (!revealed)
-              FilledButton(
-                onPressed: selectedIndex < 0
-                    ? null
-                    : () => setDialogState(() => revealed = true),
-                child: const Text('정답 확인'),
-              ),
-          ],
-        );
-      },
-    ),
-  );
-}
-
-class _QuizOption extends StatelessWidget {
-  const _QuizOption({
-    required this.number,
-    required this.label,
-    required this.selected,
-    required this.correct,
-    required this.wrong,
-    required this.onTap,
-  });
-
-  final int number;
-  final String label;
-  final bool selected;
-  final bool correct;
-  final bool wrong;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final color = correct
-        ? cs.secondary
-        : wrong
-            ? cs.error
-            : selected
-                ? cs.primary
-                : cs.outlineVariant;
-    final background = correct
-        ? cs.secondaryContainer
-        : wrong
-            ? cs.errorContainer
-            : selected
-                ? cs.primaryContainer
-                : cs.surfaceContainerLow;
-
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(
-                color: color, width: selected || correct || wrong ? 2 : 1),
+          AnimatedSize(
+            duration: AppDuration.medium1,
+            curve: AppCurves.standard,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? _ExpandedRuleCategory(
+                    title: title,
+                    articles: articles,
+                    sport: sport,
+                  )
+                : const SizedBox.shrink(),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: color,
-                child: Text(
-                  '$number',
-                  style: tt.labelSmall?.copyWith(
-                    color: correct || wrong || selected
-                        ? Colors.white
-                        : cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  label,
-                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              if (correct) Icon(Icons.check_rounded, color: cs.secondary),
-              if (wrong) Icon(Icons.close_rounded, color: cs.error),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryGrid extends StatelessWidget {
-  const _CategoryGrid({required this.grouped, required this.sport});
-
-  final Map<String, List<RuleArticle>> grouped;
-  final String sport;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = grouped.entries.toList();
-    final cs = Theme.of(context).colorScheme;
-
-    return Column(
-      children: [
-        for (var index = 0; index < entries.length; index++) ...[
-          _CategoryCard(
-            title: entries[index].key,
-            count: entries[index].value.length,
-            icon: _iconForCategory(entries[index].key),
-            sport: sport,
-            onTap: () => _showCategorySheet(
-              context,
-              entries[index].key,
-              entries[index].value,
-              sport,
-            ),
-          ),
-          if (index < entries.length - 1)
-            Divider(height: 1, color: cs.outlineVariant),
         ],
-      ],
-    );
-  }
-
-  void _showCategorySheet(
-    BuildContext context,
-    String title,
-    List<RuleArticle> articles,
-    String sport,
-  ) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.68,
-        minChildSize: 0.4,
-        maxChildSize: 0.92,
-        builder: (context, scroll) => _CategorySheet(
-          title: title,
-          articles: articles,
-          sport: sport,
-          scrollController: scroll,
-        ),
       ),
     );
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({
+class _ExpandedRuleCategory extends StatelessWidget {
+  const _ExpandedRuleCategory({
     required this.title,
-    required this.count,
-    required this.icon,
+    required this.articles,
     required this.sport,
-    required this.onTap,
   });
 
   final String title;
-  final int count;
-  final IconData icon;
+  final List<RuleArticle> articles;
   final String sport;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = articles.take(4).toList(growable: false);
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSizes.touchTarget + AppSpacing.sm,
+          AppSpacing.sm,
+          0,
+          AppSpacing.sm,
+        ),
+        child: Column(
+          children: [
+            for (final article in visible) _AccordionRuleRow(article: article),
+            _OpenCategoryRow(
+              count: articles.length,
+              onTap: () => _showCategorySheet(context, title, articles, sport),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccordionRuleRow extends ConsumerWidget {
+  const _AccordionRuleRow({required this.article});
+
+  final RuleArticle article;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (!AppConfig.userDesignPreview) {
+            unawaited(_recordRuleClick(ref, article.id));
+          }
+          _showArticle(context, article);
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          child: Row(
+            children: [
+              Icon(Icons.circle, size: AppSpacing.xs, color: cs.primary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  _displayRuleTitle(article.title),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpenCategoryRow extends StatelessWidget {
+  const _OpenCategoryRow({required this.count, required this.onTap});
+
+  final int count;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final accent = _accentFor(context, sport);
-    final description = _descriptionForCategory(title);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppSizes.listRow + AppSpacing.lg,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: AppSizes.touchTarget,
-                  height: AppSizes.touchTarget,
-                  child: Icon(icon, color: accent, size: 22),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        title,
-                        style: tt.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '$description · $count개 규칙',
-                        style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          height: 1.25,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+          constraints: const BoxConstraints(minHeight: AppSizes.touchTarget),
+          child: Row(
+            children: [
+              Icon(Icons.add_rounded, size: 20, color: cs.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  '$count개 규칙 모두 보기',
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: cs.onSurfaceVariant,
-                  size: 20,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+void _showCategorySheet(
+  BuildContext context,
+  String title,
+  List<RuleArticle> articles,
+  String sport,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+    builder: (_) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.68,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (context, scroll) => _CategorySheet(
+        title: title,
+        articles: articles,
+        sport: sport,
+        scrollController: scroll,
+      ),
+    ),
+  );
 }
 
 class _PopularRulesList extends StatelessWidget {
@@ -1028,21 +1226,29 @@ class _PopularRulesList extends StatelessWidget {
   }
 }
 
-class _ArticleRow extends StatelessWidget {
-  const _ArticleRow({
-    required this.article,
-  });
+class _ArticleRow extends ConsumerWidget {
+  const _ArticleRow({required this.article, this.onOpen});
 
   final RuleArticle article;
+  final VoidCallback? onOpen;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _showArticle(context, article),
+        onTap: () {
+          if (!AppConfig.userDesignPreview) {
+            unawaited(_recordRuleClick(ref, article.id));
+          }
+          if (onOpen != null) {
+            onOpen!();
+          } else {
+            _showArticle(context, article);
+          }
+        },
         child: Container(
           constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -1053,7 +1259,7 @@ class _ArticleRow extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  article.title,
+                  _displayRuleTitle(article.title),
                   style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -1072,7 +1278,15 @@ class _ArticleRow extends StatelessWidget {
   }
 }
 
-class _CategorySheet extends StatelessWidget {
+Future<void> _recordRuleClick(WidgetRef ref, String articleId) async {
+  try {
+    await ref.read(apiProvider).recordRuleArticleClick(articleId);
+  } catch (_) {
+    // 클릭 집계 실패가 룰 본문 열람을 막아서는 안 된다.
+  }
+}
+
+class _CategorySheet extends StatefulWidget {
   const _CategorySheet({
     required this.title,
     required this.articles,
@@ -1086,12 +1300,20 @@ class _CategorySheet extends StatelessWidget {
   final ScrollController scrollController;
 
   @override
+  State<_CategorySheet> createState() => _CategorySheetState();
+}
+
+class _CategorySheetState extends State<_CategorySheet> {
+  RuleArticle? _selectedArticle;
+
+  @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final accent = _accentFor(context, sport);
+    final accent = _accentFor(context, widget.sport);
+    final selectedArticle = _selectedArticle;
 
     return ListView(
-      controller: scrollController,
+      controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         AppSpacing.sm,
@@ -1110,22 +1332,41 @@ class _CategorySheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            Icon(_iconForCategory(title), color: accent),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                title,
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
+        if (selectedArticle != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _selectedArticle = null),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: Text('${widget.title} 목록'),
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        for (final article in articles) ...[
-          _ArticleRow(article: article),
+          ),
           const SizedBox(height: AppSpacing.sm),
+          MarkdownBody(
+            data:
+                '# ${_displayRuleTitle(selectedArticle.title)}\n\n${selectedArticle.body}',
+          ),
+        ] else ...[
+          Row(
+            children: [
+              Icon(_iconForCategory(widget.title), color: accent),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (final article in widget.articles) ...[
+            _ArticleRow(
+              article: article,
+              onOpen: () => setState(() => _selectedArticle = article),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
         ],
       ],
     );
@@ -1151,7 +1392,7 @@ void _showArticle(BuildContext context, RuleArticle article) {
         ),
         child: Markdown(
           controller: scroll,
-          data: '# ${article.title}\n\n${article.body}',
+          data: '# ${_displayRuleTitle(article.title)}\n\n${article.body}',
         ),
       ),
     ),
@@ -1241,13 +1482,13 @@ String _descriptionForCategory(String category) {
     return '킥인 · 코너킥 · 재개';
   }
   if (lower.contains('장비') || lower.contains('경기장') || lower.contains('피치')) {
-    return '풋살공 · 피치 · 장비';
+    return '경기장 규격 · 골대 · 장비';
   }
   if (lower.contains('연맹')) {
     return '공식 기관 · 규칙서';
   }
   if (lower.contains('포지션') || lower.contains('전술')) {
-    return '피보 · 아라 · 픽소';
+    return '골레이로 · 픽소 · 아라 · 피보';
   }
   if (lower.contains('부상') || lower.contains('컨디션')) {
     return '부상 예방 · 회복';
@@ -1273,4 +1514,11 @@ String _descriptionForCategory(String category) {
 Color _accentFor(BuildContext context, String sport) {
   final cs = Theme.of(context).colorScheme;
   return sport == 'tennis' ? cs.tertiary : cs.secondary;
+}
+
+String _displayRuleTitle(String title) {
+  return title
+      .replaceFirst(RegExp(r'^\d+\.\s*'), '')
+      .replaceFirst(RegExp(r'^제\d+조\s*[–-]\s*'), '')
+      .replaceFirst(RegExp(r'^규칙\s*\d+(?:[·~]\d+)?\s*[–-]\s*'), '');
 }

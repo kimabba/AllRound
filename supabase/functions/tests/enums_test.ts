@@ -7,6 +7,7 @@ import {
   parseRecruiting,
   REGION_CODES,
   regionCodeFromLabel,
+  resolveRegionCode,
   TENNIS_ORGS,
 } from '../_shared/enums.ts';
 
@@ -219,4 +220,31 @@ Deno.test('isValidPlayerOrigin accepts valid origins', () => {
 Deno.test('isValidPlayerOrigin rejects invalid values', () => {
   assertEquals(isValidPlayerOrigin('pro'), false);
   assertEquals(isValidPlayerOrigin(''), false);
+});
+
+// 제보 경로가 region_code 를 안 채워서, 지역 필터(region_code 정확매칭)에서
+// 부산 대회 2건이 통째로 빠져 있었다. 라벨에서 유도해 채운다.
+Deno.test('resolveRegionCode: 명시 코드가 없으면 한글 지역명에서 유도한다', () => {
+  assertEquals(resolveRegionCode(undefined, '부산'), 'busan');
+  assertEquals(resolveRegionCode(undefined, ' 경기 '), 'gyeonggi');
+  assertEquals(resolveRegionCode(null, '광주'), 'gwangju');
+});
+
+Deno.test('resolveRegionCode: 명시 코드가 있으면 그대로 쓴다', () => {
+  assertEquals(resolveRegionCode('seoul', '부산'), 'seoul');
+});
+
+// 빈 문자열이 그대로 통과하면 유도도 막히고 FK 위반으로 500 이 난다.
+Deno.test('resolveRegionCode: 빈 명시 코드는 무시하고 지역명에서 유도한다', () => {
+  assertEquals(resolveRegionCode('' as never, '부산'), 'busan');
+  assertEquals(resolveRegionCode('   ' as never, '부산'), 'busan');
+  assertEquals(resolveRegionCode('' as never, undefined), undefined);
+});
+
+Deno.test('resolveRegionCode: 판정할 수 없으면 undefined', () => {
+  // '경기·인천' 같은 복합 표기는 한쪽으로 단정하지 않는다.
+  assertEquals(resolveRegionCode(undefined, '경기·인천'), undefined);
+  assertEquals(resolveRegionCode(undefined, '전국'), undefined);
+  assertEquals(resolveRegionCode(undefined, undefined), undefined);
+  assertEquals(resolveRegionCode(undefined, ''), undefined);
 });

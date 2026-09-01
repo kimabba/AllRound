@@ -1,7 +1,8 @@
 import { errorResponse, jsonResponse, preflight, withCors } from '../_shared/cors.ts';
 import { requireUser } from '../_shared/auth.ts';
 import { assertKnownOrgs } from '../_shared/orgs.ts';
-import { isValidRegionCode, parseDivisionCodes, parseRecruiting } from '../_shared/enums.ts';
+import { assertKnownRegions, fetchActiveRegionCodes } from '../_shared/regions.ts';
+import { parseDivisionCodes, parseRecruiting } from '../_shared/enums.ts';
 
 /**
  * GET /tournaments-search
@@ -34,9 +35,16 @@ Deno.serve(withCors(async (req) => {
     return errorResponse('sport must be tennis or futsal');
   }
   const region = url.searchParams.get('region'); // 자유 텍스트 (구 컬럼)
-  const regionCode = url.searchParams.get('region_code'); // 권역 (gwangju, seoul_metro 등)
-  if (regionCode && !isValidRegionCode(regionCode)) {
-    return errorResponse('invalid region_code');
+  const regionCode = url.searchParams.get('region_code'); // 지역 (gwangju, seoul 등)
+  if (regionCode) {
+    // 지역 정본은 DB regions 다(P7) — 협회(JY-135, #330)와 같은 원칙. 정적 REGION_CODES 로
+    // 검증하면 지역을 DB 에 추가해도 필터가 "invalid region_code" 로 거절된다.
+    const regionCatalog = await fetchActiveRegionCodes(supabase);
+    if ('status' in regionCatalog) {
+      return errorResponse(regionCatalog.message, regionCatalog.status);
+    }
+    const regionError = assertKnownRegions([regionCode], regionCatalog.codes);
+    if (regionError) return errorResponse(regionError.message, regionError.status);
   }
   const org = url.searchParams.get('org'); // 협회 (kta, kato 등)
   if (org) {

@@ -7,6 +7,7 @@ import '../../services/api.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
+import 'admin_shell.dart';
 
 final formatReviewQueueProvider =
     FutureProvider.autoDispose<List<FormatReviewItem>>((ref) async {
@@ -44,7 +45,10 @@ class FormatReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queue = ref.watch(formatReviewQueueProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('요강 검수')),
+      appBar: AppBar(
+        leading: adminShellLeading(context),
+        title: const Text('요강 검수'),
+      ),
       body: queue.when(
         loading: () => const _ReviewLoading(),
         error: (_, __) => _ReviewStateMessage(
@@ -538,4 +542,5 @@ const _flagLabels = <String, String>{
   'kato_missing_section': 'KATO 요강에서 섹션을 찾지 못함',
   'kato_division_coverage': 'KATO 부서 정보 파싱 불완전',
   'kato_parse_failed': 'KATO 요강 파싱 실패',
+  'poster_extracted': '포스터에서 추출됨 (원문 대조 불가 — 포스터와 대조 필요)',
 };

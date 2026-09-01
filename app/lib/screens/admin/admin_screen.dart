@@ -9,6 +9,7 @@ import '../../models/tournament.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
 import '../../utils/grade_labels.dart';
+import 'admin_shell.dart';
 import 'crawl_logs_tab.dart';
 import 'crawl_sources_tab.dart';
 import 'draft_approval_widgets.dart';
@@ -17,8 +18,9 @@ import 'knowledge_base_tab.dart';
 import 'ranking_claims_tab.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
-  const AdminScreen({super.key, this.initialTab = 0});
+  const AdminScreen({super.key, this.initialTab = 0, this.focusClubId});
   final int initialTab;
+  final String? focusClubId;
 
   @override
   ConsumerState<AdminScreen> createState() => _AdminScreenState();
@@ -49,6 +51,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
 
   // Tab 3: pending clubs
   List<Club> _pendingClubs = [];
+  List<ClubReviewRecord> _recentClubReviews = [];
   bool _loadingPendingClubs = false;
   final Set<String> _selectedPendingClubIds = {};
   bool _clubReviewInFlight = false;
@@ -349,10 +352,13 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     if (_loadingPendingClubs) return;
     if (mounted) setState(() => _loadingPendingClubs = true);
     try {
-      final list = await ref.read(apiProvider).pendingClubs();
+      final api = ref.read(apiProvider);
+      final list = await api.pendingClubs();
+      final reviews = await api.recentClubReviews();
       if (mounted) {
         setState(() {
           _pendingClubs = list;
+          _recentClubReviews = reviews;
           final pendingIds = list.map((club) => club.id).toSet();
           _selectedPendingClubIds.retainAll(pendingIds);
         });
@@ -463,6 +469,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           context,
         ).showSnackBar(SnackBar(content: Text('처리 실패: $e')));
       }
+      await _loadPendingClubs();
     } finally {
       if (mounted) setState(() => _clubReviewInFlight = false);
     }
@@ -674,16 +681,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     return Scaffold(
       key: AllRoundE2EKeys.adminScreen,
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: '뒤로가기',
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/profile');
-            }
-          },
-          icon: const Icon(Icons.arrow_back_rounded),
+        leading: adminShellLeading(
+          context,
+          fallback: IconButton(
+            tooltip: '뒤로가기',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/profile');
+              }
+            },
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
         ),
         title: const Text('관리자'),
         bottom: TabBar(
@@ -791,45 +801,66 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Checkbox(
-                value: allSelected,
-                tristate: true,
-                // tristate: 일부만 선택된 경우 null → 한 번 더 누르면 전체 선택.
-                onChanged: filtered.isEmpty
-                    ? null
-                    : (v) => _toggleSelectAll(v ?? true),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: allSelected,
+                    tristate: true,
+                    // tristate: 일부만 선택된 경우 null → 한 번 더 누르면 전체 선택.
+                    onChanged: filtered.isEmpty
+                        ? null
+                        : (v) => _toggleSelectAll(v ?? true),
+                  ),
+                  Text(
+                    '선택 $selectedInView / ${filtered.length}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
-              Text(
-                '선택 $selectedInView / ${filtered.length}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                // 전역 테마 minimumSize: Size.fromHeight(52) = Size(∞, 52)를 오버라이드.
-                // Row 안에서 무한 너비 constraint 에러 방지.
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                    ? null
-                    : _bulkApprove,
-                icon: _bulkActionInFlight
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: const Text('일괄 승인'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: (_selectedDraftIds.isEmpty || _bulkActionInFlight)
-                    ? null
-                    : _bulkReject,
-                icon: const Icon(Icons.close, color: Colors.red),
-                label: const Text('일괄 거부', style: TextStyle(color: Colors.red)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton.icon(
+                    // 전역 테마 minimumSize: Size.fromHeight(52) = Size(∞, 52)를 오버라이드.
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
+                    onPressed:
+                        (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                            ? null
+                            : _bulkApprove,
+                    icon: _bulkActionInFlight
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: const Text('일괄 승인'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
+                    onPressed:
+                        (_selectedDraftIds.isEmpty || _bulkActionInFlight)
+                            ? null
+                            : _bulkReject,
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    label: const Text(
+                      '일괄 거부',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -872,6 +903,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           final source = t['source'] as String? ?? '';
           final kind = t['submission_kind'] as String? ?? 'crawler';
           final submitterEmail = t['submitted_by_email'] as String?;
+          final contactName = t['contact_name'] as String? ?? '';
+          final contactValue = t['contact_value'] as String? ?? '';
           final sourceLabel = kind == 'user'
               ? (submitterEmail != null
                   ? submitterEmail.split('@').first
@@ -905,7 +938,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               SubmissionKindBadge(kind: kind),
                               const SizedBox(width: 6),
@@ -947,25 +982,30 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
+                          if (contactName.isNotEmpty ||
+                              contactValue.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '담당자: ${[
+                                if (contactName.isNotEmpty) contactName,
+                                if (contactValue.isNotEmpty) contactValue,
+                              ].join(' · ')}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () => _approve(id),
-                                child: const Text('승인'),
-                              ),
-                              const SizedBox(width: 8),
-                              OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 36),
-                                ),
-                                onPressed: () => _reject(id),
-                                child: const Text('거절'),
-                              ),
-                            ],
+                          AdminTournamentReviewActions(
+                            onOpenDetails: () =>
+                                context.push('/admin/edit/$id'),
+                            onOpenPreview: () => context.push(
+                              '/admin/preview/tournaments/$id',
+                            ),
+                            onApprove: () => _approve(id),
+                            onReject: () => _reject(id),
                           ),
                         ],
                       ),
@@ -983,85 +1023,91 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
   // ── Tab 3 (admin): Pending Clubs ─────────────────────────────────────────
 
   Widget _buildPendingClubsTab() {
-    if (_loadingPendingClubs && _pendingClubs.isEmpty) {
+    if (_loadingPendingClubs &&
+        _pendingClubs.isEmpty &&
+        _recentClubReviews.isEmpty) {
       return const Center(child: CircularProgressIndicator());
-    }
-    if (_pendingClubs.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _loadPendingClubs,
-        child: ListView(
-          children: const [
-            Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: Text('승인 대기 클럽이 없습니다')),
-            ),
-          ],
-        ),
-      );
     }
     return RefreshIndicator(
       onRefresh: _loadPendingClubs,
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Checkbox(
-                    value:
-                        _selectedPendingClubIds.length == _pendingClubs.length,
-                    onChanged: _clubReviewInFlight
-                        ? null
-                        : (selected) {
-                            setState(() {
-                              _selectedPendingClubIds.clear();
-                              if (selected == true) {
-                                _selectedPendingClubIds.addAll(
-                                  _pendingClubs.map((club) => club.id),
-                                );
-                              }
-                            });
-                          },
-                  ),
-                  Text(
-                    _selectedPendingClubIds.isEmpty
-                        ? '전체 선택'
-                        : '${_selectedPendingClubIds.length}개 선택',
-                  ),
-                  FilledButton.icon(
-                    onPressed:
-                        _selectedPendingClubIds.isEmpty || _clubReviewInFlight
-                            ? null
-                            : () => _reviewClubs(
-                                  _selectedPendingClubIds.toList(),
-                                  approve: true,
-                                ),
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('선택 승인'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed:
-                        _selectedPendingClubIds.isEmpty || _clubReviewInFlight
-                            ? null
-                            : () => _reviewClubs(
-                                  _selectedPendingClubIds.toList(),
-                                  approve: false,
-                                ),
-                    icon: const Icon(Icons.close_rounded),
-                    label: const Text('선택 거절'),
-                  ),
-                ],
+          Text('승인 대기', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (_pendingClubs.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: Text('승인 대기 클럽이 없습니다')),
+              ),
+            )
+          else ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Checkbox(
+                      value: _selectedPendingClubIds.length ==
+                          _pendingClubs.length,
+                      onChanged: _clubReviewInFlight
+                          ? null
+                          : (selected) {
+                              setState(() {
+                                _selectedPendingClubIds.clear();
+                                if (selected == true) {
+                                  _selectedPendingClubIds.addAll(
+                                    _pendingClubs.map((club) => club.id),
+                                  );
+                                }
+                              });
+                            },
+                    ),
+                    Text(
+                      _selectedPendingClubIds.isEmpty
+                          ? '전체 선택'
+                          : '${_selectedPendingClubIds.length}개 선택',
+                    ),
+                    FilledButton.icon(
+                      onPressed:
+                          _selectedPendingClubIds.isEmpty || _clubReviewInFlight
+                              ? null
+                              : () => _reviewClubs(
+                                    _selectedPendingClubIds.toList(),
+                                    approve: true,
+                                  ),
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('선택 승인'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _selectedPendingClubIds.isEmpty || _clubReviewInFlight
+                              ? null
+                              : () => _reviewClubs(
+                                    _selectedPendingClubIds.toList(),
+                                    approve: false,
+                                  ),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('선택 거절'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          for (final c in _pendingClubs) ...[
+            const SizedBox(height: 8),
+          ],
+          for (final c in _orderedPendingClubs) ...[
             Card(
+              color: c.id == widget.focusClubId
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : null,
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
@@ -1088,7 +1134,73 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             ),
             const SizedBox(height: 8),
           ],
+          const SizedBox(height: 16),
+          Text('최근 처리 현황', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            '다른 관리자가 처리한 승인·거절 결과도 여기에 표시됩니다.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          if (_recentClubReviews.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: Text('아직 처리된 클럽이 없습니다')),
+              ),
+            )
+          else
+            for (final review in _recentClubReviews) ...[
+              _buildClubReviewHistoryCard(review),
+              const SizedBox(height: 8),
+            ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildClubReviewHistoryCard(ClubReviewRecord review) {
+    final approved = review.isApproved;
+    final reviewedAt = review.reviewedAt.toLocal();
+    final timestamp =
+        '${reviewedAt.year}.${reviewedAt.month.toString().padLeft(2, '0')}.'
+        '${reviewedAt.day.toString().padLeft(2, '0')} '
+        '${reviewedAt.hour.toString().padLeft(2, '0')}:'
+        '${reviewedAt.minute.toString().padLeft(2, '0')}';
+    final meta = [
+      sportLabelFromString(review.sport),
+      if (review.region != null && review.region!.isNotEmpty) review.region!,
+    ].join(' · ');
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: approved
+              ? Colors.green.withValues(alpha: 0.12)
+              : Colors.red.withValues(alpha: 0.12),
+          child: Icon(
+            approved ? Icons.check_rounded : Icons.close_rounded,
+            color: approved ? Colors.green : Colors.red,
+          ),
+        ),
+        title: Text(review.name),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (meta.isNotEmpty) Text(meta),
+            Text('${review.reviewerName ?? '관리자'} · $timestamp'),
+            if (!approved &&
+                review.statusReason != null &&
+                review.statusReason!.isNotEmpty)
+              Text('거절 사유: ${review.statusReason!}'),
+          ],
+        ),
+        trailing: Chip(
+          label: Text(approved ? '승인 완료' : '거절'),
+          side: BorderSide.none,
+          backgroundColor: approved
+              ? Colors.green.withValues(alpha: 0.12)
+              : Colors.red.withValues(alpha: 0.12),
+        ),
       ),
     );
   }
@@ -1102,6 +1214,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (club.id == widget.focusClubId) ...[
+          Text(
+            '알림에서 선택한 승인 요청',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(club.name, style: Theme.of(context).textTheme.titleMedium),
         if (meta.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -1124,8 +1246,20 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           ),
         ],
         const SizedBox(height: 10),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+              ),
+              onPressed: () => context.push(
+                '/admin/preview/clubs/${club.id}',
+              ),
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('사용자 미리보기'),
+            ),
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
               onPressed: _clubReviewInFlight
@@ -1133,7 +1267,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                   : () => _approveClub(club.id, approve: true),
               child: const Text('승인'),
             ),
-            const SizedBox(width: 8),
             OutlinedButton(
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
               onPressed: _clubReviewInFlight
@@ -1145,6 +1278,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         ),
       ],
     );
+  }
+
+  List<Club> get _orderedPendingClubs {
+    final focusedId = widget.focusClubId;
+    if (focusedId == null || focusedId.isEmpty) return _pendingClubs;
+    final focused = _pendingClubs.where((club) => club.id == focusedId);
+    final rest = _pendingClubs.where((club) => club.id != focusedId);
+    return [...focused, ...rest];
   }
 
   // ── Tab 2: Crawl Sources (DB-driven CRUD) ─────────────────────────────────
@@ -1186,6 +1327,53 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
           );
         },
       ),
+    );
+  }
+}
+
+class AdminTournamentReviewActions extends StatelessWidget {
+  const AdminTournamentReviewActions({
+    super.key,
+    required this.onOpenDetails,
+    required this.onOpenPreview,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final VoidCallback onOpenDetails;
+  final VoidCallback onOpenPreview;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onOpenDetails,
+          icon: const Icon(Icons.description_outlined),
+          label: const Text('등록 정보'),
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onOpenPreview,
+          icon: const Icon(Icons.visibility_outlined),
+          label: const Text('사용자 미리보기'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onApprove,
+          child: const Text('승인'),
+        ),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+          onPressed: onReject,
+          child: const Text('거절'),
+        ),
+      ],
     );
   }
 }

@@ -1,13 +1,19 @@
 import 'package:allround/models/org_ranking.dart';
+import 'package:allround/models/org_ranking_snapshot.dart';
 import 'package:allround/models/player_result.dart';
 import 'package:allround/models/tournament.dart';
+import 'package:allround/screens/rankings/player_history_sheet.dart';
 import 'package:allround/screens/rankings/rankings_screen.dart';
 import 'package:allround/services/api.dart';
 import 'package:allround/state/providers.dart';
 import 'package:allround/theme/app_theme.dart';
+import 'package:allround/testing/e2e_keys.dart';
+import 'package:allround/widgets/app_card.dart';
+import 'package:allround/widgets/tournament_section_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 OrgRankingRow _row({
@@ -28,6 +34,33 @@ OrgRankingRow _row({
   );
 }
 
+PlayerResult _result({
+  required DateTime playedOn,
+  required int points,
+  int? resultRound,
+  String tournamentName = '대회',
+}) {
+  return PlayerResult(
+    orgCode: 'gj',
+    orgPlayerId: 'a',
+    tournamentName: tournamentName,
+    playedOn: playedOn,
+    resultRaw: resultRound?.toString() ?? '',
+    resultRound: resultRound,
+    points: points,
+  );
+}
+
+/// 기본 등록 상태 — 광주협회 남자골드부. 화면 기본 선택과 같아 registeredHere 가 참이다.
+/// UserTennisOrg 는 const 생성자가 아니라 최종 필드로 둔다.
+final _kDefaultMyOrgs = [
+  UserTennisOrg(
+    org: 'gj',
+    division: 'default',
+    divisionCodes: const ['gj_m_gold'],
+  ),
+];
+
 /// 화면 통합용 — _load() 가 실제로 쓰는 네 조회만 갈아끼운다.
 /// (단위 테스트가 판정 함수를 고정해도, 화면이 그 판정을 안 쓰면 소용없다.)
 class _FakeRankingApi extends ApiService {
@@ -36,7 +69,12 @@ class _FakeRankingApi extends ApiService {
     required this.links,
     this.candidates = const [],
     this.myName = '김평화',
-  })  : super(
+    List<UserTennisOrg>? myOrgs,
+    this.history,
+    this.myRankings = const [],
+    this.playerRankingsThrows = false,
+  })  : myOrgs = myOrgs ?? _kDefaultMyOrgs,
+        super(
           SupabaseClient(
             'http://127.0.0.1:54321',
             'qa-anon-key',
@@ -48,13 +86,25 @@ class _FakeRankingApi extends ApiService {
   final List<Map<String, dynamic>> links;
   final List<OrgRankingRow> candidates;
   final String myName;
+  final List<UserTennisOrg> myOrgs;
+  final PlayerHistory? history;
+  final List<OrgRankingRow> myRankings;
+  final bool playerRankingsThrows;
+
+  /// 마지막으로 조회한 협회·부서 — 드롭다운 변경이 실제 재조회로 이어지는지 검증용.
+  String? lastOrgCode;
+  String? lastDivisionCode;
+  String? lastPlayerRankingsOrgCode;
 
   @override
   Future<List<OrgRankingRow>> orgRankings({
     required String orgCode,
     required String divisionCode,
-  }) async =>
-      rows;
+  }) async {
+    lastOrgCode = orgCode;
+    lastDivisionCode = divisionCode;
+    return rows;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> orgPlayerLinks(String orgCode) async =>
@@ -64,41 +114,72 @@ class _FakeRankingApi extends ApiService {
   Future<List<OrgRankingRow>> myRankingCandidates() async => candidates;
 
   @override
-  Future<List<UserTennisOrg>> myTennisOrgs() async => [
-        UserTennisOrg(
-          org: 'gj',
-          division: 'default',
-          divisionCodes: const ['gj_m_gold'],
-        ),
-      ];
+  Future<List<UserTennisOrg>> myTennisOrgs() async => myOrgs;
 
   @override
   Future<UserProfile?> myProfile() async => UserProfile(name: myName);
 
   @override
-  Future<List<PlayerResult>> myPlayerResults() async => const [];
+  Future<List<PlayerResult>> myPlayerResults({String? orgCode}) async =>
+      const [];
+
+  @override
+  Future<PlayerHistory> playerHistory(OrgRankingRow player) async {
+    return history ??
+        PlayerHistory(
+          results: const [],
+          fetchedAt: DateTime.utc(2026, 8, 9),
+          isComplete: true,
+          wasCached: true,
+        );
+  }
+
+  @override
+  Future<List<OrgRankingSnapshot>> playerRankingHistory({
+    required String orgCode,
+    required String divisionCode,
+    required String orgPlayerId,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<OrgRankingRow>> playerRankings({
+    required String orgCode,
+    required String orgPlayerId,
+  }) async {
+    lastPlayerRankingsOrgCode = orgCode;
+    if (playerRankingsThrows) throw Exception('boom');
+    return myRankings;
+  }
 }
 
 const _kTestUserId = 'me-uuid';
 
-Future<void> _pumpScreen(
+Future<_FakeRankingApi> _pumpScreen(
   WidgetTester tester, {
   required List<OrgRankingRow> rows,
   required List<Map<String, dynamic>> links,
   List<OrgRankingRow> candidates = const [],
   String myName = '김평화',
+  List<UserTennisOrg>? myOrgs,
+  PlayerHistory? history,
+  List<OrgRankingRow> myRankings = const [],
+  bool playerRankingsThrows = false,
 }) async {
+  final api = _FakeRankingApi(
+    rows: rows,
+    links: links,
+    candidates: candidates,
+    myName: myName,
+    myOrgs: myOrgs,
+    history: history,
+    myRankings: myRankings,
+    playerRankingsThrows: playerRankingsThrows,
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        apiProvider.overrideWithValue(
-          _FakeRankingApi(
-            rows: rows,
-            links: links,
-            candidates: candidates,
-            myName: myName,
-          ),
-        ),
+        apiProvider.overrideWithValue(api),
         currentUserProvider.overrideWithValue(
           User(
             id: _kTestUserId,
@@ -116,6 +197,7 @@ Future<void> _pumpScreen(
     ),
   );
   await tester.pumpAndSettle();
+  return api;
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) {
@@ -129,9 +211,65 @@ Future<void> _pump(WidgetTester tester, Widget child) {
   );
 }
 
+/// [RankingList] 는 행별 지연 빌드를 위해 슬리버(SliverList)를 낸다 — 화면과
+/// 마찬가지로 [CustomScrollView] 안에서만 pump 할 수 있다.
+Future<void> _pumpRankingList(WidgetTester tester, RankingList list) {
+  return tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(body: CustomScrollView(slivers: [list])),
+      ),
+    ),
+  );
+}
+
 void main() {
+  testWidgets('랭킹 상단에 알림과 MY 메뉴를 모두 표시한다', (tester) async {
+    await _pumpScreen(tester, rows: const [], links: const []);
+
+    expect(find.byTooltip('알림함'), findsOneWidget);
+    expect(find.byKey(AllRoundE2EKeys.navProfile), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byType(TournamentSectionBar),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  group('협회 드롭다운', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('세그먼트 대신 드롭다운이 뜨고, 부서 드롭다운과 한 줄에 나란하다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      // 협회가 계속 추가될 예정이라 세그먼트는 확장이 안 된다 — 드롭다운으로 교체.
+      expect(find.byType(SegmentedButton<String>), findsNothing);
+      expect(find.text('광주협회'), findsOneWidget);
+      expect(find.text('협회'), findsOneWidget); // labelText
+      expect(find.text('부서'), findsOneWidget); // labelText
+    });
+
+    testWidgets('협회를 바꾸면 그 협회의 첫 부서로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(tester, rows: rows, links: const []);
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 부서 items 가 통째로 바뀌어도 크래시 없이(ValueKey 재생성) 첫 부서로 리셋.
+      expect(api.lastOrgCode, 'jn');
+      expect(api.lastDivisionCode, 'jn_m_gold');
+    });
+  });
+
   testWidgets('순위표 행이 렌더링된다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -144,6 +282,28 @@ void main() {
 
     expect(find.text('김평화'), findsOneWidget);
     expect(find.text('이기영'), findsOneWidget);
+  });
+
+  // 부서당 최대 871행(광주 남자일반부) — 행 전체를 한 번에 빌드하면 카드
+  // 871개가 동시에 만들어진다. RankingList 가 SliverList 로 지연
+  // 빌드하는지 여기서 확인한다(위젯테스트 기본 뷰포트 600px 기준).
+  testWidgets('행이 많아도 화면에 보이는 행만 빌드된다 (지연 렌더링)', (tester) async {
+    final manyRows = [
+      for (var i = 1; i <= 500; i++)
+        _row(rank: i, name: '선수$i', points: 500 - i, orgPlayerId: 'p$i'),
+    ];
+    await _pumpRankingList(
+      tester,
+      RankingList(rows: manyRows, linkedOrgPlayerId: null),
+    );
+
+    // 행마다 카드(AppCard)가 하나씩이므로 빌드된 행 수와 정확히 일치한다.
+    final builtRows = find.byType(AppCard).evaluate().length;
+    expect(builtRows, greaterThan(0));
+    expect(builtRows, lessThan(manyRows.length));
+    // 뷰포트에 다 안 들어가는 500행 중 소수만 빌드된다는 게 핵심 —
+    // 넉넉히 여유를 둔 상한.
+    expect(builtRows, lessThan(50));
   });
 
   testWidgets('출처 표기가 항상 보인다', (tester) async {
@@ -174,7 +334,7 @@ void main() {
   });
 
   testWidgets('내 계정과 연결된 행은 강조된다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -186,6 +346,202 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('ranking-row-mine')), findsOneWidget);
+  });
+
+  // 이름 첫 글자 원형 아바타는 정보가 없는 장식이라 제거했다(kimabba 결정
+  // 2026-08-26). 소속은 협회 원문('어등산/')이 아니라 다듬은 라벨로 보여준다.
+  testWidgets('행에 아바타는 없고, 소속은 꼬리 슬래시 없이 표시된다', (tester) async {
+    await _pumpRankingList(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'vudghk2116'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'lkybks'),
+        ],
+        linkedOrgPlayerId: null,
+      ),
+    );
+
+    expect(find.byType(CircleAvatar), findsNothing);
+    // _row 의 clubRaw 는 협회 원문 그대로 '어등산/' — 화면에는 '어등산'만.
+    expect(find.text('어등산'), findsNWidgets(2));
+    expect(find.text('어등산/'), findsNothing);
+  });
+
+  testWidgets('선수 행을 누르면 대회 이력을 보여준다', (tester) async {
+    final history = PlayerHistory(
+      results: [
+        PlayerResult(
+          orgCode: 'gj',
+          orgPlayerId: 'a',
+          tournamentName: '광주시장배',
+          playedOn: DateTime(2026, 5),
+          resultRaw: '1',
+          resultRound: 1,
+          points: 1000,
+          eventRaw: '골드부',
+        ),
+      ],
+      fetchedAt: DateTime.utc(2026, 8, 9),
+      isComplete: true,
+      wasCached: false,
+    );
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+    await _pumpScreen(tester, rows: rows, links: const [], history: history);
+
+    await tester.tap(find.text('김평화').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('선수 기록'), findsOneWidget);
+    expect(find.text('광주시장배'), findsOneWidget);
+    expect(find.text('우승'), findsOneWidget);
+  });
+
+  testWidgets('선수 기록 시트는 320px 200% 글자에서도 긴 협회 원문을 모두 표시한다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final player = _row(
+      rank: 1,
+      name: '아주긴이름의테니스선수',
+      points: 2649,
+      orgPlayerId: 'a',
+    );
+    const rawResult = '예선탈락(1회전 세트스코어 0:2 패배, 재경기 없음)';
+    final history = PlayerHistory(
+      results: [
+        PlayerResult(
+          orgCode: 'gj',
+          orgPlayerId: 'a',
+          tournamentName: '아주 긴 이름의 광주광역시 전국 생활체육 테니스대회',
+          playedOn: DateTime(2026, 5),
+          resultRaw: rawResult,
+          points: 0,
+          eventRaw: '남자골드부 개인복식',
+        ),
+      ],
+      fetchedAt: DateTime.utc(2026, 8, 9),
+      isComplete: true,
+      wasCached: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: PlayerHistorySheet(
+              player: player,
+              load: () async => history,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text(rawResult),
+      240,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('player-history-list')),
+        matching: find.byType(Scrollable),
+      ),
+      maxScrolls: 12,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text(rawResult), findsOneWidget);
+    final resultText = tester.widget<Text>(find.text(rawResult));
+    expect(resultText.maxLines, isNull);
+    expect(resultText.overflow, isNot(TextOverflow.ellipsis));
+  });
+
+  testWidgets('연도 헤더에 우승·준우승·입상·포인트 요약이 표시된다', (tester) async {
+    final history = PlayerHistory(
+      results: [
+        _result(playedOn: DateTime(2026, 5), points: 1000, resultRound: 1),
+        _result(playedOn: DateTime(2026, 4), points: 246, resultRound: 4),
+        _result(playedOn: DateTime(2026, 3), points: 700, resultRound: 4),
+      ],
+      fetchedAt: DateTime.utc(2026, 8, 9),
+      isComplete: true,
+      wasCached: false,
+    );
+    final rows = [_row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a')];
+    await _pumpScreen(tester, rows: rows, links: const [], history: history);
+
+    await tester.tap(find.text('김평화').first);
+    await tester.pumpAndSettle();
+
+    // 준우승 0건은 생략, 우승·입상·포인트만 남는다.
+    expect(find.text('우승 1 · 입상 2 · 1,946점'), findsOneWidget);
+  });
+
+  test('연도별 성적 집계 - 우승/준우승/입상 횟수와 포인트 합산(라운드 없는 행 포함)', () {
+    final results = [
+      _result(playedOn: DateTime(2026, 5), points: 500, resultRound: 1),
+      _result(playedOn: DateTime(2026, 5), points: 500, resultRound: 1),
+      _result(playedOn: DateTime(2026, 4), points: 300, resultRound: 2),
+      _result(playedOn: DateTime(2026, 3), points: 200, resultRound: 4),
+      _result(playedOn: DateTime(2026, 3), points: 200, resultRound: 4),
+      // resultRound 가 없어도(협회 표기를 못 읽은 행) 포인트는 합산돼야 한다.
+      _result(playedOn: DateTime(2026, 2), points: 100, resultRound: null),
+      // 4강이 아닌 다른 라운드는 카운트되지 않지만 포인트는 합산된다.
+      _result(playedOn: DateTime(2026, 1), points: 50, resultRound: 8),
+    ];
+
+    final stats = computeYearlyStats(results);
+
+    expect(stats.wins, 2);
+    expect(stats.runnerUps, 1);
+    expect(stats.semiFinals, 2);
+    expect(stats.points, 500 + 500 + 300 + 200 + 200 + 100 + 50);
+  });
+
+  test('요약 라벨 - 우승/준우승/입상이 모두 있으면 전부 표시한다', () {
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '우승 3 · 준우승 1 · 입상 2 · 1,946점');
+  });
+
+  test('요약 라벨 - 횟수가 0인 항목은 생략한다', () {
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 0, semiFinals: 2, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '우승 3 · 입상 2 · 1,946점');
+  });
+
+  test('요약 라벨 - 셋 다 0이면 포인트만 표시한다', () {
+    const stats =
+        YearlyStats(wins: 0, runnerUps: 0, semiFinals: 0, points: 1946);
+
+    expect(yearlySummaryLabel(stats), '1,946점');
+  });
+
+  test('요약 라벨 - 이력이 완전하면 접미사가 붙지 않는다', () {
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(
+      yearlySummaryLabel(stats, complete: true),
+      '우승 3 · 준우승 1 · 입상 2 · 1,946점',
+    );
+  });
+
+  test('요약 라벨 - 이력이 잘렸으면 "일부 기록" 접미사가 붙는다', () {
+    const stats =
+        YearlyStats(wins: 3, runnerUps: 1, semiFinals: 2, points: 1946);
+
+    expect(
+      yearlySummaryLabel(stats, complete: false),
+      '우승 3 · 준우승 1 · 입상 2 · 1,946점 · 일부 기록',
+    );
   });
 
   test('검색어는 이름과 소속 둘 다에서 부분일치로 거른다', () {
@@ -307,9 +663,234 @@ void main() {
     });
   });
 
+  group('이의신청 가능한 행 계산', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+      _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+    ];
+    const me = 'me-uuid';
+
+    Set<String> dispute(
+      List<Map<String, dynamic>> links, {
+      bool here = true,
+      String myName = '김평화',
+    }) =>
+        computeDisputableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: myName,
+          registeredHere: here,
+        );
+
+    Set<String> claim(List<Map<String, dynamic>> links) => computeClaimableIds(
+          rows: rows,
+          links: links,
+          myUserId: me,
+          myName: '김평화',
+          registeredHere: true,
+        );
+
+    test('남이 확정한 선수에만 붙는다 — 신청 버튼이 사라지는 자리다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), {'a'});
+      // 두 집합은 겹치지 않는다 — 한 줄에 버튼이 둘 뜨면 안 된다.
+      expect(claim(links), isEmpty);
+    });
+
+    test('빈 자리(주인 없음)에는 붙지 않는다 — 그건 일반 신청이다', () {
+      expect(dispute(const []), isEmpty);
+      expect(claim(const []), {'a'});
+    });
+
+    test('남이 신청 중(pending)일 뿐이면 붙지 않는다', () {
+      // 아직 주인이 없다 — 일반 신청으로 경합하면 된다.
+      final links = [
+        {'org_player_id': 'a', 'status': 'pending', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+      expect(claim(links), {'a'});
+    });
+
+    test('내가 이미 그 선수에 신청·반려 이력이 있으면 빠진다', () {
+      // unique(org_code, org_player_id, user_id) 가 상태를 안 가려서 재신청이
+      // 반드시 실패한다 — 버튼이 뜨면 이유 모를 에러만 본다.
+      for (final mineStatus in ['pending', 'rejected']) {
+        final links = [
+          {
+            'org_player_id': 'a',
+            'status': 'confirmed',
+            'user_id': 'other-uuid',
+          },
+          {'org_player_id': 'a', 'status': mineStatus, 'user_id': me},
+        ];
+        expect(dispute(links), isEmpty, reason: mineStatus);
+      }
+    });
+
+    test('이 협회에 내 확정 연결이 있으면 아무 행도 다툴 수 없다', () {
+      // has_confirmed_org_link() 가 INSERT 를 거부한다.
+      final links = [
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links), isEmpty);
+    });
+
+    test('이름이 다르면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, myName: '없는사람'), isEmpty);
+      // 정책이 글자 그대로 비교한다 — 앞뒤 여백도 불일치다.
+      expect(dispute(links, myName: ' 김평화 '), isEmpty);
+    });
+
+    test('등록한 부서가 아니면 다툴 수 없다', () {
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+      ];
+      expect(dispute(links, here: false), isEmpty);
+    });
+
+    test('로그인 전(myUserId=null)에는 두 함수 다 아무 행도 내지 않는다', () {
+      // 내 링크를 못 알아봐 전부 남의 것으로 취급하게 된다. 서버는 어차피
+      // user_id = auth.uid() 로 거부한다(codex 리뷰 2026-08-18).
+      final links = [
+        {'org_player_id': 'a', 'status': 'confirmed', 'user_id': 'other-uuid'},
+        {'org_player_id': 'b', 'status': 'confirmed', 'user_id': me},
+      ];
+      for (final compute in [computeDisputableIds, computeClaimableIds]) {
+        expect(
+          compute(
+            rows: rows,
+            links: links,
+            myUserId: null,
+            myName: '김평화',
+            registeredHere: true,
+          ),
+          isEmpty,
+        );
+      }
+    });
+  });
+
+  // 본인 연결 진입이 0건인 이유 중 하나 — 등록 안 한 부서를 보면 버튼만
+  // 조용히 사라지고 설명이 없었다(2026-08-18 실측: 27명 중 20명이 협회 미등록).
+  group('등록 안 한 부서 안내', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+
+    testWidgets('협회를 하나도 등록 안 했으면 등록을 권하고 버튼을 준다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: const [],
+      );
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+    });
+
+    testWidgets('등록은 했지만 다른 부서를 보는 중이면 버튼을 주지 않는다', (tester) async {
+      // "등록하러 가라"가 틀린 조언인 자리다 — 그 협회 랭커가 아닌 사람이
+      // 자기 부서가 아닌 것을 등록하게 만든다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            // 화면 기본 선택은 gj_m_gold 라 여기는 "내 부서가 아님"이 된다.
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsNothing);
+    });
+
+    testWidgets('등록한 부서를 보는 중이면 이 안내가 안 뜬다', (tester) async {
+      await _pumpScreen(tester, rows: rows, links: const []);
+
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsNothing);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
+    });
+
+    // 우선순위 고정(codex 리뷰 2026-08-18). 후보 카드·'확인 중입니다'는 부서가
+    // 아니라 협회 단위로 뜬다 — 화면 기본 부서가 gj_m_gold 라 부서로 좁히면
+    // 남자일반부 후보를 가진 사람이 탭을 옮기기 전엔 카드를 못 본다.
+    // 진행 중인 신청 소식이 "여긴 네 부서가 아니야"보다 먼저다.
+    testWidgets('같은 협회에 진행 중인 신청이 있으면 그 소식이 먼저다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: [
+          UserTennisOrg(
+            org: 'gj',
+            division: 'default',
+            divisionCodes: const ['gj_m_general'],
+          ),
+        ],
+      );
+
+      expect(find.text('확인 중입니다'), findsOneWidget);
+      expect(find.textContaining('내가 등록한 부서가 아니라'), findsNothing);
+    });
+
+    // 단 협회 등록이 0개면 등록 안내가 이긴다. 등록을 지워도 pending 은
+    // 남으므로(org_player_links 는 user_tennis_orgs 와 별개 테이블),
+    // 순서가 반대면 '확인 중입니다'가 등록 안내를 영구히 가린다
+    // (codex 리뷰 2026-08-18).
+    testWidgets('협회 등록을 지운 뒤 pending 이 남아 있어도 등록 안내가 이긴다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: const [
+          {'org_player_id': 'a', 'status': 'pending', 'user_id': _kTestUserId},
+        ],
+        myOrgs: const [],
+      );
+
+      expect(find.widgetWithText(TextButton, '등록하러 가기'), findsOneWidget);
+      expect(find.text('확인 중입니다'), findsNothing);
+    });
+  });
+
+  testWidgets('이미 주인이 있는 줄에는 이의신청 버튼이 붙는다', (tester) async {
+    OrgRankingRow? disputed;
+    await _pumpRankingList(
+      tester,
+      RankingList(
+        rows: [
+          _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+          _row(rank: 2, name: '이기영', points: 2562, orgPlayerId: 'b'),
+        ],
+        linkedOrgPlayerId: null,
+        disputableOrgPlayerIds: const {'a'},
+        onDispute: (row) => disputed = row,
+      ),
+    );
+
+    expect(find.text('이의신청'), findsOneWidget);
+    expect(find.text('본인'), findsNothing);
+    await tester.tap(find.text('이의신청'));
+    expect(disputed?.orgPlayerId, 'a');
+  });
+
   testWidgets('신청 가능한 행에만 본인 버튼이 붙는다', (tester) async {
     OrgRankingRow? claimed;
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [
@@ -328,7 +909,7 @@ void main() {
   });
 
   testWidgets('신청 자격이 없으면(등록 부서 밖) 버튼이 하나도 안 뜬다', (tester) async {
-    await _pump(
+    await _pumpRankingList(
       tester,
       RankingList(
         rows: [_row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a')],
@@ -426,5 +1007,184 @@ void main() {
     );
 
     expect(find.textContaining('본인'), findsOneWidget);
+  });
+
+  group('내 기록 요약 카드', () {
+    final rows = [
+      _row(rank: 1, name: '김평화', points: 2649, orgPlayerId: 'a'),
+    ];
+    const confirmedLinks = [
+      {'org_player_id': 'a', 'status': 'confirmed', 'user_id': _kTestUserId},
+    ];
+
+    testWidgets('확정 연결이 있으면 요약 카드가 뜨고 "내 기록 보기" 링크는 없다', (tester) async {
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
+      // 부서(골드부)·순위(3위)·누적 포인트(2,649P)가 한 카드에 보인다.
+      expect(find.textContaining('골드부 3위'), findsOneWidget);
+      expect(find.textContaining('2,649P'), findsOneWidget);
+      // 진입점은 카드로 대체됐다 — 링크는 제거.
+      expect(find.text('내 기록 보기'), findsNothing);
+    });
+
+    testWidgets('연결은 있는데 공표 표에 내 행이 없어도 카드는 뜬다', (tester) async {
+      // 연초 협회 포인트 리셋 등으로 표가 비어도, 링크를 없앤 자리라 이 카드가
+      // /rankings/me 로 가는 유일한 진입점이다 — 사라지면 기록 화면이 고아가 된다.
+      await _pumpScreen(tester, rows: rows, links: confirmedLinks);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('내 기록 요약 조회가 실패해도 순위표는 정상적으로 뜬다', (tester) async {
+      // 부가 기능(요약 카드)이 핵심 기능(공개 순위표)을 죽이면 안 된다 —
+      // playerRankings() 가 예외를 던져도 _load() 전체가 실패해서는 안 된다.
+      await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        playerRankingsThrows: true,
+      );
+
+      expect(find.text('김평화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
+      expect(find.text('공표된 순위 없음'), findsOneWidget);
+    });
+
+    testWidgets('확정 연결이 없어도 카드가 뜨고, 그 아래 기존 연결 유도도 함께 뜬다', (tester) async {
+      // "이 화면도 너무하지 않아?" 피드백 — 미연결 협회라고 카드 자체를 숨기지
+      // 않는다. 대신 탭 불가·안내 문구로 상태를 표시하고, 기존 유도 체인은
+      // 카드 아래 그대로 유지한다.
+      await _pumpScreen(tester, rows: rows, links: const [], myOrgs: const []);
+
+      expect(find.byKey(const ValueKey('my-ranking-summary-card')),
+          findsOneWidget);
+      expect(find.textContaining('전적이 없거나 확인되지 않았습니다'), findsOneWidget);
+      // 탭 불가 상태라 거짓 어포던스인 화살표는 없어야 한다.
+      expect(find.byIcon(Icons.chevron_right), findsNothing);
+      expect(find.textContaining('소속 협회·부서를 등록하면'), findsOneWidget);
+    });
+
+    testWidgets('미연결 카드는 탭해도 아무 데도 가지 않는다', (tester) async {
+      // AppCard 는 onTap 이 null 이면 InkWell 자체를 만들지 않는다 — 탭해도
+      // 반응이 없어야 정상.
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, __) => const Scaffold(body: Text('내 기록 화면')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(rows: rows, links: const [], myOrgs: const []),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child:
+              MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('내 기록 화면'), findsNothing);
+    });
+
+    testWidgets('협회를 바꾸면 내 기록도 그 협회 기준으로 다시 조회한다', (tester) async {
+      final api = await _pumpScreen(
+        tester,
+        rows: rows,
+        links: confirmedLinks,
+        myRankings: [
+          _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+        ],
+      );
+      expect(api.lastPlayerRankingsOrgCode, 'gj');
+
+      await tester.tap(find.text('광주협회'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('전남협회').last);
+      await tester.pumpAndSettle();
+
+      // 협회별로 내 기록이 다를 수 있다 — 카드 데이터도 새 협회로 재조회돼야 한다.
+      expect(api.lastPlayerRankingsOrgCode, 'jn');
+    });
+
+    testWidgets('카드를 탭하면 /rankings/me 로 가는데, 지금 보는 협회를 org 쿼리로 싣는다',
+        (tester) async {
+      // "전남 내 기록" 카드를 탭했는데 광주 기록이 뜨는 불일치(myConfirmedLink()가
+      // org_code 정렬 1순위만 돌려줘 광주+전남 동시 confirmed 사용자는 항상
+      // 광주가 나옴) 재발 방지 — 카드가 지금 보는 협회를 쿼리로 실어 보내는지 검증.
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, __) => const RankingsScreen()),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, state) => Scaffold(
+              body: Text('내 기록 화면 org=${state.uri.queryParameters['org']}'),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiProvider.overrideWithValue(
+              _FakeRankingApi(
+                rows: rows,
+                links: confirmedLinks,
+                myRankings: [
+                  _row(rank: 3, name: '김평화', points: 2649, orgPlayerId: 'a'),
+                ],
+              ),
+            ),
+            currentUserProvider.overrideWithValue(
+              User(
+                id: _kTestUserId,
+                appMetadata: const {},
+                userMetadata: const {},
+                aud: 'authenticated',
+                createdAt: '2026-08-05T00:00:00Z',
+              ),
+            ),
+          ],
+          child:
+              MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('my-ranking-summary-card')));
+      await tester.pumpAndSettle();
+
+      // 화면 기본 협회가 광주(gj)다 — 드롭다운을 안 바꿨으니 그대로 실려야 한다.
+      expect(find.text('내 기록 화면 org=gj'), findsOneWidget);
+    });
   });
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:allround/models/club_recruiting.dart';
+import 'package:allround/models/tournament.dart';
+import 'package:allround/widgets/clubs/club_tiles.dart';
 import 'package:allround/widgets/clubs/team_recruiting_widgets.dart';
 
 void main() {
@@ -28,8 +30,12 @@ void main() {
     ),
   );
 
-  testWidgets('모임 탭은 모집글 3개와 전체 보기 진입점을 노출한다', (tester) async {
-    var opened = false;
+  testWidgets('클럽 홈 모집 카드는 로고와 조건을 표시하고 섹션 전체보기를 없앤다', (tester) async {
+    final club = Club(
+      id: posts.first.clubId,
+      sport: 'tennis',
+      name: posts.first.clubName,
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -40,18 +46,23 @@ void main() {
               managedClubIds: const {},
               onClosePost: (_) {},
               onOpenPost: (_) {},
-              onViewAll: () => opened = true,
+              clubForPost: (post) => post.clubId == club.id ? club : null,
             ),
           ),
         ),
       ),
     );
 
+    expect(find.byType(SimpleClubAvatar), findsOneWidget);
     expect(find.text('팀원 모집 0'), findsOneWidget);
-    expect(find.text('팀원 모집 2'), findsOneWidget);
-    expect(find.text('팀원 모집 3'), findsNothing);
-    await tester.tap(find.text('전체 보기'));
-    expect(opened, isTrue);
+    expect(find.text('무관 · 2명'), findsWidgets);
+    expect(find.text('무관 · 무관'), findsWidgets);
+    expect(find.text('전체보기'), findsNothing);
+  });
+
+  test('클럽 홈 모집 제목은 한글 포함 최대 8글자만 표시한다', () {
+    expect(recruitingHomeTitle('평일 저녁 신규 회원 모집'), '평일 저녁 신규');
+    expect(recruitingHomeTitle('짧은 제목'), '짧은 제목');
   });
 
   testWidgets('전체 팀원모집 화면은 모든 글을 표시한다', (tester) async {

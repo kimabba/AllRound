@@ -32,7 +32,9 @@ import {
   type Intent,
   INTENT_VALUES,
   type IntentResult,
+  isDateRangeFullyPast,
   resolveRequestedSport,
+  type Slots,
 } from '../_shared/intent.ts';
 import {
   buildClubCards,
@@ -41,15 +43,18 @@ import {
   type ClubCardRow,
   type ClubDetailRow,
   isGradeRegisteredForSport,
+  isScheduleConflictRow,
   isTournamentCardRow,
   parseSelectedEntity,
   parseTournamentRefine,
   renderClubDetailText,
   renderClubSearchEmptyText,
   renderClubSearchText,
+  renderScheduleConflictText,
   renderTournamentApplicationGuideText,
   renderTournamentSearchEmptyText,
   renderTournamentSearchText,
+  type ScheduleConflictRow,
 } from '../_shared/chat_cards.ts';
 
 import type {
@@ -62,7 +67,7 @@ import type {
   UserTennisOrgRow,
   VenueRow,
 } from './types.ts';
-import { INTENT_KNN_THRESHOLD, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
+import { INTENT_KNN_THRESHOLD, isMyRankingRow, ROUTING_CONFIDENCE_THRESHOLD } from './types.ts';
 import {
   buildContextPrompt,
   buildProfileContext,
@@ -74,7 +79,18 @@ import {
 } from './context.ts';
 import { performRagSearch, performVenueSearch } from './rag.ts';
 import { cacheIncrementHit, cacheInsert, cacheLookup } from './cache.ts';
-import { buildDbCitations, buildTournamentCardBlocks, streamLlmResponse } from './stream.ts';
+import {
+  buildResponseDbCitations,
+  buildTournamentCardBlocks,
+  streamLlmResponse,
+} from './stream.ts';
+import { assessChatInput } from './safety.ts';
+import {
+  type OrgRankingRow,
+  parseOrgRankingRows,
+  rankingScopeLabel,
+  renderRankingResults,
+} from './ranking.ts';
 
 const ROUTABLE_INTENTS: ReadonlySet<Intent> = new Set<Intent>(['tournament_search', 'club_search']);
 
@@ -84,6 +100,102 @@ function isIntentValue(value: string): value is Intent {
 
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function chatTextResponse(conversationId: string, text: string): Response {
+  return new Response(
+    sseEvent('meta', { conversation_id: conversationId }) +
+      sseEvent('delta', { text }) +
+      sseEvent('done', {}),
+    {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      },
+    },
+  );
+}
+
+function buildRankingCitations(rows: readonly OrgRankingRow[]): DbCitation[] {
+  const scopes = new Map<string, OrgRankingRow>();
+  for (const row of rows) {
+    const key = `${row.org_code}:${row.division_code}`;
+    if (!scopes.has(key)) scopes.set(key, row);
+  }
+  return [...scopes.values()].slice(0, 6).map((row) => ({
+    type: 'db',
+    source: 'rankings',
+    id: `${row.org_code}:${row.division_code}`,
+    title: `${rankingScopeLabel(row.org_code, row.division_code)} 랭킹`,
+  }));
+}
+
+interface PriorChatMessage {
+  role: string;
+  content: string;
+  citations: unknown;
+}
+
+const RANKING_HISTORY_MARKER: DbCitation = {
+  type: 'db',
+  source: 'rankings',
+  id: 'ranking-query',
+  title: '협회 랭킹 조회',
+};
+
+function parsePriorMessages(value: unknown): PriorChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  const rows: PriorChatMessage[] = [];
+  for (const item of value) {
+    if (
+      typeof item === 'object' &&
+      item !== null &&
+      'role' in item &&
+      typeof item.role === 'string' &&
+      'content' in item &&
+      typeof item.content === 'string'
+    ) {
+      rows.push({
+        role: item.role,
+        content: item.content,
+        citations: 'citations' in item ? item.citations : null,
+      });
+    }
+  }
+  return rows;
+}
+
+function hasRankingCitation(value: unknown): boolean {
+  return Array.isArray(value) && value.some((citation) =>
+    typeof citation === 'object' &&
+    citation !== null &&
+    'source' in citation &&
+    citation.source === 'rankings'
+  );
+}
+
+/** 과거 랭킹 턴의 선수명을 후속 Gemini 요청에 다시 보내지 않는다. */
+function modelSafePriorMessages(messages: readonly PriorChatMessage[]): PriorChatMessage[] {
+  const excluded = new Set<number>();
+  for (let i = 0; i < messages.length; i++) {
+    if (!hasRankingCitation(messages[i].citations)) continue;
+    excluded.add(i);
+    if (messages[i].role === 'assistant' && i > 0 && messages[i - 1].role === 'user') {
+      excluded.add(i - 1);
+    }
+  }
+  return messages.filter((_, index) => !excluded.has(index));
+}
+
+function redactPlayerName(message: string, playerName: string | undefined): string {
+  return playerName ? message.replaceAll(playerName, '[선수명]') : message;
+}
+
+function logSafeSlots(slots: Slots): Omit<Slots, 'player_name'> {
+  const { player_name: _playerName, ...safe } = slots;
+  return safe;
 }
 
 Deno.serve(withCors(async (req) => {
@@ -119,6 +231,22 @@ Deno.serve(withCors(async (req) => {
   const conversationId = body.conversation_id ?? crypto.randomUUID();
   const userMessage = body.message.trim();
   const clientActiveSport: string | undefined = body.active_sport;
+  // 협회 랭킹은 개인정보가 포함될 수 있으므로 임베딩/Gemini 호출보다 먼저 로컬 룰로
+  // 판별한다. 아래 일반 의도 분류에서도 같은 결과를 재사용한다.
+  const initialSlots = extractSlots(userMessage);
+  const initialRuleHit = classifyByRule(userMessage);
+  const modelUserMessage = redactPlayerName(userMessage, initialSlots.player_name);
+
+  // 명백한 유해 입력은 DB 저장·임베딩·Gemini 전송 전에 차단한다. 차단 로그에는
+  // 원문이나 사용자 ID를 넣지 않고 범주만 남긴다.
+  const safetyDecision = assessChatInput(userMessage);
+  if (safetyDecision.blocked && safetyDecision.category && safetyDecision.responseText) {
+    console.warn(
+      'chat_safety',
+      JSON.stringify({ event: 'local_input_block', category: safetyDecision.category }),
+    );
+    return chatTextResponse(conversationId, safetyDecision.responseText);
+  }
 
   const selectedEntityResult = parseSelectedEntity(body.selected_entity);
   const selectedEntity = selectedEntityResult.ok ? selectedEntityResult.value : null;
@@ -144,20 +272,32 @@ Deno.serve(withCors(async (req) => {
   // Prior conversation (last 10 turns = 20 messages)
   const { data: priorRaw } = await supabase
     .from('chat_messages')
-    .select('role, content')
+    .select('role, content, citations')
     .eq('user_id', user.id)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(20);
-  const prior = priorRaw?.reverse() ?? null;
+  const prior = parsePriorMessages(priorRaw).reverse();
+  const modelPrior = modelSafePriorMessages(prior);
 
-  // Persist user message
-  await chatWriter.from('chat_messages').insert({
-    user_id: user.id,
-    conversation_id: conversationId,
-    role: 'user',
-    content: userMessage,
-  });
+  // Persist user message. Gemini 의미 안전 필터가 뒤에서 차단하면 이 id로 원문을
+  // 즉시 지운다. id 없이 content 조건으로 지우면 같은 문구의 과거 메시지까지
+  // 삭제할 수 있으므로 삽입 행을 정확히 잡는다.
+  const { data: userMessageRow, error: userMessageError } = await chatWriter
+    .from('chat_messages')
+    .insert({
+      user_id: user.id,
+      conversation_id: conversationId,
+      role: 'user',
+      content: userMessage,
+      ...(initialSlots.player_name ? { citations: [RANKING_HISTORY_MARKER] } : {}),
+    })
+    .select('id')
+    .single();
+  if (userMessageError || !userMessageRow || typeof userMessageRow.id !== 'string') {
+    return errorResponse('메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 500);
+  }
+  const userMessageId = userMessageRow.id;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -228,7 +368,7 @@ Deno.serve(withCors(async (req) => {
             .from('clubs')
             .select(
               'id, sport, name, region, address, description, member_count, ' +
-                'monthly_fee, meeting_days, gender_preference, contact',
+                'monthly_fee, fee_type, meeting_days, gender_preference, contact',
             )
             .eq('id', selectedEntity.id)
             // 카드 검색(status='approved')과 동일 가시성 명시.
@@ -276,11 +416,108 @@ Deno.serve(withCors(async (req) => {
           return;
         }
 
+        // ---- 협회 랭킹 조회: DB 결정적 응답, 임베딩·Gemini 미사용 ----
+        // 공개 랭킹만 읽는다("본인 랭킹"은 #424가 이미 my_profile 라우팅에
+        // my_confirmed_ranking RPC로 통합해뒀다 — 여기서 다시 만들지 않는다).
+        // 질문·결과의 선수명은 로그에 남기지 않는다.
+        if (
+          !tournamentRefine &&
+          !selectedEntity &&
+          initialRuleHit?.intent === 'ranking_lookup'
+        ) {
+          send('intent', {
+            intent: 'ranking_lookup',
+            confidence: 1,
+            method: 'rule',
+            slots: initialSlots,
+            rule_matched: initialRuleHit.rule,
+          });
+
+          let answerText: string;
+          let rankingRows: OrgRankingRow[] = [];
+
+          if (
+            !initialSlots.org_code &&
+            !initialSlots.division_code &&
+            !initialSlots.player_name
+          ) {
+            answerText =
+              '어느 랭킹인지 알려주세요. 예: “광주 골드부 랭킹” 또는 “김평화 선수 순위”.';
+          } else {
+            let rankingQuery = supabase
+              .from('org_rankings')
+              .select(
+                'org_code, division_code, rank, player_name, org_player_id, ' +
+                  'club_raw, rank_points, total_points',
+              )
+              .order('rank', { ascending: true })
+              .order('division_code', { ascending: true })
+              .limit(10);
+            if (initialSlots.org_code) {
+              rankingQuery = rankingQuery.eq('org_code', initialSlots.org_code);
+            }
+            if (initialSlots.division_code) {
+              rankingQuery = rankingQuery.eq('division_code', initialSlots.division_code);
+            }
+            if (initialSlots.player_name) {
+              rankingQuery = rankingQuery.eq('player_name', initialSlots.player_name);
+            }
+
+            const { data: rankingRaw, error: rankingError } = await rankingQuery;
+            if (rankingError) {
+              console.warn(
+                'chat_route',
+                JSON.stringify({
+                  event: 'ranking_query_error',
+                  reason_code: rankingError.code,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              answerText = '현재 협회 랭킹표를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+            } else {
+              rankingRows = parseOrgRankingRows(rankingRaw ?? []);
+              answerText = renderRankingResults(rankingRows, {
+                orgCode: initialSlots.org_code,
+                divisionCode: initialSlots.division_code,
+                playerName: initialSlots.player_name,
+              });
+            }
+          }
+
+          const citations = buildRankingCitations(rankingRows);
+          console.log(
+            'chat_route',
+            JSON.stringify({
+              event: 'ranking_lookup_routed',
+              result_count: rankingRows.length,
+              has_org_filter: !!initialSlots.org_code,
+              has_division_filter: !!initialSlots.division_code,
+              has_player_filter: !!initialSlots.player_name,
+              user_id_hash: hashedUserId,
+              conversation_id: conversationId,
+            }),
+          );
+          send('route', { intent: 'ranking_lookup', result_count: rankingRows.length });
+          send('context', { tournaments: [], rules: [] });
+          send('delta', { text: answerText });
+          if (citations.length > 0) send('citation', { items: citations });
+          await chatWriter.from('chat_messages').insert({
+            user_id: user.id,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: answerText,
+            citations,
+          });
+          send('done', {});
+          return;
+        }
+
         // ---- Embedding (reused for cache lookup + RAG) ----
         let vectorLiteral: string | null = null;
         let userContextHash: string | null = null;
         try {
-          const embedResult = await embedTextWithUsage(userMessage, 'RETRIEVAL_QUERY');
+          const embedResult = await embedTextWithUsage(modelUserMessage, 'RETRIEVAL_QUERY');
           vectorLiteral = toVectorLiteral(embedResult.values);
           userContextHash = await computeUserContextHash(
             user.id,
@@ -304,8 +541,8 @@ Deno.serve(withCors(async (req) => {
         const adminSupabase = serviceClient();
 
         // ---- Intent classification ----
-        const slots = extractSlots(userMessage);
-        const ruleHit = classifyByRule(userMessage);
+        const slots = initialSlots;
+        const ruleHit = initialRuleHit;
         let intentResult: IntentResult;
         if (tournamentRefine) {
           // JY-101: 정제 칩 재요청 — 분류/후속이어받기를 건너뛰고 tournament_search 로
@@ -376,9 +613,10 @@ Deno.serve(withCors(async (req) => {
         // ---- 짧은 후속 질문 이어받기 ----
         // "다음달은?", "광주는?" 처럼 대회 키워드가 없어 분류되지 않은 후속 질문은,
         // 직전 turn 이 대회 검색이었다면 대회 검색으로 이어받아 기간·지역만 갱신한다.
-        // venue/club 등 명확한 다른 의도(ROUTABLE)는 덮지 않는다.
+        // 룰 분류(confidence=1.0)는 어떤 의도든 덮지 않는다 — "오늘 매치 일정" 같은
+        // 확실한 match_schedule 이 직전 대회 검색에 끌려가면 안 된다.
         if (
-          !ROUTABLE_INTENTS.has(intentResult.intent) &&
+          !(intentResult.method === 'rule' || ROUTABLE_INTENTS.has(intentResult.intent)) &&
           (slots.date_range || slots.region)
         ) {
           const priorMsgs = (prior ?? []) as { role: string; content: string }[];
@@ -426,7 +664,7 @@ Deno.serve(withCors(async (req) => {
             intent: intentResult.intent,
             confidence: intentResult.confidence,
             method: intentResult.method,
-            slots: intentResult.slots,
+            slots: logSafeSlots(intentResult.slots),
             rule_matched: intentResult.rule_matched ?? null,
             has_embedding: !!vectorLiteral,
             requested_sport: requestedSport ?? null,
@@ -437,13 +675,80 @@ Deno.serve(withCors(async (req) => {
           }),
         );
 
-        // ---- match_schedule: 개인 매치 일정 데이터 미비 → 결정적 안내 fallback ----
-        // RAG 로 흘리면 무관한 대회/룰을 긁어오므로 안내로 종료한다.
-        if (intentResult.intent === 'match_schedule') {
-          const dr = intentResult.slots.date_range;
-          const scheduleText = '개인 매치 일정은 아직 채팅에서 조회할 수 없어요. ' +
-            '클럽 모임은 클럽 탭에서, 관심 대회 일정은 대회 즐겨찾기에서 확인하세요.' +
-            (dr ? '\n이 기간의 대회가 궁금하면 "이 기간 대회 알려줘"라고 말씀해 주세요.' : '');
+        // ---- match_schedule: 즐겨찾기 대회 + 클럽 모임 일정 겹침 확인 (LLM 미사용, 결정적) ----
+        if (
+          intentResult.intent === 'match_schedule' &&
+          intentResult.confidence >= ROUTING_CONFIDENCE_THRESHOLD
+        ) {
+          const scheduleErrorText = '일시적인 시스템 오류로 일정을 확인하지 못했습니다. ' +
+            '잠시 후 다시 시도해 주세요.';
+          const todayKstForSchedule = new Date(Date.now() + 9 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
+          const rawDateRange = intentResult.slots.date_range;
+          // 이 RPC 는 미래 겹침만 보는 구조(내부에서 conflict_date >= 오늘 강제)라, 이미
+          // 지난 범위를 그대로 넘기면 항상 0행이 나와 "겹침 없음"으로 오판된다 — 그럴 땐
+          // 범위를 무시하고 기본 90일 창을 쓴다. isDateRangeFullyPast 참고.
+          const dateRange = rawDateRange && !isDateRangeFullyPast(rawDateRange, todayKstForSchedule)
+            ? rawDateRange
+            : undefined;
+          const scheduleRangeLabel = dateRange
+            ? `${dateRange.from} ~ ${dateRange.to}`
+            : '앞으로 90일';
+          const { data: conflictRows, error: conflictErr } = await supabase.rpc(
+            'my_schedule_conflicts',
+            { p_date_from: dateRange?.from ?? null, p_date_to: dateRange?.to ?? null },
+          );
+
+          let scheduleText: string;
+          if (conflictErr) {
+            console.error(
+              'chat_route',
+              JSON.stringify({
+                event: 'schedule_conflicts_rpc_error',
+                reason: conflictErr.message,
+                user_id_hash: hashedUserId,
+                conversation_id: conversationId,
+              }),
+            );
+            scheduleText = scheduleErrorText;
+          } else {
+            const typedRows = (Array.isArray(conflictRows) ? conflictRows : [])
+              .filter(isScheduleConflictRow) as ScheduleConflictRow[];
+            if (typedRows.length === 0) {
+              // 겹침이 0건인 이유가 "비교할 게 없어서"인지 "겹치는 게 없어서"인지 구분해
+              // 서로 다른 안내를 준다. RPC 두 분기 모두 즐겨찾기 대회가 조인 뿌리라서
+              // 즐겨찾기 0건이면 클럽 가입 여부와 무관하게 겹침이 나올 수 없다 —
+              // 판정은 즐겨찾기 수만 본다.
+              // RPC가 published/closed 대회만 비교하므로 개수도 같은 기준으로 센다 —
+              // draft/rejected 즐겨찾기만 있으면 "비교할 게 없음" 안내가 맞다.
+              const favoriteResult = await supabase
+                .from('tournament_favorites')
+                .select('tournament_id, tournaments!inner(status)', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .in('tournaments.status', ['published', 'closed']);
+              // count는 실패해도 null로 와서 "0건"과 구분되지 않는다. error를 봐야 한다.
+              if (favoriteResult.error) {
+                console.error(
+                  'chat_route',
+                  JSON.stringify({
+                    event: 'schedule_conflicts_count_error',
+                    reason: favoriteResult.error.message,
+                    user_id_hash: hashedUserId,
+                    conversation_id: conversationId,
+                  }),
+                );
+                scheduleText = scheduleErrorText;
+              } else {
+                scheduleText = (favoriteResult.count ?? 0) === 0
+                  ? '비교할 즐겨찾기 대회나 클럽 모임이 없어요. ' +
+                    '대회를 즐겨찾기하거나 클럽에 가입하면 겹치는 일정을 확인해 드릴게요.'
+                  : renderScheduleConflictText([]);
+              }
+            } else {
+              scheduleText = renderScheduleConflictText(typedRows, scheduleRangeLabel);
+            }
+          }
+
           send('context', { tournaments: [], rules: [] });
           send('delta', { text: scheduleText });
           await chatWriter.from('chat_messages').insert({
@@ -528,11 +833,51 @@ Deno.serve(withCors(async (req) => {
               const score = o.score !== null ? ` (점수 ${o.score})` : '';
               profileLines.push(`- ${orgName}: ${division}${score}${o.is_primary ? ' ★주' : ''}`);
             }
+
+            // 본인 인증 연결(confirmed)된 랭킹만 표시. 대부분 사용자는 아직 연결이
+            // 없어 "조회 불가" 로 나온다 — 알려진 제약(design doc §3 제외 항목).
+            // org_rankings 는 테니스 협회 전용이라 등록 협회가 없으면 항상 0행 →
+            // 아예 조회하지 않고 섹션도 붙이지 않는다([등록 협회] 섹션과 같은 조건).
+            const { data: rankingRows, error: rankingErr } = await supabase.rpc(
+              'my_confirmed_ranking',
+            );
+            profileLines.push('');
+            profileLines.push('[내 랭킹]');
+            if (rankingErr) {
+              console.error(
+                'chat_route',
+                JSON.stringify({
+                  event: 'my_confirmed_ranking_rpc_error',
+                  reason: rankingErr.message,
+                  user_id_hash: hashedUserId,
+                  conversation_id: conversationId,
+                }),
+              );
+              profileLines.push('- 랭킹 조회 중 오류가 발생해 표시할 수 없음');
+            } else {
+              const typedRanking = (Array.isArray(rankingRows) ? rankingRows : [])
+                .filter(isMyRankingRow);
+              if (typedRanking.length === 0) {
+                profileLines.push(
+                  '- 아직 협회 랭킹 본인 인증 연결이 되어 있지 않아 조회할 수 없음',
+                );
+              } else {
+                for (const r of typedRanking) {
+                  const orgName = TENNIS_ORG_LABELS[r.org_code as keyof typeof TENNIS_ORG_LABELS] ??
+                    r.org_code;
+                  profileLines.push(
+                    `- ${orgName} ${r.division_code}: ${r.rank}위 ` +
+                      `(순위포인트 ${r.rank_points}, 전체포인트 ${r.total_points})`,
+                  );
+                }
+              }
+            }
           }
+
           const profileContext = profileLines.join('\n');
 
           const profileHistory: ChatTurn[] = [];
-          for (const m of prior ?? []) {
+          for (const m of modelPrior) {
             profileHistory.push({
               role: m.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: m.content }],
@@ -546,7 +891,7 @@ Deno.serve(withCors(async (req) => {
             role: 'model',
             parts: [{ text: '네, 위 프로필 정보를 참고해 답변하겠습니다.' }],
           });
-          profileHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+          profileHistory.push({ role: 'user', parts: [{ text: modelUserMessage }] });
 
           send('route', { intent: 'my_profile', result_count: sports.length });
           send('context', { tournaments: [], rules: [] });
@@ -593,7 +938,7 @@ Deno.serve(withCors(async (req) => {
             .from('clubs')
             .select(
               'id, sport, name, region, description, member_count, ' +
-                'monthly_fee, meeting_days, gender_preference',
+                'monthly_fee, fee_type, meeting_days, gender_preference',
             )
             .eq('status', 'approved')
             .order('member_count', { ascending: false })
@@ -637,7 +982,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'club_search_routed',
                 result_count: typedClubs.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
@@ -728,7 +1073,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'tournament_application_guide_routed',
                 result_count: typedRows.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 requested_sport: requestedSport ?? null,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
@@ -852,7 +1197,7 @@ Deno.serve(withCors(async (req) => {
                 'chat_route',
                 JSON.stringify({
                   event: 'tournament_search_empty',
-                  slots: intentResult.slots,
+                  slots: logSafeSlots(intentResult.slots),
                   requested_sport: requestedSport,
                   user_id_hash: hashedUserId,
                   conversation_id: conversationId,
@@ -903,7 +1248,7 @@ Deno.serve(withCors(async (req) => {
               JSON.stringify({
                 event: 'tournament_search_routed',
                 result_count: typedRows.length,
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
               }),
@@ -946,7 +1291,7 @@ Deno.serve(withCors(async (req) => {
               'chat_route',
               JSON.stringify({
                 event: 'tournament_search_empty',
-                slots: intentResult.slots,
+                slots: logSafeSlots(intentResult.slots),
                 requested_sport: requestedSport,
                 user_id_hash: hashedUserId,
                 conversation_id: conversationId,
@@ -1104,7 +1449,7 @@ Deno.serve(withCors(async (req) => {
           .join('\n\n');
 
         const history: ChatTurn[] = [];
-        for (const m of prior ?? []) {
+        for (const m of modelPrior) {
           history.push({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }],
@@ -1120,7 +1465,7 @@ Deno.serve(withCors(async (req) => {
             parts: [{ text: '네, 위 컨텍스트를 참고해 답변하겠습니다.' }],
           });
         }
-        history.push({ role: 'user', parts: [{ text: userMessage }] });
+        history.push({ role: 'user', parts: [{ text: modelUserMessage }] });
 
         let assistantText = '';
         let cacheable = false;
@@ -1133,7 +1478,7 @@ Deno.serve(withCors(async (req) => {
         } else {
           const llmResult = await streamLlmResponse(history, systemPrompt, send);
           assistantText = llmResult.assistantText;
-          if (!llmResult.errored && assistantText.trim().length > 0) {
+          if (!llmResult.errored && !llmResult.blocked && assistantText.trim().length > 0) {
             cacheable = true;
           }
           if (llmResult.usage) {
@@ -1147,13 +1492,35 @@ Deno.serve(withCors(async (req) => {
               context: 'chat',
             });
           }
+          if (llmResult.blocked) {
+            console.warn(
+              'chat_safety',
+              JSON.stringify({
+                event: 'gemini_block',
+                reason: llmResult.blockReason ?? 'SAFETY',
+              }),
+            );
+            const { error: deleteBlockedError } = await chatWriter
+              .from('chat_messages')
+              .delete()
+              .eq('id', userMessageId)
+              .eq('user_id', user.id);
+            if (deleteBlockedError) {
+              console.error('chat_safety blocked input deletion failed');
+            }
+            send('done', {});
+            controller.close();
+            return;
+          }
         }
 
         // ---- Citations + Cards ----
-        // 규칙 질문은 답변 본문에 출처가 이미 인라인으로 들어가므로 하단 출처 리스트를 생략.
-        const dbCitationItems = intentResult.intent === 'rule_lookup'
-          ? []
-          : buildDbCitations(tournaments, rules, venues);
+        const dbCitationItems = buildResponseDbCitations(
+          intentResult.intent,
+          tournaments,
+          rules,
+          venues,
+        );
         if (dbCitationItems.length > 0) {
           send('citation', { items: dbCitationItems });
         }

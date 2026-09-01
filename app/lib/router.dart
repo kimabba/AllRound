@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'config.dart';
+import 'screens/admin/admin_operations_home_screen.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/no_access_screen.dart';
@@ -28,6 +29,7 @@ import 'screens/more_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rankings/rankings_screen.dart';
+import 'screens/rankings/my_record_screen.dart';
 import 'screens/rules_screen.dart';
 import 'screens/tournaments/tournament_detail_screen.dart';
 import 'screens/tournaments/tournament_submit_screen.dart';
@@ -39,11 +41,31 @@ import 'widgets/app_bottom_nav.dart';
 import 'widgets/chat_sheet.dart';
 import 'widgets/mini_ballboy_bar.dart';
 
+/// 모바일에서도 열리는 관리자 경로. 나머지 `/admin/*` 는 웹 전용이라 홈으로
+/// 돌아간다 — 알림 딥링크가 가리키는 관리자 화면은 반드시 여기 있어야
+/// 관리자가 휴대폰에서 알림을 눌러 바로 처리할 수 있다.
+const kMobileAdminPaths = {
+  '/admin/clubs',
+  '/admin/ranking-claims',
+  '/admin/drafts',
+};
+
+/// `/rankings/me?org=` 딥링크 쿼리 검증. [kRankingDivisions](미러 협회 SSOT)에
+/// 없으면(오타·공백·폐기 코드) null 로 강등해 [MyRecordScreen] 이 기존 기본
+/// 동작(정렬 1순위 협회)을 쓰게 한다 — 검증 없이 그대로 넘기면 "연결 안
+/// 됨"(ConnectPrompt)으로 오표시돼 사용자가 불필요한 재연결을 시도하게 된다.
+String? validatedRankingOrgCode(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || !kRankingDivisions.containsKey(trimmed)) return null;
+  return trimmed;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: kIsWeb && AppConfig.userDesignPreview
-        ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
-        : '/',
+    initialLocation:
+        kIsWeb && (AppConfig.userDesignPreview || AppConfig.adminDesignPreview)
+            ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
+            : '/',
     refreshListenable: GoRouterRefreshStream(ref),
     redirect: (context, state) async {
       final user = ref.read(currentUserProvider);
@@ -84,9 +106,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // 앱: 클럽 승인은 관리자가 알림에서 바로 처리할 수 있게
-      // 모바일에서도 해당 경로만 허용한다. 권한 판정은 서버 role이 기준이다.
-      if (loc == '/admin/clubs') {
+      // 앱: 관리자가 알림에서 바로 처리할 수 있어야 하는 승인 큐만 모바일에서도
+      // 허용한다. 권한 판정은 서버 role이 기준이다.
+      // 여기 없는 /admin/* 는 아래에서 홈으로 돌려보내므로, 알림 딥링크를 새로
+      // 만들 때는 이 목록에도 넣어야 한다(랭킹 연결 알림이 그래서 추가됐다).
+      if (kMobileAdminPaths.contains(loc) ||
+          loc.startsWith('/admin/edit/') ||
+          loc.startsWith('/admin/preview/')) {
         final adminAsync = ref.read(isAdminProvider);
         if (adminAsync.isLoading) return null;
         return (adminAsync.value ?? false) ? null : '/';
@@ -119,7 +145,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
-          path: '/login', builder: (_, __) => catalogAware(LoginScreen.new)),
+        path: '/login',
+        builder: (_, __) => catalogAware(LoginScreen.new),
+      ),
       GoRoute(
         path: '/reset-password',
         builder: (_, __) => catalogAware(ResetPasswordScreen.new),
@@ -149,14 +177,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/tournaments',
-            builder: (_, __) => catalogAware(TournamentsScreen.new),
+            builder: (_, state) => catalogAware(
+              () => TournamentsScreen(
+                openSearch: state.uri.queryParameters['search'] == '1',
+              ),
+            ),
           ),
           GoRoute(
             path: '/clubs',
             builder: (_, __) => catalogAware(ClubsScreen.new),
           ),
           GoRoute(
-              path: '/more', builder: (_, __) => catalogAware(MoreScreen.new)),
+            path: '/more',
+            builder: (_, __) => catalogAware(MoreScreen.new),
+          ),
           GoRoute(
             path: '/rules',
             builder: (_, state) => catalogAware(
@@ -172,6 +206,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/rankings',
             builder: (_, __) => catalogAware(RankingsScreen.new),
+          ),
+          GoRoute(
+            path: '/rankings/me',
+            builder: (_, state) => catalogAware(
+              () => MyRecordScreen(
+                orgCode: validatedRankingOrgCode(
+                  state.uri.queryParameters['org'],
+                ),
+              ),
+            ),
           ),
           GoRoute(
             path: '/profile',
@@ -234,6 +278,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/admin',
+            builder: (_, __) => catalogAware(AdminOperationsHomeScreen.new),
+          ),
+          GoRoute(
+            path: '/admin/crawl-status',
             builder: (_, __) => catalogAware(AdminScreen.new),
           ),
           GoRoute(
@@ -250,7 +298,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/admin/clubs',
-            builder: (_, __) => catalogAware(() => AdminScreen(initialTab: 3)),
+            builder: (_, state) => catalogAware(
+              () => AdminScreen(
+                initialTab: 3,
+                focusClubId: state.uri.queryParameters['clubId'],
+              ),
+            ),
           ),
           GoRoute(
             path: '/admin/kb',
@@ -276,6 +329,24 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ),
           ),
+          GoRoute(
+            path: '/admin/preview/tournaments/:id',
+            builder: (_, state) => catalogAware(
+              () => TournamentDetailScreen(
+                tournamentId: state.pathParameters['id']!,
+                adminPreview: true,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/admin/preview/clubs/:id',
+            builder: (_, state) => catalogAware(
+              () => ClubDetailScreen(
+                clubId: state.pathParameters['id']!,
+                adminPreview: true,
+              ),
+            ),
+          ),
         ],
       ),
       GoRoute(
@@ -291,9 +362,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/clubs/:id/inquiries/manage',
         builder: (_, state) => catalogAware(
-          () => ClubInquiryInboxScreen(
-            clubId: state.pathParameters['id']!,
-          ),
+          () => ClubInquiryInboxScreen(clubId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -334,19 +403,17 @@ class _MainShell extends ConsumerWidget {
 
   final Widget child;
 
-  static const _tabs = <String>[
-    '/',
-    '/clubs',
-    '/profile',
-  ];
+  static const _tabs = <String>['/', '/clubs'];
 
   /// 탭이 아닌 화면들. 여기 있는 동안은 어떤 탭도 선택 표시하지 않는다
   /// (대회 전체·랭킹·룰북은 대회 하위 화면으로 첫 탭을 표시한다).
   static const _untabbedPaths = [
     '/more',
+    '/profile',
     '/notifications',
     '/favorites',
     '/blocked-users',
+    '/rankings/me',
   ];
 
   int _indexOf(String location) {
@@ -372,8 +439,9 @@ class _MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentPath =
-        GoRouter.of(context).routeInformationProvider.value.uri.path;
+    final currentPath = GoRouter.of(
+      context,
+    ).routeInformationProvider.value.uri.path;
     final idx = _indexOf(currentPath);
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final isFullChat = currentPath == '/chat';
@@ -417,7 +485,10 @@ class _AdminTournamentListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final supabase = ref.read(supabaseProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('대회 편집')),
+      appBar: AppBar(
+        leading: adminShellLeading(context),
+        title: const Text('대회 편집'),
+      ),
       body: FutureBuilder(
         future: supabase
             .from('tournaments')
@@ -447,8 +518,10 @@ class _AdminTournamentListScreen extends ConsumerWidget {
                   '${r['sport']} · ${r['region'] ?? ''} · ${r['start_date']}',
                 ),
                 trailing: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),

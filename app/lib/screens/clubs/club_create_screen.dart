@@ -2,11 +2,15 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/place_search_result.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../utils/club_create_draft.dart';
@@ -18,7 +22,11 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/moderation/ugc_moderation_widgets.dart';
 
 class ClubCreateScreen extends ConsumerStatefulWidget {
-  const ClubCreateScreen({super.key});
+  const ClubCreateScreen({super.key, this.initialSport});
+
+  /// 클럽 목록에서 사용자가 마지막으로 고른 종목.
+  /// 작성 중인 임시저장이 없다면 새 클럽의 기본 종목으로 사용한다.
+  final String? initialSport;
 
   @override
   ConsumerState<ClubCreateScreen> createState() => _ClubCreateScreenState();
@@ -34,12 +42,15 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   final _website = TextEditingController();
   final _description = TextEditingController();
   final _monthlyFee = TextEditingController();
+  String _feeType = 'monthly';
+  double? _addressLatitude;
+  double? _addressLongitude;
   Uint8List? _logoBytes;
   String _logoExtension = 'jpg';
   String _logoContentType = 'image/jpeg';
   final List<_PendingIntroImage> _introImages = [];
   final Set<String> _meetingDays = {};
-  String? _genderPreference;
+  String _genderPreference = 'mixed';
   String _cardColor = defaultClubCardColor;
   int _step = 0;
   bool _submitting = false;
@@ -63,6 +74,9 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   @override
   void initState() {
     super.initState();
+    _sport = resolveClubCreateSport(
+      selectedSport: widget.initialSport ?? ref.read(activeSportProvider),
+    );
     for (final controller in _draftTextControllers) {
       controller.addListener(_scheduleDraftSave);
     }
@@ -98,19 +112,25 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       _draftUserId = userId;
 
       setState(() {
-        if (draft != null) {
-          _sport = draft.sport;
+        _sport = resolveClubCreateSport(
+          selectedSport: _sport,
+          draft: draft,
+        );
+        if (draft != null && draft.hasUserContent) {
           _name.text = draft.name;
           _region.text = draft.region;
           _address.text = draft.address;
+          _addressLatitude = draft.latitude;
+          _addressLongitude = draft.longitude;
           _contact.text = draft.contact;
           _website.text = draft.website;
           _description.text = draft.description;
           _monthlyFee.text = draft.monthlyFee;
+          _feeType = draft.feeType;
           _meetingDays
             ..clear()
             ..addAll(draft.meetingDays);
-          _genderPreference = draft.genderPreference;
+          _genderPreference = draft.genderPreference ?? 'mixed';
           _cardColor = draft.cardColor;
           _step = draft.step;
         }
@@ -140,11 +160,14 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         website: _website.text,
         description: _description.text,
         monthlyFee: _monthlyFee.text,
+        feeType: _feeType,
         meetingDays: _meetingDays.toList(growable: false),
         genderPreference: _genderPreference,
         cardColor: _cardColor,
         step: _step,
         hadSelectedImages: _logoBytes != null || _introImages.isNotEmpty,
+        latitude: _addressLatitude,
+        longitude: _addressLongitude,
       );
 
   void _scheduleDraftSave() {
@@ -179,6 +202,26 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     if (store != null && userId != null) await store.clear(userId);
   }
 
+  Future<void> _showPlaceSearch() async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<PlaceSearchResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _PlaceSearchSheet(
+        search: ref.read(apiProvider).searchPlaces,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _address.text = selected.displayText;
+      _addressLatitude = selected.latitude;
+      _addressLongitude = selected.longitude;
+    });
+    _scheduleDraftSave();
+  }
+
   Future<void> _confirmReset() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -206,10 +249,13 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
         controller.clear();
       }
       _sport = ref.read(activeSportProvider) ?? 'tennis';
+      _addressLatitude = null;
+      _addressLongitude = null;
       _logoBytes = null;
       _introImages.clear();
       _meetingDays.clear();
-      _genderPreference = null;
+      _feeType = 'monthly';
+      _genderPreference = 'mixed';
       _step = 0;
     });
     try {
@@ -238,6 +284,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     }
     if (!_validateOperationStep()) {
       setState(() => _step = 1);
+      return;
+    }
+    if (!_validateIntroStep()) {
+      setState(() => _step = 2);
       return;
     }
     if (!(_formKey.currentState?.validate() ?? true)) return;
@@ -299,7 +349,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
       double? latitude;
       double? longitude;
       final address = _address.text.trim();
-      if (address.isNotEmpty) {
+      if (_addressLatitude != null && _addressLongitude != null) {
+        latitude = _addressLatitude;
+        longitude = _addressLongitude;
+      } else if (address.isNotEmpty) {
         try {
           final locations = await Geocoding().locationFromAddress(address);
           if (locations.isNotEmpty) {
@@ -322,6 +375,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
             introImageUrls: introImageUrls,
             meetingDays: _meetingDays.toList(),
             monthlyFee: fee,
+            feeType: _feeType,
             genderPreference: _genderPreference,
             cardColor: _cardColor,
             latitude: latitude,
@@ -376,6 +430,16 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   bool _validateOperationStep() {
     final error = clubWebsiteInputError(_website.text) ??
         clubMonthlyFeeInputError(_monthlyFee.text);
+    if (error == null) return true;
+    _formKey.currentState?.validate();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error)),
+    );
+    return false;
+  }
+
+  bool _validateIntroStep() {
+    final error = clubDescriptionInputError(_description.text);
     if (error == null) return true;
     _formKey.currentState?.validate();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -549,6 +613,8 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
     setState(() {
       if (_region.text.trim() != selected.label) {
         _address.clear();
+        _addressLatitude = null;
+        _addressLongitude = null;
       }
       _region.text = selected.label;
     });
@@ -620,6 +686,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                                 _scheduleDraftSave();
                               },
                               onRegionTap: _showRegionPicker,
+                              onAddressTap: _showPlaceSearch,
                               onCardColorChanged: (value) {
                                 setState(() => _cardColor = value);
                                 _scheduleDraftSave();
@@ -630,6 +697,7 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               contact: _contact,
                               website: _website,
                               monthlyFee: _monthlyFee,
+                              feeType: _feeType,
                               meetingDays: _meetingDays,
                               genderPreference: _genderPreference,
                               onMeetingDayChanged: (day, selected) =>
@@ -643,6 +711,10 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
                               }),
                               onGenderChanged: (value) {
                                 setState(() => _genderPreference = value);
+                                _scheduleDraftSave();
+                              },
+                              onFeeTypeChanged: (value) {
+                                setState(() => _feeType = value);
                                 _scheduleDraftSave();
                               },
                             )
@@ -806,6 +878,7 @@ class _BasicClubStep extends StatelessWidget {
     required this.onLogoTap,
     required this.onSportChanged,
     required this.onRegionTap,
+    required this.onAddressTap,
     required this.onCardColorChanged,
   });
 
@@ -819,6 +892,7 @@ class _BasicClubStep extends StatelessWidget {
   final VoidCallback onLogoTap;
   final ValueChanged<String> onSportChanged;
   final VoidCallback onRegionTap;
+  final VoidCallback onAddressTap;
   final ValueChanged<String> onCardColorChanged;
 
   @override
@@ -869,9 +943,9 @@ class _BasicClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         TextFormField(
           controller: name,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '클럽명 *',
-            hintText: '예: 광주 테니스 클럽',
+            hintText: clubNameHintForSport(sport),
           ),
           validator: (value) =>
               (value == null || value.trim().isEmpty) ? '클럽명은 필수입니다' : null,
@@ -893,12 +967,14 @@ class _BasicClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: address,
+          readOnly: true,
+          onTap: onAddressTap,
           decoration: const InputDecoration(
             labelText: '활동 장소',
-            hintText: '예: 서울 송파구 올림픽로 25 잠실 풋살파크',
+            hintText: '장소명 또는 주소로 검색',
             prefixIcon: Icon(Icons.place_outlined),
+            suffixIcon: Icon(Icons.search_rounded),
           ),
-          textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text('클럽 카드 색상', style: tt.labelLarge),
@@ -952,19 +1028,23 @@ class _OperationClubStep extends StatelessWidget {
     required this.contact,
     required this.website,
     required this.monthlyFee,
+    required this.feeType,
     required this.meetingDays,
     required this.genderPreference,
     required this.onMeetingDayChanged,
     required this.onGenderChanged,
+    required this.onFeeTypeChanged,
   });
 
   final TextEditingController contact;
   final TextEditingController website;
   final TextEditingController monthlyFee;
+  final String feeType;
   final Set<String> meetingDays;
-  final String? genderPreference;
+  final String genderPreference;
   final void Function(String day, bool selected) onMeetingDayChanged;
-  final ValueChanged<String?> onGenderChanged;
+  final ValueChanged<String> onGenderChanged;
+  final ValueChanged<String> onFeeTypeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1008,12 +1088,23 @@ class _OperationClubStep extends StatelessWidget {
               )
               .toList(),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('회비 방식', style: tt.labelLarge),
+        const SizedBox(height: AppSpacing.sm),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'monthly', label: Text('월회비')),
+            ButtonSegment(value: 'per_event', label: Text('1회 참가비')),
+          ],
+          selected: {feeType},
+          onSelectionChanged: (selected) => onFeeTypeChanged(selected.first),
+        ),
         const SizedBox(height: AppSpacing.md),
         TextFormField(
           controller: monthlyFee,
           validator: clubMonthlyFeeInputError,
-          decoration: const InputDecoration(
-            labelText: '월 회비 (원)',
+          decoration: InputDecoration(
+            labelText: feeType == 'per_event' ? '1회 참가비 (원)' : '월회비 (원)',
             hintText: '예: 30000',
           ),
           keyboardType: TextInputType.number,
@@ -1022,9 +1113,8 @@ class _OperationClubStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text('성별 선호', style: tt.labelLarge),
         const SizedBox(height: AppSpacing.sm),
-        SegmentedButton<String?>(
+        SegmentedButton<String>(
           segments: const [
-            ButtonSegment(value: null, label: Text('무관')),
             ButtonSegment(value: 'mixed', label: Text('혼성')),
             ButtonSegment(value: 'male', label: Text('남성')),
             ButtonSegment(value: 'female', label: Text('여성')),
@@ -1056,11 +1146,14 @@ class _IntroClubStep extends StatelessWidget {
       children: [
         TextFormField(
           controller: description,
+          validator: clubDescriptionInputError,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           decoration: const InputDecoration(
             labelText: '클럽 소개',
-            hintText: '클럽 소개, 활동 내용, 가입 조건 등',
+            hintText: '활동 내용과 가입 조건을 30자 이상 적어주세요',
             alignLabelWithHint: true,
           ),
+          maxLength: 2000,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           minLines: 5,
@@ -1382,8 +1475,13 @@ class _RegionPickerSheet extends StatelessWidget {
 
   final String selectedRegion;
 
+  // #318: 이 시트는 showModalBottomSheet 로 별도 오버레이 라우트에 뜬다 — router.dart 가
+  // 감싼 라우트 트리의 자손이 아니라서, 열려 있는 동안 지역 카탈로그 로드가 도착하면
+  // 이 시트만 폴백 목록으로 남는다. 여기서 감싼다(tournaments_screen 필터 시트 선례).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => catalogAware(() => _build(context));
+
+  Widget _build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
@@ -1451,6 +1549,381 @@ class _RegionPickerSheet extends StatelessWidget {
   }
 }
 
-final _regionOptions = [
-  for (final code in regionCodes) _RegionOption(regionLabel(code)),
-];
+// getter 여야 한다 — top-level final 로 캐시하면 카탈로그 로드 전(폴백) 값으로
+// 한 번 굳어 catalogRevision 리빌드에도 갱신되지 않는다.
+List<_RegionOption> get _regionOptions => [
+      for (final code in regionCodes) _RegionOption(regionLabel(code)),
+    ];
+
+typedef _PlaceSearchCallback = Future<List<PlaceSearchResult>> Function(
+  String query,
+);
+
+class _PlaceSearchSheet extends StatefulWidget {
+  const _PlaceSearchSheet({required this.search});
+
+  final _PlaceSearchCallback search;
+
+  @override
+  State<_PlaceSearchSheet> createState() => _PlaceSearchSheetState();
+}
+
+class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
+  final _query = TextEditingController();
+  final _focusNode = FocusNode();
+  Timer? _searchDebounce;
+  int _searchRequest = 0;
+  List<PlaceSearchResult> _results = const [];
+  bool _loading = false;
+  bool _searched = false;
+  String? _error;
+  PlaceSearchResult? _selectedPlace;
+  LatLng? _pinCenter;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _query.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    _searchDebounce?.cancel();
+    final query = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (query.length < 2) {
+      _searchRequest++;
+      setState(() {
+        _loading = false;
+        _searched = false;
+        _results = const [];
+        _error = null;
+      });
+      return;
+    }
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _runSearch(keepKeyboardOpen: true),
+    );
+  }
+
+  Future<void> _runSearch({bool keepKeyboardOpen = false}) async {
+    final query = _query.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (query.length < 2) {
+      setState(() => _error = '장소명이나 주소를 2자 이상 입력해주세요.');
+      return;
+    }
+    if (!keepKeyboardOpen) FocusScope.of(context).unfocus();
+    final request = ++_searchRequest;
+    setState(() {
+      _loading = true;
+      _searched = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.search(query);
+      if (!mounted || request != _searchRequest) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted || request != _searchRequest) return;
+      setState(() {
+        _results = const [];
+        _error = '장소를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
+      });
+    } finally {
+      if (mounted && request == _searchRequest) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  void _showOnMap(PlaceSearchResult place) {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _selectedPlace = place;
+      _pinCenter = LatLng(place.latitude, place.longitude);
+    });
+  }
+
+  void _backToResults() {
+    setState(() {
+      _selectedPlace = null;
+      _pinCenter = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _confirmLocation() {
+    final place = _selectedPlace;
+    final pin = _pinCenter;
+    if (place == null || pin == null) return;
+    Navigator.pop(
+      context,
+      place.withCoordinates(
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final selectedPlace = _selectedPlace;
+    return FractionallySizedBox(
+      heightFactor: 0.86,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (selectedPlace == null) ...[
+              Text(
+                '활동 장소 검색',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '장소명이나 주소를 입력하면 바로 검색해드려요.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _query,
+                focusNode: _focusNode,
+                textInputAction: TextInputAction.search,
+                onChanged: _onQueryChanged,
+                onSubmitted: (_) => _runSearch(),
+                decoration: InputDecoration(
+                  hintText: '예: 잠실 풋살장, 올림픽로 25',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : _query.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _query.clear();
+                                _onQueryChanged('');
+                                _focusNode.requestFocus();
+                              },
+                              tooltip: '검색어 지우기',
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  _error!,
+                  style: tt.bodySmall?.copyWith(color: cs.error),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: _results.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searched
+                              ? '검색 결과가 없습니다.'
+                              : '두 글자 이상 입력하면 검색 결과가 나타납니다.',
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final place = _results[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.xs,
+                            ),
+                            onTap: () => _showOnMap(place),
+                            leading: Icon(
+                              Icons.place_outlined,
+                              color: cs.primary,
+                            ),
+                            title: Text(
+                              place.name,
+                              style: tt.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            subtitle: Text(place.preferredAddress),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                          );
+                        },
+                      ),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _backToResults,
+                    tooltip: '검색 결과로 돌아가기',
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '정확한 위치 지정',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedPlace.name,
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      selectedPlace.preferredAddress,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      FlutterMap(
+                        options: MapOptions(
+                          initialCenter: _pinCenter!,
+                          initialZoom: 17,
+                          minZoom: 6,
+                          maxZoom: 19,
+                          onPositionChanged: (camera, hasGesture) {
+                            if (hasGesture) _pinCenter = camera.center;
+                          },
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'kr.jyoung.allround',
+                          ),
+                          SimpleAttributionWidget(
+                            source: const Text('OpenStreetMap contributors'),
+                            onTap: () => launchUrl(
+                              Uri.parse(
+                                  'https://www.openstreetmap.org/copyright'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            backgroundColor: cs.surface.withValues(alpha: 0.85),
+                          ),
+                        ],
+                      ),
+                      IgnorePointer(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 36),
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 52,
+                            color: cs.primary,
+                            shadows: const [
+                              Shadow(
+                                blurRadius: 8,
+                                color: Colors.black38,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: AppSpacing.sm,
+                        left: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: cs.surface.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              boxShadow: const [
+                                BoxShadow(
+                                  blurRadius: 10,
+                                  color: Colors.black12,
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
+                              child: Text(
+                                '지도를 움직여 정확한 입구나 운동장 위치에 핀을 맞춰주세요.',
+                                style: tt.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              FilledButton.icon(
+                onPressed: _confirmLocation,
+                icon: const Icon(Icons.check_rounded),
+                label: const Text('이 위치로 선택'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

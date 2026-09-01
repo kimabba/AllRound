@@ -19,8 +19,9 @@
 //   - org 는 crawl_sources.org_code('kato'), 추론 금지. 상세 fetch 30건 cap.
 
 import { DOMParser } from 'deno-dom';
-import { type CrawlerTournament, upsertTournament } from '../../crawler.ts';
+import { type CrawlerTournament, markListingSeen, upsertTournament } from '../../crawler.ts';
 import { type DivisionDictRow, loadDivisionDict, mapDivisionsByDict } from '../divisions.ts';
+import { extractPosterUrl } from '../poster.ts';
 import type { CrawlResult, CrawlSource, ParserContext, ParserFn } from '../types.ts';
 import { parseKatoRegulation } from './kato_regulation.ts';
 
@@ -33,7 +34,9 @@ const COMMON_HEADERS: Record<string, string> = {
 const DETAIL_CAP = 30;
 // 파서 결과 의미가 바뀌면 revision을 올린다. 원문 목록이 그대로여도 새 파서로
 // 상세를 한 번 다시 읽게 해 기존 대회의 누락 데이터를 복구한다.
-const KATO_PARSER_REVISION = '2026-07-regulation-v2';
+// 2026-08: 장소·제목에서 region_code 유도(region_text.ts). 기존 18건이 region_code=null
+// 이라 재파싱이 필요하다 — revision 을 올려 SQL 백필 없이 다음 크롤에서 복구한다.
+const KATO_PARSER_REVISION = '2026-08-region-from-venue';
 
 // deno-dom 요소를 최소 인터페이스로 좁혀 쓰기 위한 캐스트 헬퍼.
 type El = {
@@ -132,6 +135,7 @@ export interface KatoDetailFields {
   location?: string;
   organizer?: string;
   entryFee?: number;
+  posterUrl?: string;
 }
 
 // 라벨 td(전각공백 무시) → 다음 td 값. 없으면 undefined.
@@ -160,7 +164,11 @@ function cleanVenue(v: string | undefined): string | undefined {
   return cut || undefined;
 }
 
-export function parseKatoDetail(html: string, titleHint: string): KatoDetailFields | null {
+export function parseKatoDetail(
+  html: string,
+  titleHint: string,
+  baseUrl = 'https://kato.kr',
+): KatoDetailFields | null {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   if (!dom) return null;
   const root = dom as unknown as El;
@@ -184,7 +192,22 @@ export function parseKatoDetail(html: string, titleHint: string): KatoDetailFiel
       if (amount > 0 && amount < 1_000_000) entryFee = amount;
     }
   }
-  return { title, location, organizer, entryFee };
+  // 공고에 포스터 이미지가 붙은 대회는 URL 만 수집한다(P6). 상세는 본문 컨테이너로
+  // 범위를 못 좁혀 전체 HTML 을 훑으므로 **업로드 경로 이미지만** 인정한다 —
+  // 실측(openGame 0299/0311/0315/0318)상 페이지에는 로고(logox3)·그룹 배지·협찬배너
+  // (/uploads/commercials/*)뿐이라, 폴백을 열어두면 로고가 포스터로 잡힌다.
+  const posterUrl = extractPosterUrl(html, baseUrl, { requireUploadPath: true }) ?? undefined;
+  return { title, location, organizer, entryFee, posterUrl };
+}
+
+export function katoCanonicalContent(
+  html: string,
+  detail: KatoDetailFields,
+): string {
+  return JSON.stringify({
+    detail,
+    regulation: parseKatoRegulation(html),
+  });
 }
 
 // =============================================================================
@@ -222,6 +245,7 @@ export function buildTournament(
     location: detail.location,
     eligible_grades: codes,
     division_label_local: label || undefined,
+    poster_url: detail.posterUrl,
     source_url: item.url,
     organizer: detail.organizer,
     entry_fee: detail.entryFee,
@@ -275,6 +299,10 @@ export const katoOpenListParser: ParserFn = async (
     return { ...empty, status: 'error', error: (e as Error).message };
   }
 
+  // 목록이탈 만료 판정 기준 — "목록에 있음"을 상세 파싱 성공이 아니라 여기서
+  // 확정한다(ended 필터·CAP·상세 실패로 상세를 안 가는 항목도 목록엔 있다).
+  await markListingSeen(ctx.audit, items.map((it) => it.url));
+
   // 3) content-hash 변경 감지 (서버 ETag 없을 때)
   const computedHash = await listingContentHash(items);
   const effectiveEtag = listEtag ?? computedHash;
@@ -298,13 +326,13 @@ export const katoOpenListParser: ParserFn = async (
       const res = await fetch(item.url, { headers: COMMON_HEADERS });
       if (!res.ok) continue; // 원본 자체가 없음
       const html = await res.text();
-      const detail = parseKatoDetail(html, item.title);
+      const detail = parseKatoDetail(html, item.title, item.url);
       if (detail) {
         await upsertTournament(
           ctx.audit,
           'tennis',
           buildTournament(item, detail, dict, source.region),
-          html,
+          { rawHtml: html, canonicalContent: katoCanonicalContent(html, detail) },
         );
       } else {
         ctx.audit.fetched++;

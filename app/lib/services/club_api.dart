@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -9,6 +10,7 @@ import '../models/club_dues.dart';
 import '../models/club_inquiry.dart';
 import '../models/club_post.dart';
 import '../models/club_recruiting.dart';
+import '../models/place_search_result.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
 import '../utils/grade_labels.dart';
@@ -108,6 +110,25 @@ mixin ClubApi on ApiBase {
         .toList(growable: false);
   }
 
+  Future<List<PlaceSearchResult>> searchPlaces(String query) async {
+    final normalized = query.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length < 2) return const [];
+    final res = await httpGet(
+      uri('place-search', {'q': normalized}),
+      headers: await authHeaders(),
+    );
+    check(res);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final places = body['places'];
+    if (places is! List) return const [];
+    return places
+        .whereType<Map>()
+        .map((place) => PlaceSearchResult.fromJson(
+              Map<String, dynamic>.from(place),
+            ))
+        .toList(growable: false);
+  }
+
   Future<Club> createClub({
     required String sport,
     required String name,
@@ -120,6 +141,7 @@ mixin ClubApi on ApiBase {
     List<String> introImageUrls = const [],
     List<String>? meetingDays,
     int? monthlyFee,
+    String feeType = 'monthly',
     String? genderPreference,
     String cardColor = '#3156D8',
     double? latitude,
@@ -142,6 +164,7 @@ mixin ClubApi on ApiBase {
         if (meetingDays != null && meetingDays.isNotEmpty)
           'meeting_days': meetingDays,
         if (monthlyFee != null) 'monthly_fee': monthlyFee,
+        'fee_type': feeType,
         if (genderPreference != null && genderPreference.isNotEmpty)
           'gender_preference': genderPreference,
         'card_color': cardColor,
@@ -811,6 +834,24 @@ mixin ClubApi on ApiBase {
         .map((row) => ClubChatMessage.fromJson(Map<String, dynamic>.from(row)))
         .toList(growable: false);
     return messages.reversed.toList(growable: false);
+  }
+
+  Stream<List<ClubChatMessage>> watchClubChatMessages(String threadId) {
+    return supabase
+        .from('club_chat_messages')
+        .stream(primaryKey: ['id'])
+        .eq('thread_id', threadId)
+        .order('created_at', ascending: false)
+        .limit(300)
+        .map((rows) {
+          final messages =
+              rows.map(ClubChatMessage.fromJson).toList(growable: false);
+          messages.sort((a, b) {
+            final createdAtOrder = a.createdAt.compareTo(b.createdAt);
+            return createdAtOrder != 0 ? createdAtOrder : a.id.compareTo(b.id);
+          });
+          return messages;
+        });
   }
 
   Future<void> sendClubChatMessage({

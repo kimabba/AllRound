@@ -4,13 +4,38 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../state/providers.dart';
 import '../../testing/e2e_keys.dart';
+import '../../theme/color_schemes.dart';
+import '../../theme/motion.dart';
 import '../../theme/tokens.dart';
 import '../../utils/age.dart';
 import '../../utils/auth_error_message.dart';
+import '../../utils/auth_redirect.dart';
+import '../../utils/legal_urls.dart';
+import '../in_app_browser_screen.dart';
+
+const _loginFriendsPhotoAsset = 'assets/images/auth/login-friends-v1.jpg';
+const _loginTournamentsPhotoAsset =
+    'assets/images/auth/login-futsal-tournaments-v1.jpg';
+const _loginClubsPhotoAsset = 'assets/images/auth/login-clubs-v1.jpg';
+const _loginBallboyPhotoAsset =
+    'assets/images/auth/login-futsal-ballboy-v1.jpg';
+const _loginSlidePhotoAssets = <String>[
+  _loginFriendsPhotoAsset,
+  _loginTournamentsPhotoAsset,
+  _loginClubsPhotoAsset,
+  _loginBallboyPhotoAsset,
+];
+const _loginSlideSportLabels = <String>[
+  'TENNIS',
+  'FUTSAL',
+  'TENNIS',
+  'FUTSAL',
+];
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,13 +52,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _signUp = false;
   bool _busy = false;
   bool _marketingConsent = false;
+  bool _termsConsent = false;
+  int _introPage = 0;
   String? _error;
   String? _info;
-  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) return;
+    final callbackError = authCallbackErrorMessage(Uri.base);
+    if (callbackError == null) return;
+    _error = callbackError;
+    // Google 신규 사용자가 이메일 버튼을 누르면 로그인 탭을 한 번 더
+    // 거치지 않고 바로 생년월일이 포함된 안전한 가입 흐름을 연다.
+    _signUp = callbackError == '신규 가입은 이메일로 진행해 주세요.';
+  }
 
   @override
   void dispose() {
-    _authSubscription?.cancel();
     _email.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
@@ -78,6 +115,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       set(() => _error = '계정 생성 전에 생년월일을 확인해 주세요.');
       return;
     }
+    if (_signUp && !_termsConsent) {
+      set(() => _error = '이용약관과 개인정보 처리방침에 동의해 주세요.');
+      return;
+    }
 
     FocusManager.instance.primaryFocus?.unfocus();
     set(() {
@@ -93,6 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           password: password,
           data: {
             'birth_date': _formatBirthDateForAuth(_signupBirthDate!),
+            'terms_agreed_at': DateTime.now().toUtc().toIso8601String(),
             'marketing_consent': _marketingConsent,
             if (_marketingConsent)
               'marketing_consent_at': DateTime.now().toUtc().toIso8601String(),
@@ -153,7 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await ref.read(supabaseProvider).auth.resetPasswordForEmail(
             email,
-            redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
+            redirectTo: authRedirectTo(isWeb: kIsWeb, baseUri: Uri.base),
           );
       if (!mounted) return;
       set(() {
@@ -200,6 +242,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _password.clear();
       _passwordConfirm.clear();
       _signupBirthDate = null;
+      _termsConsent = false;
     });
   }
 
@@ -236,85 +279,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     onChanged();
   }
 
-  Future<void> _openEmailFlow({
-    required bool signUp,
-    String presetEmail = '',
-  }) async {
-    if (_busy) return;
-    _setMode(signUp: signUp);
-    _email.text = presetEmail;
-    await _showEmailAuthSheet();
-  }
-
   Future<void> _googleSignIn() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final supa = ref.read(supabaseProvider);
-      final consent = _marketingConsent;
-      _authSubscription?.cancel();
-      _authSubscription = supa.auth.onAuthStateChange.listen((data) async {
-        if (data.event == AuthChangeEvent.signedIn) {
-          _authSubscription?.cancel();
-          _authSubscription = null;
-          await supa.auth.updateUser(
-            UserAttributes(data: {
-              'marketing_consent': consent,
-              if (consent)
-                'marketing_consent_at':
-                    DateTime.now().toUtc().toIso8601String(),
-            }),
-          );
-        }
-      });
-      await supa.auth.signInWithOAuth(
+      // 마케팅 수신 동의는 회원가입 시트에서만 받는다. 예전엔 여기서 로그인
+      // 성공을 듣고 updateUser 로 동의값을 썼는데, Google 재로그인 때마다
+      // 예전 동의가 체크박스 기본값(false)으로
+      // 덮어써졌다. 서버에 보정 로직이 없어 동의 이력이 조용히 사라졌다.
+      await ref.read(supabaseProvider).auth.signInWithOAuth(
         OAuthProvider.google,
-        // 모바일은 딥링크 스킴으로 복귀. 웹(admin/웹빌드)에서는 모바일 스킴을 쓰면
-        // 브라우저로 못 돌아오므로 redirectTo 를 비워 현재 origin 으로 복귀시킨다 (JY-132).
-        redirectTo: kIsWeb ? null : 'kr.allround.app://login-callback/',
+        // 모바일은 딥링크, 웹은 현재 origin 으로 명시적으로 복귀한다. null 이면
+        // Supabase Site URL(localhost:3000 등)로 빠지므로 생략하면 안 된다.
+        redirectTo: authRedirectTo(isWeb: kIsWeb, baseUri: Uri.base),
         // 로그아웃 후 재로그인 시 직전 구글 계정으로 자동 재인증되지 않도록
         // 계정 선택 화면을 항상 노출한다 (JY-113).
         queryParams: const {'prompt': 'select_account'},
       );
     } catch (_) {
-      _authSubscription?.cancel();
-      _authSubscription = null;
       setState(() => _error = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _openGoogleExistingLogin() async {
-    final existingAccount = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Google 로그인 안내'),
-        content: const Text(
-          'Google은 기존 AllRound 계정 로그인만 지원합니다. '
-          '처음 가입한다면 이메일로 생년월일을 먼저 확인해 주세요.',
-        ),
-        actions: [
-          TextButton(
-            key: AllRoundE2EKeys.googleEmailSignupAction,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('이메일로 신규 가입'),
-          ),
-          FilledButton(
-            key: AllRoundE2EKeys.googleExistingLoginConfirm,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('기존 계정 로그인'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || existingAccount == null) return;
-    if (existingAccount) {
-      await _googleSignIn();
-    } else {
-      await _openEmailFlow(signUp: true);
     }
   }
 
@@ -438,6 +425,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     onChanged: refreshSheet,
                                   ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        _ConsentRow(
+                          checkboxKey: AllRoundE2EKeys.signupTermsConsent,
+                          value: _termsConsent,
+                          label: '이용약관·개인정보 처리방침 동의 (필수)',
+                          onChanged: (value) {
+                            setState(() => _termsConsent = value ?? false);
+                            refreshSheet();
+                          },
+                        ),
+                        Wrap(
+                          children: const [
+                            _LegalLinkButton(
+                              label: '이용약관',
+                              url: kTermsOfServiceUrl,
+                            ),
+                            _LegalLinkButton(
+                              label: '개인정보 처리방침',
+                              url: kPrivacyPolicyUrl,
+                            ),
+                          ],
+                        ),
+                        // 선택 동의라 계정을 만드는 이 자리에서만 묻는다.
+                        // 로그인하는 기존 회원에게는 물을 이유가 없다.
+                        _ConsentRow(
+                          value: _marketingConsent,
+                          label: '마케팅 정보 수신 동의 (선택)',
+                          onChanged: (value) {
+                            setState(() => _marketingConsent = value ?? false);
+                            refreshSheet();
+                          },
+                        ),
                       ],
                       // 비밀번호 재설정은 kr.allround.app:// 딥링크로 앱을 여는
                       // 흐름이라 모바일 전용. 웹(admin)에선 링크가 앱을 못 열고
@@ -487,9 +506,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                       const SizedBox(height: AppSpacing.lg),
+                      if (_signUp && !_termsConsent) ...[
+                        Text(
+                          '필수 동의에 체크하면 가입을 시작할 수 있어요.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       FilledButton(
                         key: AllRoundE2EKeys.authSubmitButton,
-                        onPressed: _busy
+                        onPressed: _busy || (_signUp && !_termsConsent)
                             ? null
                             : () => _emailAuth(
                                   onChanged: refreshSheet,
@@ -535,6 +564,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 웹은 initState 의 Uri.base 로 OAuth 콜백 에러를 잡지만, 모바일은 세션
+    // 변화 없이 딥링크만 돌아와 조용히 실패한다(에러가 onAuthStateChange
+    // 스트림으로만 통지됨, supabase_flutter의 notifyException). 신규 가입
+    // 차단 같은 케이스를 모바일에서도 동일하게 노출한다.
+    ref.listen<AsyncValue<AuthState>>(authStateProvider, (previous, next) {
+      final error = next.error;
+      if (error is! AuthException) return;
+      final message = authErrorMessage(error, signUp: false);
+      setState(() {
+        _error = message;
+        _signUp = message == '신규 가입은 이메일로 진행해 주세요.';
+      });
+    });
+
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     // 로컬 관리자 모드(make admin): 마케팅·온보딩 카피를 숨기고
@@ -546,195 +589,215 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // 유지하되 iOS에서는 서버의 가입 전 연령 게이트가 있는 이메일 흐름만 쓴다.
     final showGoogleLogin =
         kIsWeb || defaultTargetPlatform != TargetPlatform.iOS;
+    final photoAsset = adminMode ? null : _loginSlidePhotoAssets[_introPage];
+    final sportLabel = adminMode ? null : _loginSlideSportLabels[_introPage];
+    final photoSlide = photoAsset != null;
 
     return Scaffold(
       key: AllRoundE2EKeys.loginScreen,
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Center(
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.xl,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - (AppSpacing.xl * 2),
-                    maxWidth: 480,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _LoginHeader(),
-                      const SizedBox(height: AppSpacing.xxl),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.xxl),
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(AppRadius.xxl),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (adminMode)
-                              _SportBubble(
-                                icon: Icons.admin_panel_settings_rounded,
-                                backgroundColor: cs.primary,
-                                foregroundColor: cs.onPrimary,
-                              )
-                            else
-                              const _AllRoundMascot(),
-                            const SizedBox(height: AppSpacing.xxl),
-                            Text(
-                              adminMode ? '관리자 로그인' : '운동 친구를\n만나러 가볼까요?',
-                              textAlign: TextAlign.center,
-                              style: tt.headlineLarge?.copyWith(
-                                color: cs.onPrimaryContainer,
-                                fontWeight: FontWeight.w800,
-                                height: 1.12,
-                                letterSpacing: -1,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              adminMode
-                                  ? '관리자 계정으로 안전하게 로그인하세요.'
-                                  : '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
-                              textAlign: TextAlign.center,
-                              style: tt.bodyMedium?.copyWith(
-                                // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
-                                // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
-                                color: cs.onPrimaryContainer.withValues(
-                                  alpha: 0.8,
-                                ),
-                                height: 1.55,
-                              ),
-                            ),
-                            if (!adminMode) ...[
-                              const SizedBox(height: AppSpacing.xl),
-                              const Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  _FeaturePill(
-                                    emoji: '👥',
-                                    label: '내 주변 클럽',
-                                  ),
-                                  _FeaturePill(
-                                    emoji: '🏆',
-                                    label: '대회 일정',
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: cs.errorContainer,
-                            border: Border.all(color: cs.error),
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                          ),
-                          child: Text(
-                            _error!,
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onErrorContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.xl),
-                      if (showGoogleLogin) ...[
-                        _SocialButton(
-                          key: AllRoundE2EKeys.googleExistingLoginButton,
-                          onPressed: _busy ? null : _openGoogleExistingLogin,
-                          icon: Icons.account_circle_outlined,
-                          label: 'Google 기존 회원 로그인',
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
-                      FilledButton(
-                        key: AllRoundE2EKeys.emailFlowButton,
-                        onPressed: _busy ? null : _showEmailAuthSheet,
-                        style: FilledButton.styleFrom(
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(AppRadius.xxl),
-                            ),
-                          ),
-                        ),
-                        child: const Text('이메일로 계속하기'),
-                      ),
-                      if (!adminMode) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          '계속하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        _MarketingConsentRow(
-                          value: _marketingConsent,
-                          onChanged: (value) => setState(
-                            () => _marketingConsent = value ?? false,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+      backgroundColor: cs.primaryContainer,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (photoAsset != null)
+            AnimatedSwitcher(
+              duration: AppDuration.medium1,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: SizedBox.expand(
+                key: ValueKey(photoAsset),
+                child: Image.asset(
+                  photoAsset,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
                 ),
               ),
-            );
-          },
-        ),
+            )
+          else
+            ColoredBox(color: cs.primaryContainer),
+          if (photoSlide)
+            DecoratedBox(
+              // 사진의 운동감은 살리되 로고·카피·CTA 위치에서는 흰색 작은
+              // 글씨도 AA 대비를 유지하도록 위치별 스크림 농도를 조절한다.
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    cs.scrim.withValues(alpha: 0.6),
+                    cs.scrim.withValues(alpha: 0.6),
+                    cs.scrim.withValues(alpha: 0.14),
+                    cs.scrim.withValues(alpha: 0.18),
+                    cs.scrim.withValues(alpha: 0.68),
+                    cs.scrim.withValues(alpha: 0.88),
+                  ],
+                  stops: const [0, 0.08, 0.28, 0.48, 0.74, 1],
+                ),
+              ),
+            ),
+          SafeArea(
+            child: Center(
+              // 데스크톱에서도 로그인 콘텐츠는 모바일 폭을 유지하되, 슬라이드의
+              // 배경색은 Scaffold 전체를 채워 작은 카드처럼 보이지 않게 한다.
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                        0,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '올라운드',
+                                  maxLines: 1,
+                                  style: tt.titleLarge?.copyWith(
+                                    color: photoSlide
+                                        ? AppPalette.photoForeground
+                                        : cs.onPrimaryContainer,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.8,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          if (sportLabel != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.xs,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppPalette.photoForeground.withValues(
+                                  alpha: 0.14,
+                                ),
+                                borderRadius: AppRadius.pill,
+                              ),
+                              child: Text(
+                                sportLabel,
+                                maxLines: 1,
+                                textScaler: TextScaler.noScaling,
+                                style: tt.labelSmall?.copyWith(
+                                  color: AppPalette.photoForeground,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Expanded(
+                      child: _IntroCarousel(
+                        adminMode: adminMode,
+                        onPageChanged: (page) {
+                          if (_introPage == page) return;
+                          setState(() => _introPage = page);
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer,
+                                border: Border.all(color: cs.error),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.sm),
+                              ),
+                              child: Text(
+                                _error!,
+                                style: tt.bodySmall?.copyWith(
+                                  color: cs.onErrorContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
+                          if (showGoogleLogin) ...[
+                            _SocialButton(
+                              key: AllRoundE2EKeys.googleContinueButton,
+                              onPressed: _busy ? null : _googleSignIn,
+                              icon: Icons.account_circle_outlined,
+                              label: 'Google로 계속하기',
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                          ],
+                          FilledButton(
+                            key: AllRoundE2EKeys.emailFlowButton,
+                            onPressed: _busy ? null : _showEmailAuthSheet,
+                            style: FilledButton.styleFrom(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(AppRadius.xxl),
+                                ),
+                              ),
+                            ),
+                            child: const Text('이메일로 계속하기'),
+                          ),
+                          if (!adminMode) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Text(
+                              '계속하면 이용약관과 개인정보 처리방침에 동의한 것으로 간주됩니다.',
+                              textAlign: TextAlign.center,
+                              style: tt.bodySmall?.copyWith(
+                                color: photoSlide
+                                    ? AppPalette.photoForeground
+                                    : cs.onPrimaryContainer.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _SportBubble extends StatelessWidget {
-  const _SportBubble({
-    required this.icon,
-    required this.backgroundColor,
-    required this.foregroundColor,
-  });
-
-  final IconData icon;
-  final Color backgroundColor;
-  final Color foregroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: AppSizes.touchTarget,
-      height: AppSizes.touchTarget,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: foregroundColor, size: 23),
     );
   }
 }
 
 class _AllRoundMascot extends StatelessWidget {
-  const _AllRoundMascot();
+  const _AllRoundMascot({this.onPhoto = false});
+
+  final bool onPhoto;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final foreground = onPhoto ? AppPalette.photoForeground : cs.primary;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -742,12 +805,13 @@ class _AllRoundMascot extends StatelessWidget {
           width: AppSizes.touchTarget * 2,
           height: AppSizes.touchTarget * 2,
           decoration: BoxDecoration(
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(AppRadius.xxl * 2),
+            color: foreground.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            border: Border.all(color: foreground, width: 2),
           ),
           child: Icon(
             Icons.sentiment_satisfied_alt_rounded,
-            color: cs.onPrimary,
+            color: foreground,
             size: AppSizes.touchTarget,
           ),
         ),
@@ -758,7 +822,7 @@ class _AllRoundMascot extends StatelessWidget {
             width: AppSizes.touchTarget,
             height: AppSizes.touchTarget,
             decoration: BoxDecoration(
-              color: cs.surface,
+              color: foreground,
               shape: BoxShape.circle,
               border: Border.all(
                 color: cs.primaryContainer,
@@ -767,7 +831,7 @@ class _AllRoundMascot extends StatelessWidget {
             ),
             child: Icon(
               Icons.sports_tennis_rounded,
-              color: cs.primary,
+              color: onPhoto ? AppPalette.accent : cs.onPrimary,
               size: 22,
             ),
           ),
@@ -786,84 +850,435 @@ class _AllRoundMascot extends StatelessWidget {
   }
 }
 
-class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({
-    required this.emoji,
-    required this.label,
+/// 로그인 전에 "여기서 뭘 할 수 있는지"를 넘겨 보는 카드.
+/// 첫 장은 인사, 나머지는 하단 탭의 동선(대회·클럽·볼보이)과 1:1 로 맞춘다.
+class _IntroCarousel extends StatefulWidget {
+  const _IntroCarousel({
+    required this.adminMode,
+    required this.onPageChanged,
   });
 
-  final String emoji;
-  final String label;
+  final bool adminMode;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  State<_IntroCarousel> createState() => _IntroCarouselState();
+}
+
+class _IntroCarouselState extends State<_IntroCarousel> {
+  static const _adminCards = <_IntroCardData>[
+    _IntroCardData(
+      icon: Icons.admin_panel_settings_rounded,
+      title: '관리자 로그인',
+      body: '관리자 계정으로 안전하게 로그인하세요.',
+    ),
+  ];
+
+  static const _cards = <_IntroCardData>[
+    _IntroCardData(
+      backgroundAsset: _loginFriendsPhotoAsset,
+      title: '운동 친구를 만나러 가볼까요?',
+      body: '대회도 모임도, 올라운드에서\n즐겁고 간편하게 찾아보세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.emoji_events_rounded,
+      backgroundAsset: _loginTournamentsPhotoAsset,
+      title: '열리는 대회를 한눈에',
+      body: '지역별로 모아 보고, 신청 마감일까지\n한 번에 확인하세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.groups_rounded,
+      backgroundAsset: _loginClubsPhotoAsset,
+      title: '가까운 클럽과 모임 찾기',
+      body: '동네 클럽을 둘러보고\n같이 칠 사람을 구해 보세요.',
+    ),
+    _IntroCardData(
+      icon: Icons.chat_bubble_rounded,
+      backgroundAsset: _loginBallboyPhotoAsset,
+      title: '궁금한 건 볼보이에게',
+      body: '대회 규정이나 일정을 물어보면\n채팅으로 바로 찾아 줍니다.',
+    ),
+  ];
+
+  final _controller = PageController();
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoPlay();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startAutoPlay() {
+    if (widget.adminMode) return;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_controller.hasClients) return;
+      // 모션 최소화를 켠 사용자에게 화면이 저절로 움직이면 안 된다.
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _timer?.cancel();
+        return;
+      }
+      _controller.animateToPage(
+        (_page + 1) % _cards.length,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  /// 이 카드가 화면 중앙에서 몇 장만큼 떨어져 있는지. 0 이면 정중앙,
+  /// 0.5 면 절반쯤 넘어간 상태다. 넘기는 중에는 소수로 계속 바뀐다.
+  double _offsetOf(int index) {
+    if (!_controller.hasClients || !_controller.position.haveDimensions) {
+      return (_page - index).toDouble();
+    }
+    return (_controller.page ?? _page.toDouble()) - index;
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: cs.onPrimaryContainer.withValues(alpha: 0.08),
-        borderRadius: AppRadius.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: tt.bodyMedium),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            // pill 배경이 onPrimaryContainer 계열이므로 전경도 같은 role 을 쓴다.
-            // cs.primary 는 다크에서 4.04:1 로 AA 미달이었다(교체 후 라이트 7.66 / 다크 6.53).
-            style: tt.labelMedium?.copyWith(
-              color: cs.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
+    final cards = widget.adminMode ? _adminCards : _cards;
+    final photoSlide = cards[_page].backgroundAsset != null;
+    return Column(
+      children: [
+        Expanded(
+          // 사용자가 한 번 손으로 넘기면 자동 넘김을 멈춘다. 저절로 움직이는
+          // 화면을 멈출 방법이 있어야 한다(WCAG 2.2.2). depth 0 만 보는 것은
+          // 카드 안쪽 스크롤(큰 글자)이 올려보내는 알림과 구분하기 위함이다.
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification &&
+                  notification.depth == 0 &&
+                  notification.dragDetails != null) {
+                _timer?.cancel();
+              }
+              return false;
+            },
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: cards.length,
+              onPageChanged: (value) {
+                setState(() => _page = value);
+                widget.onPageChanged(value);
+              },
+              // 화면 전체가 넘어가면서 안쪽 콘텐츠에도 작은 시차를 준다.
+              itemBuilder: (context, index) => AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => _IntroCard(
+                  data: cards[index],
+                  offset: _offsetOf(index),
+                ),
+              ),
             ),
           ),
+        ),
+        if (cards.length > 1) ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < cards.length; index++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == _page ? 18 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: index == _page
+                        ? (photoSlide ? AppPalette.photoForeground : cs.primary)
+                        : (photoSlide
+                            ? AppPalette.photoForeground.withValues(alpha: 0.4)
+                            : cs.outlineVariant),
+                    borderRadius: AppRadius.pill,
+                  ),
+                ),
+            ],
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _LoginHeader extends StatelessWidget {
-  const _LoginHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Text(
-          '올라운드',
-          style: tt.titleLarge?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.8,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          '로그인',
-          style: tt.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
       ],
     );
   }
 }
 
-class _MarketingConsentRow extends StatelessWidget {
-  const _MarketingConsentRow({
+class _IntroCardData {
+  const _IntroCardData({
+    this.icon,
+    this.backgroundAsset,
+    required this.title,
+    required this.body,
+  });
+
+  /// null 이면 마스코트를 쓴다(첫 인사 카드).
+  final IconData? icon;
+  final String? backgroundAsset;
+  final String title;
+  final String body;
+}
+
+class _IntroCard extends StatelessWidget {
+  const _IntroCard({required this.data, this.offset = 0});
+
+  final _IntroCardData data;
+
+  /// 화면 중앙에서 떨어진 정도. 0 이 정중앙, ±1 이 한 장 옆.
+  final double offset;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final onPhoto = data.backgroundAsset != null;
+    final foreground =
+        onPhoto ? AppPalette.photoForeground : cs.onPrimaryContainer;
+    final t = offset.clamp(-1.0, 1.0);
+    // 아이콘이 글자보다 더 크게 밀리면서 겹이 생긴다(패럴랙스).
+    // 중앙에 서 있는 동안은 계산값이 모두 0 이라 아무 비용도 들지 않는다.
+    final centeredContent = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Transform.translate(
+          offset: Offset(t * 44, 0),
+          child: data.icon == null
+              ? _AllRoundMascot(onPhoto: onPhoto)
+              // 마스코트와 같은 크기·모양이어야 장을 넘겨도 무게가 흔들리지 않는다.
+              : Container(
+                  width: AppSizes.touchTarget * 2,
+                  height: AppSizes.touchTarget * 2,
+                  decoration: BoxDecoration(
+                    color: foreground.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: foreground, width: 2),
+                  ),
+                  child: Icon(
+                    data.icon,
+                    color: foreground,
+                    size: AppSizes.touchTarget,
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Transform.translate(
+          offset: Offset(t * 18, 0),
+          child: Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    data.title,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: tt.displaySmall?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                data.body,
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(
+                  // 0.72 는 라이트에서 4.34:1 로 WCAG AA(4.5:1) 미달이었다.
+                  // 0.80 이면 라이트 5.29 / 다크 5.62 로 여유가 생긴다.
+                  color: onPhoto
+                      ? AppPalette.photoForeground
+                      : cs.onPrimaryContainer.withValues(alpha: 0.8),
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final editorialContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Transform.translate(
+          offset: Offset(t * 18, 0),
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: AppRadius.pill,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Transform.translate(
+          offset: Offset(t * 18, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    data.title,
+                    maxLines: 1,
+                    textAlign: TextAlign.left,
+                    style: tt.displaySmall?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                data.body,
+                textAlign: TextAlign.left,
+                style: tt.bodyMedium?.copyWith(
+                  color: AppPalette.photoForeground,
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final content = onPhoto ? editorialContent : centeredContent;
+
+    final away = t.abs();
+    return ClipRect(
+      child: CustomPaint(
+        painter: onPhoto
+            ? null
+            : _IntroBackdropPainter(
+                accent: cs.primary,
+                line: cs.onPrimaryContainer,
+              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final verticalPadding = AppSpacing.xxl * 2;
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xxl,
+                vertical: AppSpacing.xxl,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: (constraints.maxHeight - verticalPadding)
+                      .clamp(0.0, double.infinity),
+                ),
+                child: Align(
+                  alignment: onPhoto ? Alignment.bottomLeft : Alignment.center,
+                  child: away == 0
+                      ? content
+                      // 완전히 중앙일 때는 Opacity 레이어를 만들지 않는다.
+                      : Opacity(
+                          opacity: (1 - away * 1.1).clamp(0.0, 1.0),
+                          child: content,
+                        ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 큰 원형 필드와 사선 코트 면을 화면 배경까지 확장한다. 이미지 파일 없이
+/// 그리므로 화면 비율과 해상도가 달라도 같은 밀도로 보인다.
+class _IntroBackdropPainter extends CustomPainter {
+  const _IntroBackdropPainter({required this.accent, required this.line});
+
+  final Color accent;
+  final Color line;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final band = Path()
+      ..moveTo(0, size.height * 0.12)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height * 0.2)
+      ..lineTo(0, size.height * 0.34)
+      ..close();
+    canvas.drawPath(
+      band,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = accent.withValues(alpha: 0.06),
+    );
+
+    final focusCenter = Offset(size.width * 0.5, size.height * 0.46);
+    final focusRadius = (size.width * 0.43).clamp(
+      0.0,
+      size.height * 0.32,
+    );
+    canvas.drawCircle(
+      focusCenter,
+      focusRadius,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = accent.withValues(alpha: 0.1),
+    );
+
+    final fieldLine = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = line.withValues(alpha: 0.16);
+    for (var ring = 1; ring <= 3; ring++) {
+      canvas.drawCircle(
+        focusCenter,
+        focusRadius * (0.58 + (ring * 0.18)),
+        fieldLine,
+      );
+    }
+
+    canvas.drawLine(
+      Offset(0, focusCenter.dy),
+      Offset(size.width, focusCenter.dy),
+      fieldLine,
+    );
+    canvas.drawCircle(
+      Offset(size.width, size.height),
+      size.width * 0.28,
+      fieldLine,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_IntroBackdropPainter oldDelegate) =>
+      oldDelegate.accent != accent || oldDelegate.line != line;
+}
+
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
     required this.value,
+    required this.label,
     required this.onChanged,
+    this.checkboxKey,
   });
 
   final bool value;
+  final String label;
   final ValueChanged<bool?> onChanged;
+  final Key? checkboxKey;
 
   @override
   Widget build(BuildContext context) {
@@ -874,18 +1289,17 @@ class _MarketingConsentRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Checkbox(
+              key: checkboxKey,
               value: value,
               onChanged: onChanged,
               side: BorderSide(color: cs.outline, width: 1.4),
-              // 레이블이 없으면 스크린리더가 무엇에 대한 체크박스인지 알리지 못한다.
-              semanticLabel: '마케팅 정보 수신 동의 (선택)',
+              semanticLabel: label,
             ),
             Expanded(
               child: Text(
-                '마케팅 정보 수신 동의 (선택)',
+                label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
@@ -895,6 +1309,31 @@ class _MarketingConsentRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LegalLinkButton extends StatelessWidget {
+  const _LegalLinkButton({required this.label, required this.url});
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: () {
+        final uri = Uri.parse(url);
+        if (kIsWeb) {
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(builder: (_) => InAppBrowserScreen(uri: uri)),
+        );
+      },
+      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+      label: Text(label),
     );
   }
 }

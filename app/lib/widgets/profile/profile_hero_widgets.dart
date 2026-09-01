@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/tournament.dart';
 import '../../theme/tokens.dart';
-import '../../utils/grade_labels.dart';
 
 // ────────────────────────────────────────────────────────────
 // Hero SliverAppBar
@@ -16,14 +15,15 @@ class ProfileHeroSliver extends StatelessWidget {
   final String title; // 앱 활동 표시명(닉네임 우선)
   final String subtitle; // 이메일
   final String? infoLine; // 실명·나이 (본인만)
-  final AsyncValue<List<UserSport>> sports;
-  final AsyncValue<List<UserTennisOrg>> tennisOrgs;
+  // 종목·협회는 본문에서만 표시하지만 기존 호출부 호환은 유지한다.
+  final AsyncValue<List<UserSport>>? sports;
+  final AsyncValue<List<UserTennisOrg>>? tennisOrgs;
   final Uint8List? avatarBytes;
   final String? avatarUrl;
   final VoidCallback onAvatarTap;
   final VoidCallback onNotificationsTap;
   final int unreadNotificationCount;
-  final VoidCallback onMoreTap;
+  final VoidCallback? onMoreTap;
 
   const ProfileHeroSliver({
     super.key,
@@ -31,30 +31,34 @@ class ProfileHeroSliver extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.infoLine,
-    required this.sports,
-    required this.tennisOrgs,
+    this.sports,
+    this.tennisOrgs,
     required this.avatarBytes,
     required this.avatarUrl,
     required this.onAvatarTap,
     required this.onNotificationsTap,
     required this.unreadNotificationCount,
-    required this.onMoreTap,
+    this.onMoreTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final topSafeArea = MediaQuery.paddingOf(context).top;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final expandedHeight = 316.0 + ((textScale - 1).clamp(0.0, 1.0) * 180.0);
-    final primarySport = sports.maybeWhen(
-      data: (items) => items.where((item) => item.isPrimary).firstOrNull?.sport,
-      orElse: () => null,
-    );
-
+    // 기본 화면에서는 프로필 카드의 빈 상단을 줄인다. 큰 글자와 iPhone 안전영역은
+    // 내용이 잘리지 않도록 줄인 높이를 다시 보충한다.
+    final compactReduction = 32.0 * (2.0 - textScale).clamp(0.0, 1.0);
+    final safeAreaCompensation = topSafeArea.clamp(0.0, compactReduction);
+    final expandedHeight = 238.0 +
+        AppSpacing.sm -
+        compactReduction +
+        safeAreaCompensation +
+        ((textScale - 1).clamp(0.0, 1.0) * 180.0);
     return SliverAppBar(
       expandedHeight: expandedHeight,
-      pinned: true,
+      pinned: false,
       backgroundColor: cs.surface,
       foregroundColor: cs.onSurface,
       title: Text(
@@ -78,18 +82,13 @@ class ProfileHeroSliver extends StatelessWidget {
             icon: const Icon(Icons.notifications_none_rounded),
           ),
         ),
-        IconButton(
-          tooltip: '전체 메뉴',
-          onPressed: onMoreTap,
-          icon: const Icon(Icons.settings_outlined),
-        ),
         const SizedBox(width: AppSpacing.sm),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.xl,
-            kToolbarHeight + AppSpacing.xxl,
+            topSafeArea + kToolbarHeight + AppSpacing.xxl,
             AppSpacing.xl,
             AppSpacing.lg,
           ),
@@ -101,17 +100,6 @@ class ProfileHeroSliver extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Positioned(
-                  right: -AppSpacing.md,
-                  top: -AppSpacing.md,
-                  child: Icon(
-                    primarySport == 'tennis'
-                        ? Icons.sports_tennis_rounded
-                        : Icons.sports_soccer_rounded,
-                    size: 104,
-                    color: cs.onPrimary.withValues(alpha: 0.08),
-                  ),
-                ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -121,13 +109,10 @@ class ProfileHeroSliver extends StatelessWidget {
                       title: title,
                       subtitle: subtitle,
                       infoLine: infoLine,
-                      sports: sports,
                       avatarBytes: avatarBytes,
                       avatarUrl: avatarUrl,
                       onAvatarTap: onAvatarTap,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    StatsGrid(sports: sports, tennisOrgs: tennisOrgs),
                   ],
                 ),
               ],
@@ -146,7 +131,6 @@ class ProfileHeaderContent extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.infoLine,
-    required this.sports,
     required this.avatarBytes,
     required this.avatarUrl,
     required this.onAvatarTap,
@@ -156,7 +140,6 @@ class ProfileHeaderContent extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? infoLine;
-  final AsyncValue<List<UserSport>> sports;
   final Uint8List? avatarBytes;
   final String? avatarUrl;
   final VoidCallback onAvatarTap;
@@ -165,11 +148,6 @@ class ProfileHeaderContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final primary = sports.maybeWhen(
-      data: (items) => items.where((s) => s.isPrimary).firstOrNull,
-      orElse: () => null,
-    );
-    final sportCount = sports.maybeWhen(data: (l) => l.length, orElse: () => 0);
     final normalizedAvatarUrl = avatarUrl?.trim();
     final ImageProvider<Object>? avatarImage = avatarBytes != null
         ? MemoryImage(avatarBytes!)
@@ -270,168 +248,10 @@ class ProfileHeaderContent extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  HeroChip(
-                    label: primary == null
-                        ? '종목 미등록'
-                        : sportLabelFromString(primary.sport),
-                  ),
-                  if (primary != null)
-                    HeroChip(label: gradeLabel(primary.grade)),
-                  HeroChip(label: '$sportCount개 종목'),
-                ],
-              ),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class HeroChip extends StatelessWidget {
-  const HeroChip({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: cs.onPrimary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: cs.onPrimary.withValues(alpha: 0.22),
-        ),
-      ),
-      child: Text(
-        label,
-        style: tt.labelSmall?.copyWith(
-          color: cs.onPrimary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class StatsGrid extends StatelessWidget {
-  const StatsGrid({super.key, required this.sports, required this.tennisOrgs});
-
-  final AsyncValue<List<UserSport>> sports;
-  final AsyncValue<List<UserTennisOrg>> tennisOrgs;
-
-  @override
-  Widget build(BuildContext context) {
-    final sportCount = sports.maybeWhen(
-      data: (items) => items.length,
-      orElse: () => 0,
-    );
-    final orgCount = tennisOrgs.maybeWhen(
-      data: (items) => items.length,
-      orElse: () => 0,
-    );
-    final primary = sports.maybeWhen(
-      data: (items) => items.where((s) => s.isPrimary).firstOrNull?.sport,
-      orElse: () => null,
-    );
-
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.only(top: AppSpacing.md),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: cs.onPrimary.withValues(alpha: 0.22)),
-        ),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Expanded(
-              child: StatCard(
-                value: '$sportCount',
-                label: '등록 종목',
-              ),
-            ),
-            VerticalDivider(
-              width: 1,
-              color: cs.onPrimary.withValues(alpha: 0.22),
-            ),
-            Expanded(
-              child: StatCard(
-                value: '$orgCount',
-                label: '소속 협회',
-              ),
-            ),
-            VerticalDivider(
-              width: 1,
-              color: cs.onPrimary.withValues(alpha: 0.22),
-            ),
-            Expanded(
-              child: StatCard(
-                value: primary == null ? '-' : sportLabelFromString(primary),
-                label: '기본 필터',
-                compact: true,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class StatCard extends StatelessWidget {
-  const StatCard({
-    super.key,
-    required this.value,
-    required this.label,
-    this.compact = false,
-  });
-
-  final String value;
-  final String label;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: (compact ? tt.labelLarge : tt.titleLarge)?.copyWith(
-              color: cs.onPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: tt.labelSmall?.copyWith(
-              color: cs.onPrimary.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

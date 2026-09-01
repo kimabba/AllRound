@@ -39,6 +39,12 @@ void main() {
     test('monthly fee label includes context', () {
       expect(clubMonthlyFeeLabel(40000), '월회비 4만원');
       expect(clubMonthlyFeeLabel(0), '월회비 무료');
+      expect(clubFeeLabel(20000, feeType: 'per_event'), '1회 참가비 2만원');
+    });
+
+    test('club name hint follows the selected sport', () {
+      expect(clubNameHintForSport('tennis'), '예: 광주 테니스 클럽');
+      expect(clubNameHintForSport('futsal'), '예: 서울 풋살 클럽');
     });
   });
 
@@ -53,6 +59,16 @@ void main() {
       expect(clubMonthlyFeeInputError('free'), isNotNull);
       expect(clubMonthlyFeeInputError('-1'), isNotNull);
       expect(clubMonthlyFeeInputError('1000001'), isNotNull);
+    });
+  });
+
+  group('club description input', () {
+    test('requires at least 30 trimmed characters', () {
+      final short = List.filled(29, '가').join();
+      final minimum = List.filled(30, '가').join();
+      expect(clubDescriptionInputError(short), isNotNull);
+      expect(clubDescriptionInputError(minimum), isNull);
+      expect(clubDescriptionInputError('  $minimum  '), isNull);
     });
   });
 

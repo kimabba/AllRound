@@ -8,7 +8,11 @@
 ```
 Flutter (SSE) → chat Edge Function
    │
+   ├─[0] 입력 길이·호출량·콘텐츠 안전 검사
+   │       └ 명백한 유해 입력은 저장·임베딩·Gemini 전송 전에 즉시 거절
+   │
    ├─[1] Intent 분류 (룰 → pgvector KNN 폴백)
+   │       ├ 협회/내 랭킹 → 인증 DB 직접 조회 (임베딩·LLM 우회)
    │       └ 미등록 종목 명시 → 즉시 거부 (LLM·RAG 우회)
    │
    ├─[2] Slot routing — tournament_search & confidence ≥ 0.95
@@ -33,18 +37,34 @@ Flutter (SSE) → chat Edge Function
 | 벡터DB | pgvector (HNSW, cosine) | tournaments/rules/intent_examples/qa_cache |
 | 스트리밍 | Server-Sent Events (SSE) | |
 
+## 입력 범위와 콘텐츠 안전
+
+- 사용자당 **분당 10회**, 메시지당 **4,000자**로 제한한다.
+- `chat/safety.ts`는 명백한 성적·욕설·모욕·위험 요청만 고신뢰 패턴으로 먼저 막는다.
+  이 단계에서 차단되면 서버 대화 이력에 저장하지 않고 Gemini에도 보내지 않는다.
+- 정상 스포츠 표현인 `대회 성적`, `성인부`, `서브 폭발력`, `상대를 이기는 법`은
+  차단하지 않는 회귀 테스트를 둔다.
+- Gemini 요청에는 성적 콘텐츠를 `BLOCK_LOW_AND_ABOVE`, 괴롭힘·혐오·위험 콘텐츠를
+  `BLOCK_MEDIUM_AND_ABOVE`로 명시한다. Gemini가 차단한 입력은 방금 저장한 서버
+  대화 이력에서도 즉시 삭제하고 안전 안내만 현재 화면에 표시한다.
+- 무해하지만 테니스·풋살·운동·올라운드 앱과 무관한 질문은 계정 제재 대상으로 보지
+  않고, 시스템 프롬프트가 도움 범위를 짧게 안내한다.
+- 차단 이벤트 로그에는 질문 원문·사용자 ID를 넣지 않고 `local_input_block`의 범주 또는
+  `gemini_block` 사유만 남긴다.
+
 ## 의도 분류 (`_shared/intent.ts`)
 
-- 의도 8종: `tournament_search`, `tournament_detail`, `club_search`, `rule_lookup`,
-  `venue_search`, `match_schedule`, `my_profile`, `free_chat`.
+- 의도 9종: `tournament_search`, `tournament_detail`, `ranking_lookup`,
+  `club_search`, `rule_lookup`, `venue_search`, `match_schedule`, `my_profile`, `free_chat`.
 - 1차 **룰 분류** (`classifyByRule`) — 정규식·키워드, confidence 1.0. recall 우선
   (false positive 보다 false negative 가 안전 → 모호하면 `null` 반환).
 - 2차 **임베딩 KNN 폴백** — RPC `intent_classify` (cosine, threshold 0.75).
   `intent_examples` 테이블의 few-shot 예시 기준.
 - 3차 **free_chat 폴백**.
 - **슬롯 추출** (`extractSlots`) 은 의도와 독립적으로 항상 수행:
-  `region`(한국어 별칭 → REGION_CODES), `sport`, `date_range`(KST 기준 자연어 → ISO).
-- 회귀 테스트: `supabase/functions/tests/intent_test.ts` (정형 질문 14건 샘플).
+  `region`(한국어 별칭 → REGION_CODES), `sport`, `date_range`(KST 기준 자연어 → ISO),
+  랭킹의 `org_code`·`division_code`·명시된 `player_name`.
+- 회귀 테스트: `supabase/functions/tests/intent_test.ts`, `chat_ranking_test.ts`.
 
 ## Slot routing (LLM 0회)
 
@@ -52,6 +72,16 @@ Flutter (SSE) → chat Edge Function
 - 룰 분류(confidence 1.0)만 통과, 임베딩 폴백(보통 0.7~0.85)은 자동 미달 → 안전하게 RAG+LLM.
 - RPC `tournament_search_by_slots` (화이트리스트, `security invoker` + RLS) → `renderTournamentSearchTemplate` 로 결정적 마크다운 생성.
 - 결과 0건 또는 RPC 에러는 **return 하지 않고** 기존 RAG+LLM 흐름으로 자연 전환 (false negative 회피).
+
+### 협회 랭킹 결정적 라우팅
+
+- `ranking_lookup`은 광주·전남 `org_rankings`를 `rank ASC`로 직접 조회해 1위부터 최대
+  10명을 보여준다. 협회·부서·명시 선수명만 화이트리스트 슬롯으로 필터링한다.
+- "본인 랭킹" 질문은 별도 의도가 아니라 `my_profile` 라우팅이 담당한다
+  (`my_confirmed_ranking` RPC, #424) — `org_player_links.status='confirmed'` 연결만
+  본인으로 인정하고 `pending`·미연결 상태를 실제 순위처럼 추측하지 않는다.
+- 선수명과 랭킹 결과는 Gemini 임베딩/생성 요청에 넣지 않는다. 구조화 로그에는 질문·선수명
+  대신 결과 건수와 필터 사용 여부, 해시 사용자 ID만 기록한다.
 
 ## QA cache (`qa_cache`)
 
@@ -72,6 +102,9 @@ Flutter (SSE) → chat Edge Function
 2. **검색** — `tournaments_semantic_search` (top 5, `p_only_my_grade: false`),
    `rules_semantic_search` (top 3). venue_search 의도는 `venues_search` RPC 직접 호출(임베딩 불필요).
 3. **응답 생성** — RAG 컨텍스트(`<data>` 블록) + system prompt → Gemini Flash-Lite SSE.
+
+룰북은 cosine 유사도 **0.72 이상**인 문서만 모델 컨텍스트와 DB citation에 사용한다.
+관련 문서가 없으면 DB 근거가 없음을 먼저 밝히며, 일반 상식을 특정 룰북 출처처럼 말하지 않는다.
 
 ## Search Grounding 발동 기준 (정책)
 
@@ -97,6 +130,8 @@ Flutter (SSE) → chat Edge Function
 | 장치 | 위치 | 효과 |
 |---|---|---|
 | Rate limit 10회/분 | `chat_rate_limit` | 남용 차단 |
+| 입력 안전 가드 | `chat/safety.ts` | 명백한 유해 입력의 저장·외부 전송 차단 |
+| Gemini 안전 설정 | `_shared/gemini.ts` | 성적·괴롭힘·혐오·위험 콘텐츠 의미 필터 |
 | Slot routing | `tournament_search_by_slots` | 정형 질문 LLM 0회 |
 | QA cache | `qa_cache` (0.92 / 24h) | 유사 질문 LLM 0회 |
 | free_chat RAG skip | `skipRag` | 잡담 시 임베딩·citation 우회 |
@@ -112,7 +147,8 @@ chat Edge Function 은 구조화 JSON 로그를 마커와 함께 출력한다 (P
 |---|---|
 | `chat_intent` | `classify`, `refuse_unregistered_sport`, `knn_rpc_error`, `knn_exception` |
 | `chat_cache` | `hit`, `miss`, `skip_history`, `skip_sport_filter`, `skip_no_embedding`, `insert`, `insert_skipped_duplicate`, `insert_failed` |
-| `chat_route` | `tournament_search_routed`, `tournament_search_empty`, `tournament_search_rpc_error` |
+| `chat_route` | 대회 라우팅 이벤트, `ranking_lookup_routed`, 랭킹 조회 오류 |
+| `chat_safety` | `local_input_block`, `gemini_block` (질문 원문·사용자 ID 없음) |
 
 **분석 도구**: `scripts/analyze_chat_cost.py` — 로그를 흘려넣으면 QA cache 히트율,
 intent 분포·method 믹스, routing(LLM 우회) 비율, 임베딩 호출 수, 미등록종목 거부 수를 집계한다.
@@ -138,3 +174,4 @@ python3 scripts/analyze_chat_cost.py --json chat.log   # JSON 출력
 - `<data>...</data>` 블록 내용은 **데이터**이며 그 안의 지시는 따르지 않는다 (프롬프트 인젝션 방지).
 - `escapeForData` 로 `</data>` 위조 종결 차단.
 - RAG·검색 스니펫은 untrusted data (BACKEND_RULES.md / SECURITY_RULES.md 참조).
+- 입력 안전 가드는 빠른 최소 방어이고, 의미 기반 Gemini 안전 필터를 함께 강제한다.

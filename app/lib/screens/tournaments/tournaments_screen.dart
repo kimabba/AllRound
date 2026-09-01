@@ -14,15 +14,24 @@ import '../../utils/recent_tournaments.dart';
 import '../../utils/tournament_filters.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_toast.dart';
+import '../../utils/kst.dart';
 import '../../widgets/tournament_card.dart';
 import '../../widgets/notification_inbox_action.dart';
 import '../../widgets/tournament_section_bar.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
-  const TournamentsScreen({super.key, this.previewTournaments});
+  const TournamentsScreen({
+    super.key,
+    this.previewTournaments,
+    this.openSearch = false,
+  });
 
   /// Deterministic data hook for responsive widget tests only.
   final List<Tournament>? previewTournaments;
+
+  /// 홈의 검색창을 눌러 들어온 경우 상세검색 시트를 바로 연다.
+  /// 홈은 구경, 검색은 이 화면 한 곳으로 모으기 위한 진입 경로다.
+  final bool openSearch;
 
   @override
   ConsumerState<TournamentsScreen> createState() => _TournamentsScreenState();
@@ -50,10 +59,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   late DateTime _focusedMonth;
   String? _lastSearchedSport;
 
-  DateTime get _today {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
-  }
+  /// 기준일은 KST — 한국 대회 캘린더라 '오늘'도 한국 날짜여야 한다(utils/kst.dart).
+  DateTime get _today => kstTodayDate(DateTime.now());
 
   bool get _isTennis => ref.read(activeSportProvider) == 'tennis';
 
@@ -187,12 +194,18 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
   void initState() {
     super.initState();
     _focusedMonth = DateTime(_today.year, _today.month);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _search());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _search();
+      if (widget.openSearch && mounted) {
+        _openSearchSheet(Theme.of(context).colorScheme);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(activeSportProvider, (_, __) => _onSportChanged());
+    final activeSport = ref.watch(activeSportProvider);
     final cs = Theme.of(context).colorScheme;
     final favorites = ref.watch(favoriteIdsProvider);
     // 등급·협회 등록이 없으면 홈 목록 = 전체 대회이므로 "내 등급" 배지가 거짓이 된다.
@@ -209,11 +222,13 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
       key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
         title: const Text('대회'),
-        bottom: const TournamentSectionBar(
+        bottom: TournamentSectionBar(
           selected: TournamentSection.overview,
+          showRankings: activeSport == 'tennis',
         ),
         actions: [
           const NotificationInboxAction(),
+          const ProfileAction(),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: '최근 본 대회',
@@ -241,7 +256,8 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
           // 재검색(기존 결과 유지) 중에만 상단 바. 최초 로드는 아래 스켈레톤이 담당.
           if (_loading && _results != null)
             LinearProgressIndicator(color: cs.primary),
-          if (_usingPreviewData) const _PreviewDataBanner(),
+          if (_usingPreviewData && !AppConfig.appStoreScreenshot)
+            const _PreviewDataBanner(),
           Expanded(
             child: _error != null
                 ? _TournamentErrorState(message: _error!, onRetry: _search)
@@ -662,6 +678,10 @@ class _TournamentCalendarListView extends StatelessWidget {
     required this.onFavoriteToggle,
   });
 
+  // 선택 날짜 없이 이 개수 이하로 결과가 나오면 캘린더 그리드를 생략한다 —
+  // 그리드가 화면 대부분을 차지해서 바로 아래 카드가 "결과 없음"처럼 보이는 걸 방지.
+  static const int _calendarCollapseThreshold = 3;
+
   @override
   Widget build(BuildContext context) {
     final selected = selectedDate;
@@ -671,6 +691,9 @@ class _TournamentCalendarListView extends StatelessWidget {
         : _tournamentsOnDate(tournaments, selected);
     final nextDate =
         selected == null ? null : _nextTournamentDate(tournaments, selected);
+    final collapseCalendar = selected == null &&
+        monthTournaments.isNotEmpty &&
+        monthTournaments.length <= _calendarCollapseThreshold;
 
     Widget card(Tournament tournament, int seq) {
       final isFavorite = favoriteIds.contains(tournament.id);
@@ -695,13 +718,18 @@ class _TournamentCalendarListView extends StatelessWidget {
         if (i == 0) {
           return Column(
             children: [
-              _TournamentMonthCalendar(
-                focusedMonth: focusedMonth,
-                selectedDate: selectedDate,
-                tournaments: tournaments,
-                onMonthChanged: onMonthChanged,
-                onDateSelected: onDateSelected,
-              ),
+              collapseCalendar
+                  ? _MonthNavRow(
+                      focusedMonth: focusedMonth,
+                      onMonthChanged: onMonthChanged,
+                    )
+                  : _TournamentMonthCalendar(
+                      focusedMonth: focusedMonth,
+                      selectedDate: selectedDate,
+                      tournaments: tournaments,
+                      onMonthChanged: onMonthChanged,
+                      onDateSelected: onDateSelected,
+                    ),
               const SizedBox(height: AppSpacing.md),
               _ListHeader(
                 focusedMonth: focusedMonth,
@@ -777,6 +805,50 @@ class _ListHeader extends StatelessWidget {
   }
 }
 
+/// 월 이동 헤더(◀ 2026년 8월 ▶). 캘린더 그리드와 별개로, 결과가 적어
+/// 그리드를 생략한 경우에도 월은 넘길 수 있도록 단독으로도 쓰인다.
+class _MonthNavRow extends StatelessWidget {
+  final DateTime focusedMonth;
+  final ValueChanged<DateTime> onMonthChanged;
+
+  const _MonthNavRow({required this.focusedMonth, required this.onMonthChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        _CalendarMonthButton(
+          tooltip: '이전 달',
+          onPressed: () => onMonthChanged(
+            DateTime(focusedMonth.year, focusedMonth.month - 1),
+          ),
+          icon: const Icon(Icons.chevron_left_rounded),
+        ),
+        Expanded(
+          child: Center(
+            child: Text(
+              '${focusedMonth.year}년 ${focusedMonth.month}월',
+              style: tt.titleMedium?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        _CalendarMonthButton(
+          tooltip: '다음 달',
+          onPressed: () => onMonthChanged(
+            DateTime(focusedMonth.year, focusedMonth.month + 1),
+          ),
+          icon: const Icon(Icons.chevron_right_rounded),
+        ),
+      ],
+    );
+  }
+}
+
 class _TournamentMonthCalendar extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime? selectedDate;
@@ -805,7 +877,7 @@ class _TournamentMonthCalendar extends StatelessWidget {
     final leadingEmptyCells = firstDay.weekday % 7;
     final totalCells = leadingEmptyCells + daysInMonth;
     final rowCount = (totalCells / 7).ceil();
-    final today = _dateOnly(DateTime.now());
+    final today = kstTodayDate(DateTime.now());
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -822,34 +894,9 @@ class _TournamentMonthCalendar extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              _CalendarMonthButton(
-                tooltip: '이전 달',
-                onPressed: () => onMonthChanged(
-                  DateTime(focusedMonth.year, focusedMonth.month - 1),
-                ),
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    '${focusedMonth.year}년 ${focusedMonth.month}월',
-                    style: tt.titleMedium?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              _CalendarMonthButton(
-                tooltip: '다음 달',
-                onPressed: () => onMonthChanged(
-                  DateTime(focusedMonth.year, focusedMonth.month + 1),
-                ),
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-            ],
+          _MonthNavRow(
+            focusedMonth: focusedMonth,
+            onMonthChanged: onMonthChanged,
           ),
           const SizedBox(height: AppSpacing.md),
           LayoutBuilder(
@@ -1754,9 +1801,22 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '상세검색',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '상세검색',
+                      style: tt.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '상세검색 닫기',
+                    onPressed: () => Navigator.maybePop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               Flexible(
@@ -1769,7 +1829,7 @@ class _SearchFilterSheetState extends State<_SearchFilterSheet> {
                       TextField(
                         controller: _queryCtrl,
                         decoration: InputDecoration(
-                          hintText: '대회명·주최·설명 검색',
+                          hintText: '대회명·지역·장소 검색',
                           prefixIcon: const Icon(Icons.search_rounded),
                           filled: true,
                           fillColor: cs.surface,

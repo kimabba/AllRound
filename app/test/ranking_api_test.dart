@@ -25,4 +25,31 @@ void main() {
     final link = await api.myConfirmedLink();
     expect(link, isNull);
   });
+
+  test('연결이 없으면 myCurrentRankings 는 빈 목록이다(전체 순위를 긁지 않는다)', () async {
+    final api = _unauthenticatedApi();
+    expect(await api.myCurrentRankings(), isEmpty);
+  });
+
+  // orgCode 는 로그인 이후 필터로만 쓰인다 — 비로그인 조기 반환 경로는
+  // orgCode 유무와 무관하게 항상 먼저 걸린다. 실제 필터링(광주+전남 동시
+  // confirmed 사용자가 지정한 협회만 받는지)은 네트워크를 타야 해 이 계층에서는
+  // 검증할 수 없다 — rankings_screen_test.dart 의 _FakeRankingApi 로 화면
+  // 통합 수준에서 확인한다.
+  test('연결이 없으면 myConfirmedLink(orgCode:) 도 null 이다', () async {
+    final api = _unauthenticatedApi();
+    final link = await api.myConfirmedLink(orgCode: 'jn');
+    expect(link, isNull);
+  });
+
+  test('연결이 없으면 myPlayerResults(orgCode:) 도 빈 목록이다', () async {
+    final api = _unauthenticatedApi();
+    final results = await api.myPlayerResults(orgCode: 'jn');
+    expect(results, isEmpty);
+  });
+
+  test('연결이 없으면 myCurrentRankings(orgCode:) 도 빈 목록이다', () async {
+    final api = _unauthenticatedApi();
+    expect(await api.myCurrentRankings(orgCode: 'jn'), isEmpty);
+  });
 }

@@ -38,29 +38,36 @@ class _ClubMemberChatScreenState extends ConsumerState<ClubMemberChatScreen> {
   String? _threadId;
   List<ClubChatMessage> _messages = const [];
   bool _loading = true;
+  bool _refreshing = false;
   bool _sending = false;
   String? _error;
-  Timer? _refreshTimer;
+  StreamSubscription<List<ClubChatMessage>>? _messageSubscription;
+  Timer? _fallbackRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _threadId = widget.threadId;
     _load();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && !_loading && !_sending) _load(showLoading: false);
+    _fallbackRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && !_loading && !_refreshing && !_sending) {
+        _load(showLoading: false);
+      }
     });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _fallbackRefreshTimer?.cancel();
+    unawaited(_messageSubscription?.cancel());
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool showLoading = true}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     if (mounted && showLoading) setState(() => _loading = true);
     try {
       final api = ref.read(apiProvider);
@@ -69,6 +76,10 @@ class _ClubMemberChatScreenState extends ConsumerState<ClubMemberChatScreen> {
             clubId: widget.clubId,
             otherUserId: widget.otherMember?.userId,
           );
+      if (_threadId != threadId || _messageSubscription == null) {
+        _threadId = threadId;
+        await _listenToMessages(threadId);
+      }
       final messages = await api.clubChatMessages(threadId);
       if (!mounted) return;
       setState(() {
@@ -82,8 +93,41 @@ class _ClubMemberChatScreenState extends ConsumerState<ClubMemberChatScreen> {
         setState(() => _error = '대화를 불러오지 못했습니다. 멤버 상태를 확인해주세요.');
       }
     } finally {
+      _refreshing = false;
       if (mounted && showLoading) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _listenToMessages(String threadId) async {
+    await _messageSubscription?.cancel();
+    if (!mounted) return;
+    _messageSubscription =
+        ref.read(apiProvider).watchClubChatMessages(threadId).listen(
+      (messages) {
+        if (!mounted) return;
+        final shouldScroll = _messages.isEmpty || _isNearBottom;
+        setState(() {
+          _messages = messages;
+          _error = null;
+        });
+        if (shouldScroll) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _scrollToBottom(),
+          );
+        }
+      },
+      onError: (Object _) {
+        if (!mounted || _messages.isNotEmpty) return;
+        setState(() => _error = '실시간 연결이 끊겼습니다. 새로고침해주세요.');
+      },
+      onDone: () => _messageSubscription = null,
+    );
+  }
+
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels < 120;
   }
 
   void _scrollToBottom() {
@@ -363,16 +407,36 @@ class _ChatBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!mine) ...[
-                Text(senderName, style: Theme.of(context).textTheme.labelSmall),
+                Text(
+                  '$senderName · ${_formatChatTime(message.createdAt)}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.xs),
               ],
               Text(message.body),
+              if (mine) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _formatChatTime(message.createdAt),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
+}
+
+String _formatChatTime(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
 
 class _ChatEmpty extends StatelessWidget {

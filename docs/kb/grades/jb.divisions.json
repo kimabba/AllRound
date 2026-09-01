@@ -1,0 +1,129 @@
+{
+  "org_code": "jb",
+  "org_name_ko": "전북특별자치도테니스협회",
+  "org_label": "JBSTA",
+  "source_url": "https://www.jbsta.com/bbs/board.php?bo_table=schedule&gubun=list",
+  "note": "기계 판독 정본. tennis_divisions seed(20260826050000_seed_jb_divisions.sql)가 이 파일과 일치하도록 grade_kb_verify_test.ts 가 CI 에서 강제한다. 협회가 체계를 바꾸면 여기를 먼저 수정. 근거: 2026-08 jbsta.com 대회일정 게시물 21건의 참가부서 셀 실측 — 전북은 금·은·동배(메달) 승강 체계를 쓴다(동배=하위, 금은배=상위 통합, 금동배=금+동 통합 이벤트). 국화부는 여성 상위부로 추정(타 협회 관례), 합산대회는 팀 합산점수제(N점 은 대회마다 달라 접두 synonym 으로 매칭). skill_tier 근거가 약한 부서(금동배·합산·단체전)는 null.",
+  "divisions": [
+    {
+      "code": "jb_m_dong",
+      "org_code": "jb",
+      "label_ko": "남자동배부",
+      "synonyms": ["남자동배부"],
+      "skill_tier": "rookie",
+      "gender": "male",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_m_geumeun",
+      "org_code": "jb",
+      "label_ko": "남자금은배부",
+      "synonyms": ["남자금은배부"],
+      "skill_tier": "advanced",
+      "gender": "male",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_m_geumdong",
+      "org_code": "jb",
+      "label_ko": "남자금동배부",
+      "synonyms": ["남자금동배부"],
+      "skill_tier": null,
+      "gender": "male",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_w_dong",
+      "org_code": "jb",
+      "label_ko": "여자동배부",
+      "synonyms": ["여자동배부"],
+      "skill_tier": "rookie",
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_w_geumeun",
+      "org_code": "jb",
+      "label_ko": "여자금은배부",
+      "synonyms": ["여자금은배부"],
+      "skill_tier": "advanced",
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_gukhwa",
+      "org_code": "jb",
+      "label_ko": "국화부",
+      "synonyms": ["국화부"],
+      "skill_tier": "advanced",
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_mixed",
+      "org_code": "jb",
+      "label_ko": "혼합복식부",
+      "synonyms": ["혼합복식부", "혼합복식"],
+      "skill_tier": null,
+      "gender": "mixed",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "mixed",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_team",
+      "org_code": "jb",
+      "label_ko": "단체전",
+      "synonyms": ["단체전"],
+      "skill_tier": null,
+      "gender": "all",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "team",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_m_hapsan",
+      "org_code": "jb",
+      "label_ko": "남자합산대회",
+      "synonyms": ["남자합산"],
+      "skill_tier": null,
+      "gender": "male",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    },
+    {
+      "code": "jb_w_hapsan",
+      "org_code": "jb",
+      "label_ko": "여자합산대회",
+      "synonyms": ["여자합산"],
+      "skill_tier": null,
+      "gender": "female",
+      "age_min": null,
+      "champion_only": false,
+      "event_type": "doubles",
+      "equiv_group": null
+    }
+  ]
+}

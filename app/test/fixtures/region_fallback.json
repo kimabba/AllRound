@@ -1,0 +1,23 @@
+[
+  {"code": "busan", "label": "부산", "isActive": true},
+  {"code": "busan_ulsan_gn", "label": "부산·울산·경남", "isActive": false},
+  {"code": "chungbuk", "label": "충북", "isActive": true},
+  {"code": "chungcheong", "label": "충청", "isActive": false},
+  {"code": "chungnam", "label": "충남", "isActive": true},
+  {"code": "daegu", "label": "대구", "isActive": true},
+  {"code": "daegu_gb", "label": "대구·경북", "isActive": false},
+  {"code": "daejeon", "label": "대전", "isActive": true},
+  {"code": "gangwon", "label": "강원", "isActive": true},
+  {"code": "gwangju", "label": "광주", "isActive": true},
+  {"code": "gyeongbuk", "label": "경북", "isActive": true},
+  {"code": "gyeonggi", "label": "경기", "isActive": true},
+  {"code": "gyeongnam", "label": "경남", "isActive": true},
+  {"code": "incheon", "label": "인천", "isActive": true},
+  {"code": "jeju", "label": "제주", "isActive": true},
+  {"code": "jeonbuk", "label": "전북", "isActive": true},
+  {"code": "jeonnam", "label": "전남", "isActive": true},
+  {"code": "sejong", "label": "세종", "isActive": true},
+  {"code": "seoul", "label": "서울", "isActive": true},
+  {"code": "seoul_metro", "label": "수도권", "isActive": false},
+  {"code": "ulsan", "label": "울산", "isActive": true}
+]

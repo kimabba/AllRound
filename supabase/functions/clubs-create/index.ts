@@ -8,6 +8,8 @@ import { ugcAccessError } from '../_shared/ugc.ts';
 import { notifyAdminsOfPendingClub } from './notifications.ts';
 import {
   parseClubCardColor,
+  parseClubDescription,
+  parseFeeType,
   parseGenderPreference,
   parseMeetingDays,
   parseMonthlyFee,
@@ -76,6 +78,14 @@ Deno.serve(withCors(async (req) => {
   if (!parsedMonthlyFee.ok) {
     return errorResponse(parsedMonthlyFee.message, 400);
   }
+  const parsedFeeType = parseFeeType(body.fee_type);
+  if (!parsedFeeType.ok) {
+    return errorResponse(parsedFeeType.message, 400);
+  }
+  const parsedDescription = parseClubDescription(body.description);
+  if (!parsedDescription.ok) {
+    return errorResponse(parsedDescription.message, 400);
+  }
   const parsedGenderPreference = parseGenderPreference(
     body.gender_preference,
   );
@@ -118,9 +128,10 @@ Deno.serve(withCors(async (req) => {
     intro_image_urls: introImageUrls,
     contact: optionalText(body.contact),
     website: parsedWebsite.value,
-    description: optionalText(body.description),
+    description: parsedDescription.value,
     meeting_days: parsedMeetingDays.value,
     monthly_fee: parsedMonthlyFee.value,
+    fee_type: parsedFeeType.value,
     gender_preference: parsedGenderPreference.value,
     card_color: parsedCardColor.value,
     latitude,

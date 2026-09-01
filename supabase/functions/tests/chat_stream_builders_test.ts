@@ -1,7 +1,12 @@
 import { assertEquals } from 'std/assert/mod.ts';
 
-import { buildDbCitations, buildTournamentCardBlocks } from '../chat/stream.ts';
+import {
+  buildDbCitations,
+  buildResponseDbCitations,
+  buildTournamentCardBlocks,
+} from '../chat/stream.ts';
 import type { SemanticRule, SemanticTournament, VenueRow } from '../chat/types.ts';
+import { RULE_GROUNDING_MIN_SIMILARITY } from '../chat/types.ts';
 
 function tourn(id: string, over: Partial<SemanticTournament> = {}): SemanticTournament {
   return {
@@ -18,8 +23,8 @@ function tourn(id: string, over: Partial<SemanticTournament> = {}): SemanticTour
   };
 }
 
-function rule(id: string): SemanticRule {
-  return { id, sport: 'tennis', category: 'c', title: `R-${id}`, body: 'b', similarity: 0.8 };
+function rule(id: string, similarity = 0.8): SemanticRule {
+  return { id, sport: 'tennis', category: 'c', title: `R-${id}`, body: 'b', similarity };
 }
 
 function venue(id: string): VenueRow {
@@ -57,6 +62,42 @@ Deno.test('buildDbCitations: 소스별 개수 상한 (t 5 / r 3 / v 15)', () => 
   assertEquals(cites.filter((c) => c.source === 'tournaments').length, 5);
   assertEquals(cites.filter((c) => c.source === 'rules').length, 3);
   assertEquals(cites.filter((c) => c.source === 'venues').length, 15);
+});
+
+Deno.test('buildDbCitations: 유사도가 낮은 룰북은 DB 근거로 인용하지 않는다', () => {
+  const cites = buildDbCitations(
+    [],
+    [
+      rule('low', RULE_GROUNDING_MIN_SIMILARITY - 0.001),
+      rule('grounded', RULE_GROUNDING_MIN_SIMILARITY),
+    ],
+    [],
+  );
+  assertEquals(cites, [
+    { type: 'db', source: 'rules', id: 'grounded', title: 'R-grounded' },
+  ]);
+});
+
+Deno.test('buildResponseDbCitations: rule_lookup도 관련 룰북 DB 인용을 내린다', () => {
+  const cites = buildResponseDbCitations(
+    'rule_lookup',
+    [tourn('t1')],
+    [rule('r1')],
+    [venue('v1')],
+  );
+  assertEquals(cites, [
+    { type: 'db', source: 'rules', id: 'r1', title: 'R-r1' },
+  ]);
+});
+
+Deno.test('buildResponseDbCitations: rule_lookup에 관련 룰북이 없으면 인용하지 않는다', () => {
+  const cites = buildResponseDbCitations(
+    'rule_lookup',
+    [tourn('t1')],
+    [rule('low', 0.2)],
+    [venue('v1')],
+  );
+  assertEquals(cites, []);
 });
 
 Deno.test('buildTournamentCardBlocks: 빈 입력은 null', () => {

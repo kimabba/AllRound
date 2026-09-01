@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _allowedSports = {'tennis', 'futsal'};
 const _allowedMeetingDays = {'월', '화', '수', '목', '금', '토', '일'};
 const _allowedGenderPreferences = {'mixed', 'male', 'female'};
+const _allowedFeeTypes = {'monthly', 'per_event'};
 const _allowedCardColors = {
   '#18376D',
   '#3156D8',
@@ -24,11 +25,14 @@ class ClubCreateDraft {
     required this.website,
     required this.description,
     required this.monthlyFee,
+    required this.feeType,
     required this.meetingDays,
     required this.genderPreference,
     required this.cardColor,
     required this.step,
     required this.hadSelectedImages,
+    this.latitude,
+    this.longitude,
   });
 
   final String sport;
@@ -39,11 +43,14 @@ class ClubCreateDraft {
   final String website;
   final String description;
   final String monthlyFee;
+  final String feeType;
   final List<String> meetingDays;
   final String? genderPreference;
   final String cardColor;
   final int step;
   final bool hadSelectedImages;
+  final double? latitude;
+  final double? longitude;
 
   bool get hasUserContent =>
       name.trim().isNotEmpty ||
@@ -53,8 +60,9 @@ class ClubCreateDraft {
       website.trim().isNotEmpty ||
       description.trim().isNotEmpty ||
       monthlyFee.trim().isNotEmpty ||
+      feeType != 'monthly' ||
       meetingDays.isNotEmpty ||
-      genderPreference != null ||
+      (genderPreference != null && genderPreference != 'mixed') ||
       cardColor != '#3156D8' ||
       hadSelectedImages;
 
@@ -68,11 +76,14 @@ class ClubCreateDraft {
         'website': website,
         'description': description,
         'monthly_fee': monthlyFee,
+        'fee_type': feeType,
         'meeting_days': meetingDays,
         'gender_preference': genderPreference,
         'card_color': cardColor,
         'step': step,
         'had_selected_images': hadSelectedImages,
+        'latitude': latitude,
+        'longitude': longitude,
       });
 
   static ClubCreateDraft? fromJsonString(String source) {
@@ -115,6 +126,10 @@ class ClubCreateDraft {
       website: _stringValue(decoded['website']),
       description: _stringValue(decoded['description']),
       monthlyFee: _stringValue(decoded['monthly_fee']),
+      feeType: decoded['fee_type'] is String &&
+              _allowedFeeTypes.contains(decoded['fee_type'])
+          ? decoded['fee_type']! as String
+          : 'monthly',
       meetingDays: meetingDays,
       genderPreference: genderPreference,
       cardColor: decoded['card_color'] is String &&
@@ -123,11 +138,30 @@ class ClubCreateDraft {
           : '#3156D8',
       step: step,
       hadSelectedImages: decoded['had_selected_images'] == true,
+      latitude: _doubleValue(decoded['latitude'], min: -90, max: 90),
+      longitude: _doubleValue(decoded['longitude'], min: -180, max: 180),
     );
   }
 }
 
+/// 새 작성이면 클럽 화면에서 고른 종목을, 실제 작성 내용이 남아 있으면
+/// 사용자가 작성 중이던 임시저장 종목을 우선한다.
+String resolveClubCreateSport({
+  required String? selectedSport,
+  ClubCreateDraft? draft,
+}) {
+  if (draft != null && draft.hasUserContent) return draft.sport;
+  return _allowedSports.contains(selectedSport) ? selectedSport! : 'tennis';
+}
+
 String _stringValue(Object? value) => value is String ? value : '';
+
+double? _doubleValue(Object? value,
+    {required double min, required double max}) {
+  if (value is! num) return null;
+  final number = value.toDouble();
+  return number.isFinite && number >= min && number <= max ? number : null;
+}
 
 class ClubCreateDraftStore {
   ClubCreateDraftStore(this._preferences);

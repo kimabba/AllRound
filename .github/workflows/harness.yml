@@ -55,6 +55,11 @@ jobs:
       - run: python3 scripts/harness/check_division_parity.py
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      # 지역 정본↔폴백 대조. 지역 3층 정규식 검사(check_enums.py)를 걷어낸 자리를
+      # 협회와 같은 스냅샷 다리로 메운다(P7).
+      - run: python3 scripts/harness/check_region_parity.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   flutter:
     name: Flutter analyze/test
@@ -86,7 +91,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno fmt --check */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
-      - run: deno lint --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
-      - run: deno check --config deno.json */*.ts _shared/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+      - run: deno fmt --check */*.ts _shared/*.ts _shared/crawler/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+      - run: deno lint --config deno.json */*.ts _shared/*.ts _shared/crawler/*.ts _shared/crawler/parsers/*.ts tests/*.ts
+      - run: deno check --config deno.json */*.ts _shared/*.ts _shared/crawler/*.ts _shared/crawler/parsers/*.ts tests/*.ts
       - run: deno test --config deno.json --allow-env --allow-read tests

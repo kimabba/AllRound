@@ -47,3 +47,18 @@ class PlayerResult {
 
   bool get isWin => resultRound == 1;
 }
+
+/// 랭킹표에서 선택한 선수의 협회 공표 이력 묶음.
+class PlayerHistory {
+  const PlayerHistory({
+    required this.results,
+    required this.fetchedAt,
+    required this.isComplete,
+    required this.wasCached,
+  });
+
+  final List<PlayerResult> results;
+  final DateTime fetchedAt;
+  final bool isComplete;
+  final bool wasCached;
+}

@@ -16,6 +16,7 @@ import {
   classifyByRule,
   extractDateRange,
   extractSlots,
+  isDateRangeFullyPast,
 } from '../_shared/intent.ts';
 
 // 고정 시각: KST 2026-06-15(월) 12:00.
@@ -175,4 +176,20 @@ Deno.test('extractDateRange: 범위 밖 월 "13월" → undefined (매칭은 되
 Deno.test('extractSlots: 특수문자만 입력 → 빈 슬롯', () => {
   const slots = extractSlots('!@#$%^&*()', FIXED_NOW);
   assertEquals(slots, {});
+});
+
+// FIXED_NOW = 2026-06-15. "5월" 같은 단독 월 표현은 연도를 안 넘기므로(extractDateRange
+// 스펙, 위 "단독 5월" 테스트 참고) 6월 기준으로 5월은 이미 지난 올해 날짜다.
+Deno.test('isDateRangeFullyPast: 이미 지난 올해 월(5월)은 true', () => {
+  const range = extractDateRange('5월 대회', FIXED_NOW)!;
+  assertEquals(isDateRangeFullyPast(range, '2026-06-15'), true);
+});
+
+Deno.test('isDateRangeFullyPast: 아직 안 지난 월(12월)은 false', () => {
+  const range = extractDateRange('12월 대회', FIXED_NOW)!;
+  assertEquals(isDateRangeFullyPast(range, '2026-06-15'), false);
+});
+
+Deno.test('isDateRangeFullyPast: to == today 는 아직 안 지난 것(false)', () => {
+  assertEquals(isDateRangeFullyPast({ from: '2026-06-10', to: '2026-06-15' }, '2026-06-15'), false);
 });

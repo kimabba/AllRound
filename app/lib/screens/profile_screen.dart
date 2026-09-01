@@ -13,12 +13,10 @@ import '../services/notifications.dart';
 import '../testing/e2e_keys.dart';
 import '../theme/tokens.dart';
 import '../utils/club_image_upload.dart';
-import '../widgets/profile/my_record_widgets.dart';
+import '../utils/customer_support.dart';
 import '../widgets/profile/profile_hero_widgets.dart';
 import '../widgets/profile/profile_quick_actions.dart';
-import '../widgets/profile/profile_records_widgets.dart';
 import '../widgets/profile/profile_settings_widgets.dart';
-import '../widgets/profile/profile_sports_widgets.dart';
 import '../widgets/app_card.dart';
 
 const _notifyTournamentPrefsKey = 'notify.tournament_deadline';
@@ -66,6 +64,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _notifyCoach = prefs.getBool(_notifyCoachPrefsKey) ?? false;
       _notifySound = prefs.getBool(_notifySoundPrefsKey) ?? true;
     });
+  }
+
+  Future<void> _openCustomerSupport() async {
+    final result = await openCustomerSupportEmail();
+    if (!mounted || result == CustomerSupportOpenResult.opened) return;
+
+    final message = switch (result) {
+      CustomerSupportOpenResult.addressCopied =>
+        '메일 앱이 없어 문의 주소를 복사했습니다: $customerSupportEmail',
+      CustomerSupportOpenResult.unavailable =>
+        '메일 앱을 열지 못했습니다. 문의 주소: $customerSupportEmail',
+      CustomerSupportOpenResult.opened => '',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Future<void> _pickProfilePhoto(ImageSource source) async {
@@ -319,8 +333,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final sports = ref.watch(userSportsProvider);
-    final tennisOrgs = ref.watch(userTennisOrgsProvider);
     final profile = ref.watch(myProfileProvider).value;
     final isAdmin = ref.watch(isAdminProvider).value ?? false;
     final unreadNotificationCount =
@@ -351,14 +363,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             title: displayName,
             subtitle: email,
             infoLine: infoLine,
-            sports: sports,
-            tennisOrgs: tennisOrgs,
             avatarBytes: _avatarBytes,
             avatarUrl: profile?.avatarUrl,
             onAvatarTap: _showProfilePhotoSheet,
             onNotificationsTap: () => context.push('/notifications'),
             unreadNotificationCount: unreadNotificationCount,
-            onMoreTap: () => context.push('/more'),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -370,24 +379,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 const ProfileQuickActions(),
-                const SizedBox(height: AppSpacing.xxl),
-                if (profile?.birthDate == null) ...[
-                  AppCard(
-                    variant: AppCardVariant.outlined,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.edit_calendar_rounded),
-                      title: const Text('생년월일을 등록해 주세요'),
-                      subtitle: const Text(
-                        '클럽 사진·게시글 작성과 대회 자격 확인에 필요합니다.',
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => context.push('/onboarding'),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
                 if (isAdmin) ...[
+                  const SizedBox(height: AppSpacing.xxl),
                   AppCard(
                     variant: AppCardVariant.outlined,
                     child: ListTile(
@@ -399,36 +392,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onTap: () => context.push('/admin/clubs'),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
                 ],
-                const MyRecordSection(),
                 const SizedBox(height: AppSpacing.xxl),
-                const MyClubsSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                SportsSection(sports: sports),
-                const SizedBox(height: AppSpacing.xxl),
-                tennisOrgs.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (orgs) => orgs.isEmpty
-                      ? const SizedBox.shrink()
-                      : TennisOrgsSection(orgs: orgs),
-                ),
                 const SizedBox(height: AppSpacing.xxl),
                 ProfileServiceSection(
-                  onRulesTap: () => context.push('/rules'),
+                  onCustomerSupportTap: _openCustomerSupport,
+                  onTournamentInquiryTap: () =>
+                      context.push('/tournaments/submit'),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                AppearanceSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                AccountSection(
-                  ref: ref,
-                  unreadNotificationCount: unreadNotificationCount,
+                AppSettingsSection(
                   tournamentNotificationsEnabled: _notifyTournament,
                   clubNotificationsEnabled: _notifyClub,
                   coachNotificationsEnabled: _notifyCoach,
-                  onNotificationInboxTap: () => context.push('/notifications'),
                   onNotificationTap: _showNotificationSettings,
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                AccountSection(
+                  ref: ref,
                 ),
                 const SizedBox(height: AppSpacing.xxxl),
               ]),

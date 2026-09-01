@@ -11,6 +11,7 @@ class AppPalette {
   static const Color text = Color(0xFF161616);
   static const Color textMuted = Color(0xFF6F7176);
   static const Color border = Color(0xFFE5E6E8);
+  static const Color photoForeground = Color(0xFFFFFFFF);
 
   // 기존 참조를 깨지 않기 위한 의미 호환 별칭.
   static const Color primaryBlue = accent;

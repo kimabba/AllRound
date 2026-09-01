@@ -119,11 +119,6 @@ mixin UserApi on ApiBase {
     });
   }
 
-  Future<List<Region>> listRegions() async {
-    final rows = await supabase.from('regions').select().order('code');
-    return rows.map((r) => Region.fromJson(r)).toList();
-  }
-
   Future<List<UserTennisOrg>> myTennisOrgs() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:allround/models/tournament.dart';
 import 'package:allround/widgets/tournament_card.dart';
+import 'package:allround/widgets/tournament_cover_image.dart';
 
 void main() {
   // 카드가 DateFormat('M/d (E)','ko') 를 쓰므로 ko 로케일 데이터를 준비한다.
@@ -32,13 +33,29 @@ void main() {
   }
 
   Widget wrap(Tournament t) => MaterialApp(
-    home: Scaffold(body: TournamentCard(tournament: t)),
-  );
+        home: Scaffold(body: TournamentCard(tournament: t)),
+      );
 
-  testWidgets('대회일 라벨과 날짜를 렌더한다', (tester) async {
+  testWidgets('대회 사진과 제목을 렌더한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament()));
-    expect(find.text('대회'), findsOneWidget);
-    expect(find.textContaining('6/13'), findsWidgets);
+    expect(find.byType(TournamentCoverImage), findsOneWidget);
+    expect(find.text('광주 테니스 오픈'), findsOneWidget);
+  });
+
+  testWidgets('관심 대회 표식은 하트로 렌더한다', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentCard(
+            tournament: makeTournament(),
+            isFavorite: true,
+            onFavoriteToggle: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
   });
 
   testWidgets('목록 카드는 신청 마감일을 노출한다', (tester) async {
@@ -53,12 +70,19 @@ void main() {
     await tester.pumpWidget(
       wrap(makeTournament(location: '진월국제테니스장', region: '광주')),
     );
-    expect(find.text('진월국제테니스장 · 광주'), findsOneWidget);
+    expect(find.text('6/13 (토) · 진월국제테니스장 · 광주'), findsOneWidget);
   });
 
   testWidgets('location 이 null 이면 region 으로 폴백한다', (tester) async {
     await tester.pumpWidget(wrap(makeTournament(location: null, region: '전남')));
-    expect(find.text('전남'), findsOneWidget);
+    expect(find.text('6/13 (토) · 전남'), findsOneWidget);
+  });
+
+  // 커버 이미지가 예전 날짜 컬럼을 대체하면서, 장소가 있으면 날짜가 카드
+  // 어디에도 안 보이던 회귀(#423 리뷰)를 막는다.
+  testWidgets('장소가 있어도 날짜가 계속 보인다', (tester) async {
+    await tester.pumpWidget(wrap(makeTournament(location: '진월국제테니스장')));
+    expect(find.textContaining('6/13'), findsWidgets);
   });
 
   testWidgets('마감 미정이면 신청 줄을 그리지 않는다', (tester) async {

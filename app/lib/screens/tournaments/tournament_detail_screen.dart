@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config.dart';
 import '../../models/regulation_body_lines.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_schedule.dart';
@@ -17,11 +18,17 @@ import '../../utils/recent_tournaments.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_skeleton_card.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/tournament_cover_image.dart';
 import '../../widgets/tournaments/regulation_document_view.dart';
 
 class TournamentDetailScreen extends ConsumerStatefulWidget {
-  const TournamentDetailScreen({super.key, required this.tournamentId});
+  const TournamentDetailScreen({
+    super.key,
+    required this.tournamentId,
+    this.adminPreview = false,
+  });
   final String tournamentId;
+  final bool adminPreview;
 
   @override
   ConsumerState<TournamentDetailScreen> createState() =>
@@ -102,12 +109,12 @@ class _TournamentDetailScreenState
     final isFav = (favorites.value ?? const {}).contains(
       widget.tournamentId,
     );
-    final isPreview = _isPreviewTournament;
+    final isPreview = _isPreviewTournament || widget.adminPreview;
 
     return Scaffold(
       key: AllRoundE2EKeys.tournamentDetailScreen,
       appBar: AppBar(
-        title: const Text('대회'),
+        title: Text(widget.adminPreview ? '사용자 화면 미리보기' : '대회'),
         actions: [
           if (_t != null && !isPreview)
             IconButton(
@@ -115,7 +122,7 @@ class _TournamentDetailScreenState
                   ? AllRoundE2EKeys.tournamentFavoriteSaved
                   : AllRoundE2EKeys.tournamentFavoriteUnsaved,
               icon: Icon(
-                isFav ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                 color: isFav ? cs.primary : null,
               ),
               onPressed: () async {
@@ -159,7 +166,12 @@ class _TournamentDetailScreenState
                       title: '대회 정보가 없습니다',
                       description: '대회 목록에서 다른 대회를 확인해 주세요.',
                     )
-                  : _DetailBody(t: _t!, df: _df, isPreview: isPreview),
+                  : _DetailBody(
+                      t: _t!,
+                      df: _df,
+                      isPreview: isPreview,
+                      adminPreview: widget.adminPreview,
+                    ),
     );
   }
 }
@@ -208,10 +220,12 @@ class _DetailBody extends StatelessWidget {
   final Tournament t;
   final DateFormat df;
   final bool isPreview;
+  final bool adminPreview;
   const _DetailBody({
     required this.t,
     required this.df,
     required this.isPreview,
+    required this.adminPreview,
   });
 
   static final _feeFormat = NumberFormat.decimalPattern('ko');
@@ -240,8 +254,8 @@ class _DetailBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isPreview) ...[
-                const _DetailPreviewBanner(),
+              if (isPreview && !AppConfig.appStoreScreenshot) ...[
+                _DetailPreviewBanner(adminPreview: adminPreview),
                 const SizedBox(height: AppSpacing.md),
               ],
 
@@ -294,11 +308,6 @@ class _DetailBody extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),
-              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
-                _TournamentPosterCard(url: t.posterUrl!.trim()),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-
               _DetailFacts(
                 date: _dateText(),
                 location: t.location ?? t.region ?? '장소 확인 필요',
@@ -352,17 +361,24 @@ class _DetailBody extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
 
               // ── 대회 요강 (구조화 요강 → 폴백: 평문 description) ──
-              _AccordionSection(
-                icon: Icons.article_rounded,
-                title: '대회 요강',
-                initiallyExpanded: false,
-                children: _buildRegulationChildren(
-                  context,
-                  hasDescription: hasDescription,
-                ),
+              _buildRegulationSection(
+                context,
+                hasDescription: hasDescription,
               ),
 
               const SizedBox(height: AppSpacing.lg),
+
+              // ── 포스터 원본 (요강 정리 뒤 참고용 — 세로로 긴 스캔본이 많아
+              // 맨 위에 두면 장소·부서 같은 핵심 정보가 스크롤 밖으로 밀린다) ──
+              if (t.posterUrl != null && t.posterUrl!.trim().isNotEmpty) ...[
+                Text(
+                  '포스터 원본',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _TournamentPosterCard(tournament: t),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               // ── 참가 신청 준비 중 안내 (모든 대회 공고 하단 고정) ──
               Container(
@@ -425,28 +441,44 @@ class _DetailBody extends StatelessWidget {
     return _RegulationFieldRow(label: f.label, value: f.value);
   }
 
-  /// 대회 요강 아코디언 본문.
-  /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
-  /// 그것도 없으면 "아직 공지되지 않았습니다".
-  List<Widget> _buildRegulationChildren(
+  /// 구조화 요강은 5개 탭으로 나누고, 레거시 평문은 원문을 그대로 보여준다.
+  Widget _buildRegulationSection(
     BuildContext context, {
     required bool hasDescription,
   }) {
     final document = t.regulationDocument;
     if (document != null && !document.isEmpty) {
-      return [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: RegulationDocumentView(document: document),
-        ),
-      ];
+      return RegulationTabbedDocumentView(
+        key: ValueKey('regulation-${t.id}'),
+        document: document,
+        hidePublicMetadata: true,
+      );
     }
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '대회 요강',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ..._buildLegacyRegulationChildren(
+          context,
+          hasDescription: hasDescription,
+        ),
+      ],
+    );
+  }
+
+  /// fields / body / notes 를 모두 표시(누락 0). 셋 다 비면 description 폴백 →
+  /// 그것도 없으면 "아직 공지되지 않았습니다".
+  List<Widget> _buildLegacyRegulationChildren(
+    BuildContext context, {
+    required bool hasDescription,
+  }) {
     // 1) 구조화 요강 필드. prize/format 가 필드에 없으면 보강한다.
     //    단, body 가 동일 내용을 포함하면 과한 중복이 되므로 body 가 있을 땐 보강하지 않는다.
     final fields = t.regulationFields
@@ -549,30 +581,33 @@ class _DetailBody extends StatelessWidget {
 }
 
 class _TournamentPosterCard extends StatelessWidget {
-  const _TournamentPosterCard({required this.url});
+  const _TournamentPosterCard({required this.tournament});
 
-  final String url;
+  final Tournament tournament;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ClipRRect(
-      borderRadius: AppRadius.card,
-      child: Image.network(
-        url,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: 240,
-            color: cs.surfaceContainerLow,
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final posterHeight = (constraints.maxWidth * 0.75).clamp(
+          360.0,
+          640.0,
+        );
+        return ClipRRect(
+          borderRadius: AppRadius.card,
+          child: SizedBox(
+            width: double.infinity,
+            height: posterHeight,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerLowest,
+              child: TournamentCoverImage(
+                tournament: tournament,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -673,7 +708,9 @@ class _DetailFact extends StatelessWidget {
 }
 
 class _DetailPreviewBanner extends StatelessWidget {
-  const _DetailPreviewBanner();
+  const _DetailPreviewBanner({required this.adminPreview});
+
+  final bool adminPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -692,7 +729,9 @@ class _DetailPreviewBanner extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
+              adminPreview
+                  ? '승인 후 사용자에게 보일 대회 화면입니다. 이 화면에서는 신청과 관심 저장이 작동하지 않습니다.'
+                  : '프리뷰 데이터로 대회 상세 화면을 확인 중입니다.',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -853,51 +892,7 @@ class _TournamentDetailError extends StatelessWidget {
   }
 }
 
-class _AccordionSection extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool initiallyExpanded;
-  final List<Widget> children;
-
-  const _AccordionSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-    this.initiallyExpanded = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: cs.outlineVariant),
-            bottom: BorderSide(color: cs.outlineVariant),
-          ),
-        ),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.md),
-          shape: const Border(),
-          collapsedShape: const Border(),
-          leading: Icon(icon, size: 20, color: cs.primary),
-          title: Text(
-            title,
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
-/// 구조화 요강 한 줄 (라벨 + 값). 아코디언 내부 들여쓰기 스타일은
+/// 구조화 요강 한 줄 (라벨 + 값).
 /// 기존 _InfoRow 와 동일하게 유지한다.
 /// 요강 한 필드(라벨 + 값).
 ///

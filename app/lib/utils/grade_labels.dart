@@ -416,6 +416,63 @@ const _kFallbackDivisions = <TennisDivision>[
       label: '여자우승자부',
       gender: 'female'),
 
+  // 전북(JBSTA) — 금·은·동배(메달) 체계. 통합 이벤트(금동배)·혼합복식·단체전·
+  // 합산대회는 출전 종목 전용(isRankingGrade: false).
+  TennisDivision(
+      code: 'jb_gukhwa',
+      org: 'jb',
+      label: '국화부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_m_dong',
+      org: 'jb',
+      label: '남자동배부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_geumdong',
+      org: 'jb',
+      label: '남자금동배부',
+      isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_geumeun',
+      org: 'jb',
+      label: '남자금은배부',
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_m_hapsan',
+      org: 'jb',
+      label: '남자합산대회',
+      isRankingGrade: false,
+      gender: 'male'),
+  TennisDivision(
+      code: 'jb_mixed',
+      org: 'jb',
+      label: '혼합복식부',
+      isRankingGrade: false,
+      gender: 'mixed'),
+  TennisDivision(
+      code: 'jb_team',
+      org: 'jb',
+      label: '단체전',
+      isRankingGrade: false),
+  TennisDivision(
+      code: 'jb_w_dong',
+      org: 'jb',
+      label: '여자동배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_w_geumeun',
+      org: 'jb',
+      label: '여자금은배부',
+      gender: 'female'),
+  TennisDivision(
+      code: 'jb_w_hapsan',
+      org: 'jb',
+      label: '여자합산대회',
+      isRankingGrade: false,
+      gender: 'female'),
+
   // 시·군/클럽 자체 — 임시 등급(비활성)
   TennisDivision(
       code: 'local_general',
@@ -687,6 +744,7 @@ const _kFallbackOrgEntries = <TennisOrgEntry>[
   TennisOrgEntry(code: 'kasta', label: '단식 테니스 (KASTA / 단테매)', shortLabel: 'KASTA', isActive: true),
   TennisOrgEntry(code: 'gj', label: '광주광역시테니스협회 (GJTA)', shortLabel: '광주협회', isActive: true),
   TennisOrgEntry(code: 'jn', label: '전라남도테니스협회 (JNTA)', shortLabel: '전남협회', isActive: true),
+  TennisOrgEntry(code: 'jb', label: '전북특별자치도테니스협회 (JBSTA)', shortLabel: '전북협회', isActive: true),
   TennisOrgEntry(code: 'local', label: '시·군 또는 클럽 자체', shortLabel: '시·군/클럽', isActive: true),
 ];
 
@@ -797,6 +855,37 @@ List<String> get tennisOrgs => OrgCatalog.instance.activeCodes;
 List<String> get tennisOrgsWithDivisions =>
     tennisOrgs.where((code) => divisionsForOrg(code).isNotEmpty).toList();
 
+/// 협회 랭킹표가 실제로 공표하는 부서(광주·전남 동일, gnuboard_ranking 파서와
+/// 일치). 부서 카탈로그 전체([rankingGradesForOrg])와 다르다 — 오픈부·베테랑부
+/// 등은 대회 자격에는 쓰이지만 협회가 별도 랭킹표로 공표하지 않는다.
+/// 남자신인부는 2026-08 남자일반부로 통합돼 빠졌다(카탈로그에는 is_active=false 로
+/// 남아 옛 대회 라벨 해석은 계속 된다). 여자신인부는 살아 있다.
+///
+/// 여기 없는 협회(KTA·KATA·KATO 등)는 **랭킹 미러가 없다** — 등록은 되지만
+/// 본인 연결·개인 기록장이 열리지 않는다. 미러를 늘릴 때 고칠 곳은 여기 하나다
+/// (랭킹 화면의 협회 탭과 온보딩 안내가 같은 목록을 본다).
+const kRankingDivisions = <String, List<String>>{
+  'gj': [
+    'gj_m_gold',
+    'gj_m_general',
+    'gj_m_instructor',
+    'gj_w_rookie',
+    'gj_w_gukhwa',
+    'gj_w_geumbae',
+  ],
+  'jn': [
+    'jn_m_gold',
+    'jn_m_general',
+    'jn_m_instructor',
+    'jn_w_rookie',
+    'jn_w_gukhwa',
+    'jn_w_geumbae',
+  ],
+};
+
+/// 이 협회의 랭킹표를 우리가 미러하는가. false 면 등록해도 본인 연결이 안 열린다.
+bool orgHasRankingMirror(String org) => kRankingDivisions.containsKey(org);
+
 /// 협회 코드 → 완성형 라벨.
 String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
 
@@ -804,56 +893,167 @@ String tennisOrgLabel(String org) => OrgCatalog.instance.labelFor(org);
 String tennisOrgShortLabel(String org) => OrgCatalog.instance.shortLabelFor(org);
 
 // =========================
-// Region (표준 17개 광역시도)
+// Region (표준 17개 광역시도) — 정본은 DB public.regions (JY-146 P7)
 // =========================
-// 정본: DB public.regions (is_active=true) 와 코드·라벨 1:1. 지도상 순서(수도권→강원→충청→호남→영남→제주).
-// 묶음 코드(seoul_metro 등)는 deprecated(regions.is_active=false)라 UI 선택지엔 없지만,
-// backfill 이전 데이터의 라벨 표시를 위해 regionLabels 에는 하위호환으로 유지한다.
-const regionCodes = <String>[
-  'seoul',
-  'gyeonggi',
-  'incheon',
-  'gangwon',
-  'daejeon',
-  'sejong',
-  'chungbuk',
-  'chungnam',
-  'gwangju',
-  'jeonbuk',
-  'jeonnam',
-  'busan',
-  'ulsan',
-  'daegu',
-  'gyeongbuk',
-  'gyeongnam',
-  'jeju',
+
+/// 지역 카탈로그 항목. 정본은 DB public.regions 다.
+class RegionEntry {
+  const RegionEntry({
+    required this.code,
+    required this.label,
+    required this.isActive,
+  });
+
+  final String code;
+  final String label;
+  final bool isActive;
+}
+
+// 지역 정본은 DB public.regions 다. 아래 const 는 미로드 시 쓰는 오프라인 폴백이며,
+// 값은 마이그레이션(045 + 20260710030000)과 같아야 한다 — check_region_parity.py 가
+// 스냅샷(test/fixtures/region_fallback.json) 다리로 강제한다.
+//
+// 순서 = 지도상 표시 순서(수도권→강원→충청→호남→영남→제주). regions 엔 sort_order
+// 컬럼이 없어 표시 순서는 DB 가 아니라 이 폴백 순서가 정한다(ingestRows 참고).
+// 묶음 코드(seoul_metro 등)는 deprecated(is_active=false)라 선택지엔 없지만
+// backfill 이전 데이터의 라벨 해석을 위해 유지한다.
+const _kFallbackRegionEntries = <RegionEntry>[
+  RegionEntry(code: 'seoul', label: '서울', isActive: true),
+  RegionEntry(code: 'gyeonggi', label: '경기', isActive: true),
+  RegionEntry(code: 'incheon', label: '인천', isActive: true),
+  RegionEntry(code: 'gangwon', label: '강원', isActive: true),
+  RegionEntry(code: 'daejeon', label: '대전', isActive: true),
+  RegionEntry(code: 'sejong', label: '세종', isActive: true),
+  RegionEntry(code: 'chungbuk', label: '충북', isActive: true),
+  RegionEntry(code: 'chungnam', label: '충남', isActive: true),
+  RegionEntry(code: 'gwangju', label: '광주', isActive: true),
+  RegionEntry(code: 'jeonbuk', label: '전북', isActive: true),
+  RegionEntry(code: 'jeonnam', label: '전남', isActive: true),
+  RegionEntry(code: 'busan', label: '부산', isActive: true),
+  RegionEntry(code: 'ulsan', label: '울산', isActive: true),
+  RegionEntry(code: 'daegu', label: '대구', isActive: true),
+  RegionEntry(code: 'gyeongbuk', label: '경북', isActive: true),
+  RegionEntry(code: 'gyeongnam', label: '경남', isActive: true),
+  RegionEntry(code: 'jeju', label: '제주', isActive: true),
+  // deprecated 묶음 코드 — 라벨 하위호환용(backfill 이전 데이터)
+  RegionEntry(code: 'seoul_metro', label: '수도권', isActive: false),
+  RegionEntry(code: 'busan_ulsan_gn', label: '부산·울산·경남', isActive: false),
+  RegionEntry(code: 'daegu_gb', label: '대구·경북', isActive: false),
+  RegionEntry(code: 'chungcheong', label: '충청', isActive: false),
 ];
 
-const regionLabels = <String, String>{
-  // 17개 광역시도 (regions.is_active=true)
-  'seoul': '서울',
-  'gyeonggi': '경기',
-  'incheon': '인천',
-  'gangwon': '강원',
-  'daejeon': '대전',
-  'sejong': '세종',
-  'chungbuk': '충북',
-  'chungnam': '충남',
-  'gwangju': '광주',
-  'jeonbuk': '전북',
-  'jeonnam': '전남',
-  'busan': '부산',
-  'ulsan': '울산',
-  'daegu': '대구',
-  'gyeongbuk': '경북',
-  'gyeongnam': '경남',
-  'jeju': '제주',
-  // deprecated 묶음 코드 — 표시 하위호환용(backfill 이전 데이터)
-  'seoul_metro': '수도권',
-  'busan_ulsan_gn': '부산·울산·경남',
-  'daegu_gb': '대구·경북',
-  'chungcheong': '충청',
+final _kFallbackRegionByCode = {
+  for (final e in _kFallbackRegionEntries) e.code: e
 };
 
+/// 지역 목록·라벨 카탈로그. OrgCatalog 와 같은 구조다(JY-135 선례).
+///
+/// 지역 추가·개명이 regions INSERT/UPDATE 만으로 앱에 반영된다 — 재배포가 필요 없다.
+class RegionCatalog {
+  RegionCatalog._();
+  static final RegionCatalog instance = RegionCatalog._();
+
+  // null = 미로드 → const 폴백 사용.
+  List<RegionEntry>? _ordered;
+  Map<String, RegionEntry>? _byCode;
+
+  Completer<void> _ready = Completer<void>();
+  int _generation = 0;
+  Future<void> get whenReady => _ready.future;
+  void _markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
+  bool get isLoaded => _ordered != null;
+
+  List<RegionEntry> get all => _ordered ?? _kFallbackRegionEntries;
+
+  /// 비활성까지 포함한 폴백 원본. check_region_parity.py 가 DB 와 대조하는 JSON
+  /// 스냅샷과의 일치를 Flutter 테스트가 이걸로 확인한다(스냅샷 다리).
+  @visibleForTesting
+  List<RegionEntry> get fallbackSnapshot => _kFallbackRegionEntries;
+
+  /// 선택지에 노출할 활성 지역 코드(표시 순서) — 17개 시도.
+  List<String> get activeCodes =>
+      all.where((r) => r.isActive).map((r) => r.code).toList(growable: false);
+
+  /// 라벨 조회는 활성 여부와 무관하다 — deprecated 묶음 코드(seoul_metro 등)를
+  /// 가진 옛 데이터 화면에 코드 원문이 노출되면 안 된다.
+  String labelFor(String code) =>
+      (_byCode ?? _kFallbackRegionByCode)[code]?.label ?? code;
+
+  /// regions 를 읽어 카탈로그를 교체한다(멱등).
+  /// 실패(네트워크/RLS/타임아웃) 시 예외를 삼키고 폴백을 유지한다.
+  Future<void> load(SupabaseClient client) async {
+    final gen = ++_generation;
+    try {
+      final rows = await client
+          .from('regions')
+          .select('code, display_name_ko, is_active')
+          .order('code');
+      if (gen == _generation) {
+        ingestRows((rows as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // 폴백 유지 — 앱 진입을 막지 않는다.
+    } finally {
+      if (gen == _generation) _markReady();
+    }
+  }
+
+  /// DB row(또는 테스트 픽스처) → 카탈로그.
+  ///
+  /// regions 엔 sort_order 가 없어 표시 순서는 폴백의 지도상 순서를 따르고,
+  /// 폴백에 없는 신규 코드는 뒤에 code 순으로 붙는다 — 신규 지역이 DB INSERT
+  /// 만으로도 선택지 끝에 나타난다.
+  @visibleForTesting
+  void ingestRows(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) {
+      // 빈 응답으로 선택지를 통째로 지우지 않는다(권한·필터 사고 방어, GradeCatalog 와 동일).
+      _markReady();
+      return;
+    }
+    final orderIndex = {
+      for (var i = 0; i < _kFallbackRegionEntries.length; i++)
+        _kFallbackRegionEntries[i].code: i,
+    };
+    final unknownIndex = _kFallbackRegionEntries.length;
+    final sorted = [...rows]..sort((a, b) {
+        final aCode = a['code'] as String;
+        final bCode = b['code'] as String;
+        final indexCmp = (orderIndex[aCode] ?? unknownIndex)
+            .compareTo(orderIndex[bCode] ?? unknownIndex);
+        if (indexCmp != 0) return indexCmp;
+        return aCode.compareTo(bCode);
+      });
+    final entries = sorted
+        .map((r) => RegionEntry(
+              code: r['code'] as String,
+              label: (r['display_name_ko'] as String?) ?? (r['code'] as String),
+              isActive: (r['is_active'] as bool?) ?? true,
+            ))
+        .toList();
+    _ordered = entries;
+    _byCode = {for (final e in entries) e.code: e};
+    _markReady();
+    catalogRevision.value++;
+  }
+
+  /// 세션 전환(로그아웃·계정 변경) 시 호출한다.
+  void reset() {
+    _ordered = null;
+    _byCode = null;
+    _ready = Completer<void>();
+    _generation++;
+    catalogRevision.value++;
+  }
+}
+
+/// 지역 코드(표시 순서, 활성 17개 시도만). 로드됐으면 DB, 아니면 const 폴백.
+List<String> get regionCodes => RegionCatalog.instance.activeCodes;
+
+/// 활성 지역 코드인가(선택지 검증용 — deprecated 묶음 코드는 false).
 bool isValidRegionCode(String value) => regionCodes.contains(value);
-String regionLabel(String code) => regionLabels[code] ?? code;
+
+/// 지역 코드 → 라벨. deprecated 묶음 코드(seoul_metro 등)도 해석한다.
+String regionLabel(String code) => RegionCatalog.instance.labelFor(code);

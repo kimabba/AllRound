@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from './supabase.ts';
 import { regionCodeFromLabel, type Sport } from './enums.ts';
+import { regionCodeFromText } from './region_text.ts';
 
 export interface CrawlerTournament {
   title: string;
@@ -22,7 +23,18 @@ export interface CrawlerTournament {
   regulation_fields?: Array<{ label: string; value: string }>;
   regulation_notes?: string[];
   regulation_body?: string;
+  poster_url?: string; // 원문에 포스터/요강 이미지가 있으면 채운다(OCR 안 함, URL만)
   source_url: string;
+}
+
+/**
+ * rawHtml은 재처리·감사용 원본이고 canonicalContent는 변경 감지 전용 본문이다.
+ * 페이지 조회수·광고·세션 토큰처럼 대회 내용과 무관한 HTML은 canonicalContent에
+ * 넣지 않는다. 파서가 본문 경계를 가장 정확히 알기 때문에 파서가 직접 만든다.
+ */
+export interface CrawlerDocument {
+  rawHtml: string;
+  canonicalContent: string;
 }
 
 export interface AuditHandle {
@@ -76,6 +88,11 @@ async function sha256Hex(text: string): Promise<string> {
     .join('');
 }
 
+export async function crawlerDocumentHash(document: CrawlerDocument): Promise<string> {
+  const normalized = document.canonicalContent.replace(/\s+/g, ' ').trim();
+  return `v2:${await sha256Hex(normalized)}`;
+}
+
 export async function saveRawDocument(
   audit: AuditHandle,
   sourceUrl: string,
@@ -83,8 +100,11 @@ export async function saveRawDocument(
   tournamentId: string | null,
   parseStatus: 'parsed' | 'failed' | 'pending' = 'parsed',
   parseError?: string,
+  canonicalContent?: string,
 ): Promise<void> {
-  const contentHash = await sha256Hex(rawHtml);
+  const contentHash = canonicalContent === undefined
+    ? await sha256Hex(rawHtml)
+    : await crawlerDocumentHash({ rawHtml, canonicalContent });
   // 파싱 실패 등으로 tournamentId 가 없을 때, 같은 게시글이 과거에 파싱 성공해
   // 연결돼 있었다면 그 연결(tournament_id)을 끊지 않도록 기존 값을 보존한다.
   // (일시적 파싱 실패가 멀쩡한 대회와의 링크를 지우는 데이터 손상 방지)
@@ -118,6 +138,24 @@ export async function saveRawDocument(
 }
 
 /**
+ * 이번 크롤의 목록 페이지에서 실제로 본 source_url 전체를 last_seen_at=now() 로
+ * 찍는다. 목록이탈 만료(tournament_status.ts)의 "봤다"는 상세 파싱 성공이 아니라
+ * 목록 등장이 기준이어야 한다 — ended 필터·CAP slice·상세 fetch 실패로 상세를
+ * 안 가는 항목도 목록에는 있으므로, upsertTournament(상세 파싱 성공시에만 호출)에만
+ * last_seen_at 을 맡기면 그런 항목이 실제로 살아있는데도 이탈로 오판된다. 파서는
+ * listing 파싱 직후, ended 필터/CAP 적용 전 전체 url 로 이 함수를 호출해야 한다.
+ */
+export async function markListingSeen(audit: AuditHandle, urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  const { error } = await audit.supabase
+    .from('tournaments')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('source', audit.source)
+    .in('source_url', urls);
+  if (error) console.error(`markListingSeen: ${error.message}`);
+}
+
+/**
  * source_url 기준 upsert. 신규는 status='draft' 로 들어가 관리자 승인 대기.
  *  (사이트 셀렉터가 깨지거나 등급/날짜 추출이 잘못된 false positive 가
  *   바로 사용자에게 노출되지 않도록 하는 안전 장치)
@@ -128,15 +166,21 @@ export async function upsertTournament(
   audit: AuditHandle,
   sport: Sport,
   t: CrawlerTournament,
-  rawHtml?: string,
+  document?: CrawlerDocument,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   audit.fetched++;
-  // 한글 권역명 → region_code (서버사이드 지역 필터용). 미매칭이면 null.
-  const regionCode = regionCodeFromLabel(t.region);
+  // region_code 는 서버사이드 지역 필터(정확매칭)의 키다. 두 출처를 구분해서 다룬다.
+  //  - labelCode: 소스가 명시한 권역(crawl_sources.region) — 사실이므로 항상 반영한다.
+  //  - guessedCode: 장소·제목의 시군구에서 유도한 추측 — 비어 있는 칸만 채운다.
+  // 주최자는 쓰지 않는다: "㈜유성" 같은 상호가 지역으로 오탐된다.
+  const labelCode = regionCodeFromLabel(t.region);
+  const guessedCode = labelCode ??
+    regionCodeFromText(t.location) ??
+    regionCodeFromText(t.title);
   const { data: existing } = await audit.supabase
     .from('tournaments')
     .select(
-      'id, title, start_date, application_deadline, eligible_grades, region, location, manual_description, format_source_hash',
+      'id, title, start_date, application_deadline, eligible_grades, region, region_code, location, manual_description, format_source_hash, status, delisted_at',
     )
     .eq('source', audit.source)
     .eq('source_url', t.source_url)
@@ -148,6 +192,13 @@ export async function upsertTournament(
       title: t.title,
       organizer: t.organizer ?? null,
     };
+    // 목록이탈로 닫혔던 대회가 상세까지 다시 파싱됐다 = 재등장. 날짜-close 는 여기서
+    // 건드리지 않는다(그건 tournament_status.ts 의 날짜 동기화 담당) — delisted_at 이
+    // 있을 때만 되살린다.
+    if (existing.status === 'closed' && existing.delisted_at) {
+      updatePayload.status = 'published';
+    }
+    updatePayload.delisted_at = null;
     if (t.description !== undefined && !existing.manual_description) {
       updatePayload.description = t.description ?? null;
     }
@@ -179,11 +230,20 @@ export async function upsertTournament(
     // AI 정형화가 이미 채워둔 기존 값을 payload 에서 제외해 지우지 않는다.
     if (t.prize !== undefined) updatePayload.prize = t.prize;
     if (t.format !== undefined) updatePayload.format = t.format;
-    // 재크롤 재큐(P2 AI 정형화 파이프라인): 원문 content_hash 가 마지막 정형화 시점의
-    // format_source_hash 와 달라졌으면, 원문이 바뀌었다는 뜻이므로 AI 재정형화 대상으로
-    // 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
-    if (rawHtml) {
-      const newHash = await sha256Hex(rawHtml);
+    if (t.poster_url !== undefined) updatePayload.poster_url = t.poster_url;
+    // 소스가 명시한 권역은 항상 반영하고, 텍스트에서 유도한 추측은 빈 칸만 채운다.
+    // 추측으로 덮으면 (1) 유도 실패 시 기존 지역이 지워지고 (2) 유도가 틀렸을 때
+    // 관리자가 SQL 로 고쳐도 다음 크롤이 같은 오답으로 되돌린다 — 고칠 방법이 없어진다.
+    // 한계: 빈 요강(location='.')이라 제목으로 추측해 넣은 값은, 나중에 협회가 장소를
+    // 채워 더 나은 추측이 가능해져도 그대로 남는다. 추측끼리 우열을 가리려면 출처 컬럼이
+    // 필요하다 — 드문 경우라 지금은 두고, 검수에서 바로잡는다.
+    if (labelCode) updatePayload.region_code = labelCode;
+    else if (guessedCode && !existing.region_code) updatePayload.region_code = guessedCode;
+    // 재크롤 재큐(P2 AI 정형화 파이프라인): 대회 본문 content_hash 가 마지막 정형화
+    // 시점의 format_source_hash 와 달라졌으면 실제 요강이 바뀐 것이므로 AI 재정형화
+    // 대상으로 다시 큐잉한다. 진행 중이던 claim 은 무효화(clear)한다.
+    if (document) {
+      const newHash = await crawlerDocumentHash(document);
       // 원문이 같아도 파서 개선으로 장소 추출값이 달라질 수 있다. 이런 경우 기존
       // format_staged를 그대로 두지 않고 새 파서 결과로 다시 정형화한다.
       const parserLocationChanged = existing.location !== (t.location ?? null);
@@ -194,6 +254,10 @@ export async function upsertTournament(
         updatePayload.format_status = 'pending';
         updatePayload.format_claim_token = null;
         updatePayload.claimed_at = null;
+        // 시도 횟수도 되돌린다. 큐 조건이 format_attempts < 3 이라, 실패 이력을 물려받으면
+        // pending 인 채로 영영 안 집힌다 — 원문이 바뀌었는데도 재시도조차 못 한다.
+        // (2026-08 프로덕션 KATO 15건이 attempts=3·pending 으로 굳어 정형화 0회였다.)
+        updatePayload.format_attempts = 0;
       }
     }
     const { error } = await audit.supabase
@@ -204,13 +268,22 @@ export async function upsertTournament(
         end_date: t.end_date ?? null,
         application_deadline: t.application_deadline ?? null,
         region: t.region ?? null,
-        region_code: regionCode,
         location: t.location ?? null,
         entry_fee: t.entry_fee ?? null,
       })
       .eq('id', existing.id);
     if (error) throw new Error(`upsertTournament update: ${error.message}`);
-    if (rawHtml) await saveRawDocument(audit, t.source_url, rawHtml, existing.id, 'parsed');
+    if (document) {
+      await saveRawDocument(
+        audit,
+        t.source_url,
+        document.rawHtml,
+        existing.id,
+        'parsed',
+        undefined,
+        document.canonicalContent,
+      );
+    }
     audit.updated++;
     return 'updated';
   }
@@ -226,7 +299,7 @@ export async function upsertTournament(
       end_date: t.end_date ?? null,
       application_deadline: t.application_deadline ?? null,
       region: t.region ?? null,
-      region_code: regionCode,
+      region_code: guessedCode,
       location: t.location ?? null,
       eligible_grades: t.eligible_grades,
       division_label_local: t.division_label_local ?? null,
@@ -236,16 +309,25 @@ export async function upsertTournament(
       regulation_fields: t.regulation_fields ?? null,
       regulation_notes: t.regulation_notes ?? null,
       regulation_body: t.regulation_body ?? null,
+      poster_url: t.poster_url ?? null,
       source: audit.source,
       source_url: t.source_url,
       status: 'draft',
-      format_status: rawHtml ? 'pending' : 'skipped',
+      format_status: document ? 'pending' : 'skipped',
     })
     .select('id')
     .single();
   if (error) throw new Error(`upsertTournament insert: ${error.message}`);
-  if (rawHtml) {
-    await saveRawDocument(audit, t.source_url, rawHtml, insertedRow?.id ?? null, 'parsed');
+  if (document) {
+    await saveRawDocument(
+      audit,
+      t.source_url,
+      document.rawHtml,
+      insertedRow?.id ?? null,
+      'parsed',
+      undefined,
+      document.canonicalContent,
+    );
   }
   audit.inserted++;
   return 'inserted';
