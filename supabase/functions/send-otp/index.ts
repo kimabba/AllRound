@@ -11,7 +11,7 @@ import {
   stringFieldOf,
   toDomesticKr,
 } from '../_shared/phone.ts';
-import { sendSms, sensConfigFromEnv } from '../_shared/sens.ts';
+import { sendSms, solapiConfigFromEnv } from '../_shared/solapi.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 const TTL_SECONDS = 180; // OTP 유효 3분
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
   try {
     await sendSms(
-      sensConfigFromEnv(),
+      solapiConfigFromEnv(),
       toDomesticKr(e164),
       `[올라운드] 인증번호 ${code} 를 입력해 주세요.`,
     );

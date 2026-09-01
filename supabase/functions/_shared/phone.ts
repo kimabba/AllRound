@@ -20,7 +20,7 @@ export function normalizeE164Kr(raw: string): string {
   return `+82${d}`;
 }
 
-/** E.164 → SENS 발송용 국내 형식(01012345678). */
+/** E.164 → 발송용 국내 형식(01012345678). */
 export function toDomesticKr(e164: string): string {
   return `0${e164.replace(/^\+82/, '')}`;
 }
