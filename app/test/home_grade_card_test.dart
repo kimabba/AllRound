@@ -52,6 +52,48 @@ Future<void> _pumpHome(
   await tester.pumpAndSettle();
 }
 
+List<Club> _clubs(int futsalCount, {int tennisCount = 0}) => [
+      for (var i = 0; i < futsalCount; i++)
+        Club(id: 'futsal-club-$i', sport: 'futsal', name: '풋살 클럽 $i'),
+      for (var i = 0; i < tennisCount; i++)
+        Club(id: 'tennis-club-$i', sport: 'tennis', name: '테니스 클럽 $i'),
+    ];
+
+Future<void> _pumpHomeFutsal(
+  WidgetTester tester, {
+  required String grade,
+  List<Club>? clubs,
+  int? attendCount,
+  double textScale = 1,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      retry: (_, __) => null,
+      overrides: [
+        homeTournamentsProvider.overrideWith((ref) async => const <Tournament>[]),
+        myTournamentRecordsProvider
+            .overrideWith((ref) async => const <Tournament>[]),
+        unreadNotificationCountProvider.overrideWith((ref) async => 0),
+        activeSportProvider.overrideWith((ref) => 'futsal'),
+        userSportsProvider.overrideWith(
+          (ref) async => [UserSport(sport: 'futsal', grade: grade)],
+        ),
+        myClubsProvider.overrideWith((ref) async => clubs ?? const <Club>[]),
+        myFutsalAttendanceCountThisYearProvider
+            .overrideWith((ref) async => attendCount ?? 0),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: const HomeScreen(),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('ko');
@@ -181,6 +223,56 @@ void main() {
     );
 
     expect(find.text('시즌 포인트'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('풋살 등급 카드가 통계와 함께 뜬다', (tester) async {
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubs: _clubs(3),
+      attendCount: 7,
+    );
+
+    expect(find.text('내 등급'), findsOneWidget);
+    expect(find.text('가입한 클럽'), findsOneWidget);
+    expect(find.text('이번 시즌 참가'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('7회'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // 회귀 테스트: 테니스·풋살 클럽에 모두 가입한 사용자도 "가입한 클럽" 수는
+  // 풋살만 세야 한다(PR #498 재리뷰에서 발견 — myClubsProvider가 종목 구분
+  // 없이 전체 클럽을 돌려줘서 테니스 클럽이 섞여 세이던 버그).
+  testWidgets('테니스 클럽에도 가입했어도 가입한 클럽 수는 풋살만 센다', (tester) async {
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubs: _clubs(3, tennisCount: 5),
+      attendCount: 7,
+    );
+
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('8'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('작은 화면 200% 글자에서도 풋살 카드가 넘치지 않는다', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubs: _clubs(12),
+      attendCount: 48,
+      textScale: 2,
+    );
+
+    expect(find.text('내가 설정한 등급 · '), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

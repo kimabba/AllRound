@@ -27,3 +27,7 @@ DateTime kstTodayDate(DateTime now) {
   final kst = now.toUtc().add(const Duration(hours: 9));
   return DateTime(kst.year, kst.month, kst.day);
 }
+
+/// `now`를 KST 벽시계 시각을 담은(시각 성분 포함) 로컬 `DateTime`으로 바꾼다.
+/// 연도 경계처럼 날짜뿐 아니라 시각까지 KST 기준으로 비교해야 할 때 쓴다.
+DateTime kstNow(DateTime now) => now.toUtc().add(const Duration(hours: 9));
