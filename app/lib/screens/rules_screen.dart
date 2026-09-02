@@ -30,7 +30,7 @@ class RulesScreen extends ConsumerStatefulWidget {
 }
 
 class _RulesScreenState extends ConsumerState<RulesScreen> {
-  String _selectedSport = 'tennis';
+  late String _selectedSport;
   late final TextEditingController _search;
   Map<String, List<RuleArticle>>? _tennisByCat;
   Map<String, List<RuleArticle>>? _futsalByCat;
@@ -48,6 +48,7 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedSport = ref.read(activeSportProvider) ?? 'tennis';
     _search = TextEditingController(text: widget.initialCategory ?? '');
     _query = _search.text.trim();
     _search.addListener(() {
@@ -71,7 +72,10 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
     });
 
     final api = ref.read(apiProvider);
-    final sport = widget.initialSport ?? ref.read(activeSportProvider);
+    // 명시적 딥링크(initialSport)일 때만 종목 하나짜리 읽기 화면으로 보낸다.
+    // 여기서 activeSportProvider로 폴백하면 주 종목을 설정한 모든 로그인
+    // 사용자가 항상 이 분기로 빠져 아래 레일(종목 전환)이 렌더링되지 않는다.
+    final sport = widget.initialSport;
     _activeSport = sport;
 
     if (!kReleaseMode &&
@@ -178,7 +182,12 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.initialSport == null) {
-      ref.listen(activeSportProvider, (_, __) => _load());
+      ref.listen(activeSportProvider, (_, next) {
+        // 다른 화면(홈 타이틀 등)에서 종목을 바꾸면 레일 선택도 함께 따라간다
+        // — activeSportProvider가 앱 전체 종목 기준점이라는 기존 원칙과 동일.
+        if (next != null) setState(() => _selectedSport = next);
+        _load();
+      });
     }
 
     final cs = Theme.of(context).colorScheme;

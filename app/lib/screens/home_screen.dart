@@ -43,6 +43,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.invalidate(myClubsProvider);
     ref.invalidate(myCurrentRankingsProvider);
     ref.invalidate(unreadNotificationCountProvider);
+    // 풋살 등급 카드 — 첫 조회가 실패해 카드가 "—"로 멈춰 있어도 당겨서
+    // 새로고침하면 다시 시도할 수 있어야 한다.
+    ref.invalidate(userSportsProvider);
+    ref.invalidate(myFutsalAttendanceCountThisYearProvider);
     await ref.read(homeTournamentsProvider.future);
   }
 

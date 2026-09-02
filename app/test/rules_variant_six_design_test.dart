@@ -163,4 +163,36 @@ void main() {
     expect(find.text('경기 진행'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  // 회귀 테스트: 주 종목이 설정된 실사용자가 '룰북' 탭을 그냥 열었을 때
+  // (initialSport 없이, activeSportProvider가 실제 값을 주는 상태) 레일이
+  // 진짜로 렌더링되는지 확인한다. initialSport를 명시로 넘기는 다른 테스트들은
+  // 이 경로를 타지 않아 종목 폴백 버그를 잡지 못했다(PR #498 리뷰에서 발견).
+  testWidgets('주 종목이 있는 사용자가 룰북을 열어도 레일이 뜬다', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiProvider.overrideWithValue(_VariantSixRulesApi()),
+          activeSportProvider.overrideWithValue('futsal'),
+          unreadNotificationCountProvider.overrideWith((ref) async => 0),
+          currentUserProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const RulesScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 레일의 종목 전환 항목 — 단일종목 읽기 화면이었다면 안 뜬다.
+    expect(find.text('테니스'), findsOneWidget);
+    expect(find.text('풋살'), findsOneWidget);
+
+    await tester.tap(find.text('테니스'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('경기 진행'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 }

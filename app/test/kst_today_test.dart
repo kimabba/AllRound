@@ -37,6 +37,22 @@ void main() {
     expect(kstToday(DateTime.utc(2026, 12, 30, 15)), '2026-12-31');
   });
 
+  test('kstNow — 시각 성분까지 KST 벽시계로 바꾼다', () {
+    // 2026-08-18 23:50 KST == 14:50 UTC
+    final beforeMidnight = kstNow(DateTime.utc(2026, 8, 18, 14, 50));
+    expect(beforeMidnight.year, 2026);
+    expect(beforeMidnight.month, 8);
+    expect(beforeMidnight.day, 18);
+    expect(beforeMidnight.hour, 23);
+    expect(beforeMidnight.minute, 50);
+
+    // 2026-08-19 00:10 KST == 8/18 15:10 UTC — 자정을 넘어 날짜가 바뀐다.
+    final afterMidnight = kstNow(DateTime.utc(2026, 8, 18, 15, 10));
+    expect(afterMidnight.day, 19);
+    expect(afterMidnight.hour, 0);
+    expect(afterMidnight.minute, 10);
+  });
+
   test('컷오프는 오늘을 포함한다 — 오늘 시작하는 대회는 큐에 남는다', () {
     final cutoff = kstToday(DateTime.utc(2026, 8, 3, 15, 10));
     // 쿼리는 .gte(start_date, cutoff) 이므로 문자열 비교가 곧 판정이다.

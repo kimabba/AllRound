@@ -14,6 +14,7 @@ import '../models/place_search_result.dart';
 import '../models/tournament.dart';
 import '../models/venue.dart';
 import '../utils/grade_labels.dart';
+import '../utils/kst.dart';
 import '../utils/storage_object_name.dart';
 import 'api_base.dart';
 
@@ -751,17 +752,20 @@ mixin ClubApi on ApiBase {
         .select('status, club_events(starts_at)')
         .eq('user_id', uid)
         .eq('status', 'going');
-    final now = DateTime.now();
+    // 기기 로컬이 아니라 KST 기준으로 "올해"를 판정한다 — 서버 날짜 판정도
+    // KST 기준이라(docs/rules), 해외 기기나 12/31~1/1 경계에서 기기 시간대를
+    // 쓰면 사용자마다 다른 숫자가 보인다.
+    final now = kstNow(DateTime.now());
     final yearStart = DateTime(now.year, 1, 1);
     var count = 0;
     for (final row in List<Map<String, dynamic>>.from(rows)) {
       final event = row['club_events'] as Map<String, dynamic>?;
-      final startsAt = event == null
+      final startsAtRaw = event == null
           ? null
           : DateTime.tryParse(event['starts_at'] as String? ?? '');
-      if (startsAt != null &&
-          !startsAt.isBefore(yearStart) &&
-          !startsAt.isAfter(now)) {
+      if (startsAtRaw == null) continue;
+      final startsAt = kstNow(startsAtRaw);
+      if (!startsAt.isBefore(yearStart) && !startsAt.isAfter(now)) {
         count++;
       }
     }
