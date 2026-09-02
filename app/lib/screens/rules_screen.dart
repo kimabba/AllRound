@@ -48,7 +48,9 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedSport = ref.read(activeSportProvider) ?? 'tennis';
+    // 다른 화면(home_screen, sport_title, clubs_screen)과 같은 기본값 —
+    // 주 종목이 아직 없는 사용자는 전부 풋살을 기본으로 본다.
+    _selectedSport = ref.read(activeSportProvider) ?? 'futsal';
     _search = TextEditingController(text: widget.initialCategory ?? '');
     _query = _search.text.trim();
     _search.addListener(() {
@@ -182,11 +184,16 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.initialSport == null) {
+      // 다른 화면(홈 타이틀 등)에서 종목을 바꾸면 레일 선택도 함께 따라간다 —
+      // activeSportProvider가 앱 전체 종목 기준점이라는 기존 원칙과 동일.
+      // 레일 자체도 이 기준점을 통해 선택하므로(아래 onSelected), 이 리스너는
+      // 레일 탭 자신의 변경도 그대로 반영한다. 두 종목 데이터를 이미 함께
+      // 불러와 둔 상태라 선택만 바뀔 땐 다시 불러올 필요가 없다(_load() 호출
+      // 없음) — 예전엔 activeSportProvider가 단일종목 읽기 화면 분기까지
+      // 좌우해서 재조회가 필요했지만, 그 분기가 딥링크 전용으로 바뀌며 더는
+      // 아니다.
       ref.listen(activeSportProvider, (_, next) {
-        // 다른 화면(홈 타이틀 등)에서 종목을 바꾸면 레일 선택도 함께 따라간다
-        // — activeSportProvider가 앱 전체 종목 기준점이라는 기존 원칙과 동일.
         if (next != null) setState(() => _selectedSport = next);
-        _load();
       });
     }
 
@@ -261,8 +268,12 @@ class _RulesScreenState extends ConsumerState<RulesScreen> {
               padding: const EdgeInsets.fromLTRB(0, AppSpacing.md, 0, 0),
               child: _SportRailToggle(
                 selected: _selectedSport,
+                // 로컬 상태만 바꾸면 홈·클럽 등 다른 화면은 여전히 예전
+                // 종목을 본다 — activeSportProvider(sportOverrideProvider)를
+                // 직접 갱신해 앱 전체 기준점을 따라가게 한다. _selectedSport
+                // 자체는 위 ref.listen이 이 변경을 되돌려받아 갱신한다.
                 onSelected: (sport) =>
-                    setState(() => _selectedSport = sport),
+                    ref.read(sportOverrideProvider.notifier).select(sport),
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -650,45 +661,53 @@ class _RuleRailItem extends StatelessWidget {
       bottomRight: Radius.circular(AppRadius.md),
     );
 
-    return Material(
-      color: selected ? cs.primaryContainer : Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
+    // TabBar가 자동으로 주던 "선택됨" 상태를 스크린리더가 다시 읽어주도록
+    // 직접 표시한다 — 안 그러면 지금 어느 종목/카테고리를 보고 있는지
+    // 안내가 사라진다.
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: label,
+      child: Material(
+        color: selected ? cs.primaryContainer : Colors.transparent,
         borderRadius: radius,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 68),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xs,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: selected ? cs.primary : Colors.transparent,
-                width: 3,
-              ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 68),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.sm,
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 22, color: color),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1,
-                  color: color,
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: selected ? cs.primary : Colors.transparent,
+                  width: 3,
                 ),
               ),
-            ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 22, color: color),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

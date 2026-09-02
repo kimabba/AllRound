@@ -749,27 +749,36 @@ mixin ClubApi on ApiBase {
   Future<int> myClubEventAttendanceCountThisYear({String? sport}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return 0;
+    // 상한 없이 전체 이력을 다 받아오면(활발한 다년차 사용자) 서버 기본
+    // 행 상한에 걸려 조용히 잘릴 수 있다 — 최근 응답순으로 상한을 둬서,
+    // 잘리더라도 "이번 시즌"과 무관한 오래된 행부터 빠지게 한다.
     final rows = await supabase
         .from('club_event_attendees')
         .select('status, club_events(starts_at, clubs(sport))')
         .eq('user_id', uid)
-        .eq('status', 'going');
+        .eq('status', 'going')
+        .order('responded_at', ascending: false)
+        .limit(1000);
     // 기기 로컬이 아니라 KST 기준으로 "올해"를 판정한다 — 서버 날짜 판정도
     // KST 기준이라(docs/rules), 해외 기기나 12/31~1/1 경계에서 기기 시간대를
     // 쓰면 사용자마다 다른 숫자가 보인다.
+    // JSON 경계에서 바로 타입 있는 값으로 바꾼다 — dynamic 중첩 맵을 아래
+    // 필터링 로직까지 그대로 들고 다니지 않는다.
+    final attendances = List<Map<String, dynamic>>.from(
+      rows,
+    ).map(_ClubEventAttendance.fromJson).toList(growable: false);
+
     final now = kstNow(DateTime.now());
-    final yearStart = DateTime(now.year, 1, 1);
+    // kstNow()가 돌려주는 값은 isUtc=true 로 표시되지만 실제로는 KST
+    // 벽시계 숫자를 담고 있다. 여기서 DateTime(...)(기기 로컬 생성자)를
+    // 쓰면 isUtc 불일치로 두 값이 서로 다른 절대시각 기준으로 비교돼
+    // 자정 근처에서 하루 틀리게 판정한다 — DateTime.utc(...)로 맞춘다.
+    final yearStart = DateTime.utc(now.year, 1, 1);
     var count = 0;
-    for (final row in List<Map<String, dynamic>>.from(rows)) {
-      final event = row['club_events'] as Map<String, dynamic>?;
-      if (event == null) continue;
-      if (sport != null) {
-        final club = event['clubs'] as Map<String, dynamic>?;
-        if (club?['sport'] != sport) continue;
-      }
-      final startsAtRaw = DateTime.tryParse(event['starts_at'] as String? ?? '');
-      if (startsAtRaw == null) continue;
-      final startsAt = kstNow(startsAtRaw);
+    for (final a in attendances) {
+      if (a.startsAt == null) continue;
+      if (sport != null && a.clubSport != sport) continue;
+      final startsAt = kstNow(a.startsAt!);
       if (!startsAt.isBefore(yearStart) && !startsAt.isAfter(now)) {
         count++;
       }
@@ -1075,5 +1084,23 @@ mixin ClubApi on ApiBase {
           fileOptions: FileOptions(contentType: contentType, upsert: false),
         );
     return supabase.storage.from('club-posts').getPublicUrl(path);
+  }
+}
+
+/// [ClubApi.myClubEventAttendanceCountThisYear] 전용 — 응답을 바로 타입
+/// 있는 값으로 바꿔서, 중첩 JSON 맵을 필터링 로직까지 들고 다니지 않는다.
+class _ClubEventAttendance {
+  const _ClubEventAttendance({this.startsAt, this.clubSport});
+
+  final DateTime? startsAt;
+  final String? clubSport;
+
+  factory _ClubEventAttendance.fromJson(Map<String, dynamic> json) {
+    final event = json['club_events'] as Map<String, dynamic>?;
+    final club = event?['clubs'] as Map<String, dynamic>?;
+    return _ClubEventAttendance(
+      startsAt: DateTime.tryParse(event?['starts_at'] as String? ?? ''),
+      clubSport: club?['sport'] as String?,
+    );
   }
 }

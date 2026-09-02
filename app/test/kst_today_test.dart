@@ -53,6 +53,26 @@ void main() {
     expect(afterMidnight.minute, 10);
   });
 
+  test('kstNow — DateTime.utc(...)와 비교해야 자정 경계가 맞는다', () {
+    // 회귀 재현: kstNow() 결과(isUtc=true, KST 벽시계 숫자)를 DateTime(...)
+    // (기기 로컬 생성자, isUtc=false)로 만든 값과 비교하면, 둘의 절대시각
+    // 기준이 어긋나 자정 근처에서 하루 틀리게 판정한다 — club_api.dart의
+    // myClubEventAttendanceCountThisYear에서 실제로 있었던 버그.
+    // DateTime.utc(...)로 만들어야 두 값이 같은 기준으로 비교된다.
+    final now = kstNow(DateTime.utc(2025, 12, 31, 15, 30)); // 2026-01-01 00:30 KST
+    final yearStartUtc = DateTime.utc(now.year, 1, 1);
+
+    // 2025-12-31 23:00 KST — 명백히 작년. "올해"로 세면 안 된다.
+    final lastYearEvent = kstNow(DateTime.utc(2025, 12, 31, 14, 0));
+    expect(lastYearEvent.isBefore(yearStartUtc), isTrue,
+        reason: 'DateTime.utc 기준이면 작년으로 정확히 판정된다');
+
+    // 2026-01-01 00:10 KST — 명백히 올해.
+    final thisYearEvent = kstNow(DateTime.utc(2025, 12, 31, 15, 10));
+    expect(thisYearEvent.isBefore(yearStartUtc), isFalse);
+    expect(thisYearEvent.isAfter(now), isFalse);
+  });
+
   test('컷오프는 오늘을 포함한다 — 오늘 시작하는 대회는 큐에 남는다', () {
     final cutoff = kstToday(DateTime.utc(2026, 8, 3, 15, 10));
     // 쿼리는 .gte(start_date, cutoff) 이므로 문자열 비교가 곧 판정이다.

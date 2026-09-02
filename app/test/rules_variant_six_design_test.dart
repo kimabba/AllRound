@@ -195,4 +195,44 @@ void main() {
     expect(find.text('경기 진행'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  // 회귀 테스트: 레일에서 종목을 바꾸면 화면 로컬 상태만 바뀌는 게 아니라
+  // 앱 전체 기준점(activeSportProvider)도 같이 바뀌어야 한다 — 안 그러면
+  // 룰북 안에서는 풋살을 보고 있는데 상단 탭바(TournamentSectionBar)는
+  // 여전히 이전 종목 기준으로 "랭킹" 탭을 보여주는 식으로 화면 안에서까지
+  // 어긋난다(PR #498 재리뷰에서 발견). activeSportProvider를 직접
+  // 오버라이드하지 않고 userSportsProvider로만 주 종목을 줘서, 레일 탭이
+  // 진짜로 sportOverrideProvider를 거쳐 전파되는지까지 확인한다.
+  testWidgets('레일에서 종목을 바꾸면 앱 전체 종목 기준점도 따라간다', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiProvider.overrideWithValue(_VariantSixRulesApi()),
+          userSportsProvider.overrideWith(
+            (ref) async => [
+              UserSport(sport: 'tennis', grade: 'div3', isPrimary: true),
+            ],
+          ),
+          unreadNotificationCountProvider.overrideWith((ref) async => 0),
+          currentUserProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const RulesScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 주 종목이 테니스라 시작은 테니스 — 랭킹 탭이 보인다.
+    expect(find.text('랭킹'), findsOneWidget);
+
+    await tester.tap(find.text('풋살'));
+    await tester.pumpAndSettle();
+
+    // 레일 탭이 activeSportProvider까지 바꿔서, 풋살엔 없는 랭킹 탭이
+    // TournamentSectionBar에서도 함께 사라져야 한다.
+    expect(find.text('랭킹'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
