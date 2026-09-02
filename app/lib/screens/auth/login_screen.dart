@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../state/providers.dart';
@@ -16,7 +15,7 @@ import '../../utils/age.dart';
 import '../../utils/auth_error_message.dart';
 import '../../utils/auth_redirect.dart';
 import '../../utils/legal_urls.dart';
-import '../in_app_browser_screen.dart';
+import '../../widgets/consent_row.dart';
 
 const _loginFriendsPhotoAsset = 'assets/images/auth/login-friends-v1.jpg';
 const _loginTournamentsPhotoAsset =
@@ -426,7 +425,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
-                        _ConsentRow(
+                        ConsentRow(
                           checkboxKey: AllRoundE2EKeys.signupTermsConsent,
                           value: _termsConsent,
                           label: '이용약관·개인정보 처리방침 동의 (필수)',
@@ -437,11 +436,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         Wrap(
                           children: const [
-                            _LegalLinkButton(
+                            LegalLinkButton(
                               label: '이용약관',
                               url: kTermsOfServiceUrl,
                             ),
-                            _LegalLinkButton(
+                            LegalLinkButton(
                               label: '개인정보 처리방침',
                               url: kPrivacyPolicyUrl,
                             ),
@@ -449,7 +448,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         // 선택 동의라 계정을 만드는 이 자리에서만 묻는다.
                         // 로그인하는 기존 회원에게는 물을 이유가 없다.
-                        _ConsentRow(
+                        ConsentRow(
                           value: _marketingConsent,
                           label: '마케팅 정보 수신 동의 (선택)',
                           onChanged: (value) {
@@ -1265,77 +1264,6 @@ class _IntroBackdropPainter extends CustomPainter {
   @override
   bool shouldRepaint(_IntroBackdropPainter oldDelegate) =>
       oldDelegate.accent != accent || oldDelegate.line != line;
-}
-
-class _ConsentRow extends StatelessWidget {
-  const _ConsentRow({
-    required this.value,
-    required this.label,
-    required this.onChanged,
-    this.checkboxKey,
-  });
-
-  final bool value;
-  final String label;
-  final ValueChanged<bool?> onChanged;
-  final Key? checkboxKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
-          children: [
-            Checkbox(
-              key: checkboxKey,
-              value: value,
-              onChanged: onChanged,
-              side: BorderSide(color: cs.outline, width: 1.4),
-              semanticLabel: label,
-            ),
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LegalLinkButton extends StatelessWidget {
-  const _LegalLinkButton({required this.label, required this.url});
-
-  final String label;
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: () {
-        final uri = Uri.parse(url);
-        if (kIsWeb) {
-          launchUrl(uri, mode: LaunchMode.externalApplication);
-          return;
-        }
-        Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(builder: (_) => InAppBrowserScreen(uri: uri)),
-        );
-      },
-      icon: const Icon(Icons.open_in_new_rounded, size: 16),
-      label: Text(label),
-    );
-  }
 }
 
 class _SignupBirthDateField extends StatelessWidget {

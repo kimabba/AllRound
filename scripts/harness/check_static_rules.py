@@ -165,6 +165,64 @@ def check_ai_disclosure_present() -> None:
     print("✓ 생성형 AI 고지 — 챗봇 화면 · 이용약관 · 처리방침 3곳 존재")
 
 
+def check_phone_collection_disclosure() -> None:
+    """전화번호 수집 고지가 처리방침 **두 사본 모두**에 있는지 본다.
+
+    처리방침이 `docs/legal/privacy-policy.html`(앱이 여는 원문)과
+    `website/privacy/index.html`(공식 홈페이지) 두 벌로 존재하고 수동 동기화다.
+    한쪽만 고치면 "어느 쪽이 진짜냐"가 생기고, 실제 처리와 고지가 어긋나면
+    개인정보보호법 §30(처리방침 공개) 위반이 된다.
+
+    한계: 이 검사는 문자열만 본다. "화면에 실제로 보이는지"는
+    `app/test/verify_phone_screen_test.dart` 의 렌더 테스트가 맡는다.
+    이 검사의 몫은 조항이 통째로 사라지거나 한쪽 사본만 갱신되는 경우다.
+    """
+    # 단어 하나만 보면 본문에서 조항을 지우고 푸터에 단어만 남겨도 통과한다.
+    # 고지가 성립하려면 항목·목적·보유기간·수탁자·전달 사실이 모두 있어야 한다.
+    required = (
+        ("휴대폰 번호", "수집 항목의 전화번호"),
+        ("중복 가입 방지", "이용 목적"),
+        ("1년간 보관", "인증·탈퇴 이력 보유기간"),
+        ("탈퇴한 계정 식별자", "이력에 함께 남는 계정 식별자"),
+        ("솔라피(주)", "문자 발송 수탁자"),
+        ("수신 휴대폰 번호가 전달", "수탁자에게 번호가 전달되는 사실"),
+        ("6개월", "수탁자 측 발송 내역 보유기간"),
+    )
+    copies = ("docs/legal/privacy-policy.html", "website/privacy/index.html")
+    for relative in copies:
+        body = read(relative)
+        for needle, what in required:
+            if needle not in body:
+                fail(
+                    f"{relative}: {what} 고지가 없다(찾는 문구: {needle!r}).\n"
+                    "전화번호를 받아 외부 수탁자에게 넘기면서 처리방침에 적지 않으면 "
+                    "실제 처리와 고지가 어긋난다(개인정보보호법 §30)."
+                )
+
+    # 두 사본이 같은 조항을 담고 있는지. 문구 존재만 보면 한쪽 행을 축약하고
+    # 다른 자리에 단어만 남겨도 통과하므로, 해당 표의 행 자체를 뽑아 통째로 비교한다.
+    def table_row(html: str, pattern: str) -> str | None:
+        found = re.search(pattern, html, re.S)
+        return found.group(0) if found else None
+
+    for pattern, what in (
+        (r"<tr><td>휴대폰 번호.*?</tr>", "전화번호 수집 항목 행"),
+        (r"<tr><td>솔라피\(주\).*?</tr>", "솔라피 위탁 행"),
+    ):
+        rows = [table_row(read(r), pattern) for r in copies]
+        if any(row is None for row in rows):
+            missing = [r for r, row in zip(copies, rows) if row is None]
+            fail(f"{', '.join(missing)}: {what} 을 찾지 못했다.")
+        if rows[0] != rows[1]:
+            fail(
+                f"처리방침 두 사본의 {what} 내용이 서로 다르다.\n"
+                f"{copies[0]} 와 {copies[1]} 은 같은 문서다 — 한쪽만 고치면 "
+                "어느 쪽이 진짜인지 알 수 없게 된다."
+            )
+
+    print("✓ 전화번호 수집·위탁 고지 — 처리방침 두 사본에 항목·목적·보유기간·수탁자 모두 존재")
+
+
 def check_pureform_literal_contracts() -> None:
     roots = [ROOT / "app/lib/screens", ROOT / "app/lib/widgets"]
     excluded_parts = {"admin"}
@@ -727,6 +785,7 @@ def main() -> int:
     check_no_shell_background_wrappers_in_harness()
     check_tournament_closed_is_automation_only()
     check_ai_disclosure_present()
+    check_phone_collection_disclosure()
     check_pureform_literal_contracts()
     check_sport_grade_label_hardcode()
     check_no_device_local_today()

@@ -68,13 +68,50 @@ export async function requireVerifiedAge(
   return null;
 }
 
-/** 인증과 서버 연령 검증을 함께 요구하는 쓰기·비용 발생 endpoint용 guard. */
+/**
+ * 인증과 서버 연령 검증을 함께 요구하는 guard.
+ *
+ * 주의: 전화번호 인증은 여기 넣지 않는다. send-otp 가 이 guard 를 쓰므로
+ * 자격에 전화인증을 포함시키면 "인증하려면 인증돼 있어야 하는" 순환이 된다.
+ * 참여(사회적 쓰기) endpoint 는 아래 requireEligibleMember 를 쓴다.
+ */
 export async function requireVerifiedUser(req: Request): Promise<UserAuthResult> {
   const result = await requireUser(req);
   if ('error' in result) return result;
 
   const ageError = await requireVerifiedAge(result.supabase);
   if (ageError) return { error: ageError };
+  return result;
+}
+
+/**
+ * 계정 자격(연령 + 전화번호 인증)을 DB 술어로 확인한다.
+ * 판정 정본은 public.is_eligible_member() 이며, 최종 강제는 RLS 가 한다.
+ * 이 함수는 빠른 실패와 사용자에게 보여줄 에러 메시지를 위한 층이다.
+ */
+export async function requireEligibility(
+  supabase: SupabaseClient,
+): Promise<Response | null> {
+  const { data, error } = await supabase.rpc('is_eligible_member');
+  if (error) {
+    return errorResponse('Eligibility check unavailable', 500);
+  }
+  if (data !== true) {
+    return errorResponse(
+      'PHONE_VERIFICATION_REQUIRED: 전화번호 인증이 필요합니다.',
+      403,
+    );
+  }
+  return null;
+}
+
+/** 인증 + 계정 자격을 함께 요구하는 참여·비용 발생 endpoint용 guard. */
+export async function requireEligibleMember(req: Request): Promise<UserAuthResult> {
+  const result = await requireUser(req);
+  if ('error' in result) return result;
+
+  const eligibilityError = await requireEligibility(result.supabase);
+  if (eligibilityError) return { error: eligibilityError };
   return result;
 }
 
