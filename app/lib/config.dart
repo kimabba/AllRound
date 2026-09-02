@@ -81,7 +81,7 @@ class AppConfig {
   /// 신경 써야 하고, 이 값 하나를 위해 의존성을 늘릴 이유가 없다. 대신 pubspec 과의
   /// 일치는 `app/test/release_gate_test.dart` 가 강제한다 — 손으로 맞추다 어긋나는
   /// 경로를 막는다.
-  static const appBuildNumber = 6;
+  static const appBuildNumber = 7;
 
   /// 개발용 프리뷰/관리자 우회 플래그 중 하나라도 켜져 있는지.
   /// 릴리스 빌드 차단(assertConfigured) 및 회귀 테스트에서 사용.
