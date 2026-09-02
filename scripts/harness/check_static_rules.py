@@ -177,20 +177,39 @@ def check_phone_collection_disclosure() -> None:
     `app/test/verify_phone_screen_test.dart` 의 렌더 테스트가 맡는다.
     이 검사의 몫은 조항이 통째로 사라지거나 한쪽 사본만 갱신되는 경우다.
     """
-    for relative in ("docs/legal/privacy-policy.html", "website/privacy/index.html"):
+    # 단어 하나만 보면 본문에서 조항을 지우고 푸터에 단어만 남겨도 통과한다.
+    # 고지가 성립하려면 항목·목적·보유기간·수탁자·전달 사실이 모두 있어야 한다.
+    required = (
+        ("휴대폰 번호", "수집 항목의 전화번호"),
+        ("중복 가입 방지", "이용 목적"),
+        ("1년간 보관", "인증·탈퇴 이력 보유기간"),
+        ("탈퇴한 계정 식별자", "이력에 함께 남는 계정 식별자"),
+        ("솔라피(주)", "문자 발송 수탁자"),
+        ("수신 휴대폰 번호가 전달", "수탁자에게 번호가 전달되는 사실"),
+        ("6개월", "수탁자 측 발송 내역 보유기간"),
+    )
+    copies = ("docs/legal/privacy-policy.html", "website/privacy/index.html")
+    for relative in copies:
         body = read(relative)
-        for needle, what in (
-            ("휴대폰 번호", "수집 항목의 전화번호"),
-            ("솔라피", "문자 발송 수탁자(솔라피)"),
-        ):
+        for needle, what in required:
             if needle not in body:
                 fail(
-                    f"{relative}: {what} 고지가 없다.\n"
+                    f"{relative}: {what} 고지가 없다(찾는 문구: {needle!r}).\n"
                     "전화번호를 받아 외부 수탁자에게 넘기면서 처리방침에 적지 않으면 "
                     "실제 처리와 고지가 어긋난다(개인정보보호법 §30)."
                 )
 
-    print("✓ 전화번호 수집·위탁 고지 — 처리방침 두 사본 모두 존재")
+    # 두 사본이 같은 조항을 담고 있는지. HTML 구조가 달라 전체 비교는 못 하므로
+    # 전화번호 관련 행의 알맹이가 같은지를 본다.
+    row_marker = "본인 확인(휴대전화 점유 인증), 중복 가입 방지, 참여 기능 이용 자격 확인"
+    if any(row_marker not in read(r) for r in copies):
+        fail(
+            "처리방침 두 사본의 전화번호 조항이 서로 다르다.\n"
+            f"{copies[0]} 와 {copies[1]} 은 같은 문서다 — 한쪽만 고치면 "
+            "어느 쪽이 진짜인지 알 수 없게 된다."
+        )
+
+    print("✓ 전화번호 수집·위탁 고지 — 처리방침 두 사본에 항목·목적·보유기간·수탁자 모두 존재")
 
 
 def check_pureform_literal_contracts() -> None:

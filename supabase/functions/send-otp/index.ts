@@ -31,11 +31,20 @@ Deno.serve(async (req) => {
   if ('error' in auth) return auth.error;
 
   let raw = '';
+  let consent = false;
   try {
     const body: unknown = await req.json();
     raw = stringFieldOf(body, 'phone');
+    consent = (body as Record<string, unknown> | null)?.consent === true;
   } catch {
     return errorResponse('Invalid JSON body', 400);
+  }
+
+  // 동의는 화면 체크박스가 아니라 여기서 막는다. 클라이언트만 검사하면 JWT 로
+  // 이 엔드포인트를 직접 호출해 우회할 수 있고, 그러면 동의 없이 번호를 받아
+  // 수탁자에게 넘기는 셈이 된다(개인정보보호법 §15·§22).
+  if (!consent) {
+    return errorResponse('개인정보 수집·이용 및 위탁에 대한 동의가 필요합니다.', 400);
   }
 
   let e164: string;
@@ -81,6 +90,20 @@ Deno.serve(async (req) => {
     const res = errorResponse('요청이 제한되었습니다. 잠시 후 다시 시도하세요.', 429, { reason });
     if (retryAfter) res.headers.set('Retry-After', String(retryAfter));
     return res;
+  }
+
+  // 동의를 받았다는 사실을 남긴다. 동의 여부의 입증 책임은 우리에게 있고,
+  // 화면 체크박스는 흔적이 남지 않는다. 최초 시점을 보존하려고 이미 값이 있으면
+  // 덮어쓰지 않는다. 기록에 실패하면 발송하지 않는다 — 근거 없이 번호를
+  // 수탁자에게 넘기지 않기 위해서다(rate limit RPC 와 같은 fail-closed).
+  const { error: consentError } = await serviceClient()
+    .from('users')
+    .update({ phone_consent_at: new Date().toISOString() })
+    .eq('id', auth.user.id)
+    .is('phone_consent_at', null);
+  if (consentError) {
+    console.error('[send-otp] consent record failed:', consentError.message);
+    return errorResponse('Verification temporarily unavailable', 503);
   }
 
   try {

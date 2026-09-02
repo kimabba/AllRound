@@ -13,6 +13,10 @@
 alter table public.users
   add column if not exists phone_hash text,
   add column if not exists phone_verified_at timestamptz,
+  -- 수집 동의 시각. 동의는 화면 체크박스가 아니라 서버가 강제해야 한다 —
+  -- 클라이언트만 검사하면 API 를 직접 호출해 우회할 수 있고, 동의를 받았다는
+  -- 입증 책임은 우리에게 있다(개인정보보호법 §22).
+  add column if not exists phone_consent_at timestamptz,
   add column if not exists pepper_version smallint not null default 1;
 
 -- 활성 계정 유니크. 탈퇴=완전삭제라 row 소멸 시 자연 해제(재사용 허용).
@@ -34,6 +38,7 @@ begin
     end if;
     if old.phone_verified_at is distinct from new.phone_verified_at
        or old.phone_hash is distinct from new.phone_hash
+       or old.phone_consent_at is distinct from new.phone_consent_at
        or old.pepper_version is distinct from new.pepper_version then
       raise exception '전화번호 인증 정보는 직접 변경할 수 없습니다';
     end if;

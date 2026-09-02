@@ -10,11 +10,13 @@ import 'api_base.dart';
 /// 실패 시 그 메시지를 그대로 [ApiException] 으로 올려 UI 가 표시한다.
 mixin PhoneApi on ApiBase {
   /// 인증번호(SMS) 발송. 인증된 사용자만 호출 가능.
-  Future<void> sendOtp(String phone) async {
+  /// [consent] 는 수집·이용·위탁 동의다. 서버가 이 값을 필수로 검사하고
+  /// 동의 시각을 기록한다 — 화면 체크박스만으로는 흔적도 강제도 남지 않는다.
+  Future<void> sendOtp(String phone, {required bool consent}) async {
     final res = await httpPost(
       uri('send-otp'),
       headers: await authHeaders(),
-      body: jsonEncode({'phone': phone}),
+      body: jsonEncode({'phone': phone, 'consent': consent}),
     );
     _ensureOk(res);
   }

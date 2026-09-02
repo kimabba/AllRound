@@ -67,19 +67,52 @@ void main() {
     expect(_sendButton(tester).onPressed, isNull);
   });
 
-  // 법정 고지는 "코드에 문자열이 있다"로는 부족하다. Offstage·빈 build 로도
-  // 정적 검사는 통과하므로, 실제로 화면에 그려지는지를 렌더로 확인한다.
+  // 법정 고지는 "코드에 문자열이 있다"로는 부족하다. 위젯 트리에 존재하는지만 보면
+  // Offstage·Opacity(0)·화면 밖 배치로 전부 우회된다. 그래서 여기서는
+  // ① 트리에 있고 ② 렌더 크기가 0 이 아니며 ③ 화면 안에 들어와 있고
+  // ④ 숨김 위젯에 감싸여 있지 않은지까지 확인한다.
   testWidgets('수집 고지가 화면에 실제로 보인다(목적·보유기간·수탁자)', (tester) async {
     await tester.pumpWidget(_app());
 
-    Finder visibleTextContaining(String needle) => find.byWidgetPredicate(
-          (w) => w is Text && (w.data ?? '').contains(needle),
-        );
+    final screen = tester.getSize(find.byKey(AllRoundE2EKeys.verifyPhoneScreen));
 
-    expect(visibleTextContaining('수집·이용 및 문자 발송 위탁 동의'), findsOneWidget);
-    expect(visibleTextContaining('중복 가입 방지'), findsOneWidget); // 이용 목적
-    expect(visibleTextContaining('1년간 보관'), findsOneWidget); // 보유 기간
-    expect(visibleTextContaining('솔라피(주)에 위탁'), findsOneWidget); // 수탁자
-    expect(find.text('개인정보 처리방침'), findsOneWidget); // 원문 링크
+    void expectActuallyVisible(String needle) {
+      final finder = find.byWidgetPredicate(
+        (w) => w is Text && (w.data ?? '').contains(needle),
+        description: 'Text containing "$needle"',
+      );
+      expect(finder, findsOneWidget, reason: '"$needle" 고지가 트리에 없다');
+
+      // 크기가 0 이면 그려져도 보이지 않는다.
+      final size = tester.getSize(finder);
+      expect(size.width, greaterThan(0), reason: '"$needle" 의 폭이 0 이다');
+      expect(size.height, greaterThan(0), reason: '"$needle" 의 높이가 0 이다');
+
+      // 화면 밖으로 밀어낸 경우를 막는다.
+      final topLeft = tester.getTopLeft(finder);
+      expect(topLeft.dy, lessThan(screen.height), reason: '"$needle" 이 화면 아래로 벗어났다');
+      expect(topLeft.dx, lessThan(screen.width), reason: '"$needle" 이 화면 오른쪽으로 벗어났다');
+
+      // Offstage / Opacity(0) / Visibility(false) 로 감싸 숨기는 경로를 막는다.
+      // Scaffold 내부도 Offstage 를 쓰므로 실제로 숨긴 것(offstage: true)만 본다.
+      final offstage = tester
+          .widgetList<Offstage>(find.ancestor(of: finder, matching: find.byType(Offstage)))
+          .where((o) => o.offstage);
+      expect(offstage, isEmpty, reason: '"$needle" 이 Offstage 안에 있다');
+      final faded = tester
+          .widgetList<Opacity>(find.ancestor(of: finder, matching: find.byType(Opacity)))
+          .where((o) => o.opacity == 0);
+      expect(faded, isEmpty, reason: '"$needle" 이 Opacity(0) 안에 있다');
+      final hidden = tester
+          .widgetList<Visibility>(find.ancestor(of: finder, matching: find.byType(Visibility)))
+          .where((v) => !v.visible);
+      expect(hidden, isEmpty, reason: '"$needle" 이 Visibility(false) 안에 있다');
+    }
+
+    expectActuallyVisible('수집·이용 및 문자 발송 위탁 동의'); // 동의 항목
+    expectActuallyVisible('중복 가입 방지'); // 이용 목적
+    expectActuallyVisible('1년간 보관'); // 보유 기간
+    expectActuallyVisible('솔라피(주)에 위탁'); // 수탁자
+    expectActuallyVisible('개인정보 처리방침'); // 원문 링크
   });
 }

@@ -76,3 +76,26 @@ Deno.test('service-role club endpoints gate writes but keep reads open', async (
     assertStringIncludes(endpoint, 'requireEligibility(auth.supabase)');
   }
 });
+
+// 동의 게이트는 화면이 아니라 서버에 있어야 한다. 체크박스만으로는 JWT 로
+// 엔드포인트를 직접 호출하는 경로를 못 막고, 동의를 받았다는 흔적도 남지 않는다.
+Deno.test('send-otp requires consent before it touches the phone number', async () => {
+  const endpoint = await source('../send-otp/index.ts');
+
+  assertStringIncludes(endpoint, '?.consent === true');
+  assertStringIncludes(endpoint, 'phone_consent_at');
+
+  // 동의 검사가 번호 해싱·발송보다 앞서야 fail-closed 다.
+  const consentGuard = endpoint.indexOf('if (!consent)');
+  const hashing = endpoint.indexOf('hashPhone(');
+  const sending = endpoint.indexOf('sendSms(');
+  assert(consentGuard >= 0, 'send-otp must reject requests without consent');
+  assert(
+    consentGuard < hashing && consentGuard < sending,
+    'consent guard must run before the number is hashed or sent (fail-closed)',
+  );
+
+  // 동의 기록 실패를 삼키면 근거 없이 번호가 수탁자로 나간다.
+  const record = endpoint.indexOf('consentError');
+  assert(record >= 0 && record < sending, 'consent must be recorded before sending');
+});

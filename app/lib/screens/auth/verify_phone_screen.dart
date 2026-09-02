@@ -74,7 +74,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
       _error = null;
     });
     try {
-      await ref.read(apiProvider).sendOtp(_phone.text);
+      await ref.read(apiProvider).sendOtp(_phone.text, consent: _consent);
       if (!mounted) return;
       setState(() => _sent = true);
       _startCooldown();
@@ -160,7 +160,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
                   padding: const EdgeInsets.only(left: 12, right: 4, bottom: 4),
                   child: Text(
                     '본인 확인과 중복 가입 방지를 위해 휴대폰 번호를 수집합니다. '
-                    '번호 원문은 저장하지 않고 암호화한 값만 보관하며 탈퇴 시 파기합니다. '
+                    '번호 원문은 저장하지 않고 되돌릴 수 없는 값으로 바꿔 보관하며 탈퇴 시 파기합니다. '
                     '인증·탈퇴 이력은 부정 가입 방지를 위해 1년간 보관합니다. '
                     '인증 문자 발송은 솔라피(주)에 위탁합니다.',
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
