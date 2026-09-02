@@ -199,15 +199,26 @@ def check_phone_collection_disclosure() -> None:
                     "실제 처리와 고지가 어긋난다(개인정보보호법 §30)."
                 )
 
-    # 두 사본이 같은 조항을 담고 있는지. HTML 구조가 달라 전체 비교는 못 하므로
-    # 전화번호 관련 행의 알맹이가 같은지를 본다.
-    row_marker = "본인 확인(휴대전화 점유 인증), 중복 가입 방지, 참여 기능 이용 자격 확인"
-    if any(row_marker not in read(r) for r in copies):
-        fail(
-            "처리방침 두 사본의 전화번호 조항이 서로 다르다.\n"
-            f"{copies[0]} 와 {copies[1]} 은 같은 문서다 — 한쪽만 고치면 "
-            "어느 쪽이 진짜인지 알 수 없게 된다."
-        )
+    # 두 사본이 같은 조항을 담고 있는지. 문구 존재만 보면 한쪽 행을 축약하고
+    # 다른 자리에 단어만 남겨도 통과하므로, 해당 표의 행 자체를 뽑아 통째로 비교한다.
+    def table_row(html: str, pattern: str) -> str | None:
+        found = re.search(pattern, html, re.S)
+        return found.group(0) if found else None
+
+    for pattern, what in (
+        (r"<tr><td>휴대폰 번호.*?</tr>", "전화번호 수집 항목 행"),
+        (r"<tr><td>솔라피\(주\).*?</tr>", "솔라피 위탁 행"),
+    ):
+        rows = [table_row(read(r), pattern) for r in copies]
+        if any(row is None for row in rows):
+            missing = [r for r, row in zip(copies, rows) if row is None]
+            fail(f"{', '.join(missing)}: {what} 을 찾지 못했다.")
+        if rows[0] != rows[1]:
+            fail(
+                f"처리방침 두 사본의 {what} 내용이 서로 다르다.\n"
+                f"{copies[0]} 와 {copies[1]} 은 같은 문서다 — 한쪽만 고치면 "
+                "어느 쪽이 진짜인지 알 수 없게 된다."
+            )
 
     print("✓ 전화번호 수집·위탁 고지 — 처리방침 두 사본에 항목·목적·보유기간·수탁자 모두 존재")
 

@@ -88,10 +88,14 @@ void main() {
       expect(size.width, greaterThan(0), reason: '"$needle" 의 폭이 0 이다');
       expect(size.height, greaterThan(0), reason: '"$needle" 의 높이가 0 이다');
 
-      // 화면 밖으로 밀어낸 경우를 막는다.
+      // 화면 밖으로 밀어낸 경우를 막는다. 아래·오른쪽뿐 아니라 위·왼쪽으로 밀어낸
+      // 경우도 봐야 한다(음수 좌표로 완전히 벗어나도 크기는 0 이 아니다).
       final topLeft = tester.getTopLeft(finder);
+      final bottomRight = tester.getBottomRight(finder);
       expect(topLeft.dy, lessThan(screen.height), reason: '"$needle" 이 화면 아래로 벗어났다');
       expect(topLeft.dx, lessThan(screen.width), reason: '"$needle" 이 화면 오른쪽으로 벗어났다');
+      expect(bottomRight.dy, greaterThan(0), reason: '"$needle" 이 화면 위로 벗어났다');
+      expect(bottomRight.dx, greaterThan(0), reason: '"$needle" 이 화면 왼쪽으로 벗어났다');
 
       // Offstage / Opacity(0) / Visibility(false) 로 감싸 숨기는 경로를 막는다.
       // Scaffold 내부도 Offstage 를 쓰므로 실제로 숨긴 것(offstage: true)만 본다.

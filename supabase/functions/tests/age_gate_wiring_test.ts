@@ -99,3 +99,18 @@ Deno.test('send-otp requires consent before it touches the phone number', async 
   const record = endpoint.indexOf('consentError');
   assert(record >= 0 && record < sending, 'consent must be recorded before sending');
 });
+
+// 발송만 막으면 불변식이 깨진다. 이미 발급된 OTP 로 verify 를 직접 부르면 동의 없이
+// 인증이 완료된다. "인증됐다면 동의도 받았다" 를 검증 경로에서도 지켜야 한다.
+Deno.test('verify-otp refuses to complete without a recorded consent', async () => {
+  const endpoint = await source('../verify-otp/index.ts');
+
+  assertStringIncludes(endpoint, 'phone_consent_at');
+
+  const consentCheck = endpoint.indexOf('phone_consent_at');
+  const verifying = endpoint.indexOf("rpc('verify_phone_otp'");
+  assert(
+    consentCheck >= 0 && verifying >= 0 && consentCheck < verifying,
+    'consent must be checked before the OTP is verified (fail-closed)',
+  );
+});

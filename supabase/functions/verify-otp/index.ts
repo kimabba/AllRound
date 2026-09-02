@@ -42,6 +42,22 @@ Deno.serve(async (req) => {
     return errorResponse('Verification unavailable', 503);
   }
 
+  // 발송 경로만 막으면 불변식이 깨진다. 이미 발급돼 남아 있는 OTP 로 이 엔드포인트를
+  // 직접 부르면 동의 기록 없이 phone_verified_at 이 찍힌다. "인증됐다면 동의도 받았다"를
+  // 검증 시점에도 지킨다.
+  const { data: consentRow, error: consentError } = await serviceClient()
+    .from('users')
+    .select('phone_consent_at')
+    .eq('id', auth.user.id)
+    .maybeSingle();
+  if (consentError) {
+    console.error('[verify-otp] consent lookup failed:', consentError.message);
+    return errorResponse('Verification temporarily unavailable', 503);
+  }
+  if (!consentRow?.phone_consent_at) {
+    return errorResponse('개인정보 수집·이용 및 위탁에 대한 동의가 필요합니다.', 400);
+  }
+
   // RPC 는 service_role 전용. 신원은 검증된 JWT 의 user.id 로 넘긴다(auth.uid 미의존).
   const { data, error } = await serviceClient().rpc('verify_phone_otp', {
     p_user_id: auth.user.id,

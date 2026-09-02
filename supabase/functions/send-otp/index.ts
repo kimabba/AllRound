@@ -64,6 +64,20 @@ Deno.serve(async (req) => {
   const phoneHash = await hashPhone(e164, pepper);
   const codeHash = await hashCode(code, pepper);
 
+  // 동의를 받았다는 사실을 남긴다. 입증 책임은 우리에게 있고 화면 체크박스는 흔적이
+  // 없다. 최초 시점을 보존하려고 이미 값이 있으면 덮어쓰지 않는다.
+  // rate limit RPC **앞**에 둔다 — RPC 는 발송 카운터를 먼저 올리므로, 뒤에 두면
+  // 기록 실패 시 문자는 안 나갔는데 시간당·일일 한도만 깎인다.
+  const { error: consentError } = await serviceClient()
+    .from('users')
+    .update({ phone_consent_at: new Date().toISOString() })
+    .eq('id', auth.user.id)
+    .is('phone_consent_at', null);
+  if (consentError) {
+    console.error('[send-otp] consent record failed:', consentError.message);
+    return errorResponse('Verification temporarily unavailable', 503);
+  }
+
   // RPC 는 service_role 전용(클라 직접 호출 차단). 신원은 검증된 JWT 에서 넘긴다.
   // fail-closed: RPC 실패면 발송하지 않는다.
   const { data, error } = await serviceClient().rpc('request_phone_otp', {
@@ -90,20 +104,6 @@ Deno.serve(async (req) => {
     const res = errorResponse('요청이 제한되었습니다. 잠시 후 다시 시도하세요.', 429, { reason });
     if (retryAfter) res.headers.set('Retry-After', String(retryAfter));
     return res;
-  }
-
-  // 동의를 받았다는 사실을 남긴다. 동의 여부의 입증 책임은 우리에게 있고,
-  // 화면 체크박스는 흔적이 남지 않는다. 최초 시점을 보존하려고 이미 값이 있으면
-  // 덮어쓰지 않는다. 기록에 실패하면 발송하지 않는다 — 근거 없이 번호를
-  // 수탁자에게 넘기지 않기 위해서다(rate limit RPC 와 같은 fail-closed).
-  const { error: consentError } = await serviceClient()
-    .from('users')
-    .update({ phone_consent_at: new Date().toISOString() })
-    .eq('id', auth.user.id)
-    .is('phone_consent_at', null);
-  if (consentError) {
-    console.error('[send-otp] consent record failed:', consentError.message);
-    return errorResponse('Verification temporarily unavailable', 503);
   }
 
   try {
