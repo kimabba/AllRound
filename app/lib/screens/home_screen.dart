@@ -43,6 +43,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.invalidate(myClubsProvider);
     ref.invalidate(myCurrentRankingsProvider);
     ref.invalidate(unreadNotificationCountProvider);
+    // 풋살 등급 카드 — 첫 조회가 실패해 카드가 "—"로 멈춰 있어도 당겨서
+    // 새로고침하면 다시 시도할 수 있어야 한다.
+    ref.invalidate(userSportsProvider);
+    ref.invalidate(myFutsalAttendanceCountThisYearProvider);
     await ref.read(homeTournamentsProvider.future);
   }
 
@@ -88,10 +92,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         : tournaments;
     // 협회 연결이 없으면 null 이고 카드 자체가 뜨지 않는다. 풋살은 랭킹 미러가
     // 없어 이 카드가 말할 게 없으므로, 종목을 풋살로 바꾸면 테니스 랭킹이
-    // 남아 있어도 감춘다(풋살용 등급 카드는 별도 작업).
+    // 남아 있어도 감춘다.
     final gradeSummary = selectedSport == 'tennis'
         ? ref.watch(myGradeSummaryProvider).value
         : null;
+    // 풋살은 협회 랭킹이 없어 본인이 설정한 등급(user_sports)을 보여준다 —
+    // 테니스 카드와 다른 데이터 출처이므로 별도 위젯(_FutsalGradeCard)이다.
+    final futsalUserSport = selectedSport == 'futsal'
+        ? (ref.watch(userSportsProvider).value ?? const [])
+            .where((s) => s.sport == 'futsal')
+            .firstOrNull
+        : null;
+
     return Scaffold(
       key: AllRoundE2EKeys.homeScreen,
       appBar: AppBar(
@@ -139,6 +151,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             initialMessage: '협회마다 부서와 포인트 기준이 어떻게 다른가요?',
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (futsalUserSport != null)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.md,
+                  AppSpacing.xl,
+                  0,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionTitle(title: '내 등급'),
+                      const SizedBox(height: AppSpacing.sm),
+                      _FutsalGradeCard(
+                        grade: futsalUserSport.grade,
+                        // myClubsProvider는 종목 구분 없이 전체를 돌려주고,
+                        // 본인이 만들었지만 아직 승인 안 된(pending) 클럽도
+                        // 포함한다(clubs-search: "mine=true 이면 본인이
+                        // 생성했거나 멤버인 클럽, pending 포함"). "가입한
+                        // 클럽"은 실제 멤버인 승인된 클럽만 세야 한다.
+                        clubCount: ref
+                            .watch(myClubsProvider)
+                            .value
+                            ?.where((c) => c.sport == 'futsal' && c.isApproved)
+                            .length,
+                        attendCount: ref
+                            .watch(myFutsalAttendanceCountThisYearProvider)
+                            .value,
+                        onEditGrade: () => context.push('/profile'),
                       ),
                     ],
                   ),
@@ -201,6 +248,139 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 홈 최상단 "내 등급 카드"(풋살). 테니스 카드와 자리는 같지만 데이터 출처가
+/// 다르다 — 협회 랭킹 미러가 없어 사용자가 프로필에서 직접 고른 등급
+/// (user_sports)을 보여준다. 그래서 "내 랭킹"이 아니라 자기신고임을 알 수
+/// 있게 "내가 설정한 등급"이라 쓰고, 카드 배경도 테니스 카드의 tint 카드가
+/// 아니라 평면(no-card) 스타일로 둔다 — 협회가 보증한 값이 아니므로 같은
+/// 무게로 보이면 안 된다.
+class _FutsalGradeCard extends StatelessWidget {
+  const _FutsalGradeCard({
+    required this.grade,
+    required this.clubCount,
+    required this.attendCount,
+    required this.onEditGrade,
+  });
+
+  final String grade;
+  final int? clubCount;
+  final int? attendCount;
+  final VoidCallback onEditGrade;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final muted = cs.onSurfaceVariant;
+
+    Widget stat(String label, String value) {
+      return Expanded(
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: muted,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: cs.primary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+              child: Icon(
+                Icons.sports_soccer_rounded,
+                size: 26,
+                color: cs.onPrimary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    gradeLabel(grade),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // Row 대신 Wrap — 200% 글자 크기에서 캡션이 넓어져도
+                  // 옆으로 밀려나가지 않고 다음 줄로 접힌다.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '내가 설정한 등급 · ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: muted,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onEditGrade,
+                        child: Text(
+                          '수정',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        Container(
+          margin: const EdgeInsets.only(top: 22),
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            border: Border.symmetric(
+              horizontal: BorderSide(color: cs.outlineVariant),
+            ),
+          ),
+          child: Row(
+            children: [
+              stat('가입한 클럽', clubCount?.toString() ?? '—'),
+              Container(width: 1, height: 36, color: cs.outlineVariant),
+              stat('이번 시즌 참가', attendCount == null ? '—' : '$attendCount회'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

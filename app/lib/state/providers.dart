@@ -91,6 +91,14 @@ final myClubsProvider = FutureProvider<List<Club>>((ref) async {
   return api.myClubs();
 });
 
+/// 홈 풋살 등급 카드용 — 올해 참석 확정한 "풋살" 클럽 모임 수.
+/// sport 필터가 없으면 테니스 모임까지 섞여 센다(두 종목 다 하는 사용자).
+final myFutsalAttendanceCountThisYearProvider = FutureProvider<int>((ref) async {
+  ref.watch(authStateProvider);
+  final api = ref.watch(apiProvider);
+  return api.myClubEventAttendanceCountThisYear(sport: 'futsal');
+});
+
 /// 즐겨찾기 ID 집합
 final favoriteIdsProvider = FutureProvider<Set<String>>((ref) async {
   ref.watch(authStateProvider);
