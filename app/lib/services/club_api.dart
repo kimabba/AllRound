@@ -743,13 +743,15 @@ mixin ClubApi on ApiBase {
   }
 
   /// 로그인한 사용자가 올해 "참석" 응답한, 이미 끝난 클럽 모임 수.
+  /// [sport]가 지정되면 그 종목 클럽의 모임만 센다 — 두 종목을 다 하는
+  /// 사용자가 다른 종목 모임까지 섞여 세지 않도록.
   /// 날짜 범위는 서버가 아니라 여기서 걸러 embedded-filter 문법 위험을 피한다.
-  Future<int> myClubEventAttendanceCountThisYear() async {
+  Future<int> myClubEventAttendanceCountThisYear({String? sport}) async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return 0;
     final rows = await supabase
         .from('club_event_attendees')
-        .select('status, club_events(starts_at)')
+        .select('status, club_events(starts_at, clubs(sport))')
         .eq('user_id', uid)
         .eq('status', 'going');
     // 기기 로컬이 아니라 KST 기준으로 "올해"를 판정한다 — 서버 날짜 판정도
@@ -760,9 +762,12 @@ mixin ClubApi on ApiBase {
     var count = 0;
     for (final row in List<Map<String, dynamic>>.from(rows)) {
       final event = row['club_events'] as Map<String, dynamic>?;
-      final startsAtRaw = event == null
-          ? null
-          : DateTime.tryParse(event['starts_at'] as String? ?? '');
+      if (event == null) continue;
+      if (sport != null) {
+        final club = event['clubs'] as Map<String, dynamic>?;
+        if (club?['sport'] != sport) continue;
+      }
+      final startsAtRaw = DateTime.tryParse(event['starts_at'] as String? ?? '');
       if (startsAtRaw == null) continue;
       final startsAt = kstNow(startsAtRaw);
       if (!startsAt.isBefore(yearStart) && !startsAt.isAfter(now)) {

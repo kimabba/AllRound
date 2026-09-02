@@ -172,7 +172,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       _FutsalGradeCard(
                         grade: futsalUserSport.grade,
-                        clubCount: ref.watch(myClubsProvider).value?.length,
+                        // myClubsProvider는 종목 구분 없이 전체 가입 클럽을
+                        // 돌려주므로, 테니스 클럽도 같이 가입한 사용자가
+                        // 섞여 세지 않게 여기서 풋살만 걸러낸다.
+                        clubCount: ref
+                            .watch(myClubsProvider)
+                            .value
+                            ?.where((c) => c.sport == 'futsal')
+                            .length,
                         attendCount: ref
                             .watch(myFutsalAttendanceCountThisYearProvider)
                             .value,

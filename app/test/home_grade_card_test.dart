@@ -52,10 +52,17 @@ Future<void> _pumpHome(
   await tester.pumpAndSettle();
 }
 
+List<Club> _clubs(int futsalCount, {int tennisCount = 0}) => [
+      for (var i = 0; i < futsalCount; i++)
+        Club(id: 'futsal-club-$i', sport: 'futsal', name: '풋살 클럽 $i'),
+      for (var i = 0; i < tennisCount; i++)
+        Club(id: 'tennis-club-$i', sport: 'tennis', name: '테니스 클럽 $i'),
+    ];
+
 Future<void> _pumpHomeFutsal(
   WidgetTester tester, {
   required String grade,
-  int? clubCount,
+  List<Club>? clubs,
   int? attendCount,
   double textScale = 1,
 }) async {
@@ -71,14 +78,7 @@ Future<void> _pumpHomeFutsal(
         userSportsProvider.overrideWith(
           (ref) async => [UserSport(sport: 'futsal', grade: grade)],
         ),
-        myClubsProvider.overrideWith(
-          (ref) async => clubCount == null
-              ? const <Club>[]
-              : List.generate(
-                  clubCount,
-                  (i) => Club(id: 'club-$i', sport: 'futsal', name: '클럽 $i'),
-                ),
-        ),
+        myClubsProvider.overrideWith((ref) async => clubs ?? const <Club>[]),
         myFutsalAttendanceCountThisYearProvider
             .overrideWith((ref) async => attendCount ?? 0),
       ],
@@ -230,7 +230,7 @@ void main() {
     await _pumpHomeFutsal(
       tester,
       grade: 'elite',
-      clubCount: 3,
+      clubs: _clubs(3),
       attendCount: 7,
     );
 
@@ -239,6 +239,22 @@ void main() {
     expect(find.text('이번 시즌 참가'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('7회'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // 회귀 테스트: 테니스·풋살 클럽에 모두 가입한 사용자도 "가입한 클럽" 수는
+  // 풋살만 세야 한다(PR #498 재리뷰에서 발견 — myClubsProvider가 종목 구분
+  // 없이 전체 클럽을 돌려줘서 테니스 클럽이 섞여 세이던 버그).
+  testWidgets('테니스 클럽에도 가입했어도 가입한 클럽 수는 풋살만 센다', (tester) async {
+    await _pumpHomeFutsal(
+      tester,
+      grade: 'elite',
+      clubs: _clubs(3, tennisCount: 5),
+      attendCount: 7,
+    );
+
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('8'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -251,7 +267,7 @@ void main() {
     await _pumpHomeFutsal(
       tester,
       grade: 'elite',
-      clubCount: 12,
+      clubs: _clubs(12),
       attendCount: 48,
       textScale: 2,
     );
