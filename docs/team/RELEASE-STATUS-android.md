@@ -29,7 +29,7 @@
 | 항목 | 상태 | 메모 |
 |---|---|---|
 | 스토어 등록 문구 | 준비 | `docs/store-listing.md` |
-| 개인정보·약관 URL | 준비 | GitHub Pages 공개 URL 사용 |
+| 개인정보·약관 URL | 준비 | 앱은 새 도메인 `https://all-round.it.kr/privacy/`·`/terms/` 사용(2026-09-03). Play Console 등록 시 이 주소로 넣어야 함(옛 GitHub Pages 주소는 그대로 남아 있음) |
 | Play 데이터 안전 답변 | 초안 | 본인확인 도입 시 전화번호·CI 흐름을 반영해 다시 작성 필요 |
 | 앱 아이콘 | 원본 준비 | `app/assets/branding/app_icon_master.png`, 1024×1024 |
 | 피처 그래픽 | 미확인 | 1024×500 파일을 찾지 못함 |
