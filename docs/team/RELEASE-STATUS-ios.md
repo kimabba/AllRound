@@ -20,7 +20,7 @@
 | 제품 페이지 | <https://apps.apple.com/kr/app/id6792671473> |
 | 심사 이력 | 2026-07-30 미통과 1회, 재제출 후 2026-08-04 승인·배포 |
 | 연령 등급 | 한국 12+, 대부분 국가 13+ |
-| 개인정보 처리방침 | <https://kimabba.github.io/AllRound/legal/privacy-policy.html> |
+| 개인정보 처리방침 | <https://all-round.it.kr/privacy/> (2026-09-03 앱 주소 교체. App Store Connect 등록 URL도 이 주소로 바꿔야 함. 옛 GitHub Pages 주소는 그대로 남아 있음) |
 
 심사 계정은 App Store Connect에 등록됐다. 심사 노트에는 대회·클럽의 사용자 작성
 콘텐츠, 신고·차단, AI 코치, 회원 탈퇴, 법적 문서 경로를 적었다. App Privacy에는

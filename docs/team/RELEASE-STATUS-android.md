@@ -4,7 +4,7 @@
 - 상태: **Play Console 앱 생성 완료** — 내부 테스트 업로드 준비 단계
 - 앱 이름: 올라운드 — 테니스·풋살 동호인
 - Android Application ID: `kr.allround.android` (2026-08-19 변경 — 아래 참고)
-- 앱 버전: `1.0.0+5`
+- 앱 버전: `1.1.0+7`
 
 ## Play Console 현재 상태 (2026-08-19)
 
