@@ -97,5 +97,5 @@ AI 코치에게 "다음 주 우리 지역 대회 알려줘", "듀스 규칙이 �
 - UGC(클럽 게시판): 신고·차단·EULA 및 관련 경로를 심사노트에 기재했고 심사를 통과했다.
 - AI 코치: 심사노트에 기능과 데이터 기반 답변임을 기재했다.
 - 계정 삭제: 앱 내 회원 탈퇴 경로를 심사노트에 기재했다(JY-112).
-- 개인정보 처리방침: App Store 등록 URL은 https://kimabba.github.io/AllRound/legal/privacy-policy.html 이다.
+- 개인정보 처리방침: 앱이 가리키는 주소는 https://all-round.it.kr/privacy/ 이다(2026-09-03 교체). App Store Connect·Play Console에 등록된 URL은 아직 옛 GitHub Pages 주소(https://kimabba.github.io/AllRound/legal/privacy-policy.html)라 콘솔에서 새 주소로 교체해야 한다. 옛 주소는 GitHub Pages에 그대로 남아 있다.
 - App Privacy: 이름·이메일·사용자 ID·기기 ID·사진/비디오·기타 사용자 콘텐츠·기타 데이터 유형을 신고했다.

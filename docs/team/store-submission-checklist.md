@@ -34,7 +34,7 @@ Google Play의 현재 계정·앱·빌드 준비 상태는
 - 심사 노트: 대회·클럽 UGC·신고/차단·AI 코치·회원 탈퇴·법적 문서 경로 기재
 - 연령 등급: 한국 **12+**, 대부분 국가 **13+**
 - App Privacy: 이름·이메일·사용자 ID·기기 ID·사진/비디오·기타 사용자 콘텐츠·기타 데이터 유형 신고
-- 개인정보 처리방침: <https://kimabba.github.io/AllRound/legal/privacy-policy.html>
+- 개인정보 처리방침: <https://all-round.it.kr/privacy/>
 
 ---
 
@@ -49,8 +49,8 @@ Google Play의 현재 계정·앱·빌드 준비 상태는
 ## 🟢 B. 공통 선결 (양 플랫폼 동일)
 
 ### 법적·개인정보
-- [x] **개인정보 처리방침 공개 URL** (렌더 O, 수정불가, 비-PDF) — GitHub Pages: `https://kimabba.github.io/AllRound/legal/privacy-policy.html` ✅
-- [x] **이용약관 공개 URL** — `https://kimabba.github.io/AllRound/legal/terms-of-service.html` ✅
+- [x] **개인정보 처리방침 공개 URL** (렌더 O, 수정불가, 비-PDF) — `https://all-round.it.kr/privacy/` ✅ (2026-09-03 공식 홈페이지 주소로 교체. 옛 GitHub Pages 주소는 그대로 남아 있음)
+- [x] **이용약관 공개 URL** — `https://all-round.it.kr/terms/` ✅
 - [ ] 개인정보 방침 연락처 이메일 **실제 수신 가능** (`play@jyoungad.kr`) — ⚠️ **미확인**
   - 2026-08-04: `ssfak@jyoungad.kr` 로 체크돼 있었으나 **그 주소는 열 수 없는 상태**였다(수신 여부를 확인하지 않고 체크했다).
   - `jyoungad.kr` 메일은 Google 이 아니라 **Daum 스마트워크**(MX `aspmx.daum.net`)로 배달된다 — Gmail 에서 찾으면 안 나온다.

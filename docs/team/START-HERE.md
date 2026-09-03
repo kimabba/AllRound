@@ -248,7 +248,7 @@ fix(ranking): 남자신인부 폐지 — 협회가 일반부로 합쳤습니다
 - Apple App Store 한국 제품 페이지 정식 출시 완료: 1.0.0 (5), Apple ID `6792671473`
 - 7/30 심사 미통과 1회 후 8/4 승인·배포 완료
 - 심사용 계정·심사 노트·연령 등급·App Privacy·법적 문서 경로 등록 확인
-- 현재 앱과 스토어의 개인정보 처리방침 주소: `https://kimabba.github.io/AllRound/legal/privacy-policy.html`
+- 개인정보 처리방침 주소 — 앱: `https://all-round.it.kr/privacy/` (2026-09-03 교체). App Store Connect·Play Console 등록 URL: 아직 옛 GitHub Pages 주소(`https://kimabba.github.io/AllRound/legal/privacy-policy.html`)라 콘솔에서 교체 필요. 옛 주소는 GitHub Pages에 그대로 남아 있음
 - 다음 출시 트랙은 Google Play 조직 계정 등록 및 Android 배포이며, Play 관련 미완료 항목은 기존 체크리스트를 따른다.
 
 ## 9. 시리 인수인계 — PR #423 리뷰 결과 ⚠️ (2026-08-19)
