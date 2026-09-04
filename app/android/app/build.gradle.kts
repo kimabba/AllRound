@@ -34,7 +34,8 @@ android {
         // Play 콘솔 패키지명. namespace(코드 패키지)·딥링크 스킴 kr.allround.app 과 별개다.
         applicationId = "kr.allround.android"
         minSdk = 24
-        targetSdk = 35
+        // Play 필수 요건: 2026-08-31부터 API 36(Android 16) 타겟 의무. compileSdk는 Flutter 기본값 36.
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
