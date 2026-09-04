@@ -86,7 +86,7 @@ Developer, 새 버전 생성·빌드 선택·심사 제출까지 하려면 App M
 cd app
 flutter analyze
 flutter test
-flutter build ipa --dart-define-from-file=.env.local
+cd .. && make release-ios   # 스토어 빌드는 반드시 이 명령 — .env.production 사용, .env.local(개발용 로컬 DB) 금지
 ```
 
 6. PR에 다음 세 줄을 포함한다.
