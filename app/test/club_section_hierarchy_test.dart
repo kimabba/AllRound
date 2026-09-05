@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -54,14 +55,22 @@ void main() {
     );
 
     final container = tester.widget<Container>(
-      find.descendant(
-        of: find.byKey(const ValueKey('circular-club-logo')),
-        matching: find.byType(Container),
-      ),
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('circular-club-logo')),
+            matching: find.byType(Container),
+          )
+          // 캐시 이미지 위젯 내부에도 Container가 있어 가장 바깥 것만 본다.
+          .first,
     );
     final decoration = container.decoration! as BoxDecoration;
     expect(decoration.shape, BoxShape.circle);
-    expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
+    // 로고는 디스크 캐시 위젯으로 그린다(테스트 환경에선 네트워크가 막혀
+    // 내부 Image가 안 뜨므로 위젯 속성으로 검증).
+    final logo = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
+    expect(logo.fit, BoxFit.cover);
   });
 
   testWidgets('추천 섹션 헤더는 아이콘과 설명을 함께 표시한다', (tester) async {

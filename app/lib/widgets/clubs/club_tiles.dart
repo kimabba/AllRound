@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -603,11 +604,12 @@ class ClubMediaImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      value,
+    // 디스크 캐시(결정 시트 9/5): 재방문 시 재다운로드 없이 즉시 표시.
+    return CachedNetworkImage(
+      imageUrl: value,
       fit: fit,
-      cacheWidth: cacheWidth,
-      errorBuilder: (_, __, ___) => fallback,
+      memCacheWidth: cacheWidth,
+      errorWidget: (_, __, ___) => fallback,
     );
   }
 }

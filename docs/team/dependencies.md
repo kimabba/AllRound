@@ -50,6 +50,7 @@
 | `intl` | 아니오 | 날짜·숫자 한국어 표시 | 초기부터 | — |
 | `flutter_markdown_plus` | 아니오 | 챗봇 답변·룰북 서식 표시 | **2026-08-07** — Flutter 3.44 호환을 위해 기존 `flutter_markdown`을 대체 | — |
 | `skeletonizer` | 아니오 | 로딩 중 뼈대 화면 | 초기부터 | — |
+| `cached_network_image` | 아니오 | 사진 디스크 캐시(재방문 시 재다운로드 방지) | 결정 시트 2026-09-05 (JY-156) | — |
 | `image` | 아니오 | 업로드 전 이미지 처리(순수 Dart) | 클럽 사진 업로드 | — |
 | `firebase_core` | **예** | Firebase 기반 | 푸시 알림(JY-43) | 미기록 |
 | `firebase_messaging` | **예** | 푸시 알림 수신 | 푸시 알림(JY-43) | 미기록 |
