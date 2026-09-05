@@ -625,19 +625,11 @@ class _ClubCreateScreenState extends ConsumerState<ClubCreateScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // 사용자가 등록한 종목만 선택지로 노출 (미등록 시에만 양쪽 fallback)
-    final registered = (ref.watch(userSportsProvider).value ?? [])
-        .map((s) => s.sport)
-        .toSet()
-        .toList()
-      ..sort();
-    final sportsToShow =
-        registered.isEmpty ? const ['tennis', 'futsal'] : registered;
-    // 현재 _sport 가 선택지에 없으면 primary(activeSport) 또는 첫 종목으로 보정
-    if (!sportsToShow.contains(_sport)) {
-      _sport = ref.read(activeSportProvider) ?? sportsToShow.first;
-      if (!sportsToShow.contains(_sport)) _sport = sportsToShow.first;
-    }
+    // 클럽 생성 종목은 프로필 등록 종목과 무관하게 항상 둘 다 고를 수 있다
+    // (김아빠 결정 2026-09-05: 제한 해제 — 서버도 원래 막지 않는다).
+    // 예전엔 등록 종목으로 제한하면서 보정 로직이 풋살 초안을 조용히
+    // 테니스로 덮는 버그가 있었다 — 제한을 없애 그 경로 자체를 제거.
+    const sportsToShow = ['tennis', 'futsal'];
 
     return Scaffold(
       appBar: AppBar(
