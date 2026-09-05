@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/tokens.dart';
@@ -37,12 +38,12 @@ class ClubIntroPhotoStrip extends StatelessWidget {
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Image.network(
-              urls[index],
+            child: CachedNetworkImage(
+              imageUrl: urls[index],
               fit: BoxFit.cover,
               // 168x132 타일 — 원본 해상도 디코드 방지.
-              cacheWidth: 520,
-              errorBuilder: (_, __, ___) => Icon(
+              memCacheWidth: 520,
+              errorWidget: (_, __, ___) => Icon(
                 Icons.image_not_supported_outlined,
                 color: colorScheme.onSurfaceVariant,
               ),

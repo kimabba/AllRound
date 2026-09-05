@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/tournament.dart';
@@ -33,13 +34,13 @@ class TournamentCoverImage extends StatelessWidget {
         );
     if (posterUrl == null || posterUrl.isEmpty) return fallback(fit);
 
-    return Image.network(
-      posterUrl,
+    return CachedNetworkImage(
+      imageUrl: posterUrl,
       // 홈 카드는 cover로 가로 프레임을 꽉 채우고, 상세 화면처럼 호출부가
       // contain을 지정한 곳에서는 원본 전체를 보여준다.
       fit: fit,
-      cacheWidth: 1200,
-      errorBuilder: (_, __, ___) => fallback(fit),
+      memCacheWidth: 1200,
+      errorWidget: (_, __, ___) => fallback(fit),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -880,12 +881,12 @@ class _ClubLogo extends StatelessWidget {
               color: accent,
               size: size * 0.46,
             )
-          : Image.network(
-              club.logoUrl!,
+          : CachedNetworkImage(
+              imageUrl: club.logoUrl!,
               fit: BoxFit.cover,
               // 원형 로고(<=96px 표시)에 원본 해상도 디코드 방지.
-              cacheWidth: 320,
-              errorBuilder: (_, __, ___) => Icon(
+              memCacheWidth: 320,
+              errorWidget: (_, __, ___) => Icon(
                 isTennis
                     ? Icons.sports_tennis_rounded
                     : Icons.sports_soccer_rounded,
@@ -2479,13 +2480,13 @@ class _ClubIntroManageThumb extends StatelessWidget {
             height: 92,
             fit: BoxFit.cover,
           )
-        : Image.network(
-            imageUrl!,
+        : CachedNetworkImage(
+            imageUrl: imageUrl!,
             width: 92,
             height: 92,
             fit: BoxFit.cover,
-            cacheWidth: 280,
-            errorBuilder: (_, __, ___) => Container(
+            memCacheWidth: 280,
+            errorWidget: (_, __, ___) => Container(
               width: 92,
               height: 92,
               color: cs.surfaceContainerHighest,
@@ -4420,12 +4421,12 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                     const SizedBox(height: AppSpacing.md),
                     ClipRRect(
                       borderRadius: AppRadius.card,
-                      child: Image.network(
-                        url,
+                      child: CachedNetworkImage(
+                        imageUrl: url,
                         fit: BoxFit.cover,
                         // 게시글 본문 폭 커버 — 포스터와 같은 상한.
-                        cacheWidth: 1200,
-                        errorBuilder: (_, __, ___) => Container(
+                        memCacheWidth: 1200,
+                        errorWidget: (_, __, ___) => Container(
                           height: 180,
                           color: cs.surfaceContainerHighest,
                           alignment: Alignment.center,
@@ -5404,12 +5405,12 @@ class _PostImagePreview extends StatelessWidget {
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: Image.network(
-              firstUrl,
+            child: CachedNetworkImage(
+              imageUrl: firstUrl,
               fit: BoxFit.cover,
               // 16:9 소개 대표 사진 — 포스터와 같은 상한.
-              cacheWidth: 1200,
-              errorBuilder: (_, __, ___) => Container(
+              memCacheWidth: 1200,
+              errorWidget: (_, __, ___) => Container(
                 color: cs.surfaceContainerHighest,
                 alignment: Alignment.center,
                 child: Icon(
