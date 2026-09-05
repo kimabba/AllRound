@@ -579,11 +579,17 @@ class ClubMediaImage extends StatelessWidget {
     required this.source,
     required this.fit,
     required this.fallback,
+    this.cacheWidth = 480,
   });
 
   final String source;
   final BoxFit fit;
   final Widget fallback;
+
+  /// 사용자 업로드 원본(휴대폰 사진 수천 px)을 목록 타일에 그대로 디코드하면
+  /// 스크롤 프레임이 떨어진다. 표시 크기에 맞는 상한을 항상 건다 —
+  /// 기본 480은 로고·아바타(≤180px 표시)용, 넓은 카드는 호출부가 키운다.
+  final int cacheWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -600,6 +606,7 @@ class ClubMediaImage extends StatelessWidget {
     return Image.network(
       value,
       fit: fit,
+      cacheWidth: cacheWidth,
       errorBuilder: (_, __, ___) => fallback,
     );
   }
