@@ -40,6 +40,8 @@ class ClubIntroPhotoStrip extends StatelessWidget {
             child: Image.network(
               urls[index],
               fit: BoxFit.cover,
+              // 168x132 타일 — 원본 해상도 디코드 방지.
+              cacheWidth: 520,
               errorBuilder: (_, __, ___) => Icon(
                 Icons.image_not_supported_outlined,
                 color: colorScheme.onSurfaceVariant,

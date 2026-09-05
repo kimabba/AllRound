@@ -883,6 +883,8 @@ class _ClubLogo extends StatelessWidget {
           : Image.network(
               club.logoUrl!,
               fit: BoxFit.cover,
+              // 원형 로고(<=96px 표시)에 원본 해상도 디코드 방지.
+              cacheWidth: 320,
               errorBuilder: (_, __, ___) => Icon(
                 isTennis
                     ? Icons.sports_tennis_rounded
@@ -2482,6 +2484,7 @@ class _ClubIntroManageThumb extends StatelessWidget {
             width: 92,
             height: 92,
             fit: BoxFit.cover,
+            cacheWidth: 280,
             errorBuilder: (_, __, ___) => Container(
               width: 92,
               height: 92,
@@ -4420,6 +4423,8 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                       child: Image.network(
                         url,
                         fit: BoxFit.cover,
+                        // 게시글 본문 폭 커버 — 포스터와 같은 상한.
+                        cacheWidth: 1200,
                         errorBuilder: (_, __, ___) => Container(
                           height: 180,
                           color: cs.surfaceContainerHighest,
@@ -5402,6 +5407,8 @@ class _PostImagePreview extends StatelessWidget {
             child: Image.network(
               firstUrl,
               fit: BoxFit.cover,
+              // 16:9 소개 대표 사진 — 포스터와 같은 상한.
+              cacheWidth: 1200,
               errorBuilder: (_, __, ___) => Container(
                 color: cs.surfaceContainerHighest,
                 alignment: Alignment.center,

@@ -1252,6 +1252,8 @@ class _ClubDiscoveryCard extends StatelessWidget {
                         : ClubMediaImage(
                             source: imageUrl,
                             fit: BoxFit.cover,
+                            // 카드 폭 전체를 덮는 커버 이미지 — 포스터와 같은 상한.
+                            cacheWidth: 1200,
                             fallback: ColoredBox(
                               color: cs.primaryContainer,
                               child: Center(
