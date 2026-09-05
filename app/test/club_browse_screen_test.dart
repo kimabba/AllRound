@@ -105,7 +105,8 @@ void main() {
     expect(find.byTooltip('지역·종목·조건 필터'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '강남');
-    await tester.pump();
+    // 검색은 입력이 멈춘 뒤 250ms 디바운스 후 반영된다.
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('클럽 1'), findsOneWidget);
     expect(find.text('강남 테니스클럽'), findsOneWidget);

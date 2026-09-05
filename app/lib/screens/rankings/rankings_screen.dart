@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -686,11 +688,27 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
   String _query = '';
   bool _claiming = false;
   late Future<_RankingScreenData> _future;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  /// 부서당 최대 871행을 키 입력마다 재필터하면 저사양 기기에서 입력이
+  /// 밀린다. 입력이 멈춘 뒤 한 번만 거른다.
+  void _onQueryChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() => _query = value);
+    });
   }
 
   Future<_RankingScreenData> _load() async {
@@ -1068,7 +1086,7 @@ class _RankingsScreenState extends ConsumerState<RankingsScreen> {
                 prefixIcon: Icon(Icons.search),
                 isDense: true,
               ),
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: _onQueryChanged,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

@@ -517,10 +517,21 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
                   : _openCreate,
             ),
           )
-        else if (hasClubNameQuery)
+        else if (hasClubNameQuery) ...[
           for (final club in displayedClubs)
-            _ClubSearchResultRow(club: club, onOpen: () => _openClub(club))
-        else
+            _ClubSearchResultRow(club: club, onOpen: () => _openClub(club)),
+          if (recommendedClubs.length > displayedClubs.length)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                '상위 ${displayedClubs.length}개만 표시 중 — 전체 결과는 아래 전체보기에서 확인하세요.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+        ] else
           SizedBox(
             height: 196,
             child: ListView.separated(
@@ -721,8 +732,13 @@ class _ClubsScreenState extends ConsumerState<ClubsScreen> {
         .toList();
     final hasClubNameQuery = _clubNameQuery.trim().isNotEmpty;
     final recommendedClubs = _recommendedClubs(visibleClubs);
-    final displayedRecommendationClubs =
-        hasClubNameQuery ? recommendedClubs : recommendedClubs.take(5).toList();
+    // ponytail: 검색 결과는 상위 30개만 즉시 그린다(비지연 SliverList.list 안이라
+    // 수백 행이 한 번에 빌드되는 병리 케이스 차단). 전체는 '전체보기' 화면이
+    // 지연 렌더링으로 감당한다. 클럽 수가 커져 30개 캡이 답답해지면 이 섹션을
+    // SliverList.builder로 재구조화한다.
+    final displayedRecommendationClubs = hasClubNameQuery
+        ? recommendedClubs.take(30).toList()
+        : recommendedClubs.take(5).toList();
     final myMembershipClubs = (_myClubs ?? const <Club>[])
         .where((club) => club.isMember)
         .where((club) => _clubInterests.contains(club.sport))

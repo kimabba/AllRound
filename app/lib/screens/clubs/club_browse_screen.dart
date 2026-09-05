@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/club_recruiting.dart';
@@ -61,11 +63,21 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
   String _query = '';
   bool _loadingClubs = false;
   int _clubSearchVersion = 0;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// 키 입력마다 전체 목록을 재필터하지 않도록, 입력이 멈춘 뒤 한 번만 거른다.
+  void _onQueryChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() => _query = value.trim());
+    });
   }
 
   Future<void> _openFilters() async {
@@ -274,7 +286,7 @@ class _ClubBrowseScreenState extends State<ClubBrowseScreen> {
                   TextField(
                     controller: _searchController,
                     textInputAction: TextInputAction.search,
-                    onChanged: (value) => setState(() => _query = value.trim()),
+                    onChanged: _onQueryChanged,
                     onTapOutside: (_) =>
                         FocusManager.instance.primaryFocus?.unfocus(),
                     decoration: InputDecoration(
