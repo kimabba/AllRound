@@ -209,6 +209,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  /// 스트리밍 중 답변이 자랄 때 화면 하단을 따라간다.
+  /// 사용자가 위로 스크롤해 앞부분을 읽는 동안에는 끌어내리지 않는다 —
+  /// 청크마다 리빌드되므로 여기서 animateTo를 걸면 애니메이션이 겹겹이 쌓여
+  /// 위로 스크롤 자체가 불가능해진다(전수조사 2026-09-03 확인). jumpTo만 쓴다.
+  static const _followBottomThresholdPx = 96.0;
+
+  void _followStreamIfNearBottom() {
+    if (_scroll.hasClients) {
+      final pos = _scroll.position;
+      if (pos.maxScrollExtent - pos.pixels > _followBottomThresholdPx) return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -218,7 +236,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final compactForKeyboard =
         widget.embedded && MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    if (messages.isNotEmpty) _scrollToBottom();
+    if (messages.isNotEmpty) _followStreamIfNearBottom();
 
     final chatBody = Column(
       children: [
