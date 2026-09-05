@@ -254,4 +254,87 @@ void main() {
     // 하단 비-flex 영역이 커지면 메시지 영역이 밀려 RenderFlex overflow 가 난다.
     expect(tester.takeException(), isNull);
   });
+
+  group('스트리밍 중 스크롤 따라가기', () {
+    ScrollPosition messageListPosition(WidgetTester tester) {
+      final scrollable = find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      );
+      return tester.state<ScrollableState>(scrollable.first).position;
+    }
+
+    Future<void> emitTallAnswer(
+      WidgetTester tester,
+      StreamController<ChatStreamEvent> controller, {
+      required int lines,
+    }) async {
+      for (var i = 0; i < lines; i++) {
+        controller.add(ChatStreamEvent('delta', {'text': '규칙 설명 $i번째 줄\n'}));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('위로 스크롤해 읽는 동안에는 새 청크가 와도 끌어내리지 않는다', (tester) async {
+      useSmallPhone(tester);
+      final controller = StreamController<ChatStreamEvent>();
+      addTearDown(() {
+        if (!controller.isClosed) unawaited(controller.close());
+      });
+      await pumpChat(tester, streamFactory: (_) => controller.stream);
+
+      await send(tester, '스크롤 테스트');
+      await emitTallAnswer(tester, controller, lines: 60);
+
+      // 사용자가 앞부분을 읽으러 위로 올라간다.
+      await tester.drag(find.byType(ListView), const Offset(0, 400));
+      await tester.pump();
+      final position = messageListPosition(tester);
+      final readingOffset = position.pixels;
+      expect(
+        position.maxScrollExtent - readingOffset,
+        greaterThan(200),
+        reason: '전제: 바닥에서 충분히 떨어져 있어야 따라가기 억제를 검증할 수 있다',
+      );
+
+      await emitTallAnswer(tester, controller, lines: 30);
+
+      expect(
+        messageListPosition(tester).pixels,
+        readingOffset,
+        reason: '위로 스크롤한 동안 스트리밍 청크가 위치를 강제로 되돌리면 회귀',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('바닥을 보고 있으면 새 청크를 계속 따라간다', (tester) async {
+      useSmallPhone(tester);
+      final controller = StreamController<ChatStreamEvent>();
+      addTearDown(() {
+        if (!controller.isClosed) unawaited(controller.close());
+      });
+      await pumpChat(tester, streamFactory: (_) => controller.stream);
+
+      await send(tester, '따라가기 테스트');
+      await emitTallAnswer(tester, controller, lines: 60);
+
+      final position = messageListPosition(tester);
+      expect(
+        position.maxScrollExtent - position.pixels,
+        lessThanOrEqualTo(96),
+        reason: '바닥 근처에 있으면 스트리밍을 따라 내려가야 한다',
+      );
+
+      // 바닥 추적을 확인한 뒤 청크가 더 와도 계속 붙어 있어야 한다.
+      await emitTallAnswer(tester, controller, lines: 30);
+      final after = messageListPosition(tester);
+      expect(
+        after.maxScrollExtent - after.pixels,
+        lessThanOrEqualTo(96),
+        reason: '추가 청크 이후에도 바닥 추적이 유지돼야 한다',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
