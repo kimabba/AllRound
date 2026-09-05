@@ -753,31 +753,7 @@ class _MessageBubble extends StatelessWidget {
                                 height: 1.5,
                               ),
                             )
-                          : MarkdownBody(
-                              data: visibleContent,
-                              selectable: true,
-                              styleSheet: MarkdownStyleSheet(
-                                p: tt.bodyMedium?.copyWith(
-                                  color: cs.onSurface,
-                                  height: 1.5,
-                                ),
-                                h2: tt.titleMedium?.copyWith(
-                                  color: cs.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                h3: tt.titleSmall?.copyWith(
-                                  color: cs.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                listBullet: tt.bodyMedium?.copyWith(
-                                  color: cs.onSurface,
-                                ),
-                                strong: tt.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                            ),
+                          : _AssistantMarkdown(content: visibleContent),
                     ),
                   ),
                   // 카드(대회·클럽)가 있으면 출처 리스트는 카드와 중복이라 숨긴다.
@@ -927,5 +903,61 @@ class _CitationRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+/// 스트리밍 청크마다 리스트가 통째로 리빌드되는데, 내용이 안 바뀐 말풍선까지
+/// 마크다운을 다시 파싱하면 긴 대화에서 답변 중 프레임이 떨어진다.
+/// 같은 내용이면 이전에 만든 위젯 인스턴스를 그대로 돌려줘(Element가 동일
+/// 인스턴스는 리빌드를 건너뛴다) 파싱을 생략한다. 테마·글자 배율이 바뀌면
+/// didChangeDependencies에서 캐시를 비워 다시 만든다.
+class _AssistantMarkdown extends StatefulWidget {
+  const _AssistantMarkdown({required this.content});
+
+  final String content;
+
+  @override
+  State<_AssistantMarkdown> createState() => _AssistantMarkdownState();
+}
+
+class _AssistantMarkdownState extends State<_AssistantMarkdown> {
+  String? _builtFor;
+  Widget? _cached;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _builtFor = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cached == null || _builtFor != widget.content) {
+      final cs = Theme.of(context).colorScheme;
+      final tt = Theme.of(context).textTheme;
+      _cached = MarkdownBody(
+        data: widget.content,
+        selectable: true,
+        styleSheet: MarkdownStyleSheet(
+          p: tt.bodyMedium?.copyWith(color: cs.onSurface, height: 1.5),
+          h2: tt.titleMedium?.copyWith(
+            color: cs.onSurface,
+            fontWeight: FontWeight.bold,
+          ),
+          h3: tt.titleSmall?.copyWith(
+            color: cs.onSurface,
+            fontWeight: FontWeight.bold,
+          ),
+          listBullet: tt.bodyMedium?.copyWith(color: cs.onSurface),
+          strong: tt.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
+      );
+      _builtFor = widget.content;
+    }
+    return _cached!;
   }
 }
