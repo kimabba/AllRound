@@ -17,6 +17,7 @@ import '../../widgets/app_toast.dart';
 import '../../utils/kst.dart';
 import '../../widgets/tournament_card.dart';
 import '../../widgets/notification_inbox_action.dart';
+import '../../widgets/sport_title.dart';
 import '../../widgets/tournament_section_bar.dart';
 
 class TournamentsScreen extends ConsumerStatefulWidget {
@@ -221,7 +222,9 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
     return Scaffold(
       key: AllRoundE2EKeys.tournamentsScreen,
       appBar: AppBar(
-        title: const Text('대회'),
+        // 홈·클럽과 같은 종목 전환 제목. 이 화면만 종목이 잠겨 있어
+        // 바꾸려면 홈으로 나가야 했다(전수조사 2026-09-03).
+        title: const SportTitle(),
         bottom: TournamentSectionBar(
           selected: TournamentSection.overview,
           showRankings: activeSport == 'tennis',

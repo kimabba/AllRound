@@ -12,6 +12,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_skeleton_card.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/clubs/club_tiles.dart';
+import '../widgets/sport_title.dart';
 import '../widgets/tournament_card.dart';
 
 class FavoritesScreen extends ConsumerStatefulWidget {
@@ -42,7 +43,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
     return Scaffold(
       key: AllRoundE2EKeys.favoritesScreen,
       appBar: AppBar(
-        title: const Text('관심 목록'),
+        // 다른 화면과 같은 전역 종목 기준. 두 종목 스크랩이 섞여 보이던
+        // 문제(전수조사 2026-09-03)를 종목 전환 제목 + 필터로 정리.
+        title: const SportTitle(),
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -76,23 +79,30 @@ class _FavoriteTournamentsTab extends ConsumerWidget {
 
     final tournaments = ref.watch(myFavoriteTournamentsProvider);
     final favoriteIds = ref.watch(favoriteIdsProvider).value;
+    final sport = ref.watch(activeSportProvider);
 
     return tournaments.when(
       data: (items) {
-        if (items.isEmpty) {
-          return const KeyedSubtree(
+        final visible = sport == null
+            ? items
+            : items.where((t) => t.sport == sport).toList();
+        if (visible.isEmpty) {
+          return KeyedSubtree(
             key: AllRoundE2EKeys.favoritesReady,
             child: AppEmptyState(
               icon: Icons.favorite_border_rounded,
               title: '관심 대회가 없습니다',
-              description: '대회 목록에서 하트를 누르면 이곳에 모입니다.',
+              description: items.isEmpty
+                  ? '대회 목록에서 하트를 누르면 이곳에 모입니다.'
+                  : '다른 종목에 관심 대회 ${items.length}개가 있습니다. '
+                      '상단 제목에서 종목을 바꿔보세요.',
             ),
           );
         }
         return KeyedSubtree(
           key: AllRoundE2EKeys.favoritesReady,
           child: _TournamentList(
-            tournaments: items,
+            tournaments: visible,
             favoriteIds: favoriteIds,
             onFavoriteToggle: (tournament) async {
               try {
@@ -176,18 +186,25 @@ class _FavoriteClubsTab extends ConsumerWidget {
     }
 
     final clubs = ref.watch(myFavoriteClubsProvider);
+    final sport = ref.watch(activeSportProvider);
 
     return clubs.when(
       data: (items) {
-        if (items.isEmpty) {
-          return const AppEmptyState(
+        final visible = sport == null
+            ? items
+            : items.where((c) => c.sport == sport).toList();
+        if (visible.isEmpty) {
+          return AppEmptyState(
             icon: Icons.groups_outlined,
             title: '스크랩한 클럽이 없습니다',
-            description: '클럽 찾기에서 북마크를 누르면 이곳에 모입니다.',
+            description: items.isEmpty
+                ? '클럽 찾기에서 북마크를 누르면 이곳에 모입니다.'
+                : '다른 종목에 스크랩한 클럽 ${items.length}개가 있습니다. '
+                    '상단 제목에서 종목을 바꿔보세요.',
           );
         }
         return _ClubList(
-          clubs: items,
+          clubs: visible,
           onFavoriteToggle: (club) async {
             await ref.read(apiProvider).toggleClubFavorite(club.id, false);
             ref.invalidate(clubFavoriteIdsProvider);
