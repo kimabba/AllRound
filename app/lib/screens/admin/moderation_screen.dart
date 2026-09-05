@@ -155,6 +155,7 @@ class _ReportDetailDialogState extends ConsumerState<_ReportDetailDialog> {
           'club_comment',
           'club_event',
         }.contains(widget.report.targetType),
+        isAiMessage: widget.report.targetType == 'ai_message',
       ),
     );
     if (decision == null) return;
@@ -187,8 +188,12 @@ class _ReportDetailDialogState extends ConsumerState<_ReportDetailDialog> {
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) {
+        // 서버 방어 코드가 관리자에게 날것으로 뜨지 않게 알려진 코드만 풀어쓴다.
+        final message = '$error'.contains('REPORTED_USER_NOT_AVAILABLE')
+            ? 'AI 답변 신고는 사용자 제재 없이 기각 또는 조치 기록으로만 처리할 수 있습니다.'
+            : '처리 실패: $error';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('처리 실패: $error')),
+          SnackBar(content: Text(message)),
         );
       }
     } finally {
@@ -301,7 +306,13 @@ class _ReportDetailDialogState extends ConsumerState<_ReportDetailDialog> {
           FilledButton.icon(
             onPressed: _busy ? null : _takeAction,
             icon: const Icon(Icons.gavel_rounded),
-            label: Text(_busy ? '처리 중…' : '삭제 · 제재 처리'),
+            label: Text(
+              _busy
+                  ? '처리 중…'
+                  : widget.report.targetType == 'ai_message'
+                      ? '조치 기록'
+                      : '삭제 · 제재 처리',
+            ),
           ),
         ],
       ],
@@ -313,10 +324,16 @@ class _ModerationDecisionDialog extends StatefulWidget {
   const _ModerationDecisionDialog({
     required this.allowPenalty,
     required this.allowDelete,
+    this.isAiMessage = false,
   });
 
   final bool allowPenalty;
   final bool allowDelete;
+
+  /// AI 답변 신고는 삭제할 게시물도 제재할 사용자도 없다.
+  /// 컨트롤을 회색으로만 두면 관리자가 이유를 모른 채 헤매므로
+  /// 아예 숨기고 처리 방식을 안내한다.
+  final bool isAiMessage;
 
   @override
   State<_ModerationDecisionDialog> createState() =>
@@ -351,42 +368,54 @@ class _ModerationDecisionDialogState extends State<_ModerationDecisionDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _deleteContent,
-              onChanged: widget.allowDelete
-                  ? (value) => setState(() => _deleteContent = value)
-                  : null,
-              title: const Text('신고된 콘텐츠 삭제'),
-            ),
-            DropdownButtonFormField<UgcPenaltyType?>(
-              isExpanded: true,
-              initialValue: _penaltyType,
-              decoration: const InputDecoration(labelText: '사용자 제재'),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('제재 없음')),
-                for (final type in UgcPenaltyType.values)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: widget.allowPenalty
-                  ? (value) => setState(() => _penaltyType = value)
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int?>(
-              isExpanded: true,
-              initialValue: _durationDays,
-              decoration: const InputDecoration(labelText: '제재 기간'),
-              items: const [
-                DropdownMenuItem(value: 7, child: Text('7일')),
-                DropdownMenuItem(value: 30, child: Text('30일')),
-                DropdownMenuItem(value: null, child: Text('영구')),
-              ],
-              onChanged: _penaltyType == null
-                  ? null
-                  : (value) => setState(() => _durationDays = value),
-            ),
-            const SizedBox(height: 12),
+            if (widget.isAiMessage) ...[
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.info_outline),
+                title: Text('AI 답변 신고는 삭제·사용자 제재 대상이 없습니다.'),
+                subtitle: Text(
+                  '처리 사유를 기록하고 확정하면 조치 완료로 저장됩니다. '
+                  '반복되는 문제는 사유에 남겨 프롬프트 개선에 활용하세요.',
+                ),
+              ),
+            ] else ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _deleteContent,
+                onChanged: widget.allowDelete
+                    ? (value) => setState(() => _deleteContent = value)
+                    : null,
+                title: const Text('신고된 콘텐츠 삭제'),
+              ),
+              DropdownButtonFormField<UgcPenaltyType?>(
+                isExpanded: true,
+                initialValue: _penaltyType,
+                decoration: const InputDecoration(labelText: '사용자 제재'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('제재 없음')),
+                  for (final type in UgcPenaltyType.values)
+                    DropdownMenuItem(value: type, child: Text(type.label)),
+                ],
+                onChanged: widget.allowPenalty
+                    ? (value) => setState(() => _penaltyType = value)
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                isExpanded: true,
+                initialValue: _durationDays,
+                decoration: const InputDecoration(labelText: '제재 기간'),
+                items: const [
+                  DropdownMenuItem(value: 7, child: Text('7일')),
+                  DropdownMenuItem(value: 30, child: Text('30일')),
+                  DropdownMenuItem(value: null, child: Text('영구')),
+                ],
+                onChanged: _penaltyType == null
+                    ? null
+                    : (value) => setState(() => _durationDays = value),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _note,
               maxLength: 1000,
