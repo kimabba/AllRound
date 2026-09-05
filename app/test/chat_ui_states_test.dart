@@ -325,6 +325,15 @@ void main() {
         lessThanOrEqualTo(96),
         reason: '바닥 근처에 있으면 스트리밍을 따라 내려가야 한다',
       );
+
+      // 바닥 추적을 확인한 뒤 청크가 더 와도 계속 붙어 있어야 한다.
+      await emitTallAnswer(tester, controller, lines: 30);
+      final after = messageListPosition(tester);
+      expect(
+        after.maxScrollExtent - after.pixels,
+        lessThanOrEqualTo(96),
+        reason: '추가 청크 이후에도 바닥 추적이 유지돼야 한다',
+      );
       expect(tester.takeException(), isNull);
     });
   });

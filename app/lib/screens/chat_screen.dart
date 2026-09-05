@@ -221,7 +221,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (pos.maxScrollExtent - pos.pixels > _followBottomThresholdPx) return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
+      if (mounted && _scroll.hasClients) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
